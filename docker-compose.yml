@@ -12,11 +12,11 @@ services:
     env_file:
       - .env
     environment:
-      - DJANGO_SETTINGS_MODULE=dunjingi_market_backend.settings
+      - DJANGO_SETTINGS_MODULE=dungji_market_backend.settings
     command: sh -c '
       python manage.py migrate &&
       python manage.py collectstatic --noinput &&
-      gunicorn config.wsgi:application --bind 0.0.0.0:8000'
+      gunicorn dungji_market_backend.wsgi:application --bind 0.0.0.0:8000'
     restart: always
 
 volumes:
