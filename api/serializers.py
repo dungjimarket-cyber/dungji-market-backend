@@ -43,13 +43,12 @@ class ProductSerializer(serializers.ModelSerializer):
 class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     creator_name = serializers.CharField(source='creator.first_name', read_only=True)
-    participant_count = serializers.IntegerField(source='current_participants', read_only=True)
-
+    
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
                 'status', 'min_participants', 'max_participants',
-                'start_time', 'end_time', 'participant_count']
+                'start_time', 'end_time', 'current_participants']
         extra_kwargs = {
             'product': {'required': True},
             'min_participants': {'required': True, 'min_value': 2},

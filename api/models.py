@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.utils.timezone import now
+from datetime import timedelta
 from django.db.models import Case, When, F
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -92,7 +94,7 @@ class GroupBuy(models.Model):
     participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys')
     min_participants = models.PositiveSmallIntegerField(default=2)
     max_participants = models.PositiveSmallIntegerField(default=5)
-    start_time = models.DateTimeField(auto_now_add=True)
+    start_time = models.DateTimeField(default=now)  # 시작일을 현재 시간으로 기본값 설정
     end_time = models.DateTimeField()  # 종료 시간 명시적 관리
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='recruiting')
     current_participants = models.PositiveIntegerField(default=0)
@@ -103,8 +105,6 @@ class GroupBuy(models.Model):
         from django.core.exceptions import ValidationError
         from datetime import timedelta
 
-        if self.end_time - self.start_time < timedelta(hours=24):
-            raise ValidationError('공구 기간은 최소 24시간 이상이어야 합니다')
         if self.end_time - self.start_time > timedelta(hours=48):
             raise ValidationError('공구 기간은 최대 48시간까지 설정 가능합니다')
 

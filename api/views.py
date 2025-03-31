@@ -195,23 +195,29 @@ class GroupBuyViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = GroupBuy.objects.all()
-        status = self.request.query_params.get('status', None)
-        
-        if status == 'active':
+        queryset = GroupBuy.objects.select_related('product', 'product__category').all()
+        status_param = self.request.query_params.get('status', None)
+        category_id = self.request.query_params.get('category', None)
+
+        # status 필터 처리
+        if status_param == 'active':
             queryset = queryset.filter(end_time__gt=timezone.now())
-        elif status == 'completed':
+        elif status_param == 'completed':
             queryset = queryset.filter(end_time__lte=timezone.now())
-            
+
+        # category 필터 처리
+        if category_id:
+            queryset = queryset.filter(product__category_id=category_id)
+
         return queryset
 
     @action(detail=False)
     def popular(self, request):
         popular_groupbuys = GroupBuy.objects.annotate(
-            participant_count=Count('participation')
+            curent_participants=Count('participation')
         ).filter(
             end_time__gt=timezone.now()
-        ).order_by('-participant_count')[:3]
+        ).order_by('-curent_participants')[:3]
         
         serializer = self.get_serializer(popular_groupbuys, many=True)
         return Response(serializer.data)
@@ -229,9 +235,6 @@ class GroupBuyViewSet(ModelViewSet):
         if self.action in ['list', 'retrieve', 'popular', 'recent']:
             return [AllowAny()]
         return [IsAuthenticated()]
-
-    def get_queryset(self):
-        return GroupBuy.objects.select_related('product', 'product__category').all()
 
     def _add_product_details(self, data, product):
         data['product'] = {
@@ -267,18 +270,6 @@ class GroupBuyViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(creator=self.request.user)
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        status_param = self.request.query_params.get('status', None)
-        category_id = self.request.query_params.get('category', None)
-
-        if status_param:
-            queryset = queryset.filter(status=status_param)
-        if category_id:
-            queryset = queryset.filter(product__category_id=category_id)
-
-        return queryset
 
     @action(detail=False, methods=['get'])
     def my_groupbuys(self, request):
