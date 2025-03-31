@@ -26,10 +26,12 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost').split(' ')
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+     "http://localhost:3000",
+    "https://www.dungjimarket.com",
+    "http://13.125.227.190:8000",
 ]
 
 # CORS 설정
