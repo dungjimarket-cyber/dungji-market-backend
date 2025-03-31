@@ -30,9 +30,7 @@ SECRET_KEY = "django-insecure-6yq+(hn%+5$vfx-rb3^0*s*627ei9*vls(w86ti(%!8o)@bslx
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    'api.dungjimarket.com',
-]
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost").split(" ")
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
