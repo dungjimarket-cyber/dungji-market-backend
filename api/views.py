@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.authtoken.models import Token
 from .models import Category, Product, GroupBuy, Participation
 from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer
 import json
@@ -77,6 +78,8 @@ def create_sns_user(request):
         # Check if user exists by sns_id
         user = User.objects.filter(sns_id=sns_id).first()
         if user:
+            user.last_login = timezone.now()
+            user.save()
             refresh = RefreshToken.for_user(user)
             return Response({
                 'jwt': {
