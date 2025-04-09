@@ -68,14 +68,39 @@ class Product(models.Model):
         ('device', '기기'),
         ('service', '통신/서비스'),
     )
+    CARRIER_CHOICES = (
+        ('SKT', 'SK텔레콤'),
+        ('KT', 'KT'),
+        ('LGU', 'LG U+'),
+        ('MVNO', '알뜰폰'),
+    )
+    REGISTRATION_TYPE_CHOICES = (
+        ('MNP', '번호이동'),
+        ('NEW', '신규가입'),
+        ('CHANGE', '기기변경'),
+    )
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)  # Add description field
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
+    category_name = models.CharField(max_length=100, blank=True)  # 카테고리 이름 직접 저장
     product_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     base_price = models.PositiveIntegerField()  # 시장가격
     image_url = models.URLField()
     is_available = models.BooleanField(default=True)
+    # 추가 필드
+    carrier = models.CharField(max_length=10, choices=CARRIER_CHOICES, blank=True, null=True)
+    registration_type = models.CharField(max_length=10, choices=REGISTRATION_TYPE_CHOICES, blank=True, null=True)
+    plan_info = models.CharField(max_length=255, blank=True, null=True)  # 요금제 정보
+    contract_info = models.CharField(max_length=255, blank=True, null=True)  # 계약 정보
+    total_support_amount = models.PositiveIntegerField(blank=True, null=True)  # 총 지원금
+    release_date = models.DateField(blank=True, null=True)  # 출시일
+    
+    def save(self, *args, **kwargs):
+        # 카테고리 이름 자동 저장
+        if self.category and not self.category_name:
+            self.category_name = self.category.name
+        super().save(*args, **kwargs)
 
 class GroupBuy(models.Model):
     STATUS_CHOICES = (
@@ -90,6 +115,7 @@ class GroupBuy(models.Model):
     title = models.CharField(max_length=255)  # Required field
     description = models.TextField(blank=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True)  # Temporarily allow null
+    product_name = models.CharField(max_length=255, blank=True)  # 상품 이름 백업
     creator = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='created_groupbuys')  # Temporarily allow null
     participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys')
     min_participants = models.PositiveSmallIntegerField(default=2)
@@ -100,6 +126,12 @@ class GroupBuy(models.Model):
     current_participants = models.PositiveIntegerField(default=0)
     voting_end = models.DateTimeField(null=True, blank=True)
     target_price = models.PositiveIntegerField(null=True, blank=True)  # 목표 가격
+    
+    def save(self, *args, **kwargs):
+        # 상품 이름 백업
+        if self.product and not self.product_name:
+            self.product_name = self.product.name
+        super().save(*args, **kwargs)
 
     def clean(self):
         from django.core.exceptions import ValidationError
