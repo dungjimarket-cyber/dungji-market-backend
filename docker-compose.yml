@@ -13,10 +13,24 @@ services:
       - .env
     environment:
       - DJANGO_SETTINGS_MODULE=dungji_market_backend.settings
+      - PYTHONUNBUFFERED=1
     command: sh -c '
       python manage.py migrate &&
       python manage.py collectstatic --noinput &&
-      gunicorn dungji_market_backend.wsgi:application --bind 0.0.0.0:8000'
+      gunicorn dungji_market_backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120'
+    restart: always
+    
+  # Nginx 서비스 추가 (정적 파일 서빙)
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - static_volume:/usr/share/nginx/html/static
+      - media_volume:/usr/share/nginx/html/media
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - "80:80"
+    depends_on:
+      - web
     restart: always
 
 volumes:

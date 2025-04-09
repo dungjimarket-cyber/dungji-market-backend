@@ -29,14 +29,24 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 
 CORS_ALLOWED_ORIGINS = [
-     "http://localhost:3000",
+    "http://localhost:3000",
     "https://www.dungjimarket.com",
     "http://13.125.227.190:8000",
-    "https://api.dungjimarket.com"
+    "https://api.dungjimarket.com",
+    "http://api.dungjimarket.com"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # 개발 환경에서만 모든 오리진 허용
+
+# CSRF 설정
+CSRF_TRUSTED_ORIGINS = [
+    "https://api.dungjimarket.com",
+    "http://api.dungjimarket.com",
+    "https://www.dungjimarket.com",
+    "http://localhost:3000",
+    "http://13.125.227.190:8000"
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -144,9 +154,25 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# 추가 정적 파일 디렉토리 설정
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
+
+# 정적 파일 수집 방법 설정
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
+
+# 보안 설정
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from api.views import (
     CategoryViewSet, ProductViewSet, GroupBuyViewSet,
@@ -44,3 +46,9 @@ urlpatterns = [
     ])),
     path('api/', include(router.urls)),
 ]
+
+# 개발 환경에서는 Django가 정적 파일 제공
+# 운영 환경에서는 웹 서버가 정적 파일 제공을 담당하는 것이 좋지만, 운영 환경에서도 작동하도록 설정
+if settings.DEBUG or True:  # 운영 환경에서도 Django가 정적 파일 제공
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
