@@ -242,7 +242,13 @@ class GroupBuyViewSet(ModelViewSet):
             'description': product.description,
             'base_price': product.base_price,
             'image_url': product.image_url,
-            'category_name': product.category.name if product.category else None
+            'category_name': product.category_name or (product.category.name if product.category else None),
+            'carrier': product.carrier,
+            'registration_type': product.registration_type,
+            'plan_info': product.plan_info,
+            'contract_info': product.contract_info,
+            'total_support_amount': product.total_support_amount,
+            'release_date': product.release_date.isoformat() if product.release_date else None
         }
         return data
 
