@@ -142,10 +142,6 @@ def create_sns_user(request):
 class CategoryViewSet(ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-
-class CategoryViewSet(ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
     permission_classes = [AllowAny]
     lookup_field = 'slug'
 

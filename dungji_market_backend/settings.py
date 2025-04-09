@@ -32,6 +32,7 @@ CORS_ALLOWED_ORIGINS = [
      "http://localhost:3000",
     "https://www.dungjimarket.com",
     "http://13.125.227.190:8000",
+    "https://api.dungjimarket.com"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
