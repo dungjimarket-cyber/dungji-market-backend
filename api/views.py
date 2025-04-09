@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import authentication_classes, permission_classes, api_view, action
 from rest_framework.views import APIView
@@ -68,6 +69,10 @@ def create_sns_user(request):
         email = data.get('email')
         name = data.get('name', '')
         profile_image = data.get('profile_image', '')
+        
+        # 디버깅 로그 추가
+        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}")
+        logger.info(f"프로필 이미지 URL: {profile_image}")
 
         if not sns_id or not sns_type or not email:
             return Response(
@@ -78,7 +83,12 @@ def create_sns_user(request):
         # Check if user exists by sns_id
         user = User.objects.filter(sns_id=sns_id).first()
         if user:
+            # 기존 사용자 정보 업데이트
             user.last_login = timezone.now()
+            # 프로필 이미지 매번 업데이트 (변경사항이 있을 수 있으므로)
+            if profile_image:
+                logger.info(f"기존 사용자({user.id})의 프로필 이미지 업데이트: {profile_image}")
+                user.profile_image = profile_image
             user.save()
             refresh = RefreshToken.for_user(user)
             return Response({
@@ -88,6 +98,10 @@ def create_sns_user(request):
                 },
                 'user_id': user.id,
                 'username': user.get_full_name() or user.username,
+                'phone_number': user.phone_number,
+                'profile_image': user.profile_image,
+                'sns_type': user.sns_type,
+                'sns_id': user.sns_id,
                 'email': user.email,
                 'access': str(refresh.access_token),
                 'refresh': str(refresh)
@@ -109,24 +123,40 @@ def create_sns_user(request):
             user.save()
         else:
             # Create new user
+            logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}")
+            logger.info(f"새 사용자 프로필 이미지: {profile_image}")
+            
+            # 사용자 생성
             user = User.objects.create_user(
                 username=email,
                 email=email,
                 password=None,  # SNS users don't need password
                 first_name=name,
                 sns_type=sns_type,
-                sns_id=sns_id,
-                profile_image=profile_image
+                sns_id=sns_id
             )
+            
+            # 프로필 이미지 별도 설정
+            if profile_image:
+                user.profile_image = profile_image
+                user.save()
+                logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
 
         token, _ = Token.objects.get_or_create(user=user)
+        # 로깅 추가
+        logger.info(f"반환할 사용자 정보: id={user.id}, first_name={user.first_name}, username={user.username}, full_name={user.get_full_name()}")
+        
         return Response({
             'jwt': {
                 'access': token.key,
                 'refresh': token.key,  # For compatibility with frontend, using same token
             },
             'user_id': user.id,
-            'username': user.get_full_name() or user.username,
+            'username': user.first_name or user.get_full_name() or user.username,  # 닉네임 우선 사용
+            'phone_number': user.phone_number,
+            'profile_image': user.profile_image,
+            'sns_type': user.sns_type,
+            'sns_id': user.sns_id,
             'email': user.email,
             'access': token.key,
             'refresh': token.key,  # For compatibility with frontend

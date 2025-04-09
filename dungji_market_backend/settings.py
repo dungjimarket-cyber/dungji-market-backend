@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "api",
     "rest_framework",
+    "rest_framework.authtoken",  # Token 인증을 위해 추가
     "rest_framework_simplejwt",
     "corsheaders",
 ]
