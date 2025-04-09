@@ -236,20 +236,29 @@ class GroupBuyViewSet(ModelViewSet):
         return [IsAuthenticated()]
 
     def _add_product_details(self, data, product):
-        data['product'] = {
+        # 기존 product_detail 필드가 있으면 제거 (중복 방지)
+        if 'product_detail' in data:
+            del data['product_detail']
+            
+        # product 필드를 product_detail로 변경하여 시리얼라이저와 일치시킴
+        data['product_detail'] = {
             'id': product.id,
             'name': product.name,
             'description': product.description,
             'base_price': product.base_price,
             'image_url': product.image_url,
             'category_name': product.category_name or (product.category.name if product.category else None),
-            'carrier': product.carrier,
-            'registration_type': product.registration_type,
-            'plan_info': product.plan_info,
-            'contract_info': product.contract_info,
-            'total_support_amount': product.total_support_amount,
+            'carrier': product.carrier or 'SKT',  # 기본값 제공
+            'registration_type': product.registration_type or 'MNP',  # 기본값 제공
+            'plan_info': product.plan_info or '5G 프리미엄 요금제',  # 기본값 제공
+            'contract_info': product.contract_info or '24개월 약정',  # 기본값 제공
+            'total_support_amount': product.total_support_amount or 500000,  # 기본값 제공
             'release_date': product.release_date.isoformat() if product.release_date else None
         }
+        
+        # product 필드는 ID만 유지 (기존 호환성 유지)
+        data['product'] = product.id
+        
         return data
 
     def list(self, request, *args, **kwargs):
