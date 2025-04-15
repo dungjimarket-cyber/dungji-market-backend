@@ -45,6 +45,8 @@ class User(AbstractUser):
     )
     
     class Meta:
+        verbose_name = '사용자'
+        verbose_name_plural = '사용자 관리'
         constraints = [
             models.UniqueConstraint(
                 fields=['username', 'phone_number'],
@@ -53,10 +55,14 @@ class User(AbstractUser):
         ]
 
 class Category(models.Model):
-    name = models.CharField(max_length=255)
-    slug = models.SlugField(unique=True, null=True)
-    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
-    is_service = models.BooleanField(default=False)  # 서비스 구분 필드 추가
+    name = models.CharField(max_length=255, verbose_name='카테고리명')
+    slug = models.SlugField(unique=True, null=True, verbose_name='슬러그')
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='상위 카테고리')
+    is_service = models.BooleanField(default=False, verbose_name='서비스 여부')  # 서비스 구분 필드 추가
+    
+    class Meta:
+        verbose_name = '카테고리'
+        verbose_name_plural = '카테고리 관리'
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -72,29 +78,33 @@ class Product(models.Model):
         ('SKT', 'SK텔레콤'),
         ('KT', 'KT'),
         ('LGU', 'LG U+'),
-        ('MVNO', '알뜰폰'),
+        ('MVNO', '알뜻폰'),
     )
     REGISTRATION_TYPE_CHOICES = (
         ('MNP', '번호이동'),
         ('NEW', '신규가입'),
         ('CHANGE', '기기변경'),
     )
-    name = models.CharField(max_length=255)
-    slug = models.SlugField(unique=True)
-    description = models.TextField(blank=True)  # Add description field
-    category = models.ForeignKey(Category, on_delete=models.PROTECT)
-    category_name = models.CharField(max_length=100, blank=True)  # 카테고리 이름 직접 저장
-    product_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
-    base_price = models.PositiveIntegerField()  # 시장가격
-    image_url = models.URLField()
-    is_available = models.BooleanField(default=True)
+    name = models.CharField(max_length=255, verbose_name='상품명')
+    slug = models.SlugField(unique=True, verbose_name='슬러그')
+    description = models.TextField(blank=True, verbose_name='상품 설명')  # Add description field
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, verbose_name='카테고리')
+    category_name = models.CharField(max_length=100, blank=True, verbose_name='카테고리명')  # 카테고리 이름 직접 저장
+    product_type = models.CharField(max_length=10, choices=TYPE_CHOICES, verbose_name='상품 유형')
+    base_price = models.PositiveIntegerField(verbose_name='기본 가격')  # 시장가격
+    image_url = models.URLField(verbose_name='이미지 URL')
+    is_available = models.BooleanField(default=True, verbose_name='판매 가능 여부')
     # 추가 필드
-    carrier = models.CharField(max_length=10, choices=CARRIER_CHOICES, blank=True, null=True)
-    registration_type = models.CharField(max_length=10, choices=REGISTRATION_TYPE_CHOICES, blank=True, null=True)
-    plan_info = models.CharField(max_length=255, blank=True, null=True)  # 요금제 정보
-    contract_info = models.CharField(max_length=255, blank=True, null=True)  # 계약 정보
-    total_support_amount = models.PositiveIntegerField(blank=True, null=True)  # 총 지원금
-    release_date = models.DateField(blank=True, null=True)  # 출시일
+    carrier = models.CharField(max_length=10, choices=CARRIER_CHOICES, blank=True, null=True, verbose_name='통신사')
+    registration_type = models.CharField(max_length=10, choices=REGISTRATION_TYPE_CHOICES, blank=True, null=True, verbose_name='가입 유형')
+    plan_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='요금제 정보')  # 요금제 정보
+    contract_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='계약 정보')  # 계약 정보
+    total_support_amount = models.PositiveIntegerField(blank=True, null=True, verbose_name='총 지원금')  # 총 지원금
+    release_date = models.DateField(blank=True, null=True, verbose_name='출시일')  # 출시일
+    
+    class Meta:
+        verbose_name = '상품'
+        verbose_name_plural = '상품 관리'
     
     def save(self, *args, **kwargs):
         # 카테고리 이름 자동 저장
@@ -112,20 +122,20 @@ class GroupBuy(models.Model):
         ('cancelled', '취소됨'),
     )
     
-    title = models.CharField(max_length=255)  # Required field
-    description = models.TextField(blank=True)
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True)  # Temporarily allow null
-    product_name = models.CharField(max_length=255, blank=True)  # 상품 이름 백업
-    creator = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='created_groupbuys')  # Temporarily allow null
-    participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys')
-    min_participants = models.PositiveSmallIntegerField(default=2)
-    max_participants = models.PositiveSmallIntegerField(default=5)
-    start_time = models.DateTimeField(default=now)  # 시작일을 현재 시간으로 기본값 설정
-    end_time = models.DateTimeField()  # 종료 시간 명시적 관리
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='recruiting')
-    current_participants = models.PositiveIntegerField(default=0)
-    voting_end = models.DateTimeField(null=True, blank=True)
-    target_price = models.PositiveIntegerField(null=True, blank=True)  # 목표 가격
+    title = models.CharField(max_length=255, verbose_name='공구 제목')  # Required field
+    description = models.TextField(blank=True, verbose_name='공구 설명')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, verbose_name='상품')  # Temporarily allow null
+    product_name = models.CharField(max_length=255, blank=True, verbose_name='상품명 백업')  # 상품 이름 백업
+    creator = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='created_groupbuys', verbose_name='생성자')  # Temporarily allow null
+    participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys', verbose_name='참여자')
+    min_participants = models.PositiveSmallIntegerField(default=2, verbose_name='최소 참여자 수')
+    max_participants = models.PositiveSmallIntegerField(default=5, verbose_name='최대 참여자 수')
+    start_time = models.DateTimeField(default=now, verbose_name='시작 시간')  # 시작일을 현재 시간으로 기본값 설정
+    end_time = models.DateTimeField(verbose_name='종료 시간')  # 종료 시간 명시적 관리
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='recruiting', verbose_name='상태')
+    current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 참여자 수')
+    voting_end = models.DateTimeField(null=True, blank=True, verbose_name='투표 종료 시간')
+    target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     
     def save(self, *args, **kwargs):
         # 상품 이름 백업
@@ -177,6 +187,8 @@ class GroupBuy(models.Model):
             )
 
     class Meta:
+        verbose_name = '공동구매'
+        verbose_name_plural = '공동구매 관리'
         indexes = [
             models.Index(fields=['status', 'end_time']),
         ]
@@ -188,11 +200,11 @@ class GroupBuy(models.Model):
         ]
 
 class Participation(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE)
-    joined_at = models.DateTimeField(auto_now_add=True)
-    is_leader = models.BooleanField(default=False)
-    is_locked = models.BooleanField(default=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자')
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, verbose_name='공동구매')
+    joined_at = models.DateTimeField(auto_now_add=True, verbose_name='참여 시간')
+    is_leader = models.BooleanField(default=False, verbose_name='리더 여부')
+    is_locked = models.BooleanField(default=False, verbose_name='잠금 여부')
 
     def save(self, *args, **kwargs):
         if Participation.objects.filter(
@@ -207,6 +219,8 @@ class Participation(models.Model):
         return not self.is_locked and self.groupbuy.status == 'recruiting'
 
     class Meta:
+        verbose_name = '참여 정보'
+        verbose_name_plural = '참여 정보 관리'
         constraints = [
             models.UniqueConstraint(
                 fields=['user', 'groupbuy'],
@@ -220,13 +234,13 @@ class Bid(models.Model):
         ('support', '지원금입찰'),
     )
     
-    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True)  # Temporarily allow null
-    seller = models.ForeignKey(User, on_delete=models.CASCADE, null=True)  # Temporarily allow null
-    bid_type = models.CharField(max_length=10, choices=BID_TYPE, default='price')
-    amount = models.PositiveIntegerField(default=0)
-    contract_period = models.PositiveSmallIntegerField(null=True, blank=True)  # 약정기간(월)
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_selected = models.BooleanField(default=False)  # 최종선택여부
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, verbose_name='공동구매')  # Temporarily allow null
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, null=True, verbose_name='판매자')  # Temporarily allow null
+    bid_type = models.CharField(max_length=10, choices=BID_TYPE, default='price', verbose_name='입찰 유형')
+    amount = models.PositiveIntegerField(default=0, verbose_name='입찰 금액')
+    contract_period = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='약정 기간(월)')  # 약정기간(월)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성 시간')
+    is_selected = models.BooleanField(default=False, verbose_name='선택 여부')  # 최종선택여부
     
     @property
     def masked_amount(self):
@@ -235,6 +249,8 @@ class Bid(models.Model):
         return str(self.amount)
 
     class Meta:
+        verbose_name = '입찰'
+        verbose_name_plural = '입찰 관리'
         ordering = [
             Case(
                 When(bid_type='price', then='amount'),
@@ -255,18 +271,22 @@ class Vote(models.Model):
         ('cancel', '포기'),
     )
     
-    participation = models.ForeignKey(Participation, on_delete=models.CASCADE)
-    choice = models.CharField(max_length=10, choices=VOTE_CHOICE)
-    voted_at = models.DateTimeField(auto_now_add=True)
+    participation = models.ForeignKey(Participation, on_delete=models.CASCADE, verbose_name='참여 정보')
+    choice = models.CharField(max_length=10, choices=VOTE_CHOICE, verbose_name='선택')
+    voted_at = models.DateTimeField(auto_now_add=True, verbose_name='투표 시간')
+    
+    class Meta:
+        verbose_name = '투표'
+        verbose_name_plural = '투표 관리'
 
 class Penalty(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    reason = models.TextField()
-    penalty_type = models.CharField(max_length=20)
-    start_date = models.DateTimeField(default=timezone.now)
-    end_date = models.DateTimeField()
-    is_active = models.BooleanField(default=True)
-    count = models.PositiveSmallIntegerField(default=1)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자')
+    reason = models.TextField(verbose_name='사유')
+    penalty_type = models.CharField(max_length=20, verbose_name='페널티 유형')
+    start_date = models.DateTimeField(default=timezone.now, verbose_name='시작일')
+    end_date = models.DateTimeField(verbose_name='종료일')
+    is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
+    count = models.PositiveSmallIntegerField(default=1, verbose_name='누적 횟수')
 
     def get_penalty_duration(self):
         duration_map = {
@@ -283,6 +303,8 @@ class Penalty(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
+        verbose_name = '페널티'
+        verbose_name_plural = '페널티 관리'
         constraints = [
             models.UniqueConstraint(
                 fields=['user', 'penalty_type'],
