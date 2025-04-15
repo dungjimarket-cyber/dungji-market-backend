@@ -13,6 +13,9 @@ class User(AbstractUser):
         ('seller', '판매자'),
         ('admin', '관리자'),
     )
+    
+    def __str__(self):
+        return f"{self.username} ({self.get_role_display()})"
     SNS_TYPE_CHOICES = (
         ('google', 'Google'),
         ('kakao', 'Kakao'),
@@ -60,6 +63,10 @@ class Category(models.Model):
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='상위 카테고리')
     is_service = models.BooleanField(default=False, verbose_name='서비스 여부')  # 서비스 구분 필드 추가
     
+    def __str__(self):
+        parent_name = f" ({self.parent.name})" if self.parent else ""
+        return f"{self.name}{parent_name}"
+    
     class Meta:
         verbose_name = '카테고리'
         verbose_name_plural = '카테고리 관리'
@@ -74,6 +81,9 @@ class Product(models.Model):
         ('device', '기기'),
         ('service', '통신/서비스'),
     )
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_product_type_display()})"
     CARRIER_CHOICES = (
         ('SKT', 'SK텔레콤'),
         ('KT', 'KT'),
@@ -142,6 +152,9 @@ class GroupBuy(models.Model):
         if self.product and not self.product_name:
             self.product_name = self.product.name
         super().save(*args, **kwargs)
+        
+    def __str__(self):
+        return f"{self.title} - {self.product_name if self.product_name else (self.product.name if self.product else '상품 없음')}"
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -205,6 +218,10 @@ class Participation(models.Model):
     joined_at = models.DateTimeField(auto_now_add=True, verbose_name='참여 시간')
     is_leader = models.BooleanField(default=False, verbose_name='리더 여부')
     is_locked = models.BooleanField(default=False, verbose_name='잠금 여부')
+    
+    def __str__(self):
+        leader_mark = "[리더]" if self.is_leader else ""
+        return f"{self.user.username} - {self.groupbuy.title} {leader_mark}"
 
     def save(self, *args, **kwargs):
         if Participation.objects.filter(
@@ -233,6 +250,10 @@ class Bid(models.Model):
         ('price', '가격입찰'),
         ('support', '지원금입찰'),
     )
+    
+    def __str__(self):
+        selected = "[선택됨]" if self.is_selected else ""
+        return f"{self.seller.username} - {self.groupbuy.title} ({self.get_bid_type_display()}: {self.amount}원) {selected}"
     
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, verbose_name='공동구매')  # Temporarily allow null
     seller = models.ForeignKey(User, on_delete=models.CASCADE, null=True, verbose_name='판매자')  # Temporarily allow null
@@ -271,6 +292,9 @@ class Vote(models.Model):
         ('cancel', '포기'),
     )
     
+    def __str__(self):
+        return f"{self.participation.user.username} - {self.get_choice_display()} ({self.participation.groupbuy.title})"
+    
     participation = models.ForeignKey(Participation, on_delete=models.CASCADE, verbose_name='참여 정보')
     choice = models.CharField(max_length=10, choices=VOTE_CHOICE, verbose_name='선택')
     voted_at = models.DateTimeField(auto_now_add=True, verbose_name='투표 시간')
@@ -287,6 +311,10 @@ class Penalty(models.Model):
     end_date = models.DateTimeField(verbose_name='종료일')
     is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
     count = models.PositiveSmallIntegerField(default=1, verbose_name='누적 횟수')
+    
+    def __str__(self):
+        active = "[활성]" if self.is_active else "[비활성]"
+        return f"{self.user.username} - {self.penalty_type} ({self.count}회) {active}"
 
     def get_penalty_duration(self):
         duration_map = {
@@ -313,6 +341,8 @@ class Penalty(models.Model):
         ]
     
 class Badge(models.Model):
+    def __str__(self):
+        return f"{self.user.username} - Level {self.level}"
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='badges')
     level = models.CharField(max_length=50)  # 예: 초보참새, 우수한참새
     icon = models.ImageField(upload_to='badges/')
