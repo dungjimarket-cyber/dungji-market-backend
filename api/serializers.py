@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from api.models import *
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class CategorySerializer(serializers.ModelSerializer):
     subcategories = serializers.SerializerMethodField()
@@ -88,17 +91,21 @@ class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     creator_name = serializers.CharField(source='creator.first_name', read_only=True)
     product_detail = ProductSerializer(source='product', read_only=True)
+    creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'product_detail', 'creator', 'creator_name',
                 'status', 'min_participants', 'max_participants',
-                'start_time', 'end_time', 'current_participants']
+                'start_time', 'end_time', 'current_participants', 'region_type', 'product_details']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
+            'creator': {'required': True},  # creator 필드를 필수로 지정
             'min_participants': {'required': True, 'min_value': 1},
             'max_participants': {'required': True, 'min_value': 1, 'max_value': 100},
-            'end_time': {'required': True}
+            'end_time': {'required': True},
+            'region_type': {'required': False},
+            'product_details': {'required': False}
         }
 
     def validate(self, data):

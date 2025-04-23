@@ -259,6 +259,11 @@ class GroupBuy(models.Model):
         ('cancelled', '취소됨'),
     )
     
+    REGION_TYPE_CHOICES = (
+        ('local', '지역'),
+        ('nationwide', '전국(비대면)'),
+    )
+    
     title = models.CharField(max_length=255, verbose_name='공구 제목')  # Required field
     description = models.TextField(blank=True, verbose_name='공구 설명')
     product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, verbose_name='상품')  # Temporarily allow null
@@ -273,6 +278,8 @@ class GroupBuy(models.Model):
     current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 참여자 수')
     voting_end = models.DateTimeField(null=True, blank=True, verbose_name='투표 종료 시간')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
+    region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')
+    product_details = models.JSONField(null=True, blank=True, verbose_name='상품 세부 정보')
     
     def save(self, *args, **kwargs):
         # 상품 이름 백업
