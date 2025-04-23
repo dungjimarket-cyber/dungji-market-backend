@@ -22,7 +22,7 @@ from rest_framework.routers import DefaultRouter
 from api.views import (
     CategoryViewSet, ProductViewSet, GroupBuyViewSet,
     ParticipationViewSet, register_user, create_sns_user,
-    UserProfileView
+    UserProfileView, get_category_fields
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -45,6 +45,7 @@ urlpatterns = [
         path('profile/', UserProfileView.as_view(), name='profile'),
     ])),
     path('api/', include(router.urls)),
+    path('api/categories/<int:category_id>/fields/', get_category_fields, name='category_fields'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

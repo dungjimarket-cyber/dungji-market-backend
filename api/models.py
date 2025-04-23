@@ -58,10 +58,20 @@ class User(AbstractUser):
         ]
 
 class Category(models.Model):
+    DETAIL_TYPE_CHOICES = (
+        ('none', '기본'),
+        ('telecom', '통신'),
+        ('electronics', '가전'),
+        ('rental', '렌탈'),
+        ('subscription', '구독'),
+    )
+    
     name = models.CharField(max_length=255, verbose_name='카테고리명')
     slug = models.SlugField(unique=True, null=True, verbose_name='슬러그')
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='상위 카테고리')
     is_service = models.BooleanField(default=False, verbose_name='서비스 여부')  # 서비스 구분 필드 추가
+    detail_type = models.CharField(max_length=20, choices=DETAIL_TYPE_CHOICES, default='none', verbose_name='상세 정보 유형')
+    required_fields = models.JSONField(default=dict, blank=True, verbose_name='필수 필드')
     
     def __str__(self):
         parent_name = f" ({self.parent.name})" if self.parent else ""
@@ -88,7 +98,7 @@ class Product(models.Model):
         ('SKT', 'SK텔레콤'),
         ('KT', 'KT'),
         ('LGU', 'LG U+'),
-        ('MVNO', '알뜻폰'),
+        ('MVNO', '알뜰폰'),
     )
     REGISTRATION_TYPE_CHOICES = (
         ('MNP', '번호이동'),
@@ -97,30 +107,147 @@ class Product(models.Model):
     )
     name = models.CharField(max_length=255, verbose_name='상품명')
     slug = models.SlugField(unique=True, verbose_name='슬러그')
-    description = models.TextField(blank=True, verbose_name='상품 설명')  # Add description field
+    description = models.TextField(blank=True, verbose_name='상품 설명')
     category = models.ForeignKey(Category, on_delete=models.PROTECT, verbose_name='카테고리')
-    category_name = models.CharField(max_length=100, blank=True, verbose_name='카테고리명')  # 카테고리 이름 직접 저장
+    category_name = models.CharField(max_length=100, blank=True, verbose_name='카테고리명')
     product_type = models.CharField(max_length=10, choices=TYPE_CHOICES, verbose_name='상품 유형')
-    base_price = models.PositiveIntegerField(verbose_name='기본 가격')  # 시장가격
+    base_price = models.PositiveIntegerField(verbose_name='기본 가격')
     image_url = models.URLField(verbose_name='이미지 URL')
     is_available = models.BooleanField(default=True, verbose_name='판매 가능 여부')
-    # 추가 필드
-    carrier = models.CharField(max_length=10, choices=CARRIER_CHOICES, blank=True, null=True, verbose_name='통신사')
-    registration_type = models.CharField(max_length=10, choices=REGISTRATION_TYPE_CHOICES, blank=True, null=True, verbose_name='가입 유형')
-    plan_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='요금제 정보')  # 요금제 정보
-    contract_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='계약 정보')  # 계약 정보
-    total_support_amount = models.PositiveIntegerField(blank=True, null=True, verbose_name='총 지원금')  # 총 지원금
-    release_date = models.DateField(blank=True, null=True, verbose_name='출시일')  # 출시일
+    release_date = models.DateField(blank=True, null=True, verbose_name='출시일')
+    attributes = models.JSONField(default=dict, blank=True, verbose_name='상품 특성')
     
     class Meta:
         verbose_name = '상품'
         verbose_name_plural = '상품 관리'
+    
+    def get_detail(self):
+        """카테고리 유형에 따라 적절한 상세 정보 모델 반환"""
+        if not self.category:
+            return None
+            
+        detail_type = self.category.detail_type
+        
+        if detail_type == 'telecom' and hasattr(self, 'telecom_detail'):
+            return self.telecom_detail
+        elif detail_type == 'electronics' and hasattr(self, 'electronics_detail'):
+            return self.electronics_detail
+        elif detail_type == 'rental' and hasattr(self, 'rental_detail'):
+            return self.rental_detail
+        elif detail_type == 'subscription' and hasattr(self, 'subscription_detail'):
+            return self.subscription_detail
+        elif detail_type == 'none' and hasattr(self, 'standard_detail'):
+            return self.standard_detail
+        return None
     
     def save(self, *args, **kwargs):
         # 카테고리 이름 자동 저장
         if self.category and not self.category_name:
             self.category_name = self.category.name
         super().save(*args, **kwargs)
+
+# 통신 상품 특화 정보 (휴대폰, 인터넷 등)
+class TelecomProductDetail(models.Model):
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='telecom_detail', verbose_name='상품')
+    carrier = models.CharField(max_length=10, choices=Product.CARRIER_CHOICES, verbose_name='통신사')
+    registration_type = models.CharField(max_length=10, choices=Product.REGISTRATION_TYPE_CHOICES, verbose_name='가입 유형')
+    plan_info = models.CharField(max_length=255, verbose_name='요금제 정보')
+    contract_info = models.CharField(max_length=255, verbose_name='계약 정보')
+    total_support_amount = models.PositiveIntegerField(verbose_name='총 지원금')
+    
+    class Meta:
+        verbose_name = '통신 상품 상세'
+        verbose_name_plural = '통신 상품 상세 관리'
+
+# 가전 제품 특화 정보
+class ElectronicsProductDetail(models.Model):
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='electronics_detail', verbose_name='상품')
+    manufacturer = models.CharField(max_length=100, verbose_name='제조사')
+    warranty_period = models.PositiveSmallIntegerField(verbose_name='보증 기간(개월)')
+    power_consumption = models.CharField(max_length=50, blank=True, verbose_name='소비 전력')
+    dimensions = models.CharField(max_length=100, blank=True, verbose_name='제품 크기')
+    
+    class Meta:
+        verbose_name = '가전 제품 상세'
+        verbose_name_plural = '가전 제품 상세 관리'
+
+# 렌탈 상품 특화 정보
+class RentalProductDetail(models.Model):
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='rental_detail', verbose_name='상품')
+    rental_period_options = models.JSONField(verbose_name='렌탈 기간 옵션')
+    maintenance_info = models.TextField(blank=True, verbose_name='유지보수 정보')
+    deposit_amount = models.PositiveIntegerField(default=0, verbose_name='보증금')
+    monthly_fee = models.PositiveIntegerField(verbose_name='월 이용료')
+    
+    class Meta:
+        verbose_name = '렌탈 상품 상세'
+        verbose_name_plural = '렌탈 상품 상세 관리'
+
+# 구독 상품 특화 정보
+class SubscriptionProductDetail(models.Model):
+    BILLING_CYCLE_CHOICES = (
+        ('monthly', '월간'),
+        ('quarterly', '분기'),
+        ('yearly', '연간'),
+    )
+    
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='subscription_detail', verbose_name='상품')
+    billing_cycle = models.CharField(max_length=20, choices=BILLING_CYCLE_CHOICES, verbose_name='결제 주기')
+    auto_renewal = models.BooleanField(default=True, verbose_name='자동 갱신')
+    free_trial_days = models.PositiveSmallIntegerField(default=0, verbose_name='무료 체험 기간(일)')
+    
+    class Meta:
+        verbose_name = '구독 상품 상세'
+        verbose_name_plural = '구독 상품 상세 관리'
+
+# 일반 상품 특화 정보 (일반 판매 상품)
+class StandardProductDetail(models.Model):
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='standard_detail', verbose_name='상품')
+    brand = models.CharField(max_length=100, blank=True, verbose_name='브랜드')
+    origin = models.CharField(max_length=100, blank=True, verbose_name='원산지')
+    shipping_fee = models.PositiveIntegerField(default=0, verbose_name='배송비')
+    shipping_info = models.CharField(max_length=255, blank=True, verbose_name='배송 정보')
+    
+    class Meta:
+        verbose_name = '일반 상품 상세'
+        verbose_name_plural = '일반 상품 상세 관리'
+
+# 동적 필드 처리를 위한 추가 모델
+class ProductCustomField(models.Model):
+    """카테고리별 커스텀 필드 정의"""
+    FIELD_TYPE_CHOICES = (
+        ('text', '텍스트'),
+        ('number', '숫자'),
+        ('boolean', '예/아니오'),
+        ('select', '선택'),
+        ('date', '날짜'),
+    )
+    
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='custom_fields', verbose_name='카테고리')
+    field_name = models.CharField(max_length=100, verbose_name='필드명')
+    field_label = models.CharField(max_length=100, verbose_name='표시명')
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPE_CHOICES, verbose_name='필드 타입')
+    is_required = models.BooleanField(default=False, verbose_name='필수 여부')
+    options = models.JSONField(default=list, blank=True, verbose_name='선택 옵션')
+    
+    class Meta:
+        verbose_name = '상품 커스텀 필드'
+        verbose_name_plural = '상품 커스텀 필드 관리'
+        unique_together = ('category', 'field_name')
+
+class ProductCustomValue(models.Model):
+    """상품별 커스텀 필드 값"""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='custom_values', verbose_name='상품')
+    field = models.ForeignKey(ProductCustomField, on_delete=models.CASCADE, verbose_name='필드')
+    text_value = models.TextField(blank=True, null=True, verbose_name='텍스트 값')
+    number_value = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, verbose_name='숫자 값')
+    boolean_value = models.BooleanField(blank=True, null=True, verbose_name='불리언 값')
+    date_value = models.DateField(blank=True, null=True, verbose_name='날짜 값')
+    
+    class Meta:
+        verbose_name = '상품 커스텀 값'
+        verbose_name_plural = '상품 커스텀 값 관리'
+        unique_together = ('product', 'field')
 
 class GroupBuy(models.Model):
     STATUS_CHOICES = (
@@ -138,8 +265,8 @@ class GroupBuy(models.Model):
     product_name = models.CharField(max_length=255, blank=True, verbose_name='상품명 백업')  # 상품 이름 백업
     creator = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='created_groupbuys', verbose_name='생성자')  # Temporarily allow null
     participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys', verbose_name='참여자')
-    min_participants = models.PositiveSmallIntegerField(default=2, verbose_name='최소 참여자 수')
-    max_participants = models.PositiveSmallIntegerField(default=5, verbose_name='최대 참여자 수')
+    min_participants = models.PositiveSmallIntegerField(default=1, verbose_name='최소 참여자 수')
+    max_participants = models.PositiveSmallIntegerField(default=100, verbose_name='최대 참여자 수')
     start_time = models.DateTimeField(default=now, verbose_name='시작 시간')  # 시작일을 현재 시간으로 기본값 설정
     end_time = models.DateTimeField(verbose_name='종료 시간')  # 종료 시간 명시적 관리
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='recruiting', verbose_name='상태')

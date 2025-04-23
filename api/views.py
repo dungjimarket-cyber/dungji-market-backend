@@ -11,6 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.authtoken.models import Token
 from .models import Category, Product, GroupBuy, Participation
 from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer
+from .utils import update_groupbuy_status, update_groupbuys_status
 import json
 import logging
 
@@ -142,14 +143,18 @@ def create_sns_user(request):
                 user.save()
                 logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
 
-        token, _ = Token.objects.get_or_create(user=user)
+        # JWT 토큰 발급
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+        
         # 로깅 추가
         logger.info(f"반환할 사용자 정보: id={user.id}, first_name={user.first_name}, username={user.username}, full_name={user.get_full_name()}")
         
         return Response({
             'jwt': {
-                'access': token.key,
-                'refresh': token.key,  # For compatibility with frontend, using same token
+                'access': access_token,
+                'refresh': refresh_token,
             },
             'user_id': user.id,
             'username': user.first_name or user.get_full_name() or user.username,  # 닉네임 우선 사용
@@ -158,8 +163,8 @@ def create_sns_user(request):
             'sns_type': user.sns_type,
             'sns_id': user.sns_id,
             'email': user.email,
-            'access': token.key,
-            'refresh': token.key,  # For compatibility with frontend
+            'access': access_token,
+            'refresh': refresh_token,
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
@@ -202,17 +207,257 @@ class ProductViewSet(ModelViewSet):
 
     def get_queryset(self):
         queryset = Product.objects.all()
-        category_slug = self.request.query_params.get('category', None)
-        if category_slug is not None:
-            # Get the category and all its subcategories
-            category = Category.objects.filter(slug=category_slug).first()
-            if category:
-                # Get all subcategory IDs
-                subcategory_ids = list(Category.objects.filter(parent=category).values_list('id', flat=True))
-                # Include the main category ID
-                category_ids = [category.id] + subcategory_ids
-                queryset = queryset.filter(category_id__in=category_ids)
+        category = self.request.query_params.get('category', None)
+        category_type = self.request.query_params.get('category_type', None)
+        product_type = self.request.query_params.get('product_type', None)
+        
+        if category:
+            queryset = queryset.filter(category__slug=category)
+        if category_type:
+            queryset = queryset.filter(category__detail_type=category_type)
+        if product_type:
+            queryset = queryset.filter(product_type=product_type)
+            
         return queryset
+    
+    def create(self, request, *args, **kwargs):
+        # 메인 상품 데이터 추출
+        product_data = request.data.copy()
+        
+        # 카테고리별 상세 정보 추출
+        detail_data = {}
+        for detail_type in [
+            'telecom_detail', 'electronics_detail', 'rental_detail', 
+            'subscription_detail', 'standard_detail'
+        ]:
+            if detail_type in request.data:
+                detail_data[detail_type] = request.data.pop(detail_type)
+        
+        # 커스텀 필드 데이터 추출
+        custom_fields = {}
+        if 'custom_fields' in request.data:
+            custom_fields = request.data.pop('custom_fields')
+        
+        # 트랜잭션으로 모든 작업 처리
+        with transaction.atomic():
+            # 상품 생성
+            serializer = self.get_serializer(data=product_data)
+            serializer.is_valid(raise_exception=True)
+            product = serializer.save()
+            
+            # 카테고리 상세 정보 저장
+            if product.category:
+                category_detail_type = product.category.detail_type
+                if category_detail_type == 'telecom' and 'telecom_detail' in detail_data:
+                    telecom_data = detail_data['telecom_detail']
+                    telecom_serializer = TelecomProductDetailSerializer(data=telecom_data)
+                    if telecom_serializer.is_valid():
+                        telecom_serializer.save(product=product)
+                elif category_detail_type == 'electronics' and 'electronics_detail' in detail_data:
+                    electronics_data = detail_data['electronics_detail']
+                    electronics_serializer = ElectronicsProductDetailSerializer(data=electronics_data)
+                    if electronics_serializer.is_valid():
+                        electronics_serializer.save(product=product)
+                elif category_detail_type == 'rental' and 'rental_detail' in detail_data:
+                    rental_data = detail_data['rental_detail']
+                    rental_serializer = RentalProductDetailSerializer(data=rental_data)
+                    if rental_serializer.is_valid():
+                        rental_serializer.save(product=product)
+                elif category_detail_type == 'subscription' and 'subscription_detail' in detail_data:
+                    subscription_data = detail_data['subscription_detail']
+                    subscription_serializer = SubscriptionProductDetailSerializer(data=subscription_data)
+                    if subscription_serializer.is_valid():
+                        subscription_serializer.save(product=product)
+                else:
+                    standard_data = detail_data.get('standard_detail', {})
+                    standard_serializer = StandardProductDetailSerializer(data=standard_data)
+                    if standard_serializer.is_valid():
+                        standard_serializer.save(product=product)
+            
+            # 커스텀 필드 값 저장
+            for field_name, value in custom_fields.items():
+                try:
+                    field = ProductCustomField.objects.get(
+                        category=product.category, 
+                        field_name=field_name
+                    )
+                    
+                    field_type = field.field_type
+                    field_value = ProductCustomValue(product=product, field=field)
+                    
+                    if field_type == 'text':
+                        field_value.text_value = value
+                    elif field_type == 'number':
+                        field_value.number_value = value
+                    elif field_type == 'boolean':
+                        field_value.boolean_value = value
+                    elif field_type == 'date':
+                        field_value.date_value = value
+                    
+                    field_value.save()
+                except ProductCustomField.DoesNotExist:
+                    pass
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    def update(self, request, *args, **kwargs):
+        # update 메서드도 create와 유사하게 구현
+        instance = self.get_object()
+        
+        # 메인 상품 데이터 추출
+        product_data = request.data.copy()
+        
+        # 카테고리별 상세 정보 추출
+        detail_data = {}
+        for detail_type in [
+            'telecom_detail', 'electronics_detail', 'rental_detail', 
+            'subscription_detail', 'standard_detail'
+        ]:
+            if detail_type in request.data:
+                detail_data[detail_type] = request.data.pop(detail_type)
+        
+        # 커스텀 필드 데이터 추출
+        custom_fields = {}
+        if 'custom_fields' in request.data:
+            custom_fields = request.data.pop('custom_fields')
+        
+        # 트랜잭션으로 모든 작업 처리
+        with transaction.atomic():
+            # 상품 업데이트
+            serializer = self.get_serializer(instance, data=product_data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            product = serializer.save()
+            
+            # 카테고리 상세 정보 업데이트
+            if product.category:
+                category_detail_type = product.category.detail_type
+                
+                if category_detail_type == 'telecom':
+                    telecom_data = detail_data.get('telecom_detail', {})
+                    telecom_instance = getattr(product, 'telecom_detail', None)
+                    if telecom_instance:
+                        telecom_serializer = TelecomProductDetailSerializer(telecom_instance, data=telecom_data, partial=True)
+                    else:
+                        telecom_serializer = TelecomProductDetailSerializer(data=telecom_data)
+                    
+                    if telecom_serializer.is_valid():
+                        telecom_serializer.save(product=product)
+                        
+                # 다른 카테고리 타입에 대해서도 유사하게 처리...
+            
+            # 커스텀 필드 값 업데이트
+            for field_name, value in custom_fields.items():
+                try:
+                    field = ProductCustomField.objects.get(
+                        category=product.category, 
+                        field_name=field_name
+                    )
+                    
+                    try:
+                        field_value = ProductCustomValue.objects.get(product=product, field=field)
+                    except ProductCustomValue.DoesNotExist:
+                        field_value = ProductCustomValue(product=product, field=field)
+                    
+                    field_type = field.field_type
+                    if field_type == 'text':
+                        field_value.text_value = value
+                    elif field_type == 'number':
+                        field_value.number_value = value
+                    elif field_type == 'boolean':
+                        field_value.boolean_value = value
+                    elif field_type == 'date':
+                        field_value.date_value = value
+                    
+                    field_value.save()
+                except ProductCustomField.DoesNotExist:
+                    pass
+            
+            return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_category_type(self, request):
+        category_type = request.query_params.get('type', None)
+        if not category_type:
+            return Response({'error': '카테고리 타입을 지정해주세요.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        products = Product.objects.filter(category__detail_type=category_type)
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+
+@api_view(['GET'])
+def get_category_fields(request, category_id):
+    """카테고리별 필수 필드 및 커스텀 필드 정보 반환"""
+    try:
+        category = Category.objects.get(id=category_id)
+        
+        # 카테고리 기본 정보
+        data = {
+            'id': category.id,
+            'name': category.name,
+            'detail_type': category.detail_type,
+            'required_fields': category.required_fields,
+        }
+        
+        # 카테고리별 필수 필드 정보
+        detail_fields = []
+        if category.detail_type == 'telecom':
+            detail_fields = [
+                {'name': 'carrier', 'type': 'select', 'required': True, 
+                 'options': [{'value': k, 'label': v} for k, v in Product.CARRIER_CHOICES]},
+                {'name': 'registration_type', 'type': 'select', 'required': True,
+                 'options': [{'value': k, 'label': v} for k, v in Product.REGISTRATION_TYPE_CHOICES]},
+                {'name': 'plan_info', 'type': 'text', 'required': True},
+                {'name': 'contract_info', 'type': 'text', 'required': True},
+                {'name': 'total_support_amount', 'type': 'number', 'required': True},
+            ]
+        elif category.detail_type == 'electronics':
+            detail_fields = [
+                {'name': 'manufacturer', 'type': 'text', 'required': True},
+                {'name': 'warranty_period', 'type': 'number', 'required': True},
+                {'name': 'power_consumption', 'type': 'text', 'required': False},
+                {'name': 'dimensions', 'type': 'text', 'required': False},
+            ]
+        elif category.detail_type == 'rental':
+            detail_fields = [
+                {'name': 'rental_period_options', 'type': 'json', 'required': True},
+                {'name': 'maintenance_info', 'type': 'text', 'required': False},
+                {'name': 'deposit_amount', 'type': 'number', 'required': True},
+                {'name': 'monthly_fee', 'type': 'number', 'required': True},
+            ]
+        elif category.detail_type == 'subscription':
+            detail_fields = [
+                {'name': 'billing_cycle', 'type': 'select', 'required': True,
+                 'options': [{'value': k, 'label': v} for k, v in SubscriptionProductDetail.BILLING_CYCLE_CHOICES]},
+                {'name': 'auto_renewal', 'type': 'boolean', 'required': True},
+                {'name': 'free_trial_days', 'type': 'number', 'required': False},
+            ]
+        elif category.detail_type == 'none':
+            detail_fields = [
+                {'name': 'brand', 'type': 'text', 'required': False},
+                {'name': 'origin', 'type': 'text', 'required': False},
+                {'name': 'shipping_fee', 'type': 'number', 'required': True},
+                {'name': 'shipping_info', 'type': 'text', 'required': False},
+            ]
+            
+        data['detail_fields'] = detail_fields
+        
+        # 커스텀 필드 정보
+        custom_fields = []
+        for field in category.custom_fields.all():
+            custom_fields.append({
+                'name': field.field_name,
+                'label': field.field_label,
+                'type': field.field_type,
+                'required': field.is_required,
+                'options': field.options if field.field_type == 'select' else [],
+            })
+        
+        data['custom_fields'] = custom_fields
+        
+        return Response(data)
+    except Category.DoesNotExist:
+        return Response({'error': '카테고리를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
 # views.py
 from django.db.models import Count
@@ -237,6 +482,9 @@ class GroupBuyViewSet(ModelViewSet):
         # category 필터 처리
         if category_id:
             queryset = queryset.filter(product__category_id=category_id)
+            
+        # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
+        update_groupbuys_status(queryset[:100])
 
         return queryset
 
@@ -248,8 +496,27 @@ class GroupBuyViewSet(ModelViewSet):
             end_time__gt=timezone.now()
         ).order_by('-curent_participants')[:3]
         
+        # 공구 상태 자동 업데이트
+        update_groupbuys_status(popular_groupbuys)
+        
         serializer = self.get_serializer(popular_groupbuys, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        
+        now = timezone.now()
+        
+        # 계산된 상태 및 남은 시간 추가
+        for item, instance in zip(data, popular_groupbuys):
+            end_time = instance.end_time
+            item['calculated_status'] = instance.status
+            
+            # 남은 시간 계산 (초 단위)
+            if now < end_time:
+                remaining_seconds = int((end_time - now).total_seconds())
+                item['remaining_seconds'] = remaining_seconds
+            else:
+                item['remaining_seconds'] = 0
+                
+        return Response(data)
 
     @action(detail=False)
     def recent(self, request):
@@ -257,8 +524,27 @@ class GroupBuyViewSet(ModelViewSet):
             end_time__gt=timezone.now()
         ).order_by('-start_time')[:3]
         
+        # 공구 상태 자동 업데이트
+        update_groupbuys_status(recent_groupbuys)
+        
         serializer = self.get_serializer(recent_groupbuys, many=True)
-        return Response(serializer.data)  # Require authentication for creating group buys
+        data = serializer.data
+        
+        now = timezone.now()
+        
+        # 계산된 상태 및 남은 시간 추가
+        for item, instance in zip(data, recent_groupbuys):
+            end_time = instance.end_time
+            item['calculated_status'] = instance.status
+            
+            # 남은 시간 계산 (초 단위)
+            if now < end_time:
+                remaining_seconds = int((end_time - now).total_seconds())
+                item['remaining_seconds'] = remaining_seconds
+            else:
+                item['remaining_seconds'] = 0
+                
+        return Response(data)  # Require authentication for creating group buys
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'popular', 'recent']:
@@ -270,21 +556,28 @@ class GroupBuyViewSet(ModelViewSet):
         if 'product_detail' in data:
             del data['product_detail']
             
-        # product 필드를 product_detail로 변경하여 시리얼라이저와 일치시킴
-        data['product_detail'] = {
+        # Product 상세 정보 추가
+        product_details = {
             'id': product.id,
             'name': product.name,
             'description': product.description,
             'base_price': product.base_price,
             'image_url': product.image_url,
             'category_name': product.category_name or (product.category.name if product.category else None),
-            'carrier': product.carrier or 'SKT',  # 기본값 제공
-            'registration_type': product.registration_type or 'MNP',  # 기본값 제공
-            'plan_info': product.plan_info or '5G 프리미엄 요금제',  # 기본값 제공
-            'contract_info': product.contract_info or '24개월 약정',  # 기본값 제공
-            'total_support_amount': product.total_support_amount or 500000,  # 기본값 제공
+            'category_detail_type': product.category.detail_type if product.category else 'standard',
             'release_date': product.release_date.isoformat() if product.release_date else None
         }
+        
+        # 카테고리 유형별 상세 정보 추가
+        detail = product.get_detail()
+        if detail:
+            if hasattr(detail, '__dict__'):
+                for key, value in detail.__dict__.items():
+                    # id나 product_id 같은 필드는 제외
+                    if key not in ['_state', 'id', 'product_id']:
+                        product_details[key] = value
+            
+        data['product_details'] = product_details
         
         # product 필드는 ID만 유지 (기존 호환성 유지)
         data['product'] = product.id
@@ -295,20 +588,64 @@ class GroupBuyViewSet(ModelViewSet):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         data = serializer.data
+        
+        now = timezone.now()
 
         # Add product details to each group buy
         for item, instance in zip(data, queryset):
             self._add_product_details(item, instance.product)
+            
+            # 계산된 상태 추가
+            end_time = instance.end_time
+            
+            if instance.status == 'recruiting' and now > end_time:
+                if instance.current_participants >= instance.min_participants:
+                    item['calculated_status'] = 'completed'
+                else:
+                    item['calculated_status'] = 'cancelled'
+            else:
+                item['calculated_status'] = instance.status
+                
+            # 남은 시간 계산 (초 단위)
+            if now < end_time:
+                remaining_seconds = int((end_time - now).total_seconds())
+                item['remaining_seconds'] = remaining_seconds
+            else:
+                item['remaining_seconds'] = 0
 
         return Response(data)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
+        
+        # 공구 상태 자동 업데이트
+        update_groupbuy_status(instance)
+        
         serializer = self.get_serializer(instance)
         data = serializer.data
         
         # Add product details
         self._add_product_details(data, instance.product)
+        
+        # 계산된 상태 추가
+        now = timezone.now()
+        end_time = instance.end_time
+        
+        # 계산된 상태 추가
+        if instance.status == 'recruiting' and now > end_time:
+            if instance.current_participants >= instance.min_participants:
+                data['calculated_status'] = 'completed'
+            else:
+                data['calculated_status'] = 'cancelled'
+        else:
+            data['calculated_status'] = instance.status
+            
+        # 남은 시간 계산 (초 단위)
+        if now < end_time:
+            remaining_seconds = int((end_time - now).total_seconds())
+            data['remaining_seconds'] = remaining_seconds
+        else:
+            data['remaining_seconds'] = 0
         
         return Response(data)
 
@@ -326,6 +663,53 @@ class GroupBuyViewSet(ModelViewSet):
         joined = self.get_queryset().filter(participants=request.user)
         serializer = self.get_serializer(joined, many=True)
         return Response(serializer.data)
+        
+    @action(detail=True, methods=['post'])
+    def join(self, request, pk=None):
+        """사용자가 공구에 참여하는 API"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 이미 참여 중인지 확인
+        if Participation.objects.filter(user=user, groupbuy=groupbuy).exists():
+            return Response(
+                {'error': '이미 참여 중인 공구입니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 공구 상태 확인
+        now = timezone.now()
+        if groupbuy.status != 'recruiting' or now > groupbuy.end_time:
+            return Response(
+                {'error': '참여할 수 없는 공구입니다. 모집이 종료되었거나 마감되었습니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 최대 참여자 수 확인
+        if groupbuy.current_participants >= groupbuy.max_participants:
+            return Response(
+                {'error': '최대 참여자 수에 도달했습니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 참여 생성
+        participation = Participation.objects.create(
+            user=user,
+            groupbuy=groupbuy,
+            is_leader=False  # 일반 참여자
+        )
+        
+        # 현재 참여자 수 증가
+        groupbuy.current_participants += 1
+        groupbuy.save(update_fields=['current_participants'])
+        
+        return Response({
+            'id': participation.id,
+            'user_id': user.id,
+            'groupbuy_id': groupbuy.id,
+            'joined_at': participation.joined_at,
+            'message': '공구 참여가 완료되었습니다.'
+        }, status=status.HTTP_201_CREATED)
 
 class ParticipationViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]

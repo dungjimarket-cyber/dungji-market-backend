@@ -1,6 +1,11 @@
 from django.contrib import admin
 from django.contrib.admin import AdminSite
-from .models import Category, Product, GroupBuy, Bid, Penalty, User, Badge
+from .models import (
+    Category, Product, GroupBuy, Bid, Penalty, User, Badge,
+    TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
+    SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
+    ProductCustomValue
+)
 
 # Admin 사이트 타이틀 한글화
 AdminSite.site_header = '둥지마켓 관리자'
@@ -9,7 +14,9 @@ AdminSite.index_title = '둥지마켓 관리자 대시보드'
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'parent']
+    list_display = ['name', 'parent', 'detail_type']
+    list_filter = ['detail_type', 'is_service']
+    search_fields = ['name']
     
     # 한글화
     def __init__(self, model, admin_site):
@@ -49,17 +56,108 @@ class BadgeAdmin(admin.ModelAdmin):
         self.list_display_links = ('user',)
         super().__init__(model, admin_site)
 
+
+# 카테고리별 상세 정보 모델 인라인
+class TelecomProductDetailInline(admin.StackedInline):
+    model = TelecomProductDetail
+    can_delete = True
+    verbose_name_plural = '통신 상품 상세 정보'
+
+class ElectronicsProductDetailInline(admin.StackedInline):
+    model = ElectronicsProductDetail
+    can_delete = True
+    verbose_name_plural = '가전 제품 상세 정보'
+
+class RentalProductDetailInline(admin.StackedInline):
+    model = RentalProductDetail
+    can_delete = True
+    verbose_name_plural = '렌탈 상품 상세 정보'
+
+class SubscriptionProductDetailInline(admin.StackedInline):
+    model = SubscriptionProductDetail
+    can_delete = True
+    verbose_name_plural = '구독 상품 상세 정보'
+
+class StandardProductDetailInline(admin.StackedInline):
+    model = StandardProductDetail
+    can_delete = True
+    verbose_name_plural = '일반 상품 상세 정보'
+
+class ProductCustomValueInline(admin.TabularInline):
+    model = ProductCustomValue
+    extra = 1
+    verbose_name_plural = '커스텀 필드 값'
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'base_price', 'is_available')
-    search_fields = ('name', 'category__name')
-    list_filter = ('category', 'product_type')
+    list_display = ['name', 'category', 'base_price', 'is_available']
+    list_filter = ['is_available', 'category__detail_type']
+    search_fields = ['name', 'description']
     prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ('category_name',)
     
-    # 한글화
-    def __init__(self, model, admin_site):
-        self.list_display_links = ('name',)
-        super().__init__(model, admin_site)
+    def get_inline_instances(self, request, obj=None):
+        inline_instances = []
+        if obj is None:
+            return inline_instances
+            
+        inlines = self.get_inlines(request, obj)
+        
+        # 카테고리 유형에 따라 적절한 인라인 선택
+        if obj.category and obj.category.detail_type == 'telecom':
+            inlines = [TelecomProductDetailInline] + [i for i in inlines if i != TelecomProductDetailInline]
+        elif obj.category and obj.category.detail_type == 'electronics':
+            inlines = [ElectronicsProductDetailInline] + [i for i in inlines if i != ElectronicsProductDetailInline]
+        elif obj.category and obj.category.detail_type == 'rental':
+            inlines = [RentalProductDetailInline] + [i for i in inlines if i != RentalProductDetailInline]
+        elif obj.category and obj.category.detail_type == 'subscription':
+            inlines = [SubscriptionProductDetailInline] + [i for i in inlines if i != SubscriptionProductDetailInline]
+        else:
+            inlines = [StandardProductDetailInline] + [i for i in inlines if i != StandardProductDetailInline]
+        
+        # 커스텀 필드 값 인라인 추가
+        inlines.append(ProductCustomValueInline)
+            
+        for inline_class in inlines:
+            inline = inline_class(self.model, self.admin_site)
+            inline_instances.append(inline)
+            
+        return inline_instances
+
+@admin.register(ProductCustomField)
+class ProductCustomFieldAdmin(admin.ModelAdmin):
+    list_display = ['field_name', 'field_label', 'category', 'field_type', 'is_required']
+    list_filter = ['category', 'field_type', 'is_required']
+    search_fields = ['field_name', 'field_label']
+
+@admin.register(TelecomProductDetail)
+class TelecomProductDetailAdmin(admin.ModelAdmin):
+    list_display = ['product', 'carrier', 'registration_type', 'total_support_amount']
+    list_filter = ['carrier', 'registration_type']
+    search_fields = ['product__name']
+
+@admin.register(ElectronicsProductDetail)
+class ElectronicsProductDetailAdmin(admin.ModelAdmin):
+    list_display = ['product', 'manufacturer', 'warranty_period']
+    list_filter = ['manufacturer']
+    search_fields = ['product__name']
+
+@admin.register(RentalProductDetail)
+class RentalProductDetailAdmin(admin.ModelAdmin):
+    list_display = ['product', 'monthly_fee', 'deposit_amount']
+    search_fields = ['product__name']
+
+@admin.register(SubscriptionProductDetail)
+class SubscriptionProductDetailAdmin(admin.ModelAdmin):
+    list_display = ['product', 'billing_cycle', 'auto_renewal', 'free_trial_days']
+    list_filter = ['billing_cycle', 'auto_renewal']
+    search_fields = ['product__name']
+
+@admin.register(StandardProductDetail)
+class StandardProductDetailAdmin(admin.ModelAdmin):
+    list_display = ['product', 'brand', 'shipping_fee']
+    list_filter = ['brand']
+    search_fields = ['product__name']
 
 @admin.register(GroupBuy)
 class GroupBuyAdmin(admin.ModelAdmin):

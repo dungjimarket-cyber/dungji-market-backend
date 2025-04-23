@@ -17,16 +17,58 @@ class CategorySerializer(serializers.ModelSerializer):
     def get_product_count(self, obj):
         return Product.objects.filter(category=obj).count()
 
+class TelecomProductDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TelecomProductDetail
+        fields = ['carrier', 'registration_type', 'plan_info', 'contract_info', 'total_support_amount']
+
+class ElectronicsProductDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ElectronicsProductDetail
+        fields = ['manufacturer', 'warranty_period', 'power_consumption', 'dimensions']
+
+class RentalProductDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RentalProductDetail
+        fields = ['rental_period_options', 'maintenance_info', 'deposit_amount', 'monthly_fee']
+
+class SubscriptionProductDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriptionProductDetail
+        fields = ['billing_cycle', 'auto_renewal', 'free_trial_days']
+
+class StandardProductDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StandardProductDetail
+        fields = ['brand', 'origin', 'shipping_fee', 'shipping_info']
+
+class ProductCustomValueSerializer(serializers.ModelSerializer):
+    field_name = serializers.CharField(source='field.field_name', read_only=True)
+    field_type = serializers.CharField(source='field.field_type', read_only=True)
+    field_label = serializers.CharField(source='field.field_label', read_only=True)
+    
+    class Meta:
+        model = ProductCustomValue
+        fields = ['field_name', 'field_label', 'field_type', 'text_value', 'number_value', 'boolean_value', 'date_value']
+
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
+    category_detail_type = serializers.CharField(source='category.detail_type', read_only=True)
     active_groupbuy = serializers.SerializerMethodField()
+    telecom_detail = TelecomProductDetailSerializer(read_only=True)
+    electronics_detail = ElectronicsProductDetailSerializer(read_only=True)
+    rental_detail = RentalProductDetailSerializer(read_only=True)
+    subscription_detail = SubscriptionProductDetailSerializer(read_only=True)
+    standard_detail = StandardProductDetailSerializer(read_only=True)
+    custom_values = ProductCustomValueSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
         fields = ['id', 'name', 'slug', 'description', 'category', 'category_name',
-                'product_type', 'base_price', 'image_url', 'is_available', 'active_groupbuy',
-                'carrier', 'registration_type', 'plan_info', 'contract_info', 
-                'total_support_amount', 'release_date']
+                'category_detail_type', 'product_type', 'base_price', 'image_url', 
+                'is_available', 'active_groupbuy', 'release_date', 'attributes',
+                'telecom_detail', 'electronics_detail', 'rental_detail', 
+                'subscription_detail', 'standard_detail', 'custom_values']
 
     def get_active_groupbuy(self, obj):
         active = GroupBuy.objects.filter(
@@ -54,8 +96,8 @@ class GroupBuySerializer(serializers.ModelSerializer):
                 'start_time', 'end_time', 'current_participants']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
-            'min_participants': {'required': True, 'min_value': 2},
-            'max_participants': {'required': True, 'min_value': 2, 'max_value': 5},
+            'min_participants': {'required': True, 'min_value': 1},
+            'max_participants': {'required': True, 'min_value': 1, 'max_value': 100},
             'end_time': {'required': True}
         }
 
@@ -71,9 +113,9 @@ class GroupBuySerializer(serializers.ModelSerializer):
             now = timezone.now()
             end_time = data['end_time']
             
-            if end_time - now < timedelta(hours=24):
+            if end_time - now < timedelta(hours=6):
                 raise serializers.ValidationError({
-                    'end_time': '공구 기간은 최소 24시간 이상이어야 합니다.'
+                    'end_time': '공구 기간은 최소 6시간 이상이어야 합니다.'
                 })
             if end_time - now > timedelta(hours=48):
                 raise serializers.ValidationError({
