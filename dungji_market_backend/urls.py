@@ -21,7 +21,8 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from api.views import (
     CategoryViewSet, ProductViewSet, GroupBuyViewSet,
-    ParticipationViewSet, register_user, create_sns_user,
+    ParticipationViewSet, WishlistViewSet, ReviewViewSet,
+    register_user, create_sns_user,
     UserProfileView, get_category_fields
 )
 from rest_framework_simplejwt.views import (
@@ -34,6 +35,8 @@ router.register('categories', CategoryViewSet)
 router.register('products', ProductViewSet)
 router.register('groupbuys', GroupBuyViewSet)
 router.register('participations', ParticipationViewSet)
+router.register(r'wishlists', WishlistViewSet, basename='wishlist')
+router.register(r'reviews', ReviewViewSet, basename='review')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

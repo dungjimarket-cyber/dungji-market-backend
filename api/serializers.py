@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -139,3 +139,70 @@ class ParticipationSerializer(serializers.ModelSerializer):
         model = Participation
         fields = ['id', 'user', 'user_name', 'groupbuy', 'groupbuy_status',
                 'joined_at', 'is_leader', 'is_locked']
+
+
+class WishlistSerializer(serializers.ModelSerializer):
+    """찜하기 기능을 위한 시리얼라이저"""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
+    groupbuy_status = serializers.CharField(source='groupbuy.status', read_only=True)
+    product_name = serializers.CharField(source='groupbuy.product.name', read_only=True)
+    
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'user', 'user_name', 'groupbuy', 'groupbuy_title', 'groupbuy_status', 
+                'product_name', 'created_at']
+        extra_kwargs = {
+            'user': {'required': True},
+            'groupbuy': {'required': True}
+        }
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    """리뷰 및 별점 기능을 위한 시리얼라이저"""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_profile_image = serializers.URLField(source='user.profile_image', read_only=True)
+    groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
+    
+    class Meta:
+        model = Review
+        fields = ['id', 'user', 'user_name', 'user_profile_image', 'groupbuy', 'groupbuy_title',
+                'rating', 'content', 'created_at', 'updated_at', 'is_purchased']
+        extra_kwargs = {
+            'user': {'required': True, 'write_only': True},
+            'groupbuy': {'required': True},
+            'rating': {'required': True, 'min_value': 1, 'max_value': 5},
+            'content': {'required': True},
+            'is_purchased': {'read_only': True}
+        }
+    
+    def validate(self, data):
+        """
+        사용자가 해당 공구에 참여했는지 확인하여 is_purchased 필드 자동 업데이트
+        """
+        user = self.context['request'].user
+        groupbuy = data.get('groupbuy')
+        
+        # 참여 여부 확인
+        participation = Participation.objects.filter(user=user, groupbuy=groupbuy).exists()
+        # 중복 리뷰 확인 (수정이 아닌 경우)
+        if not self.instance and Review.objects.filter(user=user, groupbuy=groupbuy).exists():
+            raise serializers.ValidationError({
+                "error": "이미 리뷰를 작성하셨습니다."
+            })
+            
+        return data
+    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        groupbuy = validated_data.get('groupbuy')
+        
+        # 참여 여부 확인
+        is_purchased = Participation.objects.filter(user=user, groupbuy=groupbuy).exists()
+        
+        review = Review.objects.create(
+            **validated_data,
+            user=user,
+            is_purchased=is_purchased
+        )
+        return review

@@ -492,7 +492,59 @@ class Notification(models.Model):
     is_read = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.user.username} - {self.message[:50]}"
+        return f"{self.message[:50]}..."
+
+class Wishlist(models.Model):
+    """찜하기 기능을 위한 모델"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='wishlists', verbose_name='사용자')
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, related_name='wishlists', verbose_name='공동구매')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성 시간')
+    
+    class Meta:
+        verbose_name = '찜하기'
+        verbose_name_plural = '찜하기 관리'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'groupbuy'],
+                name='unique_wishlist'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username}의 찜: {self.groupbuy.title}"
+
+
+class Review(models.Model):
+    """리뷰 및 별점 기능을 위한 모델"""
+    RATING_CHOICES = (
+        (1, '1점'),
+        (2, '2점'),
+        (3, '3점'),
+        (4, '4점'),
+        (5, '5점'),
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews', verbose_name='작성자')
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, related_name='reviews', verbose_name='공동구매')
+    rating = models.PositiveSmallIntegerField(choices=RATING_CHOICES, verbose_name='별점')
+    content = models.TextField(verbose_name='리뷰 내용')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='작성일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    is_purchased = models.BooleanField(default=False, verbose_name='구매 확인')
+    
+    class Meta:
+        verbose_name = '리뷰'
+        verbose_name_plural = '리뷰 관리'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'groupbuy'],
+                name='unique_review_per_user_groupbuy'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username}의 리뷰: {self.groupbuy.title} ({self.rating}점)"
 
 @receiver(post_save, sender=GroupBuy)
 def handle_status_change(sender, instance, **kwargs):

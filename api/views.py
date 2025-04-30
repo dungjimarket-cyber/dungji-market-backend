@@ -9,8 +9,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.authtoken.models import Token
-from .models import Category, Product, GroupBuy, Participation
-from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer
+from .models import Category, Product, GroupBuy, Participation, Wishlist, Review
+from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer, WishlistSerializer, ReviewSerializer
 from .utils import update_groupbuy_status, update_groupbuys_status
 import json
 import logging
@@ -716,7 +716,6 @@ class ParticipationViewSet(ModelViewSet):
     queryset = Participation.objects.all()
     serializer_class = ParticipationSerializer
 
-
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -747,3 +746,116 @@ class UserProfileView(APIView):
             'profile_image': user.profile_image,
             'sns_type': user.sns_type,
         })
+
+class WishlistViewSet(ModelViewSet):
+    """찜하기 기능을 위한 ViewSet"""
+    serializer_class = WishlistSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Wishlist.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        # 사용자가 찜하기를 생성할 때 현재 사용자를 자동으로 설정
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def check_wished(self, request):
+        """특정 공구에 대한 찜하기 여부 확인"""
+        groupbuy_id = request.query_params.get('groupbuy_id')
+        if not groupbuy_id:
+            return Response({"error": "공구 ID가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        is_wished = Wishlist.objects.filter(
+            user=request.user,
+            groupbuy_id=groupbuy_id
+        ).exists()
+        
+        return Response({"is_wished": is_wished})
+    
+    @action(detail=False, methods=['post'])
+    def toggle_wish(self, request):
+        """찜하기 토글 (생성/삭제)"""
+        groupbuy_id = request.data.get('groupbuy_id')
+        if not groupbuy_id:
+            return Response({"error": "공구 ID가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            groupbuy = GroupBuy.objects.get(id=groupbuy_id)
+            wish_exists = Wishlist.objects.filter(user=request.user, groupbuy=groupbuy).exists()
+            
+            # 이미 찜한 경우 삭제, 아닌 경우 추가
+            if wish_exists:
+                Wishlist.objects.filter(user=request.user, groupbuy=groupbuy).delete()
+                return Response({"status": "unwished", "message": "찜하기가 취소되었습니다."}, status=status.HTTP_200_OK)
+            else:
+                wishlist = Wishlist.objects.create(user=request.user, groupbuy=groupbuy)
+                serializer = self.get_serializer(wishlist)
+                return Response({"status": "wished", "message": "찜하기가 추가되었습니다.", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        except GroupBuy.DoesNotExist:
+            return Response({"error": "존재하지 않는 공구입니다."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ReviewViewSet(ModelViewSet):
+    """리뷰 및 별점 기능을 위한 ViewSet"""
+    serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # 사용자 자신의 리뷰만 조회하거나 파라미터로 특정 공구 리뷰 조회
+        groupbuy_id = self.request.query_params.get('groupbuy_id')
+        if groupbuy_id:
+            return Review.objects.filter(groupbuy_id=groupbuy_id)
+        return Review.objects.filter(user=self.request.user)
+    
+    def get_permissions(self):
+        """리뷰 조회는 로그인 없이 가능, 나머지 동작은 로그인 필요"""
+        if self.action in ['list', 'retrieve', 'groupbuy_reviews']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    def perform_create(self, serializer):
+        """리뷰 작성 시 현재 사용자 정보 자동 설정"""
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def groupbuy_reviews(self, request):
+        """특정 공구의 리뷰 목록 조회"""
+        groupbuy_id = request.query_params.get('groupbuy_id')
+        if not groupbuy_id:
+            return Response({"error": "공구 ID가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        reviews = Review.objects.filter(groupbuy_id=groupbuy_id).order_by('-created_at')
+        serializer = self.get_serializer(reviews, many=True)
+        
+        # 평점 평균 계산
+        avg_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0
+        
+        return Response({
+            "reviews": serializer.data,
+            "count": reviews.count(),
+            "avg_rating": round(avg_rating, 1)
+        })
+    
+    @action(detail=False, methods=['get'])
+    def my_reviews(self, request):
+        """내가 쓰기 리뷰 목록"""
+        reviews = Review.objects.filter(user=request.user).order_by('-created_at')
+        serializer = self.get_serializer(reviews, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def report(self, request, pk=None):
+        """리뷰 신고"""
+        review = self.get_object()
+        reason = request.data.get('reason', '')
+        
+        # 신고 로직 구현 (예: 관리자에게 알림 발송 등)
+        # 실제 구현은 생략하고 신고 처리를 표시만 함
+        
+        return Response({
+            "status": "success",
+            "message": "리뷰 신고가 접수되었습니다."
+        }, status=status.HTTP_200_OK)
