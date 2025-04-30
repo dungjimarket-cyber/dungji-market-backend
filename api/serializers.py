@@ -23,7 +23,7 @@ class CategorySerializer(serializers.ModelSerializer):
 class TelecomProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = TelecomProductDetail
-        fields = ['carrier', 'registration_type', 'plan_info', 'contract_info', 'total_support_amount']
+        fields = ['carrier', 'registration_type', 'plan_info', 'contract_info']
 
 class ElectronicsProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,12 +90,13 @@ class ProductSerializer(serializers.ModelSerializer):
 class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     creator_name = serializers.CharField(source='creator.first_name', read_only=True)
-    product_detail = ProductSerializer(source='product', read_only=True)
+    # product_detail 필드는 제거 (중복 및 오류 방지)
+    product_details = ProductSerializer(source='product', read_only=True)
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     
     class Meta:
         model = GroupBuy
-        fields = ['id', 'title', 'description', 'product', 'product_name', 'product_detail', 'creator', 'creator_name',
+        fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
                 'status', 'min_participants', 'max_participants',
                 'start_time', 'end_time', 'current_participants', 'region_type', 'product_details']
         extra_kwargs = {
@@ -105,7 +106,8 @@ class GroupBuySerializer(serializers.ModelSerializer):
             'max_participants': {'required': True, 'min_value': 1, 'max_value': 100},
             'end_time': {'required': True},
             'region_type': {'required': False},
-            'product_details': {'required': False}
+            # product_details는 read_only=True로 serializer에서 처리
+            'product_details': {'read_only': True}
         }
 
     def validate(self, data):

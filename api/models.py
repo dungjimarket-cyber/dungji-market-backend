@@ -153,7 +153,7 @@ class TelecomProductDetail(models.Model):
     registration_type = models.CharField(max_length=10, choices=Product.REGISTRATION_TYPE_CHOICES, verbose_name='가입 유형')
     plan_info = models.CharField(max_length=255, verbose_name='요금제 정보')
     contract_info = models.CharField(max_length=255, verbose_name='계약 정보')
-    total_support_amount = models.PositiveIntegerField(verbose_name='총 지원금')
+    # total_support_amount 필드 제거 - 지원금은 상품에 고정된 값이 아니라 입찰 시 사용자가 제안하는 금액
     
     class Meta:
         verbose_name = '통신 상품 상세'

@@ -132,7 +132,7 @@ class ProductCustomFieldAdmin(admin.ModelAdmin):
 
 @admin.register(TelecomProductDetail)
 class TelecomProductDetailAdmin(admin.ModelAdmin):
-    list_display = ['product', 'carrier', 'registration_type', 'total_support_amount']
+    list_display = ['product', 'carrier', 'registration_type', 'plan_info']
     list_filter = ['carrier', 'registration_type']
     search_fields = ['product__name']
 

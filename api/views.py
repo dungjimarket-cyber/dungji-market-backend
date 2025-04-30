@@ -551,53 +551,14 @@ class GroupBuyViewSet(ModelViewSet):
             return [AllowAny()]
         return [IsAuthenticated()]
 
-    def _add_product_details(self, data, product):
-        # 기존 product_detail 필드가 있으면 제거 (중복 방지)
-        if 'product_detail' in data:
-            del data['product_detail']
-            
-        # Product 상세 정보 추가
-        product_details = {
-            'id': product.id,
-            'name': product.name,
-            'description': product.description,
-            'base_price': product.base_price,
-            'image_url': product.image_url,
-            'category_name': product.category_name or (product.category.name if product.category else None),
-            'category_detail_type': product.category.detail_type if product.category else 'standard',
-            'release_date': product.release_date.isoformat() if product.release_date else None
-        }
-        
-        # 카테고리 유형별 상세 정보 추가
-        detail = product.get_detail()
-        if detail:
-            if hasattr(detail, '__dict__'):
-                for key, value in detail.__dict__.items():
-                    # id나 product_id 같은 필드는 제외
-                    if key not in ['_state', 'id', 'product_id']:
-                        product_details[key] = value
-            
-        data['product_details'] = product_details
-        
-        # product 필드는 ID만 유지 (기존 호환성 유지)
-        data['product'] = product.id
-        
-        return data
-
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         data = serializer.data
-        
         now = timezone.now()
-
-        # Add product details to each group buy
         for item, instance in zip(data, queryset):
-            self._add_product_details(item, instance.product)
-            
             # 계산된 상태 추가
             end_time = instance.end_time
-            
             if instance.status == 'recruiting' and now > end_time:
                 if instance.current_participants >= instance.min_participants:
                     item['calculated_status'] = 'completed'
@@ -605,33 +566,21 @@ class GroupBuyViewSet(ModelViewSet):
                     item['calculated_status'] = 'cancelled'
             else:
                 item['calculated_status'] = instance.status
-                
             # 남은 시간 계산 (초 단위)
             if now < end_time:
                 remaining_seconds = int((end_time - now).total_seconds())
                 item['remaining_seconds'] = remaining_seconds
             else:
                 item['remaining_seconds'] = 0
-
         return Response(data)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        
-        # 공구 상태 자동 업데이트
         update_groupbuy_status(instance)
-        
         serializer = self.get_serializer(instance)
         data = serializer.data
-        
-        # Add product details
-        self._add_product_details(data, instance.product)
-        
-        # 계산된 상태 추가
         now = timezone.now()
         end_time = instance.end_time
-        
-        # 계산된 상태 추가
         if instance.status == 'recruiting' and now > end_time:
             if instance.current_participants >= instance.min_participants:
                 data['calculated_status'] = 'completed'
@@ -639,14 +588,11 @@ class GroupBuyViewSet(ModelViewSet):
                 data['calculated_status'] = 'cancelled'
         else:
             data['calculated_status'] = instance.status
-            
-        # 남은 시간 계산 (초 단위)
         if now < end_time:
             remaining_seconds = int((end_time - now).total_seconds())
             data['remaining_seconds'] = remaining_seconds
         else:
             data['remaining_seconds'] = 0
-        
         return Response(data)
 
     def perform_create(self, serializer):
@@ -817,7 +763,16 @@ class ReviewViewSet(ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
-        """리뷰 작성 시 현재 사용자 정보 자동 설정"""
+        """리뷰 작성 시 현재 사용자 정보 자동 설정 및 자신의 공구에는 리뷰 작성 불가"""
+        groupbuy = serializer.validated_data.get('groupbuy')
+        
+        # 자신이 만든 공구에는 리뷰를 작성할 수 없음
+        if groupbuy.creator == self.request.user:
+            raise serializers.ValidationError({
+                'non_field_errors': ['자신이 만든 공구에는 리뷰를 작성할 수 없습니다.']
+            })
+            
+        # 리뷰 저장
         serializer.save(user=self.request.user)
     
     @action(detail=False, methods=['get'])
