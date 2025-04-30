@@ -407,9 +407,20 @@ def get_category_fields(request, category_id):
                  'options': [{'value': k, 'label': v} for k, v in Product.CARRIER_CHOICES]},
                 {'name': 'registration_type', 'type': 'select', 'required': True,
                  'options': [{'value': k, 'label': v} for k, v in Product.REGISTRATION_TYPE_CHOICES]},
-                {'name': 'plan_info', 'type': 'text', 'required': True},
-                {'name': 'contract_info', 'type': 'text', 'required': True},
-                {'name': 'total_support_amount', 'type': 'number', 'required': True},
+                {'name': 'plan_info', 'type': 'select', 'required': True,
+                 'options': [
+                     {'value': '5G 라이트', 'label': '5G 라이트 (월 55,000원)'},
+                     {'value': '5G 스탠다드', 'label': '5G 스탠다드 (월 75,000원)'},
+                     {'value': '5G 프리미엄', 'label': '5G 프리미엄 (월 95,000원)'},
+                     {'value': '5G 시그니처', 'label': '5G 시그니처 (월 130,000원)'},
+                     {'value': '5G 플래티넘', 'label': '5G 플래티넘 (월 150,000원)'},
+                 ]},
+                {'name': 'contract_info', 'type': 'select', 'required': True,
+                 'options': [
+                     {'value': '24개월', 'label': '24개월 약정'},
+                     {'value': '36개월', 'label': '36개월 약정'},
+                     {'value': '무약정', 'label': '무약정'},
+                 ]},
             ]
         elif category.detail_type == 'electronics':
             detail_fields = [
@@ -487,6 +498,49 @@ class GroupBuyViewSet(ModelViewSet):
         update_groupbuys_status(queryset[:100])
 
         return queryset
+        
+    def create(self, request, *args, **kwargs):
+        """공구 생성 API"""
+        # 디버깅을 위해 요청 데이터 로깅
+        print("\n[GroupBuy 생성 요청 데이터]")
+        for key, value in request.data.items():
+            print(f"{key}: {value}")
+        
+        # 현재 사용자를 공구 생성자로 자동 지정
+        data = request.data.copy()
+        data['creator'] = request.user.id
+        
+        # 현재 시간을 시작 시간으로 자동 설정
+        if 'start_time' not in data:
+            data['start_time'] = timezone.now().isoformat()
+        
+        # 초기 상태 설정
+        if 'status' not in data:
+            data['status'] = 'recruiting'
+        
+        # 초기 참여자 수 설정
+        if 'current_participants' not in data:
+            data['current_participants'] = 1  # 생성자가 처음 참여자
+        
+        serializer = self.get_serializer(data=data)
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            groupbuy = serializer.save()
+            
+            # 생성자를 참여자로 자동 추가 (리더로 설정)
+            Participation.objects.create(
+                user=request.user,
+                groupbuy=groupbuy,
+                is_leader=True
+            )
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except serializers.ValidationError as e:
+            print("\n[GroupBuy 생성 유효성 검사 오류]")
+            print(e.detail)
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False)
     def popular(self, request):
@@ -656,6 +710,76 @@ class GroupBuyViewSet(ModelViewSet):
             'joined_at': participation.joined_at,
             'message': '공구 참여가 완료되었습니다.'
         }, status=status.HTTP_201_CREATED)
+        
+    @action(detail=True, methods=['post'])
+    def leave(self, request, pk=None):
+        """사용자가 공구에서 탈퇴하는 API"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 참여 여부 확인
+        try:
+            participation = Participation.objects.get(user=user, groupbuy=groupbuy)
+        except Participation.DoesNotExist:
+            return Response(
+                {'error': '참여하지 않은 공구입니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 입찰 진행 여부 확인
+        has_bids = Bid.objects.filter(groupbuy=groupbuy).exists()
+        if has_bids:
+            return Response(
+                {'error': '입찰이 진행 중인 공구에서는 탈퇴할 수 없습니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 공구 생성자는 탈퇴 불가
+        if groupbuy.creator == user:
+            return Response(
+                {'error': '공구 생성자는 탈퇴할 수 없습니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 참여 삭제
+        participation.delete()
+        
+        # 현재 참여자 수 감소
+        groupbuy.current_participants -= 1
+        groupbuy.save(update_fields=['current_participants'])
+        
+        return Response({
+            'message': '공구 탈퇴가 완료되었습니다.'
+        }, status=status.HTTP_200_OK)
+        
+    @action(detail=True, methods=['get'])
+    def check_participation(self, request, pk=None):
+        """사용자의 공구 참여 여부와 입찰 진행 상태를 확인하는 API"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 로그인하지 않은 경우
+        if user.is_anonymous:
+            return Response({
+                'is_participating': False,
+                'has_bids': False,
+                'can_leave': False
+            })
+        
+        # 참여 여부 확인
+        is_participating = Participation.objects.filter(user=user, groupbuy=groupbuy).exists()
+        
+        # 입찰 진행 여부 확인
+        has_bids = Bid.objects.filter(groupbuy=groupbuy).exists()
+        
+        # 탈퇴 가능 여부 확인
+        can_leave = is_participating and not has_bids and groupbuy.creator != user
+        
+        return Response({
+            'is_participating': is_participating,
+            'has_bids': has_bids,
+            'can_leave': can_leave
+        })
 
 class ParticipationViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
