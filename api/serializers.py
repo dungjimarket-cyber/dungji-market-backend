@@ -90,15 +90,16 @@ class ProductSerializer(serializers.ModelSerializer):
 class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     creator_name = serializers.CharField(source='creator.first_name', read_only=True)
-    # product_detail 필드는 제거 (중복 및 오류 방지)
-    product_details = ProductSerializer(source='product', read_only=True)
+    # product_details는 GroupBuy 모델의 product_details 필드와 product의 정보를 병합하여 제공
+    product_details = serializers.SerializerMethodField()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
-                'status', 'min_participants', 'max_participants',
-                'start_time', 'end_time', 'current_participants', 'region_type', 'product_details']
+                'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
+                'current_participants', 'region_type', 'telecom_carrier', 'subscription_type', 'plan_info',
+                'product_details']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
             'creator': {'required': True},  # creator 필드를 필수로 지정
@@ -110,6 +111,46 @@ class GroupBuySerializer(serializers.ModelSerializer):
             'product_details': {'read_only': True}
         }
 
+    def get_product_details(self, obj):
+        """product_details 필드를 가져오는 메서드
+        
+        1. GroupBuy 모델의 product_details 필드에 저장된 사용자 입력 정보를 우선 사용
+        2. 없는 필드는 상품의 원래 정보로 보완
+        """
+        # 기본 상품 정보 가져오기
+        product_info = ProductSerializer(obj.product).data
+        
+        # 통신 상품인 경우 telecom_detail 정보 확인
+        if 'telecom_detail' in product_info:
+            telecom_detail = product_info.get('telecom_detail', {})
+        else:
+            telecom_detail = {}
+            
+        # GroupBuy에 저장된 사용자 입력 정보 (공구 등록 시 입력한 정보)
+        custom_details = obj.product_details or {}
+        
+        # 사용자가 입력한 통신사, 유형, 요금제 정보가 있으면 우선 사용
+        if custom_details:
+            # 통신 상품인 경우 telecom_detail 정보 업데이트
+            if 'telecom_detail' in product_info:
+                # 사용자가 입력한 통신사 정보가 있으면 업데이트
+                if 'telecom_carrier' in custom_details:
+                    telecom_detail['carrier'] = custom_details.get('telecom_carrier')
+                    
+                # 사용자가 입력한 유형 정보가 있으면 업데이트
+                if 'subscription_type' in custom_details:
+                    telecom_detail['registration_type'] = custom_details.get('subscription_type')
+                    
+                # 사용자가 입력한 요금제 정보가 있으면 업데이트
+                if 'telecom_plan' in custom_details:
+                    telecom_detail['plan_info'] = custom_details.get('telecom_plan')
+                    
+                # 업데이트된 telecom_detail 정보를 product_info에 반영
+                product_info['telecom_detail'] = telecom_detail
+        
+        # 최종 product_details 반환
+        return product_info
+        
     def validate(self, data):
         if data.get('min_participants', 0) > data.get('max_participants', 0):
             raise serializers.ValidationError({

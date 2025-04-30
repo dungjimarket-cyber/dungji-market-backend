@@ -264,6 +264,31 @@ class GroupBuy(models.Model):
         ('nationwide', '전국(비대면)'),
     )
     
+    # 통신사 선택 옵션
+    TELECOM_CARRIER_CHOICES = (
+        ('SKT', 'SKT'),
+        ('KT', 'KT'),
+        ('LGU', 'LG U+'),
+        ('MVNO', '알트'),
+    )
+    
+    # 가입유형 선택 옵션
+    SUBSCRIPTION_TYPE_CHOICES = (
+        ('new', '신규가입'),
+        ('transfer', '번호이동'),
+        ('change', '기기변경'),
+    )
+    
+    # 요금제 선택 옵션
+    PLAN_INFO_CHOICES = (
+        ('5G_basic', '5G 기본(3만원대)'),
+        ('5G_standard', '5G 일반(5만원대)'),
+        ('5G_premium', '5G 프리미엄(7만원대)'),
+        ('5G_special', '5G 특별(9만원대)'),
+        ('5G_platinum', '5G 플래티넘(10만원대)'),
+    )
+    
+    # 기본 공구 정보
     title = models.CharField(max_length=255, verbose_name='공구 제목')  # Required field
     description = models.TextField(blank=True, verbose_name='공구 설명')
     product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, verbose_name='상품')  # Temporarily allow null
@@ -279,7 +304,14 @@ class GroupBuy(models.Model):
     voting_end = models.DateTimeField(null=True, blank=True, verbose_name='투표 종료 시간')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')
-    product_details = models.JSONField(null=True, blank=True, verbose_name='상품 세부 정보')
+    
+    # 통신 관련 공구 정보 (명시적 필드로 추가)
+    telecom_carrier = models.CharField(max_length=20, choices=TELECOM_CARRIER_CHOICES, null=True, blank=True, verbose_name='통신사')
+    subscription_type = models.CharField(max_length=20, choices=SUBSCRIPTION_TYPE_CHOICES, null=True, blank=True, verbose_name='가입유형')
+    plan_info = models.CharField(max_length=20, choices=PLAN_INFO_CHOICES, null=True, blank=True, verbose_name='요금제')
+    
+    # 기타 카테고리별 세부 정보는 여전히 JSON으로 저장
+    product_details = models.JSONField(null=True, blank=True, verbose_name='기타 세부 정보')
     
     def save(self, *args, **kwargs):
         # 상품 이름 백업

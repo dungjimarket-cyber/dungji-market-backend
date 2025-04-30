@@ -1,12 +1,13 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.db.models import Count, Avg
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import authentication_classes, permission_classes, api_view, action
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.authtoken.models import Token
 from .models import Category, Product, GroupBuy, Participation, Wishlist, Review
@@ -522,6 +523,71 @@ class GroupBuyViewSet(ModelViewSet):
         if 'current_participants' not in data:
             data['current_participants'] = 1  # 생성자가 처음 참여자
         
+        # 통신사, 가입유형, 요금제 정보를 product_details에서 추출하여 명시적 필드에 저장
+        has_telecom_info = False
+        if 'product_details' in data and isinstance(data['product_details'], dict):
+            product_details = data['product_details']
+            print("\n[GroupBuy 상품 세부 정보]")
+            print(product_details)
+            
+            # 통신사 정보 추출 및 저장
+            if 'telecom_carrier' in product_details and product_details['telecom_carrier']:
+                data['telecom_carrier'] = product_details['telecom_carrier']
+                has_telecom_info = True
+                print(f"telecom_carrier: {data['telecom_carrier']}")
+            
+            # 가입유형 정보 추출 및 저장
+            if 'subscription_type' in product_details and product_details['subscription_type']:
+                data['subscription_type'] = product_details['subscription_type']
+                has_telecom_info = True
+                print(f"subscription_type: {data['subscription_type']}")
+            
+            # 요금제 정보 추출 및 저장
+            if 'telecom_plan' in product_details and product_details['telecom_plan']:
+                data['plan_info'] = product_details['telecom_plan']
+                has_telecom_info = True
+                print(f"plan_info: {data['plan_info']}")
+                
+            # 통신 관련 정보를 product_details에서 제거 (중복 방지)
+            clean_product_details = {}
+            for key, value in product_details.items():
+                if key not in ['telecom_carrier', 'telecom_plan', 'subscription_type'] and value:
+                    clean_product_details[key] = value
+            
+            # 기타 세부 정보만 product_details에 유지
+            if clean_product_details:
+                data['product_details'] = clean_product_details
+            else:
+                # 통신 관련 정보만 있었다면 product_details는 비운 상태로 유지
+                data['product_details'] = None
+                
+        # 디버깅 정보 출력
+        print(f"\n[통신 정보 확인] has_telecom_info: {has_telecom_info}")
+        if 'telecom_carrier' in data:
+            print(f"telecom_carrier: {data.get('telecom_carrier')}")
+        if 'subscription_type' in data:
+            print(f"subscription_type: {data.get('subscription_type')}")
+        if 'plan_info' in data:
+            print(f"plan_info: {data.get('plan_info')}")
+        
+        
+        # 중복 공구 확인 - 통신사/가입유형/요금제 정보가 있는 경우 중복 허용
+        product_id = data.get('product')
+        creator_id = data.get('creator')
+        
+        # 이미 동일한 상품으로 공구를 만든 적이 있는지 확인
+        existing_groupbuy = GroupBuy.objects.filter(product_id=product_id, creator_id=creator_id).first()
+        
+        if existing_groupbuy and not has_telecom_info:
+            # 통신 정보가 없는 경우 중복 공구 생성 불가
+            error_msg = {
+                'non_field_errors': [
+                    f'이미 동일한 상품({existing_groupbuy.product_name})으로 생성한 공구가 있습니다. '
+                    f'통신사, 가입유형, 요금제 정보를 입력하여 다른 공구로 등록해주세요.'
+                ]
+            }
+            return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = self.get_serializer(data=data)
         
         try:
@@ -540,6 +606,17 @@ class GroupBuyViewSet(ModelViewSet):
         except serializers.ValidationError as e:
             print("\n[GroupBuy 생성 유효성 검사 오류]")
             print(e.detail)
+            
+            # 중복 공구 제약 오류인 경우 더 상세한 오류 메시지 제공
+            if 'non_field_errors' in e.detail and any('unique' in str(err).lower() for err in e.detail['non_field_errors']):
+                error_msg = {
+                    'non_field_errors': [
+                        '이미 동일한 상품으로 생성한 공구가 있습니다. '
+                        '통신사, 가입유형, 요금제 정보를 입력하여 다른 공구로 등록해주세요.'
+                    ]
+                }
+                return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
+            
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False)
