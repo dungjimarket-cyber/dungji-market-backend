@@ -264,28 +264,10 @@ class GroupBuy(models.Model):
         ('nationwide', '전국(비대면)'),
     )
     
-    # 통신사 선택 옵션
-    TELECOM_CARRIER_CHOICES = (
-        ('SKT', 'SKT'),
-        ('KT', 'KT'),
-        ('LGU', 'LG U+'),
-        ('MVNO', '알트'),
-    )
-    
-    # 가입유형 선택 옵션
-    SUBSCRIPTION_TYPE_CHOICES = (
-        ('new', '신규가입'),
-        ('transfer', '번호이동'),
-        ('change', '기기변경'),
-    )
-    
-    # 요금제 선택 옵션
-    PLAN_INFO_CHOICES = (
-        ('5G_basic', '5G 기본(3만원대)'),
-        ('5G_standard', '5G 일반(5만원대)'),
-        ('5G_premium', '5G 프리미엄(7만원대)'),
-        ('5G_special', '5G 특별(9만원대)'),
-        ('5G_platinum', '5G 플래티넘(10만원대)'),
+    # 지역 유형 선택 옵션
+    REGION_TYPE_CHOICES = (
+        ('local', '지역'),
+        ('nationwide', '전국(비대면)'),
     )
     
     # 기본 공구 정보
@@ -305,10 +287,7 @@ class GroupBuy(models.Model):
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')
     
-    # 통신 관련 공구 정보 (명시적 필드로 추가)
-    telecom_carrier = models.CharField(max_length=20, choices=TELECOM_CARRIER_CHOICES, null=True, blank=True, verbose_name='통신사')
-    subscription_type = models.CharField(max_length=20, choices=SUBSCRIPTION_TYPE_CHOICES, null=True, blank=True, verbose_name='가입유형')
-    plan_info = models.CharField(max_length=20, choices=PLAN_INFO_CHOICES, null=True, blank=True, verbose_name='요금제')
+    # 통신 관련 정보는 GroupBuyTelecomDetail 모델로 분리
     
     # 기타 카테고리별 세부 정보는 여전히 JSON으로 저장
     product_details = models.JSONField(null=True, blank=True, verbose_name='기타 세부 정보')
@@ -378,6 +357,51 @@ class GroupBuy(models.Model):
             )
         ]
 
+class GroupBuyTelecomDetail(models.Model):
+    """
+    공구의 통신 관련 세부 정보를 저장하는 모델
+    GroupBuy와 1:1 관계를 가짐
+    """
+    # 통신사 선택 옵션
+    TELECOM_CARRIER_CHOICES = (
+        ('SKT', 'SKT'),
+        ('KT', 'KT'),
+        ('LGU', 'LG U+'),
+        ('MVNO', '알뜰폰'),
+    )
+    
+    # 가입유형 선택 옵션
+    SUBSCRIPTION_TYPE_CHOICES = (
+        ('new', '신규가입'),
+        ('transfer', '번호이동'),
+        ('change', '기기변경'),
+    )
+    
+    # 요금제 선택 옵션 - 만원대 표시로 변경
+    PLAN_INFO_CHOICES = (
+        ('3만원대', '3만원대'),
+        ('5만원대', '5만원대'),
+        ('7만원대', '7만원대'),
+        ('9만원대', '9만원대'),
+        ('10만원대', '10만원대'),
+    )
+    
+    groupbuy = models.OneToOneField(GroupBuy, on_delete=models.CASCADE, related_name='telecom_detail', verbose_name='공구')
+    telecom_carrier = models.CharField(max_length=20, choices=TELECOM_CARRIER_CHOICES, verbose_name='통신사')
+    subscription_type = models.CharField(max_length=20, choices=SUBSCRIPTION_TYPE_CHOICES, verbose_name='가입유형')
+    plan_info = models.CharField(max_length=20, choices=PLAN_INFO_CHOICES, verbose_name='요금제')
+    contract_period = models.CharField(max_length=20, blank=True, null=True, verbose_name='약정기간')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    
+    def __str__(self):
+        return f"{self.groupbuy.title} - {self.telecom_carrier} {self.subscription_type} {self.plan_info}"
+    
+    class Meta:
+        verbose_name = '공구 통신 세부정보'
+        verbose_name_plural = '공구 통신 세부정보 관리'
+
+
 class Participation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자')
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, verbose_name='공동구매')
@@ -417,23 +441,44 @@ class Bid(models.Model):
         ('support', '지원금입찰'),
     )
     
+    STATUS_CHOICES = (
+        ('pending', '대기중'),
+        ('selected', '확정'),
+        ('rejected', '포기'),
+    )
+    
     def __str__(self):
-        selected = "[선택됨]" if self.is_selected else ""
-        return f"{self.seller.username} - {self.groupbuy.title} ({self.get_bid_type_display()}: {self.amount}원) {selected}"
+        status_text = ""
+        if self.status == 'selected':
+            status_text = "[확정]"
+        elif self.status == 'rejected':
+            status_text = "[포기]"
+        return f"{self.seller.username} - {self.groupbuy.title} ({self.get_bid_type_display()}: {self.amount}원) {status_text}"
     
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, verbose_name='공동구매')  # Temporarily allow null
     seller = models.ForeignKey(User, on_delete=models.CASCADE, null=True, verbose_name='판매자')  # Temporarily allow null
     bid_type = models.CharField(max_length=10, choices=BID_TYPE, default='price', verbose_name='입찰 유형')
     amount = models.PositiveIntegerField(default=0, verbose_name='입찰 금액')
+    message = models.TextField(blank=True, verbose_name='입찰 메시지')
     contract_period = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='약정 기간(월)')  # 약정기간(월)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성 시간')
-    is_selected = models.BooleanField(default=False, verbose_name='선택 여부')  # 최종선택여부
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정 시간')
+    is_selected = models.BooleanField(default=False, verbose_name='선택 여부')  # 최종선택여부 (이전 필드, 호환성 유지)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='상태')
     
     @property
     def masked_amount(self):
         if self.bid_type == 'price':
             return f"{str(self.amount)[0]}*****"
         return str(self.amount)
+
+    def save(self, *args, **kwargs):
+        # status 필드와 is_selected 필드 동기화
+        if self.status == 'selected':
+            self.is_selected = True
+        else:
+            self.is_selected = False
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = '입찰'
@@ -544,6 +589,37 @@ class Wishlist(models.Model):
     
     def __str__(self):
         return f"{self.user.username}의 찜: {self.groupbuy.title}"
+
+
+class Settlement(models.Model):
+    """
+    판매자의 정산 내역을 관리하는 모델
+    """
+    PAYMENT_STATUS_CHOICES = (
+        ('pending', '처리중'),
+        ('completed', '정산완료'),
+        ('failed', '정산실패'),
+    )
+    
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='settlements', verbose_name='판매자')
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, related_name='settlements', verbose_name='공동구매')
+    bid = models.OneToOneField(Bid, on_delete=models.SET_NULL, null=True, blank=True, related_name='settlement', verbose_name='입찰')
+    total_amount = models.PositiveIntegerField(verbose_name='총 금액')
+    fee_amount = models.PositiveIntegerField(verbose_name='수수료')
+    net_amount = models.PositiveIntegerField(verbose_name='실 정산액')
+    settlement_date = models.DateTimeField(verbose_name='정산일')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending', verbose_name='정산 상태')
+    receipt_url = models.URLField(null=True, blank=True, verbose_name='영수증 URL')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성 시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정 시간')
+    
+    def __str__(self):
+        return f"{self.seller.username} - {self.groupbuy.title} ({self.net_amount}원)"
+    
+    class Meta:
+        verbose_name = '정산 내역'
+        verbose_name_plural = '정산 내역 관리'
+        ordering = ['-settlement_date']
 
 
 class Review(models.Model):

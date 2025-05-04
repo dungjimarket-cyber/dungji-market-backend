@@ -1,13 +1,22 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import Group, Permission
+from django.db.models import Q, Count, F, Sum, Avg, Case, When, Value, IntegerField
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Count, Avg
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework import viewsets, status, generics, filters
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.decorators import authentication_classes, permission_classes, api_view, action
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.response import Response
-from rest_framework import status, serializers
+from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.authtoken.models import Token
 from .models import Category, Product, GroupBuy, Participation, Wishlist, Review
@@ -474,6 +483,7 @@ def get_category_fields(request, category_id):
 # views.py
 from django.db.models import Count
 from django.utils import timezone
+from .models import Bid  # Bid 모델 import 추가
 
 class GroupBuyViewSet(ModelViewSet):
     serializer_class = GroupBuySerializer
@@ -523,30 +533,31 @@ class GroupBuyViewSet(ModelViewSet):
         if 'current_participants' not in data:
             data['current_participants'] = 1  # 생성자가 처음 참여자
         
-        # 통신사, 가입유형, 요금제 정보를 product_details에서 추출하여 명시적 필드에 저장
+        # 통신사, 가입유형, 요금제 정보를 product_details에서 추출
+        telecom_info = {}
         has_telecom_info = False
         if 'product_details' in data and isinstance(data['product_details'], dict):
             product_details = data['product_details']
             print("\n[GroupBuy 상품 세부 정보]")
             print(product_details)
             
-            # 통신사 정보 추출 및 저장
+            # 통신사 정보 추출
             if 'telecom_carrier' in product_details and product_details['telecom_carrier']:
-                data['telecom_carrier'] = product_details['telecom_carrier']
+                telecom_info['telecom_carrier'] = product_details['telecom_carrier']
                 has_telecom_info = True
-                print(f"telecom_carrier: {data['telecom_carrier']}")
+                print(f"telecom_carrier: {telecom_info['telecom_carrier']}")
             
-            # 가입유형 정보 추출 및 저장
+            # 가입유형 정보 추출
             if 'subscription_type' in product_details and product_details['subscription_type']:
-                data['subscription_type'] = product_details['subscription_type']
+                telecom_info['subscription_type'] = product_details['subscription_type']
                 has_telecom_info = True
-                print(f"subscription_type: {data['subscription_type']}")
+                print(f"subscription_type: {telecom_info['subscription_type']}")
             
-            # 요금제 정보 추출 및 저장
+            # 요금제 정보 추출
             if 'telecom_plan' in product_details and product_details['telecom_plan']:
-                data['plan_info'] = product_details['telecom_plan']
+                telecom_info['plan_info'] = product_details['telecom_plan']
                 has_telecom_info = True
-                print(f"plan_info: {data['plan_info']}")
+                print(f"plan_info: {telecom_info['plan_info']}")
                 
             # 통신 관련 정보를 product_details에서 제거 (중복 방지)
             clean_product_details = {}
@@ -563,12 +574,11 @@ class GroupBuyViewSet(ModelViewSet):
                 
         # 디버깅 정보 출력
         print(f"\n[통신 정보 확인] has_telecom_info: {has_telecom_info}")
-        if 'telecom_carrier' in data:
-            print(f"telecom_carrier: {data.get('telecom_carrier')}")
-        if 'subscription_type' in data:
-            print(f"subscription_type: {data.get('subscription_type')}")
-        if 'plan_info' in data:
-            print(f"plan_info: {data.get('plan_info')}")
+        if telecom_info:
+            for key, value in telecom_info.items():
+                print(f"{key}: {value}")
+            
+        # 통신 정보는 GroupBuyTelecomDetail 모델에 저장하기 위해 임시 저장
         
         
         # 중복 공구 확인 - 통신사/가입유형/요금제 정보가 있는 경우 중복 허용
@@ -593,6 +603,45 @@ class GroupBuyViewSet(ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
             groupbuy = serializer.save()
+            
+            # 통신 정보가 있는 경우 GroupBuyTelecomDetail 모델 생성
+            if has_telecom_info and telecom_info:
+                from .models import GroupBuyTelecomDetail
+                
+                # 필수 필드 확인 및 기본값 설정
+                if 'telecom_carrier' not in telecom_info:
+                    telecom_info['telecom_carrier'] = 'SKT'  # 기본값
+                
+                if 'subscription_type' not in telecom_info:
+                    telecom_info['subscription_type'] = 'new'  # 기본값
+                
+                if 'plan_info' not in telecom_info:
+                    telecom_info['plan_info'] = '5만원대'  # 기본값
+                
+                # 요금제 정보 변환 (5G_premium -> 7만원대)
+                if 'plan_info' in telecom_info:
+                    plan_info = telecom_info['plan_info']
+                    if plan_info == '5G_basic' or plan_info == '3만원대':
+                        telecom_info['plan_info'] = '3만원대'
+                    elif plan_info == '5G_standard' or plan_info == '5만원대':
+                        telecom_info['plan_info'] = '5만원대'
+                    elif plan_info == '5G_premium' or plan_info == '7만원대':
+                        telecom_info['plan_info'] = '7만원대'
+                    elif plan_info == '5G_special' or plan_info == '9만원대':
+                        telecom_info['plan_info'] = '9만원대'
+                    elif plan_info == '5G_platinum' or plan_info == '10만원대':
+                        telecom_info['plan_info'] = '10만원대'
+                
+                # GroupBuyTelecomDetail 모델 생성
+                GroupBuyTelecomDetail.objects.create(
+                    groupbuy=groupbuy,
+                    telecom_carrier=telecom_info['telecom_carrier'],
+                    subscription_type=telecom_info['subscription_type'],
+                    plan_info=telecom_info['plan_info'],
+                    contract_period=telecom_info.get('contract_period')
+                )
+                
+                print(f"\n[GroupBuyTelecomDetail 생성 완료] groupbuy_id: {groupbuy.id}")
             
             # 생성자를 참여자로 자동 추가 (리더로 설정)
             Participation.objects.create(

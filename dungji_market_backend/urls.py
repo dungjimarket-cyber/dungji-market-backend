@@ -22,13 +22,14 @@ from rest_framework.routers import DefaultRouter
 from api.views import (
     CategoryViewSet, ProductViewSet, GroupBuyViewSet,
     ParticipationViewSet, WishlistViewSet, ReviewViewSet,
-    register_user, create_sns_user,
-    UserProfileView, get_category_fields
+    register_user, create_sns_user, UserProfileView, get_category_fields
 )
+from api.views_bid import BidViewSet, SettlementViewSet, group_buy_bids
+from api.views_seller import SellerProfileView, get_bid_summary, SellerSalesView, get_seller_sale_detail
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
+from api.views_auth import CustomTokenObtainPairView
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -37,11 +38,13 @@ router.register('groupbuys', GroupBuyViewSet)
 router.register('participations', ParticipationViewSet)
 router.register(r'wishlists', WishlistViewSet, basename='wishlist')
 router.register(r'reviews', ReviewViewSet, basename='review')
+router.register(r'bids', BidViewSet, basename='bid')
+router.register(r'settlements', SettlementViewSet, basename='settlement')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include([
-        path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+        path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
         path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
         path('register/', register_user, name='register'),
         path('sns-login/', create_sns_user, name='sns_login'),
@@ -49,6 +52,12 @@ urlpatterns = [
     ])),
     path('api/', include(router.urls)),
     path('api/categories/<int:category_id>/fields/', get_category_fields, name='category_fields'),
+    path('api/groupbuys/<int:groupbuy_id>/bids/', group_buy_bids, name='groupbuy_bids'),
+    # 판매자 마이페이지 API
+    path('api/users/me/seller-profile/', SellerProfileView.as_view(), name='seller_profile'),
+    path('api/users/me/bids/summary/', get_bid_summary, name='bid_summary'),
+    path('api/users/me/sales/', SellerSalesView.as_view(), name='seller_sales'),
+    path('api/users/me/sales/<int:bid_id>/', get_seller_sale_detail, name='seller_sale_detail'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

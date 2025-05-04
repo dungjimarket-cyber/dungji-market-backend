@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -44,6 +44,11 @@ class StandardProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = StandardProductDetail
         fields = ['brand', 'origin', 'shipping_fee', 'shipping_info']
+
+class GroupBuyTelecomDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupBuyTelecomDetail
+        fields = ['telecom_carrier', 'subscription_type', 'plan_info', 'contract_period']
 
 class ProductCustomValueSerializer(serializers.ModelSerializer):
     field_name = serializers.CharField(source='field.field_name', read_only=True)
@@ -94,12 +99,13 @@ class GroupBuySerializer(serializers.ModelSerializer):
     product_details = serializers.SerializerMethodField()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     
+    telecom_detail = GroupBuyTelecomDetailSerializer(read_only=True)
+    
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
                 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
-                'current_participants', 'region_type', 'telecom_carrier', 'subscription_type', 'plan_info',
-                'product_details']
+                'current_participants', 'region_type', 'telecom_detail', 'product_details']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
             'creator': {'required': True},  # creator 필드를 필수로 지정
@@ -114,7 +120,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
     def get_product_details(self, obj):
         """product_details 필드를 가져오는 메서드
         
-        1. GroupBuy 모델의 product_details 필드에 저장된 사용자 입력 정보를 우선 사용
+        1. GroupBuyTelecomDetail 모델에 저장된 통신 정보를 우선 사용
         2. 없는 필드는 상품의 원래 정보로 보완
         """
         # 기본 상품 정보 가져오기
@@ -123,30 +129,43 @@ class GroupBuySerializer(serializers.ModelSerializer):
         # 통신 상품인 경우 telecom_detail 정보 확인
         if 'telecom_detail' in product_info:
             telecom_detail = product_info.get('telecom_detail', {})
-        else:
-            telecom_detail = {}
             
-        # GroupBuy에 저장된 사용자 입력 정보 (공구 등록 시 입력한 정보)
-        custom_details = obj.product_details or {}
-        
-        # 사용자가 입력한 통신사, 유형, 요금제 정보가 있으면 우선 사용
-        if custom_details:
-            # 통신 상품인 경우 telecom_detail 정보 업데이트
-            if 'telecom_detail' in product_info:
-                # 사용자가 입력한 통신사 정보가 있으면 업데이트
-                if 'telecom_carrier' in custom_details:
-                    telecom_detail['carrier'] = custom_details.get('telecom_carrier')
+            # GroupBuyTelecomDetail 모델에서 통신 정보 가져오기
+            try:
+                gb_telecom = obj.telecom_detail
+                if gb_telecom:
+                    # 통신사 정보 업데이트
+                    telecom_detail['carrier'] = gb_telecom.telecom_carrier
                     
-                # 사용자가 입력한 유형 정보가 있으면 업데이트
-                if 'subscription_type' in custom_details:
-                    telecom_detail['registration_type'] = custom_details.get('subscription_type')
+                    # 가입유형 정보 업데이트
+                    telecom_detail['registration_type'] = gb_telecom.subscription_type
                     
-                # 사용자가 입력한 요금제 정보가 있으면 업데이트
-                if 'telecom_plan' in custom_details:
-                    telecom_detail['plan_info'] = custom_details.get('telecom_plan')
+                    # 요금제 정보 업데이트
+                    telecom_detail['plan_info'] = gb_telecom.plan_info
                     
-                # 업데이트된 telecom_detail 정보를 product_info에 반영
-                product_info['telecom_detail'] = telecom_detail
+                    # 약정기간 정보 업데이트 (있는 경우)
+                    if gb_telecom.contract_period:
+                        telecom_detail['contract_info'] = gb_telecom.contract_period
+            except GroupBuyTelecomDetail.DoesNotExist:
+                # GroupBuyTelecomDetail이 없는 경우 기존 product_details에서 가져오기
+                custom_details = obj.product_details or {}
+                
+                # 사용자가 입력한 통신사, 유형, 요금제 정보가 있으면 사용
+                if custom_details:
+                    # 사용자가 입력한 통신사 정보가 있으면 업데이트
+                    if 'telecom_carrier' in custom_details:
+                        telecom_detail['carrier'] = custom_details.get('telecom_carrier')
+                        
+                    # 사용자가 입력한 유형 정보가 있으면 업데이트
+                    if 'subscription_type' in custom_details:
+                        telecom_detail['registration_type'] = custom_details.get('subscription_type')
+                        
+                    # 사용자가 입력한 요금제 정보가 있으면 업데이트
+                    if 'telecom_plan' in custom_details:
+                        telecom_detail['plan_info'] = custom_details.get('telecom_plan')
+            
+            # 업데이트된 telecom_detail 정보를 product_info에 반영
+            product_info['telecom_detail'] = telecom_detail
         
         # 최종 product_details 반환
         return product_info
