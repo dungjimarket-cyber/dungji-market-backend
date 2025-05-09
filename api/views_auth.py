@@ -19,12 +19,22 @@ class FindUsernameView(APIView):
     """
     permission_classes = [AllowAny]
     def post(self, request):
+        print(f"[DEBUG] FindUsernameView 요청 데이터: {request.data}")
+        
+        # 이메일 필드가 없을 경우에 대한 처리
+        if 'email' not in request.data:
+            print(f"[ERROR] 이메일 필드가 없음: {request.data}")
+            return Response({'email': '이메일 필드가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
         serializer = FindUsernameSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.get_username()
             # 일부 마스킹(앞 2글자 + ****)
             masked = username[:2] + '*' * (len(username)-2)
+            print(f"[DEBUG] 아이디 찾기 성공: {masked}")
             return Response({'username': masked}, status=status.HTTP_200_OK)
+        
+        print(f"[ERROR] 유효성 검증 실패: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ResetPasswordView(APIView):
