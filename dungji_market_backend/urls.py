@@ -49,7 +49,10 @@ urlpatterns = [
         path('register/', register_user, name='register'),
         path('sns-login/', create_sns_user, name='sns_login'),
         path('profile/', UserProfileView.as_view(), name='profile'),
+        path('find-username/', __import__('api.views_auth').views_auth.FindUsernameView.as_view(), name='find_username'),
+        path('reset-password/', __import__('api.views_auth').views_auth.ResetPasswordView.as_view(), name='reset_password'),
     ])),
+
     path('api/', include(router.urls)),
     path('api/categories/<int:category_id>/fields/', get_category_fields, name='category_fields'),
     path('api/groupbuys/<int:groupbuy_id>/bids/', group_buy_bids, name='groupbuy_bids'),

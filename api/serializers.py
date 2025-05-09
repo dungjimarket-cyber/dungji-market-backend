@@ -1,8 +1,50 @@
 from rest_framework import serializers
 from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
 
 User = get_user_model()
+
+class FindUsernameSerializer(serializers.Serializer):
+  email = serializers.EmailField(required=True)
+
+  def validate_email(self, value):
+    if not User.objects.filter(email=value).exists():
+      raise serializers.ValidationError('해당 이메일로 가입된 계정이 없습니다.')
+    return value
+
+  def get_username(self):
+    email = self.validated_data['email']
+    user = User.objects.get(email=email)
+    return user.username
+
+class ResetPasswordSerializer(serializers.Serializer):
+  email = serializers.EmailField(required=True)
+  username = serializers.CharField(required=True)
+
+  def validate(self, data):
+    email = data.get('email')
+    username = data.get('username')
+    if not User.objects.filter(email=email, username=username).exists():
+      raise serializers.ValidationError('입력하신 정보와 일치하는 계정이 없습니다.')
+    return data
+
+  def save(self):
+    email = self.validated_data['email']
+    username = self.validated_data['username']
+    user = User.objects.get(email=email, username=username)
+    temp_password = get_random_string(length=10)
+    user.set_password(temp_password)
+    user.save()
+    send_mail(
+      '[둥지마켓] 임시 비밀번호 안내',
+      f'임시 비밀번호: {temp_password}\n로그인 후 반드시 비밀번호를 변경해 주세요.',
+      'noreply@dungji-market.com',
+      [email],
+      fail_silently=False,
+    )
+    return temp_password
 
 class CategorySerializer(serializers.ModelSerializer):
     subcategories = serializers.SerializerMethodField()
