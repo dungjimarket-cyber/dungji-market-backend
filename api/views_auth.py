@@ -3,6 +3,7 @@ from .serializers_jwt import CustomTokenObtainPairSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from .serializers import FindUsernameSerializer, ResetPasswordSerializer
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -14,7 +15,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 class FindUsernameView(APIView):
     """
     이메일로 가입된 아이디(유저명) 찾기
+    로그인하지 않은 상태에서도 사용 가능
     """
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = FindUsernameSerializer(data=request.data)
         if serializer.is_valid():
@@ -27,7 +30,9 @@ class FindUsernameView(APIView):
 class ResetPasswordView(APIView):
     """
     이메일+아이디로 임시 비밀번호 발급
+    로그인하지 않은 상태에서도 사용 가능
     """
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         if serializer.is_valid():
