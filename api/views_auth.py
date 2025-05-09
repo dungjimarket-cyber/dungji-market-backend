@@ -29,10 +29,9 @@ class FindUsernameView(APIView):
         serializer = FindUsernameSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.get_username()
-            # 일부 마스킹(앞 2글자 + ****)
-            masked = username[:2] + '*' * (len(username)-2)
-            print(f"[DEBUG] 아이디 찾기 성공: {masked}")
-            return Response({'username': masked}, status=status.HTTP_200_OK)
+            print(f"[DEBUG] 아이디 찾기 성공: {username}")
+            # 마스킹 제거하고 원본 그대로 반환
+            return Response({'username': username}, status=status.HTTP_200_OK)
         
         print(f"[ERROR] 유효성 검증 실패: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

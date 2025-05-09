@@ -38,9 +38,49 @@ class BidViewSet(viewsets.ModelViewSet):
         created_groupbuys = GroupBuy.objects.filter(creator=user).values_list('id', flat=True)
         return Bid.objects.filter(groupbuy__in=created_groupbuys).order_by('-created_at')
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         """
-        입찰 생성 시 현재 사용자를 판매자로 설정
+        입찰 생성 API - 중복 입찰 시 기존 입찰 업데이트 기능 추가
+        """
+        # 현재 공구에 대한 현재 사용자의 기존 입찰 확인
+        try:
+            groupbuy_id = request.data.get('groupbuy')
+            existing_bid = Bid.objects.filter(
+                seller=request.user,
+                groupbuy_id=groupbuy_id,
+                status='pending'  # 대기 상태인 입찰만 업데이트 가능
+            ).first()
+            
+            if existing_bid:
+                # 기존 입찰이 있는 경우 업데이트
+                serializer = self.get_serializer(existing_bid, data=request.data, partial=True)
+                is_update = True
+            else:
+                # 신규 입찰인 경우
+                serializer = self.get_serializer(data=request.data)
+                is_update = False
+                
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer, is_update)
+            
+            headers = self.get_success_headers(serializer.data)
+            response_data = serializer.data
+            response_data['is_updated'] = is_update  # 업데이트 여부 전달
+            
+            return Response(
+                response_data, 
+                status=status.HTTP_200_OK if is_update else status.HTTP_201_CREATED,
+                headers=headers
+            )
+        except Exception as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+    def perform_create(self, serializer, is_update=False):
+        """
+        입찰 생성 또는 업데이트 시 현재 사용자를 판매자로 설정
         """
         serializer.save(seller=self.request.user)
 
@@ -99,6 +139,40 @@ class BidViewSet(viewsets.ModelViewSet):
         입찰 포기 API
         """
         bid = self.get_object()
+        
+    @action(detail=True, methods=['delete'], url_path='cancel')
+    def cancel_bid(self, request, pk=None):
+        """
+        입찰 취소 API - 입찰 시간 이전에만 취소 가능
+        """
+        bid = self.get_object()
+        
+        # 자신의 입찰만 취소 가능
+        if bid.seller != request.user:
+            return Response(
+                {"detail": "자신의 입찰만 취소할 수 있습니다."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # 입찰 상태가 대기중인 경우만 취소 가능
+        if bid.status != 'pending':
+            return Response(
+                {"detail": "이미 확정되거나 거부된 입찰은 취소할 수 없습니다."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 입찰 시간 확인 - 공구가 아직 입찰 가능 상태인지 확인
+        groupbuy = bid.groupbuy
+        if groupbuy.status != 'bidding' and groupbuy.status != 'recruiting':
+            return Response(
+                {"detail": "입찰 시간이 종료된 공구의 입찰은 취소할 수 없습니다."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 입찰 취소 실행
+        bid.delete()
+        
+        return Response({"detail": "입찰이 성공적으로 취소되었습니다."}, status=status.HTTP_204_NO_CONTENT)
         
         # 자신의 입찰만 포기 가능
         if bid.seller != request.user:
