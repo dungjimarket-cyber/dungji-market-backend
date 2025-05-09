@@ -23,7 +23,7 @@ class BidSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['status', 'created_at', 'updated_at']
         extra_kwargs = {
-            'seller': {'required': False, 'write_only': True},
+            'seller': {'required': False},
             'groupbuy': {'required': True},
             'amount': {'required': True, 'min_value': 1},
         }
