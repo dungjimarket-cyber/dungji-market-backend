@@ -38,10 +38,29 @@ class PenaltyAdmin(admin.ModelAdmin):
         self.list_display_links = ('user',)
         super().__init__(model, admin_site)
 
+from .forms import UserCreationForm, UserChangeForm
+
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
+    add_form = UserCreationForm
+    form = UserChangeForm
     list_display = ['username', 'email', 'role']
-    
+    list_filter = ['role', 'is_active', 'is_staff']
+    search_fields = ['username', 'email']
+    ordering = ['username']
+    fieldsets = (
+        (None, {'fields': ('username', 'email', 'role', 'password')}),
+        ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
+    )
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'email', 'role', 'password1', 'password2'),
+        }),
+    )
+    filter_horizontal = ('groups', 'user_permissions')
+
     # 한글화
     def __init__(self, model, admin_site):
         self.list_display_links = ('username',)
