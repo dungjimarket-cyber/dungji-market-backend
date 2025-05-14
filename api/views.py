@@ -37,6 +37,10 @@ def register_user(request):
         email = data.get('email')
         password = data.get('password')
         name = data.get('name', '')
+        role = data.get('role', 'user')  # 기본값은 일반 사용자
+        
+        # 로깅 추가
+        logger.info(f"회원가입 요청: email={email}, name={name}, role={role}")
 
         if not email or not password:
             return Response(
@@ -50,13 +54,23 @@ def register_user(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # role 값이 유효한지 확인 (seller 또는 user만 허용)
+        if role not in ['seller', 'user']:
+            return Response(
+                {'error': 'Invalid role. Must be either "seller" or "user".'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
         user = User.objects.create_user(
             username=email,
             email=email,
             password=password,
             first_name=name,
-            sns_type='email'
+            sns_type='email',
+            role=role  # 사용자가 선택한 역할로 설정
         )
+        
+        logger.info(f"사용자 생성 완료: {email}, 역할: {role}")
 
         return Response(
             {'message': 'User registered successfully'},

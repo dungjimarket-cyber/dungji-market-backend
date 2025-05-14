@@ -30,6 +30,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from api.views_auth import CustomTokenObtainPairView
+from api.views_social import social_login_dispatch, kakao_callback
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -49,6 +50,8 @@ urlpatterns = [
         path('register/', register_user, name='register'),
         path('sns-login/', create_sns_user, name='sns_login'),
         path('profile/', UserProfileView.as_view(), name='profile'),
+        path('social/<str:provider>/', social_login_dispatch, name='social_login'),
+        path('callback/kakao/', kakao_callback, name='kakao_callback'),
         path('find-username/', __import__('api.views_auth').views_auth.FindUsernameView.as_view(), name='find_username'),
         path('reset-password/', __import__('api.views_auth').views_auth.ResetPasswordView.as_view(), name='reset_password'),
     ])),
