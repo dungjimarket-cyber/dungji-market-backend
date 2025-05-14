@@ -599,18 +599,43 @@ class GroupBuyViewSet(ModelViewSet):
         product_id = data.get('product')
         creator_id = data.get('creator')
         
-        # 이미 동일한 상품으로 공구를 만든 적이 있는지 확인
-        existing_groupbuy = GroupBuy.objects.filter(product_id=product_id, creator_id=creator_id).first()
+        # 동일한 상품으로 이미 생성된 공구가 있는지 확인 (모든 사용자 대상)
+        existing_groupbuy = GroupBuy.objects.filter(
+            product_id=product_id,
+            status__in=['recruiting', 'in_progress'] # 진행 중인 공구만 체크
+        ).first()
         
-        if existing_groupbuy and not has_telecom_info:
-            # 통신 정보가 없는 경우 중복 공구 생성 불가
-            error_msg = {
-                'non_field_errors': [
-                    f'이미 동일한 상품({existing_groupbuy.product_name})으로 생성한 공구가 있습니다. '
-                    f'통신사, 가입유형, 요금제 정보를 입력하여 다른 공구로 등록해주세요.'
-                ]
-            }
-            return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
+        # 통신 제품인 경우 통신사/가입유형/요금제 정보가 다르면 중복 허용
+        if existing_groupbuy:
+            if not has_telecom_info:
+                # 통신 정보가 없는 경우 중복 공구 생성 불가
+                error_msg = {
+                    'non_field_errors': [
+                        f'이미 동일한 제품({existing_groupbuy.product_name})으로 진행 중인 공구가 있습니다. '
+                        f'다른 제품을 선택하거나, 통신 제품의 경우 통신사/가입유형/요금제 정보를 다르게 입력하여 등록해주세요.'
+                    ]
+                }
+                return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                # 통신 정보가 있는 경우, 기존 공구의 통신 정보와 비교
+                from .models import GroupBuyTelecomDetail
+                existing_telecom_detail = GroupBuyTelecomDetail.objects.filter(groupbuy=existing_groupbuy).first()
+                
+                # 기존 공구에 통신 정보가 없거나, 통신 정보가 같은 경우 중복 생성 불가
+                if not existing_telecom_detail:
+                    # 기존 공구에 통신 정보가 없는 경우
+                    pass  # 통신 정보가 다르므로 생성 허용
+                elif (existing_telecom_detail.telecom_carrier == telecom_info.get('telecom_carrier', '') and
+                      existing_telecom_detail.subscription_type == telecom_info.get('subscription_type', '') and
+                      existing_telecom_detail.plan_info == telecom_info.get('plan_info', '')):
+                    # 통신 정보가 같은 경우 중복 생성 불가
+                    error_msg = {
+                        'non_field_errors': [
+                            f'이미 동일한 제품과 동일한 통신 정보로 진행 중인 공구가 있습니다. '
+                            f'다른 제품을 선택하거나, 통신사/가입유형/요금제 정보를 다르게 입력하여 등록해주세요.'
+                        ]
+                    }
+                    return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = self.get_serializer(data=data)
         
