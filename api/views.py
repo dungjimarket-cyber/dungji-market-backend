@@ -206,9 +206,22 @@ class CategoryViewSet(ModelViewSet):
 
     def get_queryset(self):
         queryset = Category.objects.all()
+        
+        # 부모 카테고리 필터링
         parent_id = self.request.query_params.get('parent', None)
         if parent_id is not None:
             queryset = queryset.filter(parent_id=parent_id)
+        
+        # 서비스 카테고리 필터링 (show_services 파라미터가 없으면 기본적으로 서비스가 아닌 카테고리만 표시)
+        show_services = self.request.query_params.get('show_services', 'false').lower() == 'true'
+        if not show_services:
+            queryset = queryset.filter(is_service=False)
+        
+        # 모든 카테고리 표시 옵션 (관리자용)
+        show_all = self.request.query_params.get('show_all', 'false').lower() == 'true'
+        if show_all:
+            queryset = Category.objects.all()
+            
         return queryset
 
     def retrieve(self, request, *args, **kwargs):
