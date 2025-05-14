@@ -215,7 +215,7 @@ class CategoryViewSet(ModelViewSet):
         # 서비스 카테고리 필터링 (show_services 파라미터가 없으면 기본적으로 서비스가 아닌 카테고리만 표시)
         show_services = self.request.query_params.get('show_services', 'false').lower() == 'true'
         if not show_services:
-            queryset = queryset.filter(is_service=False)
+            queryset = queryset.filter(is_service=True)  # 수정: is_service=True인 항목만 표시 (휴대폰만 표시)
         
         # 모든 카테고리 표시 옵션 (관리자용)
         show_all = self.request.query_params.get('show_all', 'false').lower() == 'true'
