@@ -38,10 +38,16 @@ def get_kakao_auth_url(next_url, redirect_uri=None):
     # 클라이언트가 제공한 redirect_uri 사용 또는 기본값 사용
     actual_redirect_uri = redirect_uri or DEFAULT_REDIRECT_URI
     
+    # 리디렉트 URI가 유효한지 확인 (정확한 형식으로 인코딩)
+    # 카카오 개발자 콘솔에 등록된 URL과 정확히 일치해야 함
+    from urllib.parse import quote
+    encoded_redirect_uri = quote(actual_redirect_uri, safe='')
+    
     # 카카오 로그인 URL 생성
     kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={KAKAO_CLIENT_ID}&redirect_uri={actual_redirect_uri}&response_type=code&state={state}"
     
     logger.info(f"카카오 인증 URL: {kakao_auth_url}")
+    logger.info(f"사용된 리디렉트 URI: {actual_redirect_uri}")
     return kakao_auth_url
 
 @api_view(['GET'])
@@ -79,25 +85,50 @@ def kakao_callback(request):
     # 클라이언트가 오는 경우 적용할 리디렉트 URI (콜백 경로)
     redirect_uri = request.GET.get('redirect_uri', DEFAULT_REDIRECT_URI)
     
-    # 토큰 요청
+    # 리디렉트 URI 검증 - 기록용
+    logger.info(f"콜백을 위한 리디렉트 URI: {redirect_uri}")
+    
+    # 콜백 URL에서 '필요하다면 www.' 제거 (카카오 개발자 콘솔과 정확히 일치하도록)
+    if redirect_uri.startswith('https://www.dungjimarket.com'):
+        alternative_uri = redirect_uri.replace('https://www.dungjimarket.com', 'https://dungjimarket.com')
+        logger.info(f"대체 리디렉트 URI 사용 가능: {alternative_uri}")
+        # 둘 다 시도
+        possible_uris = [redirect_uri, alternative_uri]
+    else:
+        possible_uris = [redirect_uri]
+    
+    # 토큰 요청 실패 시 대체 URI로 재시도
     token_url = "https://kauth.kakao.com/oauth/token"
-    data = {
-        'grant_type': 'authorization_code',
-        'client_id': KAKAO_CLIENT_ID,
-        'redirect_uri': redirect_uri,  # 클라이언트에서 전달받은 URI 사용
-        'code': code,
-    }
+    token_response = None
+    token_json = None
     
-    logger.info(f"Kakao token request: redirect_uri={redirect_uri}")
-    logger.info(f"Kakao token request data: {data}")
-    
-    try:
-        token_response = requests.post(token_url, data=data)
-        token_json = token_response.json()
+    for uri in possible_uris:
+        data = {
+            'grant_type': 'authorization_code',
+            'client_id': KAKAO_CLIENT_ID,
+            'redirect_uri': uri,
+            'code': code,
+        }
         
-        if 'access_token' not in token_json:
-            logger.error(f"카카오 토큰 요청 실패: {token_json}")
-            return HttpResponse("카카오 로그인 중 오류가 발생했습니다.", status=400)
+        logger.info(f"Kakao token request: redirect_uri={uri}")
+        logger.info(f"Kakao token request data: {data}")
+        
+        try:
+            token_response = requests.post(token_url, data=data)
+            token_json = token_response.json()
+            
+            if 'access_token' in token_json:
+                logger.info(f"카카오 토큰 요청 성공 with {uri}")
+                break
+            else:
+                logger.error(f"카카오 토큰 요청 실패 with {uri}: {token_json}")
+        except Exception as e:
+            logger.error(f"카카오 토큰 요청 예외 with {uri}: {str(e)}")
+    
+    # 모든 URI로 시도해도 실패한 경우
+    if not token_json or 'access_token' not in token_json:
+        logger.error(f"모든 리디렉트 URI로 카카오 토큰 요청 실패")
+        return HttpResponse("카카오 인증 토큰 획득 실패", status=400)
             
         access_token = token_json['access_token']
         
@@ -177,9 +208,9 @@ def kakao_callback(request):
         logger.exception(f"카카오 로그인 처리 중 오류: {str(e)}")
         return HttpResponse("소셜 로그인 처리 중 오류가 발생했습니다.", status=500)
 
+@csrf_exempt
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@csrf_exempt
 def social_login_dispatch(request, provider):
     """
     소셜 로그인 요청을 알맞은 서비스 로그인 함수로 보내는 디스패처
@@ -187,13 +218,14 @@ def social_login_dispatch(request, provider):
     URL 경로에서 provider 매개변수를 받습니다.
     """
     next_url = request.GET.get('next', '')
+    redirect_uri = request.GET.get('redirect_uri', None)
     
     logger.info(f"소셜 로그인 요청: provider={provider}, next={next_url}")
     
     if provider == 'kakao':
-        # 카카오 로그인 URL로 리다이렉트
-        logger.info(f"카카오 로그인 시작: next_url={next_url}")
-        kakao_auth_url = get_kakao_auth_url(next_url)
+        # 카카오 로그인 URL로 리다이렉트 (클라이언트에서 제공한 redirect_uri 사용)
+        logger.info(f"카카오 로그인 시작: next_url={next_url}, redirect_uri={redirect_uri}")
+        kakao_auth_url = get_kakao_auth_url(next_url, redirect_uri)
         return redirect(kakao_auth_url)
     # elif provider == 'google':
     #     return google_login(request)
