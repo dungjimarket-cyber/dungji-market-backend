@@ -129,52 +129,54 @@ def kakao_callback(request):
     if not token_json or 'access_token' not in token_json:
         logger.error(f"모든 리디렉트 URI로 카카오 토큰 요청 실패")
         return HttpResponse("카카오 인증 토큰 획득 실패", status=400)
-            
-        access_token = token_json['access_token']
-        
-        # 사용자 정보 요청
-        user_info_response = requests.get(
-            "https://kapi.kakao.com/v2/user/me",
-            headers={'Authorization': f'Bearer {access_token}'}
-        )
-        user_info = user_info_response.json()
-        
-        logger.info(f"카카오 사용자 정보: {user_info}")
-        
-        # 필요한 정보 추출
-        kakao_id = user_info.get('id')
-        kakao_account = user_info.get('kakao_account', {})
-        profile = kakao_account.get('profile', {})
-        
-        email = kakao_account.get('email', f'{kakao_id}@kakao.user')
-        nickname = profile.get('nickname', '')
-        profile_image = profile.get('profile_image_url', '')
-        
-        # 기존 SNS 로그인 엔드포인트로 POST 요청 생성
-        sns_login_data = {
-            'sns_id': str(kakao_id),
-            'sns_type': 'kakao',
-            'email': email,
-            'name': nickname,
-            'profile_image': profile_image
-        }
-        
-        # 내부 API 호출 - 직접 create_sns_user 함수 호출 또는 여기서 사용자 생성/로그인 로직 구현
-        from api.views import create_sns_user
-        from django.http import HttpRequest
-        from django.contrib.auth import get_user_model
-        from rest_framework.parsers import JSONParser
-        from io import BytesIO
-        
-        # JSON 데이터로 변환
-        json_data = json.dumps(sns_login_data).encode('utf-8')
-        
-        # 가상 요청 객체 생성
-        mock_request = HttpRequest()
-        mock_request.META = request.META
-        mock_request._body = json_data
-        mock_request.method = 'POST'
-        
+    
+    # 인증 성공 후 처리    
+    access_token = token_json['access_token']
+    
+    # 사용자 정보 요청
+    user_info_response = requests.get(
+        "https://kapi.kakao.com/v2/user/me",
+        headers={'Authorization': f'Bearer {access_token}'}
+    )
+    user_info = user_info_response.json()
+    
+    logger.info(f"카카오 사용자 정보: {user_info}")
+    
+    # 필요한 정보 추출
+    kakao_id = user_info.get('id')
+    kakao_account = user_info.get('kakao_account', {})
+    profile = kakao_account.get('profile', {})
+    
+    email = kakao_account.get('email', f'{kakao_id}@kakao.user')
+    nickname = profile.get('nickname', '')
+    profile_image = profile.get('profile_image_url', '')
+    
+    # 기존 SNS 로그인 엔드포인트로 POST 요청 생성
+    sns_login_data = {
+        'sns_id': str(kakao_id),
+        'sns_type': 'kakao',
+        'email': email,
+        'name': nickname,
+        'profile_image': profile_image
+    }
+    
+    # 내부 API 호출 - 직접 create_sns_user 함수 호출 또는 여기서 사용자 생성/로그인 로직 구현
+    from api.views import create_sns_user
+    from django.http import HttpRequest
+    from django.contrib.auth import get_user_model
+    from rest_framework.parsers import JSONParser
+    from io import BytesIO
+    
+    # JSON 데이터로 변환
+    json_data = json.dumps(sns_login_data).encode('utf-8')
+    
+    # 가상 요청 객체 생성
+    mock_request = HttpRequest()
+    mock_request.META = request.META
+    mock_request._body = json_data
+    mock_request.method = 'POST'
+    
+    try:
         # POST 데이터 파싱
         stream = BytesIO(json_data)
         data = JSONParser().parse(stream)
