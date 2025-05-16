@@ -82,20 +82,39 @@ def kakao_callback(request):
         logger.error("인증 코드가 없습니다.")
         return HttpResponse("인증 코드가 없습니다.", status=400)
     
-    # 클라이언트가 오는 경우 적용할 리디렉트 URI (콜백 경로)
+    # 클라이언트가 제공한 리디렉트 URI 가져오기
     redirect_uri = request.GET.get('redirect_uri', DEFAULT_REDIRECT_URI)
     
-    # 리디렉트 URI 검증 - 기록용
+    # 의심 스러운 URI 검사 및 기록
     logger.info(f"콜백을 위한 리디렉트 URI: {redirect_uri}")
     
-    # 콜백 URL에서 '필요하다면 www.' 제거 (카카오 개발자 콘솔과 정확히 일치하도록)
-    if redirect_uri.startswith('https://www.dungjimarket.com'):
-        alternative_uri = redirect_uri.replace('https://www.dungjimarket.com', 'https://dungjimarket.com')
-        logger.info(f"대체 리디렉트 URI 사용 가능: {alternative_uri}")
-        # 둘 다 시도
-        possible_uris = [redirect_uri, alternative_uri]
-    else:
-        possible_uris = [redirect_uri]
+    # 현재 카카오 개발자 콘솔에 등록된 리디렉트 URI로 확인된 것들
+    # 주의: 이 목록은 카카오 개발자 콘솔에 등록된 URI와 정확히 일치해야 함!
+    REGISTERED_REDIRECT_URIS = [
+        'https://dungjimarket.com/api/auth/callback/kakao',
+        'http://localhost:3000/api/auth/callback/kakao',
+    ]
+    
+    # 공식 URI + 사용자 제공 URI를 모두 추가
+    possible_uris = REGISTERED_REDIRECT_URIS[:]
+    
+    # 사용자가 제공한 URI가 등록된 것이 아니면 추가
+    if redirect_uri not in possible_uris:
+        possible_uris.append(redirect_uri)
+        logger.info(f"사용자 제공 URI 추가: {redirect_uri}")
+        
+    # www 버전도 추가 고려
+    www_domain_uri = None
+    non_www_domain_uri = None
+    
+    if redirect_uri.startswith('https://dungjimarket.com'):
+        www_domain_uri = redirect_uri.replace('https://dungjimarket.com', 'https://www.dungjimarket.com')
+        possible_uris.append(www_domain_uri)
+        logger.info(f"www 버전 URI 추가: {www_domain_uri}")
+    elif redirect_uri.startswith('https://www.dungjimarket.com'):
+        non_www_domain_uri = redirect_uri.replace('https://www.dungjimarket.com', 'https://dungjimarket.com')
+        possible_uris.append(non_www_domain_uri)
+        logger.info(f"non-www 버전 URI 추가: {non_www_domain_uri}")
     
     # 토큰 요청 실패 시 대체 URI로 재시도
     token_url = "https://kauth.kakao.com/oauth/token"
