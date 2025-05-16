@@ -19,21 +19,27 @@ if not KAKAO_CLIENT_ID:
     logger.error("KAKAO_CLIENT_ID 환경변수가 설정되지 않았습니다. .env 파일을 확인해주세요.")
     KAKAO_CLIENT_ID = '48a8af8c364ef5e225460c2086473554'  # 이 키는 프론트엔드 .env.local에서 삽입
 
-# 카카오 개발자 콘솔에 등록된 리다이렉트 URI
-KAKAO_REDIRECT_URI = os.environ.get('KAKAO_REDIRECT_URI', 'http://localhost:3000/api/auth/callback/kakao')
+# 기본 리다이렉트 URI (클라이언트가 제공하지 않을 경우 사용)
+DEFAULT_REDIRECT_URI = 'http://localhost:3000/api/auth/callback/kakao'
 
 logger.info(f"KAKAO_CLIENT_ID: {KAKAO_CLIENT_ID}")
-logger.info(f"KAKAO_REDIRECT_URI: {KAKAO_REDIRECT_URI}")
 
-def get_kakao_auth_url(next_url):
+def get_kakao_auth_url(next_url, redirect_uri=None):
     """
     카카오 인증 URL 생성 함수
+    
+    Args:
+        next_url: 인증 후 배경 애플리케이션으로 리디렉션할 URL
+        redirect_uri: 클라이언트에서 제공한 리디렉트 URI (부영시 기본값 사용)
     """
-    # state에 next_url 포함시켜 저장
+    # state에 next_url 포함시케 저장
     state = next_url
     
+    # 클라이언트가 제공한 redirect_uri 사용 또는 기본값 사용
+    actual_redirect_uri = redirect_uri or DEFAULT_REDIRECT_URI
+    
     # 카카오 로그인 URL 생성
-    kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={KAKAO_CLIENT_ID}&redirect_uri={KAKAO_REDIRECT_URI}&response_type=code&state={state}"
+    kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={KAKAO_CLIENT_ID}&redirect_uri={actual_redirect_uri}&response_type=code&state={state}"
     
     logger.info(f"카카오 인증 URL: {kakao_auth_url}")
     return kakao_auth_url
@@ -46,9 +52,12 @@ def kakao_login(request):
     카카오 로그인 시작 - 카카오 인증 서버로 리다이렉트
     """
     next_url = request.GET.get('next', '')
-    logger.info(f"카카오 로그인 시작: next_url={next_url}")
+    # 클라이언트가 제공한 리디렉트 URI 사용
+    redirect_uri = request.GET.get('redirect_uri', None)
     
-    kakao_auth_url = get_kakao_auth_url(next_url)
+    logger.info(f"카카오 로그인 시작: next_url={next_url}, redirect_uri={redirect_uri}")
+    
+    kakao_auth_url = get_kakao_auth_url(next_url, redirect_uri)
     return redirect(kakao_auth_url)
 
 @api_view(['GET'])
@@ -67,16 +76,19 @@ def kakao_callback(request):
         logger.error("인증 코드가 없습니다.")
         return HttpResponse("인증 코드가 없습니다.", status=400)
     
+    # 클라이언트가 오는 경우 적용할 리디렉트 URI (콜백 경로)
+    redirect_uri = request.GET.get('redirect_uri', DEFAULT_REDIRECT_URI)
+    
     # 토큰 요청
     token_url = "https://kauth.kakao.com/oauth/token"
     data = {
         'grant_type': 'authorization_code',
         'client_id': KAKAO_CLIENT_ID,
-        'redirect_uri': KAKAO_REDIRECT_URI,  # 카카오 개발자 콘솔에 등록된 URI와 정확히 일치해야 함
+        'redirect_uri': redirect_uri,  # 클라이언트에서 전달받은 URI 사용
         'code': code,
     }
     
-    logger.info(f"Kakao token request: redirect_uri={KAKAO_REDIRECT_URI}")
+    logger.info(f"Kakao token request: redirect_uri={redirect_uri}")
     logger.info(f"Kakao token request data: {data}")
     
     try:
