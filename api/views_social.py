@@ -19,8 +19,20 @@ if not KAKAO_CLIENT_ID:
     logger.error("KAKAO_CLIENT_ID 환경변수가 설정되지 않았습니다. .env 파일을 확인해주세요.")
     KAKAO_CLIENT_ID = '48a8af8c364ef5e225460c2086473554'  # 이 키는 프론트엔드 .env.local에서 삽입
 
-# 기본 리다이렉트 URI (클라이언트가 제공하지 않을 경우 사용)
-DEFAULT_REDIRECT_URI = 'http://localhost:3000/api/auth/callback/kakao'
+# 환경별 리다이렉트 URI 설정
+REDIRECT_URIS = {
+    'development': 'http://localhost:3000/api/auth/callback/kakao',
+    'production': 'https://dungjimarket.com/api/auth/callback/kakao',
+    'staging': 'https://staging.dungjimarket.com/api/auth/callback/kakao',
+}
+
+# 현재 환경에 맞는 리다이렉트 URI 선택
+ENVIRONMENT = os.environ.get('DJANGO_ENV', 'development')
+DEFAULT_REDIRECT_URI = REDIRECT_URIS.get(ENVIRONMENT, REDIRECT_URIS['development'])
+
+# 환경별 설정 로깅
+logger.info(f"현재 환경: {ENVIRONMENT}")
+logger.info(f"기본 리다이렉트 URI: {DEFAULT_REDIRECT_URI}")
 
 logger.info(f"KAKAO_CLIENT_ID: {KAKAO_CLIENT_ID}")
 
