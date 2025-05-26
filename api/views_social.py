@@ -101,11 +101,21 @@ def kakao_callback(request):
     logger.info(f"콜백을 위한 리디렉트 URI: {redirect_uri}")
     
     # 현재 카카오 개발자 콘솔에 등록된 리디렉트 URI로 확인된 것들
-    # 주의: 이 목록은 카카오 개발자 콘솔에 등록된 URI와 정확히 일치해야 함!
+    # 환경 기반 URI 설정
     REGISTERED_REDIRECT_URIS = [
+        # 프로덕션 URI
         'https://dungjimarket.com/api/auth/callback/kakao',
+        'https://www.dungjimarket.com/api/auth/callback/kakao',
+        # 개발 환경 URI
         'http://localhost:3000/api/auth/callback/kakao',
+        # 스테이징 URI (있는 경우)
+        'https://staging.dungjimarket.com/api/auth/callback/kakao',
     ]
+    
+    # 현재 환경 설정에 따른 기본 URI 추가
+    if DEFAULT_REDIRECT_URI not in REGISTERED_REDIRECT_URIS:
+        REGISTERED_REDIRECT_URIS.append(DEFAULT_REDIRECT_URI)
+        logger.info(f"기본 리다이렉트 URI 추가: {DEFAULT_REDIRECT_URI}")
     
     # 공식 URI + 사용자 제공 URI를 모두 추가
     possible_uris = REGISTERED_REDIRECT_URIS[:]
