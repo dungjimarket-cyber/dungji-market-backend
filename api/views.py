@@ -95,6 +95,11 @@ def create_sns_user(request):
         name = data.get('name', '')
         profile_image = data.get('profile_image', '')
         
+        # 이메일이 없거나 빈 값인 경우 기본 이메일 생성
+        if not email or email == '':
+            email = f'{sns_id}@{sns_type}.user'
+            logger.info(f"이메일 정보 없음, 기본 이메일 생성: {email}")
+        
         # 디버깅 로그 추가
         logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}")
         logger.info(f"프로필 이미지 URL: {profile_image}")
@@ -110,10 +115,17 @@ def create_sns_user(request):
         if user:
             # 기존 사용자 정보 업데이트
             user.last_login = timezone.now()
+            
+            # 이메일이 비어있고 새로운 이메일이 있는 경우 업데이트
+            if (not user.email or user.email == '') and email:
+                logger.info(f"기존 사용자({user.id})의 이메일 업데이트: {email}")
+                user.email = email
+            
             # 프로필 이미지 매번 업데이트 (변경사항이 있을 수 있으므로)
             if profile_image:
                 logger.info(f"기존 사용자({user.id})의 프로필 이미지 업데이트: {profile_image}")
                 user.profile_image = profile_image
+                
             user.save()
             refresh = RefreshToken.for_user(user)
             return Response({
@@ -848,6 +860,14 @@ class GroupBuyViewSet(ModelViewSet):
         groupbuy = self.get_object()
         user = request.user
         
+        # 닉네임 정보 확인 및 업데이트
+        username = request.data.get('username')
+        if username and username.strip():
+            # 닉네임이 제공되었으면 사용자 정보 업데이트
+            user.username = username
+            user.save(update_fields=['username'])
+            logger.info(f"사용자({user.id}) 닉네임이 '{username}'으로 업데이트되었습니다.")
+        
         # 이미 참여 중인지 확인
         if Participation.objects.filter(user=user, groupbuy=groupbuy).exists():
             return Response(
@@ -980,11 +1000,24 @@ class UserProfileView(APIView):
     def patch(self, request):
         user = request.user
         email = request.data.get('email')
+        username = request.data.get('username')
         
+        changed = False
+        
+        # 이메일 업데이트 처리
         if email:
             if User.objects.filter(email=email).exclude(id=user.id).exists():
                 return Response({'error': '이미 사용 중인 이메일입니다.'}, status=status.HTTP_400_BAD_REQUEST)
             user.email = email
+            changed = True
+        
+        # 닉네임(사용자명) 업데이트 처리
+        if username:
+            user.username = username
+            changed = True
+            
+        # 변경사항이 있으면 저장
+        if changed:
             user.save()
 
         return Response({

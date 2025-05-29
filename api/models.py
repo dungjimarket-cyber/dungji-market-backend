@@ -276,6 +276,7 @@ class GroupBuy(models.Model):
     product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, verbose_name='상품')  # Temporarily allow null
     product_name = models.CharField(max_length=255, blank=True, verbose_name='상품명 백업')  # 상품 이름 백업
     creator = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='created_groupbuys', verbose_name='생성자')  # Temporarily allow null
+    creator_nickname = models.CharField(max_length=150, blank=True, null=True, verbose_name='생성자 닉네임')  # 생성자 닉네임 저장
     participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys', verbose_name='참여자')
     min_participants = models.PositiveSmallIntegerField(default=1, verbose_name='최소 참여자 수')
     max_participants = models.PositiveSmallIntegerField(default=100, verbose_name='최대 참여자 수')
@@ -296,6 +297,11 @@ class GroupBuy(models.Model):
         # 상품 이름 백업
         if self.product and not self.product_name:
             self.product_name = self.product.name
+            
+        # 생성자 닉네임 자동 저장
+        if self.creator and not self.creator_nickname:
+            self.creator_nickname = self.creator.username
+            
         super().save(*args, **kwargs)
         
     def __str__(self):
@@ -408,18 +414,26 @@ class Participation(models.Model):
     joined_at = models.DateTimeField(auto_now_add=True, verbose_name='참여 시간')
     is_leader = models.BooleanField(default=False, verbose_name='리더 여부')
     is_locked = models.BooleanField(default=False, verbose_name='잠금 여부')
+    # 참여 당시의 닉네임 저장 (사용자가 닉네임을 변경해도 참여 당시 닉네임 보존)
+    nickname = models.CharField(max_length=150, blank=True, null=True, verbose_name='참여 닉네임')
     
     def __str__(self):
         leader_mark = "[리더]" if self.is_leader else ""
         return f"{self.user.username} - {self.groupbuy.title} {leader_mark}"
 
     def save(self, *args, **kwargs):
+        # 동일한 상품의 공구 중복 참여 방지
         if Participation.objects.filter(
             user=self.user,
             groupbuy__product=self.groupbuy.product,
             groupbuy__status__in=['recruiting', 'bidding']
         ).exists():
             raise ValidationError("이미 동일한 상품의 공구에 참여중입니다.")
+            
+        # 참여 닉네임 자동 저장 (새로 생성되는 것인 경우에만)
+        if not self.pk and not self.nickname and self.user:
+            self.nickname = self.user.username
+            
         super().save(*args, **kwargs)
 
     def can_leave(self):

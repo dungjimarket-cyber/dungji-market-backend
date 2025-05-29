@@ -136,7 +136,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
-    creator_name = serializers.CharField(source='creator.first_name', read_only=True)
+    # creator_name 필드를 모델의 creator_nickname 필드를 사용하도록 변경
+    # 계획적 호환성을 위해 필드 이름은 creator_name으로 유지
+    creator_name = serializers.CharField(source='creator_nickname', read_only=True)
     # product_details는 GroupBuy 모델의 product_details 필드와 product의 정보를 병합하여 제공
     product_details = serializers.SerializerMethodField()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
