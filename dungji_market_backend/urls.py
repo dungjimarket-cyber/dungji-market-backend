@@ -22,7 +22,8 @@ from rest_framework.routers import DefaultRouter
 from api.views import (
     CategoryViewSet, ProductViewSet, GroupBuyViewSet,
     ParticipationViewSet, WishlistViewSet, ReviewViewSet,
-    register_user, create_sns_user, UserProfileView, get_category_fields
+    register_user, create_sns_user, UserProfileView, get_category_fields,
+    SellerViewSet
 )
 from api.views_bid import BidViewSet, SettlementViewSet, group_buy_bids
 from api.views_seller import SellerProfileView, get_bid_summary, SellerSalesView, get_seller_sale_detail
@@ -41,6 +42,7 @@ router.register(r'wishlists', WishlistViewSet, basename='wishlist')
 router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'bids', BidViewSet, basename='bid')
 router.register(r'settlements', SettlementViewSet, basename='settlement')
+router.register(r'seller', SellerViewSet, basename='seller')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

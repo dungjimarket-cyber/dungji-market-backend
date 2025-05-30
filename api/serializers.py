@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, Bid
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
@@ -312,3 +312,26 @@ class ReviewSerializer(serializers.ModelSerializer):
             is_purchased=is_purchased
         )
         return review
+
+
+class BidSerializer(serializers.ModelSerializer):
+    """입찰 데이터를 위한 시리얼라이저
+    
+    판매자가 입찰한 내역 및 상태를 관리합니다.
+    """
+    seller_name = serializers.CharField(source='seller.username', read_only=True)
+    groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
+    product_name = serializers.CharField(source='groupbuy.product.name', read_only=True)
+    current_participants = serializers.IntegerField(source='groupbuy.current_participants', read_only=True)
+    max_participants = serializers.IntegerField(source='groupbuy.max_participants', read_only=True)
+    
+    class Meta:
+        model = Bid
+        fields = ['id', 'groupbuy', 'groupbuy_title', 'product_name', 'seller', 'seller_name',
+                 'bid_type', 'amount', 'message', 'contract_period', 'created_at', 'updated_at',
+                 'is_selected', 'status', 'current_participants', 'max_participants']
+        extra_kwargs = {
+            'seller': {'required': True, 'write_only': True},
+            'groupbuy': {'required': True},
+            'amount': {'required': True, 'min_value': 0},
+        }

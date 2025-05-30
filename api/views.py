@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import viewsets, status, generics, filters
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
@@ -19,8 +19,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.authtoken.models import Token
-from .models import Category, Product, GroupBuy, Participation, Wishlist, Review
-from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer, WishlistSerializer, ReviewSerializer
+from .models import Category, Product, GroupBuy, Participation, Wishlist, Review, Bid
+from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer, WishlistSerializer, ReviewSerializer, BidSerializer
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from .utils import update_groupbuy_status, update_groupbuys_status
 import json
 import logging
@@ -522,7 +523,6 @@ def get_category_fields(request, category_id):
 # views.py
 from django.db.models import Count
 from django.utils import timezone
-from .models import Bid  # Bid 모델 import 추가
 from rest_framework import serializers  # serializers 모듈 import 추가
 
 class GroupBuyViewSet(ModelViewSet):
@@ -855,6 +855,25 @@ class GroupBuyViewSet(ModelViewSet):
         serializer = self.get_serializer(joined, many=True)
         return Response(serializer.data)
         
+    @action(detail=False, methods=['get'])
+    def pending_selection(self, request):
+        """최종 선택 대기중인 공구 목록 조회
+        
+        사용자가 참여한 공구 중 확정된(confirmed) 상태이거나 
+        모집이 완료되었지만 아직 최종 선택을 하지 않은 공구 목록 반환
+        """
+        # 사용자가 참여한 공구 중 'confirmed' 상태인 공구 또는
+        # 'recruiting' 상태지만 모집 완료된(current_participants == max_participants) 공구
+        pending = self.get_queryset().filter(
+            participants=request.user
+        ).filter(
+            Q(status='confirmed') | 
+            Q(status='recruiting', current_participants__gte=F('max_participants'))
+        )
+        
+        serializer = self.get_serializer(pending, many=True)
+        return Response(serializer.data)
+        
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
         """사용자가 공구에 참여하는 API"""
@@ -1076,6 +1095,59 @@ class WishlistViewSet(ModelViewSet):
                 return Response({"status": "wished", "message": "찜하기가 추가되었습니다.", "data": serializer.data}, status=status.HTTP_201_CREATED)
         except GroupBuy.DoesNotExist:
             return Response({"error": "존재하지 않는 공구입니다."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class SellerViewSet(ViewSet):
+    """판매자 관련 API를 위한 뷰셋
+    
+    판매자 활동에 필요한 API 엔드포인트를 제공합니다.
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    @action(detail=False, methods=['GET'])
+    def bids(self, request):
+        """판매자의 입찰 목록을 반환하는 API
+        
+        로그인한 판매자가 입찰한 목록을 반환합니다.
+        """
+        user = request.user
+        
+        # 판매자 역할 확인
+        if user.role != 'seller':
+            return Response(
+                {'error': '판매자 권한이 필요합니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 판매자가 입찰한 목록 가져오기
+        bids = Bid.objects.filter(seller=user)
+        serializer = BidSerializer(bids, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['GET'])
+    def settlements(self, request):
+        """판매자의 정산 내역을 반환하는 API
+        
+        로그인한 판매자의 정산 내역을 반환합니다.
+        """
+        user = request.user
+        
+        # 판매자 역할 확인
+        if user.role != 'seller':
+            return Response(
+                {'error': '판매자 권한이 필요합니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # 정산 대기 중(선택된 입찰) 내역 가져오기
+        selected_bids = Bid.objects.filter(
+            seller=user, 
+            is_selected=True, 
+            status='selected'
+        )
+        serializer = BidSerializer(selected_bids, many=True)
+        return Response(serializer.data)
 
 
 class ReviewViewSet(ModelViewSet):
