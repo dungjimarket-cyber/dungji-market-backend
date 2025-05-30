@@ -523,6 +523,7 @@ def get_category_fields(request, category_id):
 from django.db.models import Count
 from django.utils import timezone
 from .models import Bid  # Bid 모델 import 추가
+from rest_framework import serializers  # serializers 모듈 import 추가
 
 class GroupBuyViewSet(ModelViewSet):
     serializer_class = GroupBuySerializer
