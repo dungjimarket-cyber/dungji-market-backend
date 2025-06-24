@@ -220,6 +220,20 @@ class GroupBuySerializer(serializers.ModelSerializer):
                 'min_participants': '최소 참여자 수는 최대 참여자 수보다 클 수 없습니다.'
             })
         
+        # 활성 상태의 공구에 대해서만 중복 체크
+        if data.get('product') and data.get('creator'):
+            active_statuses = ['recruiting', 'bidding', 'voting', 'seller_confirmation']
+            existing_groupbuy = GroupBuy.objects.filter(
+                product=data['product'],
+                creator=data['creator'],
+                status__in=active_statuses
+            ).first()
+            
+            if existing_groupbuy:
+                raise serializers.ValidationError({
+                    'product': '이미 해당 상품으로 진행 중인 공동구매가 있습니다. 기존 공구가 완료된 후 새로운 공구를 생성해주세요.'
+                })
+        
         if data.get('end_time'):
             from django.utils import timezone
             from datetime import timedelta

@@ -356,12 +356,6 @@ class GroupBuy(models.Model):
         indexes = [
             models.Index(fields=['status', 'end_time']),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['product', 'creator'],
-                name='unique_groupbuy_per_product'
-            )
-        ]
 
 class GroupBuyTelecomDetail(models.Model):
     """
