@@ -534,6 +534,7 @@ class GroupBuyViewSet(ModelViewSet):
         queryset = GroupBuy.objects.select_related('product', 'product__category').all()
         status_param = self.request.query_params.get('status', None)
         category_id = self.request.query_params.get('category', None)
+        sort_param = self.request.query_params.get('sort', None)
 
         # status 필터 처리
         if status_param == 'active':
@@ -544,6 +545,20 @@ class GroupBuyViewSet(ModelViewSet):
         # category 필터 처리
         if category_id:
             queryset = queryset.filter(product__category_id=category_id)
+            
+        # 정렬 처리
+        if sort_param:
+            # 한글 정렬 옵션 처리
+            if sort_param == '최신순' or sort_param == 'newest':
+                queryset = queryset.order_by('-start_time')  # 최신 공구가 먼저 표시
+            elif sort_param == '인기순(참여자많은순)' or sort_param == 'popular':
+                queryset = queryset.order_by('-current_participants')  # 참여자 많은 순으로 정렬
+            else:
+                # 기본 정렬은 최신순
+                queryset = queryset.order_by('-start_time')
+        else:
+            # 기본 정렬은 최신순
+            queryset = queryset.order_by('-start_time')
             
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
         update_groupbuys_status(queryset[:100])
