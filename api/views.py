@@ -1027,7 +1027,7 @@ class UserProfileView(APIView):
         return Response({
             'id': user.id,
             'email': user.email,
-            'username': user.get_full_name() or user.username,
+            'username': user.username,  # 닉네임 수정을 위해 get_full_name() 사용하지 않고 username만 반환
             'profile_image': user.profile_image,
             'sns_type': user.sns_type,
         })
@@ -1058,7 +1058,7 @@ class UserProfileView(APIView):
         return Response({
             'id': user.id,
             'email': user.email,
-            'username': user.get_full_name() or user.username,
+            'username': user.username,  # 닉네임 수정을 위해 get_full_name() 사용하지 않고 username만 반환
             'profile_image': user.profile_image,
             'sns_type': user.sns_type,
         })
