@@ -535,35 +535,53 @@ class GroupBuyViewSet(ModelViewSet):
         status_param = self.request.query_params.get('status', None)
         category_id = self.request.query_params.get('category', None)
         sort_param = self.request.query_params.get('sort', None)
+        
+        # 현재 시간 가져오기
+        now = timezone.now()
 
         # status 필터 처리
         if status_param == 'active':
-            queryset = queryset.filter(end_time__gt=timezone.now())
+            queryset = queryset.filter(end_time__gt=now)
         elif status_param == 'completed':
-            queryset = queryset.filter(end_time__lte=timezone.now())
+            queryset = queryset.filter(end_time__lte=now)
 
         # category 필터 처리
         if category_id:
             queryset = queryset.filter(product__category_id=category_id)
             
-        # 정렬 처리
+        # 정렬 처리 - 마감된 공구는 항상 후순위로 정렬
+        # 1. 활성 공구와 마감된 공구를 분리
+        active_groupbuys = queryset.filter(end_time__gt=now)
+        ended_groupbuys = queryset.filter(end_time__lte=now)
+        
+        # 2. 각각 정렬 적용
         if sort_param:
             # 한글 정렬 옵션 처리
             if sort_param == '최신순' or sort_param == 'newest':
-                queryset = queryset.order_by('-start_time')  # 최신 공구가 먼저 표시
+                active_groupbuys = active_groupbuys.order_by('-start_time')  # 최신 공구가 먼저 표시
+                ended_groupbuys = ended_groupbuys.order_by('-start_time')  # 마감된 공구도 최신순
             elif sort_param == '인기순(참여자많은순)' or sort_param == 'popular':
-                queryset = queryset.order_by('-current_participants')  # 참여자 많은 순으로 정렬
+                active_groupbuys = active_groupbuys.order_by('-current_participants')  # 참여자 많은 순으로 정렬
+                ended_groupbuys = ended_groupbuys.order_by('-current_participants')  # 마감된 공구도 참여자 많은 순
             else:
                 # 기본 정렬은 최신순
-                queryset = queryset.order_by('-start_time')
+                active_groupbuys = active_groupbuys.order_by('-start_time')
+                ended_groupbuys = ended_groupbuys.order_by('-start_time')
         else:
             # 기본 정렬은 최신순
-            queryset = queryset.order_by('-start_time')
+            active_groupbuys = active_groupbuys.order_by('-start_time')
+            ended_groupbuys = ended_groupbuys.order_by('-start_time')
+        
+        # 3. 활성 공구와 마감된 공구 합치기 (UNION)
+        # Django ORM에서 UNION을 사용하려면 values()로 변환 후 합쳐야 함
+        # 하지만 이 방식은 select_related 등의 최적화를 잃게 됨
+        # 대신 list()로 평가한 후 Python에서 합치는 방식 사용
+        result_queryset = list(active_groupbuys) + list(ended_groupbuys)
             
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
         update_groupbuys_status(queryset[:100])
 
-        return queryset
+        return result_queryset
         
     def create(self, request, *args, **kwargs):
         """공구 생성 API"""
