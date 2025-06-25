@@ -572,11 +572,35 @@ class GroupBuyViewSet(ModelViewSet):
             active_groupbuys = active_groupbuys.order_by('-start_time')
             ended_groupbuys = ended_groupbuys.order_by('-start_time')
         
-        # 3. 활성 공구와 마감된 공구 합치기 (UNION)
-        # Django ORM에서 UNION을 사용하려면 values()로 변환 후 합쳐야 함
-        # 하지만 이 방식은 select_related 등의 최적화를 잃게 됨
-        # 대신 list()로 평가한 후 Python에서 합치는 방식 사용
-        result_queryset = list(active_groupbuys) + list(ended_groupbuys)
+        # 3. 활성 공구와 마감된 공구 합치기
+        # 리스트 대신 QuerySet을 유지하기 위해 annotate와 order_by를 사용
+        # 활성 공구는 sort_order=0, 마감된 공구는 sort_order=1로 설정하여 정렬
+        from django.db.models import Value, IntegerField
+        
+        active_groupbuys = active_groupbuys.annotate(sort_order=Value(0, output_field=IntegerField()))
+        ended_groupbuys = ended_groupbuys.annotate(sort_order=Value(1, output_field=IntegerField()))
+        
+        # QuerySet 합치기 (UNION)
+        from django.db.models import Q
+        result_queryset = GroupBuy.objects.filter(
+            Q(id__in=active_groupbuys.values('id')) | 
+            Q(id__in=ended_groupbuys.values('id'))
+        ).select_related('product', 'product__category')
+        
+        # sort_order 값을 기준으로 정렬 (활성 공구 먼저)
+        result_queryset = result_queryset.annotate(
+            sort_order=Case(
+                When(end_time__gt=now, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField()
+            )
+        ).order_by('sort_order')
+        
+        # 각 그룹 내에서 원래 정렬 적용
+        if sort_param == '최신순' or sort_param == 'newest' or not sort_param:
+            result_queryset = result_queryset.order_by('sort_order', '-start_time')
+        elif sort_param == '인기순(참여자많은순)' or sort_param == 'popular':
+            result_queryset = result_queryset.order_by('sort_order', '-current_participants')
             
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
         update_groupbuys_status(queryset[:100])
