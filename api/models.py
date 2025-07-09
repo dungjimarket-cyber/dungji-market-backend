@@ -402,6 +402,76 @@ class GroupBuyTelecomDetail(models.Model):
         verbose_name_plural = '공구 통신 세부정보 관리'
 
 
+class BidToken(models.Model):
+    """판매자의 입찰권 관리를 위한 모델"""
+    TOKEN_TYPE_CHOICES = (
+        ('standard', '기본 입찰권'),
+        ('premium', '프리미엄 입찰권'),
+        ('unlimited', '무제한 입찰권'),
+    )
+    
+    STATUS_CHOICES = (
+        ('active', '활성'),
+        ('used', '사용됨'),
+        ('expired', '만료됨'),
+    )
+    
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bid_tokens', verbose_name='판매자')
+    token_type = models.CharField(max_length=20, choices=TOKEN_TYPE_CHOICES, default='standard', verbose_name='입찰권 유형')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    expires_at = models.DateTimeField(verbose_name='만료일')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name='상태')
+    used_at = models.DateTimeField(null=True, blank=True, verbose_name='사용일')
+    used_for = models.ForeignKey('Bid', on_delete=models.SET_NULL, null=True, blank=True, related_name='token_used', verbose_name='사용된 입찰')
+    
+    class Meta:
+        verbose_name = '입찰권'
+        verbose_name_plural = '입찰권 관리'
+    
+    def __str__(self):
+        return f"{self.seller.username}의 {self.get_token_type_display()} ({self.get_status_display()})"
+    
+    def is_valid(self):
+        """입찰권이 유효한지 확인"""
+        return self.status == 'active' and self.expires_at > timezone.now()
+    
+    def use(self, bid):
+        """입찰권 사용 처리"""
+        if not self.is_valid():
+            return False
+        
+        self.status = 'used'
+        self.used_at = timezone.now()
+        self.used_for = bid
+        self.save()
+        return True
+
+
+class BidTokenPurchase(models.Model):
+    """입찰권 구매 내역"""
+    PAYMENT_STATUS_CHOICES = (
+        ('pending', '결제 대기'),
+        ('completed', '결제 완료'),
+        ('cancelled', '취소됨'),
+        ('refunded', '환불됨'),
+    )
+    
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='token_purchases', verbose_name='구매자')
+    token_type = models.CharField(max_length=20, choices=BidToken.TOKEN_TYPE_CHOICES, verbose_name='입찰권 유형')
+    quantity = models.PositiveSmallIntegerField(default=1, verbose_name='수량')
+    total_price = models.PositiveIntegerField(verbose_name='결제 금액')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending', verbose_name='결제 상태')
+    purchase_date = models.DateTimeField(auto_now_add=True, verbose_name='구매일')
+    payment_date = models.DateTimeField(null=True, blank=True, verbose_name='결제일')
+    
+    class Meta:
+        verbose_name = '입찰권 구매 내역'
+        verbose_name_plural = '입찰권 구매 내역 관리'
+    
+    def __str__(self):
+        return f"{self.seller.username}의 {self.get_token_type_display()} {self.quantity}개 구매"
+
+
 class Participation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자')
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, verbose_name='공동구매')
@@ -455,24 +525,18 @@ class Bid(models.Model):
         ('rejected', '포기'),
     )
     
-    def __str__(self):
-        status_text = ""
-        if self.status == 'selected':
-            status_text = "[확정]"
-        elif self.status == 'rejected':
-            status_text = "[포기]"
-        return f"{self.seller.username} - {self.groupbuy.title} ({self.get_bid_type_display()}: {self.amount}원) {status_text}"
-    
-    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, verbose_name='공동구매')  # Temporarily allow null
-    seller = models.ForeignKey(User, on_delete=models.CASCADE, null=True, verbose_name='판매자')  # Temporarily allow null
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, verbose_name='공동구매')
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, null=True, verbose_name='판매자')
     bid_type = models.CharField(max_length=10, choices=BID_TYPE, default='price', verbose_name='입찰 유형')
     amount = models.PositiveIntegerField(default=0, verbose_name='입찰 금액')
     message = models.TextField(blank=True, verbose_name='입찰 메시지')
-    contract_period = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='약정 기간(월)')  # 약정기간(월)
+    contract_period = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='약정 기간(월)')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성 시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정 시간')
-    is_selected = models.BooleanField(default=False, verbose_name='선택 여부')  # 최종선택여부 (이전 필드, 호환성 유지)
+    is_selected = models.BooleanField(default=False, verbose_name='선택 여부')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='상태')
+    # 입찰권 관련 필드 추가
+    bid_token = models.ForeignKey(BidToken, on_delete=models.SET_NULL, null=True, blank=True, related_name='bids', verbose_name='사용된 입찰권')
     
     @property
     def masked_amount(self):

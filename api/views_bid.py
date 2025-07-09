@@ -2,10 +2,12 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Bid, Settlement, GroupBuy
+from .models import Bid, Settlement, GroupBuy, BidToken
 from .serializers_bid import BidSerializer, SettlementSerializer
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 class IsSellerPermission(permissions.BasePermission):
     """
@@ -80,9 +82,53 @@ class BidViewSet(viewsets.ModelViewSet):
             
     def perform_create(self, serializer, is_update=False):
         """
-        입찰 생성 또는 업데이트 시 현재 사용자를 판매자로 설정
+        입찰 생성 또는 업데이트 시 현재 사용자를 판매자로 설정하고 입찰권 사용 처리
         """
-        serializer.save(seller=self.request.user)
+        user = self.request.user
+        now = timezone.now()
+        
+        # 업데이트인 경우 입찰권을 소비하지 않음
+        if is_update:
+            serializer.save(seller=user)
+            return
+        
+        # 무제한 입찰권 확인
+        unlimited_token = BidToken.objects.filter(
+            seller=user,
+            token_type='unlimited',
+            status='active',
+            expires_at__gt=now
+        ).first()
+        
+        if unlimited_token:
+            # 무제한 입찰권이 있으면 입찰권을 소비하지 않고 무제한 입찰권 정보만 추가
+            bid = serializer.save(seller=user)
+            return
+        
+        # 일반 입찰권 확인
+        standard_token = BidToken.objects.filter(
+            seller=user,
+            token_type='standard',
+            status='active',
+            expires_at__gt=now
+        ).first()
+        
+        # 프리미엄 입찰권 확인 (일반 입찰권이 없는 경우)
+        if not standard_token:
+            standard_token = BidToken.objects.filter(
+                seller=user,
+                token_type='premium',
+                status='active',
+                expires_at__gt=now
+            ).first()
+        
+        # 입찰권이 없으면 오류 발생
+        if not standard_token:
+            raise ValidationError("사용 가능한 입찰권이 없습니다. 입찰권을 구매하신 후 다시 시도해주세요.")
+        
+        # 입찰권 사용 처리 및 연결
+        bid = serializer.save(seller=user, bid_token=standard_token)
+        standard_token.use(bid)
 
     @action(detail=False, methods=['get'], url_path='seller')
     def seller_bids(self, request):
@@ -168,6 +214,15 @@ class BidViewSet(viewsets.ModelViewSet):
                 {"detail": "입찰 시간이 종료된 공구의 입찰은 취소할 수 없습니다."}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # 사용한 입찰권이 있으면 상태 복구
+        if bid.bid_token:
+            token = bid.bid_token
+            if token.status == 'used' and token.used_for == bid:
+                token.status = 'active'
+                token.used_at = None
+                token.used_for = None
+                token.save()
         
         # 입찰 취소 실행
         bid.delete()

@@ -26,7 +26,10 @@ from api.views import (
     SellerViewSet
 )
 from api.views_bid import BidViewSet, SettlementViewSet, group_buy_bids
-from api.views_seller import SellerProfileView, get_bid_summary, SellerSalesView, get_seller_sale_detail
+from api.views_seller import (
+    SellerProfileView, get_bid_summary, SellerSalesView, get_seller_sale_detail,
+    purchase_bid_tokens, get_bid_tokens
+)
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -66,6 +69,9 @@ urlpatterns = [
     path('api/users/me/bids/summary/', get_bid_summary, name='bid_summary'),
     path('api/users/me/sales/', SellerSalesView.as_view(), name='seller_sales'),
     path('api/users/me/sales/<int:bid_id>/', get_seller_sale_detail, name='seller_sale_detail'),
+    # 입찰권 관련 API
+    path('api/bid-tokens/purchase/', purchase_bid_tokens, name='purchase_bid_tokens'),
+    path('api/bid-tokens/', get_bid_tokens, name='get_bid_tokens'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

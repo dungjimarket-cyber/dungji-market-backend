@@ -6,7 +6,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .models import Bid, GroupBuy
+from .models import Bid, GroupBuy, BidToken, BidTokenPurchase
+from django.utils import timezone
+from django.db import transaction
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -68,10 +70,24 @@ class SellerProfileView(APIView):
             if reviews.exists():
                 rating = sum(review.rating for review in reviews) / reviews.count()
         
-        # 남은 입찰권 및 무제한 입찰권 여부 (가상 데이터)
-        # 실제로는 입찰권 모델이 필요함
-        remaining_bids = 10
-        has_unlimited_bids = False
+        # 남은 입찰권 및 무제한 입찰권 여부 (실제 데이터)
+        now = timezone.now()
+        
+        # 활성 상태의 입찰권 필터링
+        active_tokens = BidToken.objects.filter(
+            seller=user, 
+            status='active',
+            expires_at__gt=now
+        )
+        
+        # 기본 입찰권 개수
+        remaining_bids = active_tokens.filter(token_type='standard').count()
+        
+        # 프리미엄 입찰권 개수
+        premium_tokens = active_tokens.filter(token_type='premium').count()
+        
+        # 무제한 입찰권 보유 여부
+        has_unlimited_bids = active_tokens.filter(token_type='unlimited').exists()
         
         # 응답 데이터 구성
         data = {
@@ -84,10 +100,148 @@ class SellerProfileView(APIView):
             "pendingSales": pending_sales,
             "completedSales": completed_sales,
             "remainingBids": remaining_bids,
+            "premiumTokens": premium_tokens,
             "hasUnlimitedBids": has_unlimited_bids
         }
         
         return Response(data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def purchase_bid_tokens(request):
+    """
+    입찰권 구매 API
+    
+    요청 데이터:
+    - token_type: 입찰권 유형 (standard, premium, unlimited)
+    - quantity: 구매할 수량 (default: 1)
+    """
+    user = request.user
+    
+    # 판매자 권한 체크 (개발용 임시 비활성화)
+    # if not hasattr(user, 'userprofile') or user.userprofile.role != 'seller':
+    #     return Response({"detail": "판매자 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
+    
+    # 요청 데이터 확인
+    token_type = request.data.get('token_type', 'standard')
+    quantity = int(request.data.get('quantity', 1))
+    
+    # 입찰권 유형 검증
+    if token_type not in ['standard', 'premium', 'unlimited']:
+        return Response({"detail": "유효하지 않은 입찰권 유형입니다."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 수량 검증 (무제한은 항상 1개만 구매 가능)
+    if token_type == 'unlimited' and quantity > 1:
+        return Response({"detail": "무제한 입찰권은 한 번에 1개만 구매 가능합니다."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if quantity < 1 or quantity > 100:
+        return Response({"detail": "구매 수량은 1~100 사이의 값이어야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 가격 계산
+    price_map = {
+        'standard': 1000,  # 1,000원
+        'premium': 3000,   # 3,000원
+        'unlimited': 10000 # 10,000원
+    }
+    unit_price = price_map.get(token_type)
+    total_price = unit_price * quantity
+    
+    # 구매 내역 생성 및 입찰권 생성
+    try:
+        with transaction.atomic():
+            # 구매 내역 생성
+            purchase = BidTokenPurchase.objects.create(
+                seller=user,
+                token_type=token_type,
+                quantity=quantity,
+                total_price=total_price,
+                payment_status='completed',  # 실제로는 결제 연동 필요
+                payment_date=timezone.now()
+            )
+            
+            # 입찰권 생성
+            tokens = []
+            for _ in range(quantity):
+                # 만료일 계산 (토큰 유형에 따라 다름)
+                expires_days = {
+                    'standard': 30,   # 30일
+                    'premium': 60,   # 60일
+                    'unlimited': 90  # 90일
+                }.get(token_type)
+                
+                token = BidToken.objects.create(
+                    seller=user,
+                    token_type=token_type,
+                    expires_at=timezone.now() + timezone.timedelta(days=expires_days),
+                    status='active'
+                )
+                tokens.append(token)
+            
+            # 응답 구성
+            response_data = {
+                "purchase_id": purchase.id,
+                "token_type": token_type,
+                "quantity": quantity,
+                "total_price": total_price,
+                "tokens_created": len(tokens),
+                "expires_at": tokens[0].expires_at if tokens else None
+            }
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+    except Exception as e:
+        return Response({"detail": f"구매 처리 중 오류가 발생했습니다: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_bid_tokens(request):
+    """
+    사용자의 입찰권 목록 조회 API
+    """
+    user = request.user
+    
+    # 현재 시간
+    now = timezone.now()
+    
+    # 활성 상태의 입찰권 필터링
+    active_tokens = BidToken.objects.filter(
+        seller=user, 
+        status='active',
+        expires_at__gt=now
+    )
+    
+    # 입찰권 타입별 집계
+    standard_tokens = active_tokens.filter(token_type='standard').count()
+    premium_tokens = active_tokens.filter(token_type='premium').count()
+    unlimited_tokens = active_tokens.filter(token_type='unlimited').count()
+    
+    # 최근 구매 내역
+    recent_purchases = BidTokenPurchase.objects.filter(
+        seller=user,
+        payment_status='completed'
+    ).order_by('-purchase_date')[:5]
+    
+    # 구매 내역 데이터 준비
+    purchase_data = [{
+        'id': purchase.id,
+        'token_type': purchase.token_type,
+        'token_type_display': purchase.get_token_type_display(),
+        'quantity': purchase.quantity,
+        'total_price': purchase.total_price,
+        'purchase_date': purchase.purchase_date
+    } for purchase in recent_purchases]
+    
+    response_data = {
+        'standard_tokens': standard_tokens,
+        'premium_tokens': premium_tokens,
+        'unlimited_tokens': unlimited_tokens,
+        'total_tokens': standard_tokens + premium_tokens + unlimited_tokens,
+        'recent_purchases': purchase_data
+    }
+    
+    return Response(response_data)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

@@ -88,9 +88,20 @@ class StandardProductDetailSerializer(serializers.ModelSerializer):
         fields = ['brand', 'origin', 'shipping_fee', 'shipping_info']
 
 class GroupBuyTelecomDetailSerializer(serializers.ModelSerializer):
+    subscription_type_korean = serializers.SerializerMethodField()
+    
     class Meta:
         model = GroupBuyTelecomDetail
-        fields = ['telecom_carrier', 'subscription_type', 'plan_info', 'contract_period']
+        fields = ['telecom_carrier', 'subscription_type', 'subscription_type_korean', 'plan_info', 'contract_period']
+    
+    def get_subscription_type_korean(self, obj):
+        """가입유형을 한글로 변환하여 반환"""
+        subscription_type_map = {
+            'new': '신규가입',
+            'transfer': '번호이동',
+            'change': '기기변경',
+        }
+        return subscription_type_map.get(obj.subscription_type, obj.subscription_type)
 
 class ProductCustomValueSerializer(serializers.ModelSerializer):
     field_name = serializers.CharField(source='field.field_name', read_only=True)
@@ -139,6 +150,8 @@ class GroupBuySerializer(serializers.ModelSerializer):
     # creator_name 필드를 모델의 creator_nickname 필드를 사용하도록 변경
     # 계획적 호환성을 위해 필드 이름은 creator_name으로 유지
     creator_name = serializers.CharField(source='creator_nickname', read_only=True)
+    # 방장(creator) 사용자 이름을 명확하게 노출
+    host_username = serializers.CharField(source='creator.username', read_only=True)
     # product_details는 GroupBuy 모델의 product_details 필드와 product의 정보를 병합하여 제공
     product_details = serializers.SerializerMethodField()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
@@ -148,7 +161,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
-                'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
+                'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
                 'current_participants', 'region_type', 'telecom_detail', 'product_details']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
@@ -183,6 +196,14 @@ class GroupBuySerializer(serializers.ModelSerializer):
                     
                     # 가입유형 정보 업데이트
                     telecom_detail['registration_type'] = gb_telecom.subscription_type
+                    
+                    # 가입유형 한글명 추가
+                    subscription_type_map = {
+                        'new': '신규가입',
+                        'transfer': '번호이동',
+                        'change': '기기변경',
+                    }
+                    telecom_detail['registration_type_korean'] = subscription_type_map.get(gb_telecom.subscription_type, gb_telecom.subscription_type)
                     
                     # 요금제 정보 업데이트
                     telecom_detail['plan_info'] = gb_telecom.plan_info
