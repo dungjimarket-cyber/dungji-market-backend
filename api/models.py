@@ -7,6 +7,9 @@ from django.db.models import Case, When, F
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+# 지역 정보 모델 import
+from .models_region import Region
+
 class User(AbstractUser):
     ROLE_CHOICES = (
         ('buyer', '구매자'),
@@ -287,6 +290,8 @@ class GroupBuy(models.Model):
     voting_end = models.DateTimeField(null=True, blank=True, verbose_name='투표 종료 시간')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')
+    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='groupbuys', verbose_name='지역')
+    region_name = models.CharField(max_length=200, blank=True, null=True, verbose_name='지역명 백업')  # 지역명 백업
     
     # 통신 관련 정보는 GroupBuyTelecomDetail 모델로 분리
     

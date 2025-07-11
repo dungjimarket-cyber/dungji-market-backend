@@ -30,6 +30,7 @@ from api.views_seller import (
     SellerProfileView, get_bid_summary, SellerSalesView, get_seller_sale_detail,
     purchase_bid_tokens, get_bid_tokens
 )
+from api.views_region import RegionViewSet
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -46,6 +47,7 @@ router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'bids', BidViewSet, basename='bid')
 router.register(r'settlements', SettlementViewSet, basename='settlement')
 router.register(r'seller', SellerViewSet, basename='seller')
+router.register(r'regions', RegionViewSet, basename='region')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
