@@ -22,7 +22,7 @@ from rest_framework.authtoken.models import Token
 from .models import Category, Product, GroupBuy, Participation, Wishlist, Review, Bid
 from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer, WishlistSerializer, ReviewSerializer, BidSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .utils import update_groupbuy_status, update_groupbuys_status
+from .utils import update_groupbuy_status
 import json
 import logging
 
@@ -603,7 +603,8 @@ class GroupBuyViewSet(ModelViewSet):
             result_queryset = result_queryset.order_by('sort_order', '-current_participants')
             
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
-        update_groupbuys_status(queryset[:100])
+        for groupbuy in queryset[:100]:
+            update_groupbuy_status(groupbuy)
 
         return result_queryset
         

@@ -6,6 +6,7 @@ from datetime import timedelta
 from django.db.models import Case, When, F
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils.text import slugify
 
 # 지역 정보 모델 import
 from .models_region import Region
@@ -348,11 +349,14 @@ class GroupBuy(models.Model):
             self.save()
 
     def notify_status_change(self):
+        # STATUS_CHOICES에서 현재 상태의 한글 표시 가져오기
+        status_display = dict(self.STATUS_CHOICES).get(self.status, self.status)
+        
         for participant in self.participants.all():
             Notification.objects.create(
                 user=participant,
                 groupbuy=self,
-                message=f"공구 {self.product.name}의 상태가 {self.status}로 변경되었습니다."
+                message=f"공구 {self.product.name}의 상태가 {status_display}로 변경되었습니다."
             )
 
     class Meta:
@@ -639,9 +643,21 @@ class Badge(models.Model):
         return f"{self.user.username} - {self.level}"
 
 class Notification(models.Model):
+    NOTIFICATION_TYPES = [
+        ('reminder', '리마인더'),
+        ('success', '성공/낙찰'),
+        ('failure', '실패/취소'),
+        ('info', '정보/상태변경'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE)
     message = models.TextField()
+    notification_type = models.CharField(
+        max_length=20, 
+        choices=NOTIFICATION_TYPES, 
+        default='info'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 

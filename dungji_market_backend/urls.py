@@ -31,6 +31,7 @@ from api.views_seller import (
     purchase_bid_tokens, get_bid_tokens
 )
 from api.views_region import RegionViewSet
+from api.views_notification import NotificationViewSet
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -48,6 +49,7 @@ router.register(r'bids', BidViewSet, basename='bid')
 router.register(r'settlements', SettlementViewSet, basename='settlement')
 router.register(r'seller', SellerViewSet, basename='seller')
 router.register(r'regions', RegionViewSet, basename='region')
+router.register(r'notifications', NotificationViewSet, basename='notification')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

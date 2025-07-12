@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>입찰 마감 알림</title>
+    <style>
+        body {
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #7c3aed;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #7c3aed;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>입찰 마감 알림</h1>
+    </div>
+    <div class="content">
+        <p>안녕하세요, 둥지마켓입니다.</p>
+        <p><strong>{{ groupbuy_title }}</strong> 공동구매의 입찰 마감이 <strong>{{ hours_left }}시간</strong> 남았습니다.</p>
+        <p>아직 입찰에 참여하지 않으셨다면, 마감 전에 참여해 주세요.</p>
+        <p>입찰 마감 후에는 더 이상 참여할 수 없습니다.</p>
+        <a href="{{ site_url }}/groupbuys/{{ groupbuy_id }}" class="button">공동구매 바로가기</a>
+        <p>감사합니다.</p>
+    </div>
+    <div class="footer">
+        <p>본 메일은 발신전용이며 회신되지 않습니다.</p>
+        <p>© 2025 둥지마켓. All rights reserved.</p>
+    </div>
+</body>
+</html>
