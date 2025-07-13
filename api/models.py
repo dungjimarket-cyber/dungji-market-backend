@@ -35,6 +35,18 @@ class User(AbstractUser):
     current_penalty_level = models.PositiveSmallIntegerField(default=0)
     sns_type = models.CharField(max_length=10, choices=SNS_TYPE_CHOICES, default='email')
     sns_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    
+    # 판매자 주소 정보 (시/군/구 단위)
+    address_region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='users', verbose_name='사업장 지역')
+    address_detail = models.CharField(max_length=255, blank=True, null=True, verbose_name='상세 주소')
+    
+    # 비대면 판매 관련 필드
+    is_remote_sales_enabled = models.BooleanField(default=False, verbose_name='비대면 판매 가능 여부')
+    remote_sales_verified = models.BooleanField(default=False, verbose_name='비대면 판매 인증 완료')
+    remote_sales_verification_date = models.DateTimeField(null=True, blank=True, verbose_name='비대면 인증일')
+    remote_sales_expiry_date = models.DateTimeField(null=True, blank=True, verbose_name='비대면 인증 만료일')
+    business_license_image = models.URLField(blank=True, null=True, verbose_name='사업자등록증 이미지')
+    delivery_history_image = models.URLField(blank=True, null=True, verbose_name='택배 송장 이미지')
     # Fix reverse accessor clashes
     groups = models.ManyToManyField(
         'auth.Group',
@@ -253,6 +265,24 @@ class ProductCustomValue(models.Model):
         verbose_name_plural = '상품 커스텀 값 관리'
         unique_together = ('product', 'field')
 
+class GroupBuyRegion(models.Model):
+    """
+    공구와 지역 간의 다대다 관계를 관리하는 모델
+    한 공구는 최대 3개까지의 지역을 가질 수 있음
+    """
+    groupbuy = models.ForeignKey('GroupBuy', on_delete=models.CASCADE, related_name='regions', verbose_name='공구')
+    region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name='groupbuy_regions', verbose_name='지역')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    
+    class Meta:
+        verbose_name = '공구 지역'
+        verbose_name_plural = '공구 지역 관리'
+        unique_together = ('groupbuy', 'region')
+        
+    def __str__(self):
+        return f"{self.groupbuy.title} - {self.region.name}"
+
+
 class GroupBuy(models.Model):
     STATUS_CHOICES = (
         ('recruiting', '모집중'),
@@ -263,12 +293,6 @@ class GroupBuy(models.Model):
         ('cancelled', '취소됨'),
     )
     
-    REGION_TYPE_CHOICES = (
-        ('local', '지역'),
-        ('nationwide', '전국(비대면)'),
-    )
-    
-    # 지역 유형 선택 옵션
     REGION_TYPE_CHOICES = (
         ('local', '지역'),
         ('nationwide', '전국(비대면)'),
@@ -291,6 +315,7 @@ class GroupBuy(models.Model):
     voting_end = models.DateTimeField(null=True, blank=True, verbose_name='투표 종료 시간')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')
+    # 기존 단일 지역 필드는 유지 (하위 호환성)
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='groupbuys', verbose_name='지역')
     region_name = models.CharField(max_length=200, blank=True, null=True, verbose_name='지역명 백업')  # 지역명 백업
     
@@ -532,6 +557,7 @@ class Bid(models.Model):
         ('pending', '대기중'),
         ('selected', '확정'),
         ('rejected', '포기'),
+        ('ineligible', '자격미달'),
     )
     
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, verbose_name='공동구매')
@@ -552,8 +578,61 @@ class Bid(models.Model):
         if self.bid_type == 'price':
             return f"{str(self.amount)[0]}*****"
         return str(self.amount)
+    
+    def check_seller_eligibility(self):
+        """
+        판매자가 해당 공구에 입찰 가능한지 확인
+        """
+        from django.core.exceptions import ValidationError
+        
+        # 판매자 역할 확인
+        if self.seller.role != 'seller':
+            raise ValidationError('판매자만 입찰이 가능합니다.')
+        
+        # 전국 공구인 경우 비대면 인증 확인
+        if self.groupbuy.region_type == 'nationwide':
+            if not self.seller.is_remote_sales_enabled or not self.seller.remote_sales_verified:
+                raise ValidationError('전국 공구는 비대면 판매 인증을 완료한 판매회원만 입찰 가능합니다.')
+            
+            # 비대면 인증 만료일 확인
+            if self.seller.remote_sales_expiry_date and self.seller.remote_sales_expiry_date < timezone.now():
+                raise ValidationError('비대면 판매 인증이 만료되었습니다. 재인증이 필요합니다.')
+        
+        # 지역 공구인 경우 지역 일치 확인
+        else:
+            # 판매자 주소지 확인
+            if not self.seller.address_region:
+                raise ValidationError('판매자 주소지 정보가 없습니다.')
+            
+            # 공구 지역들과 판매자 주소지 비교
+            seller_region_code = self.seller.address_region.code
+            
+            # 기존 단일 지역 필드 확인 (하위 호환성)
+            if self.groupbuy.region and self.groupbuy.region.code[:5] == seller_region_code[:5]:
+                return True
+                
+            # 새로운 다중 지역 필드 확인
+            groupbuy_regions = self.groupbuy.regions.all()
+            for gb_region in groupbuy_regions:
+                # 시/군/구 레벨에서 비교 (코드 앞 5자리 비교)
+                if gb_region.region.code[:5] == seller_region_code[:5]:
+                    return True
+                    
+            raise ValidationError('해당 공구의 지역에 해당하는 판매회원만 입찰이 가능합니다.')
+        
+        return True
 
     def save(self, *args, **kwargs):
+        # 입찰 자격 확인 (새로 생성되는 경우에만)
+        if not self.pk:
+            try:
+                self.check_seller_eligibility()
+            except Exception as e:
+                self.status = 'ineligible'
+                # 예외 발생 시 일단 저장하고 상태만 변경
+                super().save(*args, **kwargs)
+                return
+        
         # status 필드와 is_selected 필드 동기화
         if self.status == 'selected':
             self.is_selected = True
