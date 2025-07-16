@@ -3,6 +3,7 @@
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from django.db.models import Q
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -207,12 +208,24 @@ def get_bid_tokens(request):
     active_tokens = BidToken.objects.filter(
         seller=user, 
         status='active',
-        expires_at__gt=now
     )
     
+    # 유효한 토큰만 필터링 (만료일이 없거나 현재 시간보다 미래인 경우)
+    valid_tokens = active_tokens.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    
     # 입찰권 타입별 집계
-    single_tokens = active_tokens.filter(token_type='single').count()    
-    unlimited_tokens = active_tokens.filter(token_type='unlimited').count()
+    single_tokens = valid_tokens.filter(token_type='single').count()
+    
+    # 무제한 구독권 확인
+    unlimited_subscription = False
+    unlimited_expires_at = None
+    
+    # 가장 만료일이 늦은 무제한 구독권 찾기
+    latest_unlimited = valid_tokens.filter(token_type='unlimited').order_by('-expires_at').first()
+    
+    if latest_unlimited:
+        unlimited_subscription = True
+        unlimited_expires_at = latest_unlimited.expires_at
     
     # 최근 구매 내역
     recent_purchases = BidTokenPurchase.objects.filter(
@@ -232,8 +245,9 @@ def get_bid_tokens(request):
     
     response_data = {
         'single_tokens': single_tokens,
-        'unlimited_tokens': unlimited_tokens,
-        'total_tokens': single_tokens + unlimited_tokens,
+        'unlimited_subscription': unlimited_subscription,
+        'unlimited_expires_at': unlimited_expires_at,
+        'total_tokens': single_tokens + (1 if unlimited_subscription else 0),
         'recent_purchases': purchase_data
     }
     
