@@ -2,13 +2,15 @@ from django.contrib.auth import get_user_model
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from .permissions import IsAdminRole
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from .models import GroupBuy, Bid, BidToken
+from .models import GroupBuy, Bid, BidToken, Product
 from .serializers import GroupBuySerializer
+from .utils.s3_utils import upload_file_to_s3, delete_file_from_s3
 
 User = get_user_model()
 
@@ -37,6 +39,7 @@ class AdminViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsAdminRole]
     authentication_classes = [JWTAuthentication]
+    parser_classes = [MultiPartParser, FormParser]
     
     @action(detail=False, methods=['get'])
     def group_purchases(self, request):
@@ -148,3 +151,142 @@ class AdminViewSet(viewsets.ViewSet):
             return Response({"error": "해당 사용자를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": f"입찰권 부여 중 오류가 발생했습니다: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def upload_product_image(self, request):
+        """
+        상품 이미지를 S3에 업로드하는 API
+        
+        request.data에 필요한 필드:
+        - image: 업로드할 이미지 파일
+        - product_id: 이미지를 연결할 상품 ID (선택적)
+        """
+        try:
+            # 이미지 파일 확인
+            if 'image' not in request.FILES:
+                return Response({"error": "이미지 파일이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            image_file = request.FILES['image']
+            
+            # 이미지 파일 타입 검증
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+            if image_file.content_type not in allowed_types:
+                return Response(
+                    {"error": "지원되지 않는 이미지 형식입니다. JPEG, PNG, GIF, WEBP 형식만 허용됩니다."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 파일 크기 제한 (10MB)
+            if image_file.size > 10 * 1024 * 1024:
+                return Response(
+                    {"error": "이미지 크기는 10MB를 초과할 수 없습니다."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # S3에 이미지 업로드
+            image_url = upload_file_to_s3(image_file)
+            
+            if not image_url:
+                return Response(
+                    {"error": "이미지 업로드 중 오류가 발생했습니다."}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 상품 ID가 제공된 경우 해당 상품의 이미지 URL 업데이트
+            product_id = request.data.get('product_id')
+            product_updated = False
+            
+            if product_id:
+                try:
+                    product = Product.objects.get(pk=product_id)
+                    
+                    # 기존 이미지가 있는 경우 S3에서 삭제
+                    if product.image_url:
+                        delete_file_from_s3(product.image_url)
+                    
+                    # 새 이미지 URL로 업데이트
+                    product.image_url = image_url
+                    product.save()
+                    product_updated = True
+                    
+                except Product.DoesNotExist:
+                    pass  # 상품이 없는 경우 이미지 URL만 반환
+            
+            return Response({
+                "message": "이미지가 성공적으로 업로드되었습니다.",
+                "image_url": image_url,
+                "product_updated": product_updated,
+                "product_id": product_id if product_updated else None
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"이미지 업로드 중 오류가 발생했습니다: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def update_product_image(self, request, pk=None):
+        """
+        특정 상품의 이미지를 업데이트하는 API
+        
+        request.data에 필요한 필드:
+        - image: 업로드할 이미지 파일
+        """
+        try:
+            # 상품 존재 여부 확인
+            try:
+                product = Product.objects.get(pk=pk)
+            except Product.DoesNotExist:
+                return Response({"error": "해당 상품을 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+            
+            # 이미지 파일 확인
+            if 'image' not in request.FILES:
+                return Response({"error": "이미지 파일이 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            image_file = request.FILES['image']
+            
+            # 이미지 파일 타입 검증
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+            if image_file.content_type not in allowed_types:
+                return Response(
+                    {"error": "지원되지 않는 이미지 형식입니다. JPEG, PNG, GIF, WEBP 형식만 허용됩니다."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 파일 크기 제한 (10MB)
+            if image_file.size > 10 * 1024 * 1024:
+                return Response(
+                    {"error": "이미지 크기는 10MB를 초과할 수 없습니다."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 기존 이미지가 있는 경우 S3에서 삭제
+            if product.image_url:
+                delete_file_from_s3(product.image_url)
+            
+            # S3에 새 이미지 업로드
+            image_url = upload_file_to_s3(image_file)
+            
+            if not image_url:
+                return Response(
+                    {"error": "이미지 업로드 중 오류가 발생했습니다."}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 상품 이미지 URL 업데이트
+            product.image_url = image_url
+            product.save()
+            
+            return Response({
+                "message": f"{product.name} 상품의 이미지가 성공적으로 업데이트되었습니다.",
+                "product_id": product.id,
+                "product_name": product.name,
+                "image_url": image_url
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"이미지 업데이트 중 오류가 발생했습니다: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
