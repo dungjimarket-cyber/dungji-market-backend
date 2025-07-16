@@ -158,11 +158,14 @@ class GroupBuySerializer(serializers.ModelSerializer):
     
     telecom_detail = GroupBuyTelecomDetailSerializer(read_only=True)
     
+    # 다중 지역 정보 추가
+    regions = serializers.SerializerMethodField()
+    
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
                 'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
-                'current_participants', 'region_type', 'telecom_detail', 'product_details']
+                'current_participants', 'region_type', 'telecom_detail', 'product_details', 'regions']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
             'creator': {'required': True},  # creator 필드를 필수로 지정
@@ -234,6 +237,30 @@ class GroupBuySerializer(serializers.ModelSerializer):
         
         # 최종 product_details 반환
         return product_info
+    
+    def get_regions(self, obj):
+        """
+        공구에 연결된 다중 지역 정보를 반환합니다.
+        GroupBuyRegion 모델을 통해 연결된 모든 지역 정보를 가져옵니다.
+        """
+        from .models import GroupBuyRegion
+        
+        # GroupBuyRegion 모델을 통해 연결된 지역 정보 가져오기
+        regions = GroupBuyRegion.objects.filter(groupbuy=obj).select_related('region')
+        
+        # 지역 정보 포맷팅
+        result = []
+        for region_link in regions:
+            region = region_link.region
+            if region:
+                result.append({
+                    'code': region.code,
+                    'name': region.name,
+                    'full_name': region.full_name or region.name,
+                    'level': region.level or 2
+                })
+        
+        return result
         
     def validate(self, data):
         if data.get('min_participants', 0) > data.get('max_participants', 0):

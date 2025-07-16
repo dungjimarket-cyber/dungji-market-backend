@@ -424,7 +424,7 @@ class GroupBuyTelecomDetail(models.Model):
     telecom_carrier = models.CharField(max_length=20, choices=TELECOM_CARRIER_CHOICES, verbose_name='통신사')
     subscription_type = models.CharField(max_length=20, choices=SUBSCRIPTION_TYPE_CHOICES, verbose_name='가입유형')
     plan_info = models.CharField(max_length=20, choices=PLAN_INFO_CHOICES, verbose_name='요금제')
-    contract_period = models.CharField(max_length=20, blank=True, null=True, verbose_name='약정기간')
+    contract_period = models.CharField(max_length=20, default='24개월', verbose_name='약정기간')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
     
@@ -439,9 +439,8 @@ class GroupBuyTelecomDetail(models.Model):
 class BidToken(models.Model):
     """판매자의 입찰권 관리를 위한 모델"""
     TOKEN_TYPE_CHOICES = (
-        ('standard', '기본 입찰권'),
-        ('premium', '프리미엄 입찰권'),
-        ('unlimited', '무제한 입찰권'),
+        ('single', '입찰권 단품'),
+        ('unlimited', '무제한 구독권'),
     )
     
     STATUS_CHOICES = (
@@ -453,7 +452,7 @@ class BidToken(models.Model):
     seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bid_tokens', verbose_name='판매자')
     token_type = models.CharField(max_length=20, choices=TOKEN_TYPE_CHOICES, default='standard', verbose_name='입찰권 유형')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
-    expires_at = models.DateTimeField(verbose_name='만료일')
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name='만료일')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name='상태')
     used_at = models.DateTimeField(null=True, blank=True, verbose_name='사용일')
     used_for = models.ForeignKey('Bid', on_delete=models.SET_NULL, null=True, blank=True, related_name='token_used', verbose_name='사용된 입찰')
@@ -467,7 +466,8 @@ class BidToken(models.Model):
     
     def is_valid(self):
         """입찰권이 유효한지 확인"""
-        return self.status == 'active' and self.expires_at > timezone.now()
+        # 상태가 활성이면서, 만료일이 없거나(None) 또는 만료일이 현재보다 더 나중인 경우
+        return self.status == 'active' and (self.expires_at is None or self.expires_at > timezone.now())
     
     def use(self, bid):
         """입찰권 사용 처리"""

@@ -105,30 +105,24 @@ class BidViewSet(viewsets.ModelViewSet):
             bid = serializer.save(seller=user)
             return
         
-        # 일반 입찰권 확인
-        standard_token = BidToken.objects.filter(
+        # 단품 입찰권 확인
+        # 단품 입찰권은 유효기간이 없거나, 유효기간이 있는 경우 현재 시간보다 훨씬 만료일이 더 나중인 경우
+        single_token = BidToken.objects.filter(
             seller=user,
-            token_type='standard',
+            token_type='single',
             status='active',
-            expires_at__gt=now
+        ).filter(
+            # 유효기간이 없거나(None) 유효기간이 있는 경우 만료일이 현재보다 더 나중인 경우
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
         ).first()
         
-        # 프리미엄 입찰권 확인 (일반 입찰권이 없는 경우)
-        if not standard_token:
-            standard_token = BidToken.objects.filter(
-                seller=user,
-                token_type='premium',
-                status='active',
-                expires_at__gt=now
-            ).first()
-        
         # 입찰권이 없으면 오류 발생
-        if not standard_token:
+        if not single_token:
             raise ValidationError("사용 가능한 입찰권이 없습니다. 입찰권을 구매하신 후 다시 시도해주세요.")
         
         # 입찰권 사용 처리 및 연결
-        bid = serializer.save(seller=user, bid_token=standard_token)
-        standard_token.use(bid)
+        bid = serializer.save(seller=user, bid_token=single_token)
+        single_token.use(bid)
 
     @action(detail=False, methods=['get'], url_path='seller')
     def seller_bids(self, request):

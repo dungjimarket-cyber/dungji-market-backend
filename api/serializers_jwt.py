@@ -10,8 +10,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
 
         # 토큰에 사용자 역할 정보 추가
-        token['role'] = user.role
+        # 슈퍼유저인 경우 role을 admin으로 설정
+        if user.is_superuser:
+            token['role'] = 'admin'
+        else:
+            token['role'] = user.role
         token['email'] = user.email
+        token['is_superuser'] = user.is_superuser
         
         # 필요하다면 여기에 추가 정보(username 등)를 더 넣을 수 있습니다.
         token['username'] = user.username

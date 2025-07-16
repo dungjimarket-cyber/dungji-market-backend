@@ -81,10 +81,7 @@ class SellerProfileView(APIView):
         )
         
         # 기본 입찰권 개수
-        remaining_bids = active_tokens.filter(token_type='standard').count()
-        
-        # 프리미엄 입찰권 개수
-        premium_tokens = active_tokens.filter(token_type='premium').count()
+        remaining_bids = active_tokens.filter(token_type='single').count()
         
         # 무제한 입찰권 보유 여부
         has_unlimited_bids = active_tokens.filter(token_type='unlimited').exists()
@@ -100,7 +97,6 @@ class SellerProfileView(APIView):
             "pendingSales": pending_sales,
             "completedSales": completed_sales,
             "remainingBids": remaining_bids,
-            "premiumTokens": premium_tokens,
             "hasUnlimitedBids": has_unlimited_bids
         }
         
@@ -113,8 +109,8 @@ def purchase_bid_tokens(request):
     입찰권 구매 API
     
     요청 데이터:
-    - token_type: 입찰권 유형 (standard, premium, unlimited)
-    - quantity: 구매할 수량 (default: 1)
+    - token_type: 입찰권 유형 ('single' - 입찰권 단품, 'unlimited' - 무제한 구독권)
+    - quantity: 구매할 수량 (default: 1, unlimited은 항상 1개)
     """
     user = request.user
     
@@ -123,11 +119,11 @@ def purchase_bid_tokens(request):
     #     return Response({"detail": "판매자 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN)
     
     # 요청 데이터 확인
-    token_type = request.data.get('token_type', 'standard')
+    token_type = request.data.get('token_type', 'single')
     quantity = int(request.data.get('quantity', 1))
     
     # 입찰권 유형 검증
-    if token_type not in ['standard', 'premium', 'unlimited']:
+    if token_type not in ['single', 'unlimited']:
         return Response({"detail": "유효하지 않은 입찰권 유형입니다."}, status=status.HTTP_400_BAD_REQUEST)
     
     # 수량 검증 (무제한은 항상 1개만 구매 가능)
@@ -139,9 +135,8 @@ def purchase_bid_tokens(request):
     
     # 가격 계산
     price_map = {
-        'standard': 1000,  # 1,000원
-        'premium': 3000,   # 3,000원
-        'unlimited': 10000 # 10,000원
+        'single': 1990,   # 1,990원 (입찰권 단품)
+        'unlimited': 29900 # 29,900원 (무제한 구독권 30일)
     }
     unit_price = price_map.get(token_type)
     total_price = unit_price * quantity
@@ -163,18 +158,22 @@ def purchase_bid_tokens(request):
             tokens = []
             for _ in range(quantity):
                 # 만료일 계산 (토큰 유형에 따라 다름)
-                expires_days = {
-                    'standard': 30,   # 30일
-                    'premium': 60,   # 60일
-                    'unlimited': 90  # 90일
-                }.get(token_type)
-                
-                token = BidToken.objects.create(
-                    seller=user,
-                    token_type=token_type,
-                    expires_at=timezone.now() + timezone.timedelta(days=expires_days),
-                    status='active'
-                )
+                if token_type == 'single':
+                    # 단품 입찰권은 유효기간 없음
+                    token = BidToken.objects.create(
+                        seller=user,
+                        token_type=token_type,
+                        expires_at=None,
+                        status='active'
+                    )
+                else:  # unlimited
+                    # 무제한 구독권은 30일 유효
+                    token = BidToken.objects.create(
+                        seller=user,
+                        token_type=token_type,
+                        expires_at=timezone.now() + timezone.timedelta(days=30),
+                        status='active'
+                    )
                 tokens.append(token)
             
             # 응답 구성
@@ -212,8 +211,7 @@ def get_bid_tokens(request):
     )
     
     # 입찰권 타입별 집계
-    standard_tokens = active_tokens.filter(token_type='standard').count()
-    premium_tokens = active_tokens.filter(token_type='premium').count()
+    single_tokens = active_tokens.filter(token_type='single').count()    
     unlimited_tokens = active_tokens.filter(token_type='unlimited').count()
     
     # 최근 구매 내역
@@ -233,10 +231,9 @@ def get_bid_tokens(request):
     } for purchase in recent_purchases]
     
     response_data = {
-        'standard_tokens': standard_tokens,
-        'premium_tokens': premium_tokens,
+        'single_tokens': single_tokens,
         'unlimited_tokens': unlimited_tokens,
-        'total_tokens': standard_tokens + premium_tokens + unlimited_tokens,
+        'total_tokens': single_tokens + unlimited_tokens,
         'recent_purchases': purchase_data
     }
     

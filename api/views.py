@@ -755,16 +755,50 @@ class GroupBuyViewSet(ModelViewSet):
                     elif plan_info == '5G_platinum' or plan_info == '10만원대':
                         telecom_info['plan_info'] = '10만원대'
                 
+                # 약정기간은 항상 24개월로 고정
+                contract_period = '24개월'
+                
                 # GroupBuyTelecomDetail 모델 생성
                 GroupBuyTelecomDetail.objects.create(
                     groupbuy=groupbuy,
                     telecom_carrier=telecom_info['telecom_carrier'],
                     subscription_type=telecom_info['subscription_type'],
                     plan_info=telecom_info['plan_info'],
-                    contract_period=telecom_info.get('contract_period')
+                    contract_period=contract_period
                 )
                 
                 print(f"\n[GroupBuyTelecomDetail 생성 완료] groupbuy_id: {groupbuy.id}")
+            
+            # 다중 지역 처리 - regions 필드가 있는 경우 GroupBuyRegion 모델에 저장
+            if 'regions' in request.data and isinstance(request.data['regions'], list) and request.data['regions']:
+                from .models import GroupBuyRegion, Region
+                
+                # 최대 3개 지역으로 제한
+                regions_data = request.data['regions'][:3]
+                
+                for region_data in regions_data:
+                    # 지역 코드로 Region 객체 찾기
+                    region_code = region_data.get('code')
+                    if region_code:
+                        region = Region.objects.filter(code=region_code).first()
+                        if region:
+                            # GroupBuyRegion 생성
+                            GroupBuyRegion.objects.create(
+                                groupbuy=groupbuy,
+                                region=region
+                            )
+                            print(f"[지역 추가] {region.name} (코드: {region.code})")
+                
+                # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
+                if regions_data and len(regions_data) > 0:
+                    first_region_code = regions_data[0].get('code')
+                    if first_region_code:
+                        first_region = Region.objects.filter(code=first_region_code).first()
+                        if first_region:
+                            groupbuy.region = first_region
+                            groupbuy.region_name = first_region.name
+                            groupbuy.save()
+                            print(f"[기본 지역 설정] {first_region.name}")
             
             # 생성자를 참여자로 자동 추가 (리더로 설정)
             Participation.objects.create(
@@ -849,6 +883,105 @@ class GroupBuyViewSet(ModelViewSet):
                 
         return Response(data)  # Require authentication for creating group buys
 
+    def update(self, request, *args, **kwargs):
+        """공구 정보 업데이트 메서드 - 다중 지역 처리 포함"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        groupbuy = serializer.save()
+        
+        # 통신 정보가 있는 경우 GroupBuyTelecomDetail 모델 업데이트
+        if 'product_details' in request.data and isinstance(request.data['product_details'], dict):
+            telecom_info = request.data['product_details']
+            has_telecom_info = any(key in telecom_info for key in ['telecom_carrier', 'subscription_type', 'plan_info', 'telecom_plan'])
+            
+            if has_telecom_info:
+                from .models import GroupBuyTelecomDetail
+                
+                # 기존 통신 정보 가져오기
+                telecom_detail = GroupBuyTelecomDetail.objects.filter(groupbuy=groupbuy).first()
+                
+                # 필수 필드 확인 및 기본값 설정
+                if 'telecom_carrier' not in telecom_info:
+                    telecom_info['telecom_carrier'] = 'SKT'  # 기본값
+                
+                if 'subscription_type' not in telecom_info:
+                    telecom_info['subscription_type'] = 'new'  # 기본값
+                
+                # plan_info 또는 telecom_plan 중 하나를 사용
+                plan_info = telecom_info.get('plan_info') or telecom_info.get('telecom_plan', '5만원대')
+                
+                # 요금제 정보 변환 (5G_premium -> 7만원대)
+                if plan_info == '5G_basic' or plan_info == '3만원대':
+                    plan_info = '3만원대'
+                elif plan_info == '5G_standard' or plan_info == '5만원대':
+                    plan_info = '5만원대'
+                elif plan_info == '5G_premium' or plan_info == '7만원대':
+                    plan_info = '7만원대'
+                elif plan_info == '5G_special' or plan_info == '9만원대':
+                    plan_info = '9만원대'
+                elif plan_info == '5G_platinum' or plan_info == '10만원대':
+                    plan_info = '10만원대'
+                
+                # 약정기간은 항상 24개월로 고정
+                contract_period = '24개월'
+                
+                if telecom_detail:
+                    # 기존 정보 업데이트
+                    telecom_detail.telecom_carrier = telecom_info['telecom_carrier']
+                    telecom_detail.subscription_type = telecom_info['subscription_type']
+                    telecom_detail.plan_info = plan_info
+                    telecom_detail.contract_period = contract_period
+                    telecom_detail.save()
+                    print(f"[GroupBuyTelecomDetail 업데이트 완료] groupbuy_id: {groupbuy.id}")
+                else:
+                    # 새로 생성
+                    GroupBuyTelecomDetail.objects.create(
+                        groupbuy=groupbuy,
+                        telecom_carrier=telecom_info['telecom_carrier'],
+                        subscription_type=telecom_info['subscription_type'],
+                        plan_info=plan_info,
+                        contract_period=contract_period
+                    )
+                    print(f"[GroupBuyTelecomDetail 생성 완료] groupbuy_id: {groupbuy.id}")
+        
+        # 다중 지역 처리 - regions 필드가 있는 경우 GroupBuyRegion 모델에 저장
+        if 'regions' in request.data and isinstance(request.data['regions'], list) and request.data['regions']:
+            from .models import GroupBuyRegion, Region
+            
+            # 기존 지역 정보 삭제
+            GroupBuyRegion.objects.filter(groupbuy=groupbuy).delete()
+            
+            # 최대 3개 지역으로 제한
+            regions_data = request.data['regions'][:3]
+            
+            for region_data in regions_data:
+                # 지역 코드로 Region 객체 찾기
+                region_code = region_data.get('code')
+                if region_code:
+                    region = Region.objects.filter(code=region_code).first()
+                    if region:
+                        # GroupBuyRegion 생성
+                        GroupBuyRegion.objects.create(
+                            groupbuy=groupbuy,
+                            region=region
+                        )
+                        print(f"[지역 추가] {region.name} (코드: {region.code})")
+            
+            # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
+            if regions_data and len(regions_data) > 0:
+                first_region_code = regions_data[0].get('code')
+                if first_region_code:
+                    first_region = Region.objects.filter(code=first_region_code).first()
+                    if first_region:
+                        groupbuy.region = first_region
+                        groupbuy.region_name = first_region.name
+                        groupbuy.save()
+                        print(f"[기본 지역 설정] {first_region.name}")
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
+    
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'popular', 'recent']:
             return [AllowAny()]
@@ -990,43 +1123,119 @@ class GroupBuyViewSet(ModelViewSet):
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
         """사용자가 공구에서 탈퇴하는 API"""
-        groupbuy = self.get_object()
-        user = request.user
+        print(f"\n[DEBUG] Leave API called for groupbuy_id: {pk}, user_id: {request.user.id}")
         
-        # 참여 여부 확인
         try:
-            participation = Participation.objects.get(user=user, groupbuy=groupbuy)
-        except Participation.DoesNotExist:
+            groupbuy = self.get_object()
+            print(f"[DEBUG] GroupBuy found: {groupbuy.id}, creator_id: {groupbuy.creator.id if groupbuy.creator else 'None'}")
+            
+            user = request.user
+            print(f"[DEBUG] User: {user.id}, is_creator: {user.id == groupbuy.creator.id if groupbuy.creator else False}")
+            
+            # 참여 여부 확인
+            try:
+                participation = Participation.objects.get(user=user, groupbuy=groupbuy)
+                print(f"[DEBUG] Participation found: {participation.id}")
+            except Participation.DoesNotExist:
+                print(f"[DEBUG] Error: User is not participating in this group buy")
+                return Response(
+                    {'error': '참여하지 않은 공구입니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 입찰 진행 여부 확인
+            has_bids = Bid.objects.filter(groupbuy=groupbuy).exists()
+            print(f"[DEBUG] Has bids: {has_bids}")
+            
+            if has_bids:
+                print(f"[DEBUG] Error: Cannot leave group buy with active bids")
+                return Response(
+                    {'error': '입찰이 진행 중인 공구에서는 탈퇴할 수 없습니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            print(f"[DEBUG] Unexpected error in leave API: {str(e)}")
+            error_message = f'공구 탈퇴 중 오류가 발생했습니다: {str(e)}'
             return Response(
-                {'error': '참여하지 않은 공구입니다.'}, 
+                {
+                    'error': error_message,
+                    'error_detail': str(e),
+                    'status': 'error'
+                }, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 입찰 진행 여부 확인
-        has_bids = Bid.objects.filter(groupbuy=groupbuy).exists()
-        if has_bids:
-            return Response(
-                {'error': '입찰이 진행 중인 공구에서는 탈퇴할 수 없습니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 공구 생성자는 탈퇴 불가
+        # 공구 생성자 처리
+        print(f"[DEBUG] Checking if user is creator: {user.id == groupbuy.creator.id if groupbuy.creator else False}")
         if groupbuy.creator == user:
+            print(f"[DEBUG] User is the creator of this group buy")
+            
+            # 공구에 다른 참여자가 있는지 확인 (자기 자신은 제외)
+            other_participants_exist = Participation.objects.filter(groupbuy=groupbuy).exclude(user=user).exists()
+            print(f"[DEBUG] Other participants exist: {other_participants_exist}")
+            
+            # 입찰자가 없고 다른 참여자도 없는 경우
+            if not has_bids and not other_participants_exist:
+                print(f"[DEBUG] No bids and no other participants, allowing creator to leave and cancelling group buy")
+                try:
+                    # 공구 상태를 취소로 변경
+                    groupbuy.status = 'cancelled'
+                    groupbuy.save(update_fields=['status'])
+                    print(f"[DEBUG] Group buy status changed to cancelled")
+                    
+                    # 참여 삭제
+                    participation.delete()
+                    print(f"[DEBUG] Participation deleted")
+                    
+                    return Response({
+                        'message': '공구가 취소되었습니다. 동일한 상품으로 새로운 공구를 만들 수 있습니다.'
+                    }, status=status.HTTP_200_OK)
+                except Exception as e:
+                    print(f"[DEBUG] Error while cancelling group buy: {str(e)}")
+                    error_message = f'공구 취소 중 오류가 발생했습니다: {str(e)}'
+                    return Response(
+                        {
+                            'error': error_message,
+                            'error_detail': str(e),
+                            'status': 'error'
+                        }, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                print(f"[DEBUG] Creator cannot leave: has_bids={has_bids}, other_participants_exist={other_participants_exist}")
+                # 입찰자가 있거나 다른 참여자가 있으면 탈퇴 불가
+                return Response(
+                    {'error': '입찰자가 있거나 다른 참여자가 있는 공구의 생성자는 탈퇴할 수 없습니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 생성자가 아닌 경우
+        print(f"[DEBUG] User is not the creator, proceeding with normal leave")
+        
+        try:
+            # 참여 삭제
+            participation.delete()
+            print(f"[DEBUG] Participation deleted for non-creator")
+            
+            # 현재 참여자 수 감소
+            groupbuy.current_participants -= 1
+            groupbuy.save(update_fields=['current_participants'])
+            print(f"[DEBUG] Current participants decreased to {groupbuy.current_participants}")
+            
+            return Response({
+                'message': '공구 탈퇴가 완료되었습니다.'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"[DEBUG] Error during non-creator leave: {str(e)}")
+            error_message = f'공구 탈퇴 중 오류가 발생했습니다: {str(e)}'
             return Response(
-                {'error': '공구 생성자는 탈퇴할 수 없습니다.'}, 
+                {
+                    'error': error_message,
+                    'error_detail': str(e),
+                    'status': 'error'
+                }, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # 참여 삭제
-        participation.delete()
-        
-        # 현재 참여자 수 감소
-        groupbuy.current_participants -= 1
-        groupbuy.save(update_fields=['current_participants'])
-        
-        return Response({
-            'message': '공구 탈퇴가 완료되었습니다.'
-        }, status=status.HTTP_200_OK)
         
     @action(detail=True, methods=['get'])
     def check_participation(self, request, pk=None):
