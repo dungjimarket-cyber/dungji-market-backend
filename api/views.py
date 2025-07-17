@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q, Count, F, Sum, Avg, Case, When, Value, IntegerField
+from rest_framework.decorators import action
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -1073,6 +1074,9 @@ class GroupBuyViewSet(ModelViewSet):
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
         """사용자가 공구에 참여하는 API"""
+        from django.db import transaction, IntegrityError
+        from django.core.exceptions import ValidationError
+        
         groupbuy = self.get_object()
         user = request.user
         
@@ -1091,6 +1095,17 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 동일 상품의 다른 공구에 참여 중인지 확인
+        if Participation.objects.filter(
+            user=user,
+            groupbuy__product=groupbuy.product,
+            groupbuy__status__in=['recruiting', 'bidding']
+        ).exists():
+            return Response(
+                {'error': '이미 동일한 상품의 다른 공구에 참여중입니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # 공구 상태 확인
         now = timezone.now()
         if groupbuy.status != 'recruiting' or now > groupbuy.end_time:
@@ -1099,50 +1114,80 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 최대 참여자 수 확인
+        # 최대 참여자 수 확인 (최신 데이터로 다시 확인)
+        groupbuy.refresh_from_db()
         if groupbuy.current_participants >= groupbuy.max_participants:
             return Response(
                 {'error': '최대 참여자 수에 도달했습니다.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 참여 생성
-        participation = Participation.objects.create(
-            user=user,
-            groupbuy=groupbuy,
-            is_leader=False  # 일반 참여자
-        )
-        
-        # 현재 참여자 수 증가
-        groupbuy.current_participants += 1
-        groupbuy.save(update_fields=['current_participants'])
-        
-        return Response({
-            'id': participation.id,
-            'user_id': user.id,
-            'groupbuy_id': groupbuy.id,
-            'joined_at': participation.joined_at,
-            'message': '공구 참여가 완료되었습니다.'
-        }, status=status.HTTP_201_CREATED)
+        try:
+            # 트랜잭션으로 참여 생성 및 참여자 수 업데이트를 원자적으로 처리
+            with transaction.atomic():
+                # 참여 생성
+                participation = Participation.objects.create(
+                    user=user,
+                    groupbuy=groupbuy,
+                    is_leader=False  # 일반 참여자
+                )
+                
+                # 현재 참여자 수 증가 (F 표현식 사용하여 race condition 방지)
+                GroupBuy.objects.filter(pk=groupbuy.id).update(
+                    current_participants=F('current_participants') + 1
+                )
+                
+                # 최신 데이터로 갱신
+                groupbuy.refresh_from_db()
+                
+            return Response({
+                'id': participation.id,
+                'user_id': user.id,
+                'groupbuy_id': groupbuy.id,
+                'joined_at': participation.joined_at,
+                'current_participants': groupbuy.current_participants,
+                'message': '공구 참여가 완료되었습니다.'
+            }, status=status.HTTP_201_CREATED)
+            
+        except ValidationError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except IntegrityError as e:
+            return Response(
+                {'error': '참여 처리 중 오류가 발생했습니다. 이미 참여 중일 수 있습니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"공구 참여 중 오류 발생: {str(e)}")
+            return Response(
+                {'error': '참여 처리 중 오류가 발생했습니다.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
         """사용자가 공구에서 탈퇴하는 API"""
-        print(f"\n[DEBUG] Leave API called for groupbuy_id: {pk}, user_id: {request.user.id}")
+        from django.db import transaction
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Leave API called for groupbuy_id: {pk}, user_id: {request.user.id}")
         
         try:
             groupbuy = self.get_object()
-            print(f"[DEBUG] GroupBuy found: {groupbuy.id}, creator_id: {groupbuy.creator.id if groupbuy.creator else 'None'}")
+            logger.debug(f"GroupBuy found: {groupbuy.id}, creator_id: {groupbuy.creator.id if groupbuy.creator else 'None'}")
             
             user = request.user
-            print(f"[DEBUG] User: {user.id}, is_creator: {user.id == groupbuy.creator.id if groupbuy.creator else False}")
+            logger.debug(f"User: {user.id}, is_creator: {user.id == groupbuy.creator.id if groupbuy.creator else False}")
             
             # 참여 여부 확인
             try:
                 participation = Participation.objects.get(user=user, groupbuy=groupbuy)
-                print(f"[DEBUG] Participation found: {participation.id}")
+                logger.debug(f"Participation found: {participation.id}")
             except Participation.DoesNotExist:
-                print(f"[DEBUG] Error: User is not participating in this group buy")
+                logger.warning(f"Error: User is not participating in this group buy")
                 return Response(
                     {'error': '참여하지 않은 공구입니다.'}, 
                     status=status.HTTP_400_BAD_REQUEST
@@ -1150,16 +1195,16 @@ class GroupBuyViewSet(ModelViewSet):
             
             # 입찰 진행 여부 확인
             has_bids = Bid.objects.filter(groupbuy=groupbuy).exists()
-            print(f"[DEBUG] Has bids: {has_bids}")
+            logger.debug(f"Has bids: {has_bids}")
             
             if has_bids:
-                print(f"[DEBUG] Error: Cannot leave group buy with active bids")
+                logger.warning(f"Error: Cannot leave group buy with active bids")
                 return Response(
                     {'error': '입찰이 진행 중인 공구에서는 탈퇴할 수 없습니다.'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
         except Exception as e:
-            print(f"[DEBUG] Unexpected error in leave API: {str(e)}")
+            logger.error(f"Unexpected error in leave API: {str(e)}")
             error_message = f'공구 탈퇴 중 오류가 발생했습니다: {str(e)}'
             return Response(
                 {
@@ -1171,32 +1216,33 @@ class GroupBuyViewSet(ModelViewSet):
             )
         
         # 공구 생성자 처리
-        print(f"[DEBUG] Checking if user is creator: {user.id == groupbuy.creator.id if groupbuy.creator else False}")
+        logger.debug(f"Checking if user is creator: {user.id == groupbuy.creator.id if groupbuy.creator else False}")
         if groupbuy.creator == user:
-            print(f"[DEBUG] User is the creator of this group buy")
+            logger.info(f"User is the creator of this group buy")
             
             # 공구에 다른 참여자가 있는지 확인 (자기 자신은 제외)
             other_participants_exist = Participation.objects.filter(groupbuy=groupbuy).exclude(user=user).exists()
-            print(f"[DEBUG] Other participants exist: {other_participants_exist}")
+            logger.debug(f"Other participants exist: {other_participants_exist}")
             
             # 입찰자가 없고 다른 참여자도 없는 경우
             if not has_bids and not other_participants_exist:
-                print(f"[DEBUG] No bids and no other participants, allowing creator to leave and cancelling group buy")
+                logger.info(f"No bids and no other participants, allowing creator to leave and cancelling group buy")
                 try:
-                    # 공구 상태를 취소로 변경
-                    groupbuy.status = 'cancelled'
-                    groupbuy.save(update_fields=['status'])
-                    print(f"[DEBUG] Group buy status changed to cancelled")
-                    
-                    # 참여 삭제
-                    participation.delete()
-                    print(f"[DEBUG] Participation deleted")
+                    with transaction.atomic():
+                        # 공구 상태를 취소로 변경
+                        groupbuy.status = 'cancelled'
+                        groupbuy.save(update_fields=['status'])
+                        logger.info(f"Group buy status changed to cancelled")
+                        
+                        # 참여 삭제
+                        participation.delete()
+                        logger.info(f"Participation deleted")
                     
                     return Response({
                         'message': '공구가 취소되었습니다. 동일한 상품으로 새로운 공구를 만들 수 있습니다.'
                     }, status=status.HTTP_200_OK)
                 except Exception as e:
-                    print(f"[DEBUG] Error while cancelling group buy: {str(e)}")
+                    logger.error(f"Error while cancelling group buy: {str(e)}")
                     error_message = f'공구 취소 중 오류가 발생했습니다: {str(e)}'
                     return Response(
                         {
@@ -1207,7 +1253,7 @@ class GroupBuyViewSet(ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
             else:
-                print(f"[DEBUG] Creator cannot leave: has_bids={has_bids}, other_participants_exist={other_participants_exist}")
+                logger.warning(f"Creator cannot leave: has_bids={has_bids}, other_participants_exist={other_participants_exist}")
                 # 입찰자가 있거나 다른 참여자가 있으면 탈퇴 불가
                 return Response(
                     {'error': '입찰자가 있거나 다른 참여자가 있는 공구의 생성자는 탈퇴할 수 없습니다.'}, 
@@ -1215,23 +1261,29 @@ class GroupBuyViewSet(ModelViewSet):
                 )
         
         # 생성자가 아닌 경우
-        print(f"[DEBUG] User is not the creator, proceeding with normal leave")
+        logger.info(f"User is not the creator, proceeding with normal leave")
         
         try:
-            # 참여 삭제
-            participation.delete()
-            print(f"[DEBUG] Participation deleted for non-creator")
-            
-            # 현재 참여자 수 감소
-            groupbuy.current_participants -= 1
-            groupbuy.save(update_fields=['current_participants'])
-            print(f"[DEBUG] Current participants decreased to {groupbuy.current_participants}")
+            with transaction.atomic():
+                # 참여 삭제
+                participation.delete()
+                logger.info(f"Participation deleted for non-creator")
+                
+                # 현재 참여자 수 감소 (F 표현식 사용하여 race condition 방지)
+                GroupBuy.objects.filter(pk=groupbuy.id).update(
+                    current_participants=F('current_participants') - 1
+                )
+                
+                # 최신 데이터로 갱신
+                groupbuy.refresh_from_db()
+                logger.info(f"Current participants decreased to {groupbuy.current_participants}")
             
             return Response({
-                'message': '공구 탈퇴가 완료되었습니다.'
+                'message': '공구 탈퇴가 완료되었습니다.',
+                'current_participants': groupbuy.current_participants
             }, status=status.HTTP_200_OK)
         except Exception as e:
-            print(f"[DEBUG] Error during non-creator leave: {str(e)}")
+            logger.error(f"Error during non-creator leave: {str(e)}")
             error_message = f'공구 탈퇴 중 오류가 발생했습니다: {str(e)}'
             return Response(
                 {
@@ -1275,6 +1327,17 @@ class ParticipationViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Participation.objects.all()
     serializer_class = ParticipationSerializer
+    
+    def get_queryset(self):
+        # 현재 로그인한 사용자의 참여 정보만 반환
+        return Participation.objects.filter(user=self.request.user)
+        
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """현재 로그인한 사용자의 참여 공구 목록 반환"""
+        participations = Participation.objects.filter(user=request.user)
+        serializer = self.get_serializer(participations, many=True)
+        return Response(serializer.data)
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]

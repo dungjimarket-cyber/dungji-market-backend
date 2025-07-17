@@ -128,7 +128,9 @@ class Product(models.Model):
     category_name = models.CharField(max_length=100, blank=True, verbose_name='카테고리명')
     product_type = models.CharField(max_length=10, choices=TYPE_CHOICES, verbose_name='상품 유형')
     base_price = models.PositiveIntegerField(verbose_name='기본 가격')
-    image_url = models.URLField(verbose_name='이미지 URL')
+    # 이미지 URL 필드를 ImageField로 변경하고 기존 URL도 지원
+    image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name='상품 이미지')
+    image_url = models.URLField(blank=True, verbose_name='이미지 URL')
     is_available = models.BooleanField(default=True, verbose_name='판매 가능 여부')
     release_date = models.DateField(blank=True, null=True, verbose_name='출시일')
     attributes = models.JSONField(default=dict, blank=True, verbose_name='상품 특성')

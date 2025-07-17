@@ -6,6 +6,7 @@ from .models import (
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
     ProductCustomValue
 )
+from django.utils.html import mark_safe
 
 # Admin 사이트 타이틀 한글화
 AdminSite.site_header = '둥지마켓 관리자'
@@ -109,11 +110,43 @@ class ProductCustomValueInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'base_price', 'is_available']
+    list_display = ['name', 'category', 'base_price', 'is_available', 'display_image']
     list_filter = ['is_available', 'category__detail_type']
     search_fields = ['name', 'description']
     prepopulated_fields = {'slug': ('name',)}
-    readonly_fields = ('category_name',)
+    readonly_fields = ('category_name', 'display_image_preview')
+    
+    def display_image(self, obj):
+        """어드민 목록에서 이미지 썸네일 표시"""
+        if obj.image:
+            return mark_safe(f'<img src="{obj.image.url}" width="50" height="50" />')
+        elif obj.image_url:
+            return mark_safe(f'<img src="{obj.image_url}" width="50" height="50" />')
+        return "이미지 없음"
+    display_image.short_description = '이미지'
+    
+    def display_image_preview(self, obj):
+        """어드민 상세 페이지에서 이미지 미리보기"""
+        if obj.image:
+            return mark_safe(f'<img src="{obj.image.url}" width="300" />')
+        elif obj.image_url:
+            return mark_safe(f'<img src="{obj.image_url}" width="300" />')
+        return "이미지 없음"
+    display_image_preview.short_description = '이미지 미리보기'
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('name', 'slug', 'description', 'category', 'product_type', 'base_price', 'is_available', 'release_date')
+        }),
+        ('이미지', {
+            'fields': ('image', 'image_url', 'display_image_preview'),
+            'description': '이미지 파일을 업로드하거나 외부 URL을 입력하세요. 둘 다 입력된 경우 업로드된 이미지가 우선 사용됩니다.'
+        }),
+        ('추가 정보', {
+            'fields': ('attributes',),
+            'classes': ('collapse',)
+        }),
+    )
     
     def get_inline_instances(self, request, obj=None):
         inline_instances = []

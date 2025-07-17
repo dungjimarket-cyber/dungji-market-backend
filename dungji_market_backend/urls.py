@@ -78,6 +78,8 @@ urlpatterns = [
     # 입찰권 관련 API
     path('api/bid-tokens/purchase/', purchase_bid_tokens, name='purchase_bid_tokens'),
     path('api/bid-tokens/', get_bid_tokens, name='get_bid_tokens'),
+    # 사용자 참여 정보 API
+    path('api/users/me/participations/', ParticipationViewSet.as_view({'get': 'me'}), name='user_participations'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
