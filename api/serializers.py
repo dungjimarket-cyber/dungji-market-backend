@@ -174,6 +174,10 @@ class GroupBuySerializer(serializers.ModelSerializer):
     
     telecom_detail = GroupBuyTelecomDetailSerializer(read_only=True)
     
+    # 지역 정보 필드 명시적 추가
+    region = serializers.CharField(source='region.code', read_only=True)
+    region_name = serializers.CharField(read_only=True)
+    
     # 다중 지역 정보 추가
     regions = serializers.SerializerMethodField()
     
@@ -181,7 +185,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
                 'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
-                'current_participants', 'region_type', 'telecom_detail', 'product_details', 'regions']
+                'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'product_details', 'regions']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
             'creator': {'required': True},  # creator 필드를 필수로 지정
