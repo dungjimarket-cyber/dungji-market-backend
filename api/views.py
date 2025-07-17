@@ -561,8 +561,13 @@ class GroupBuyViewSet(ModelViewSet):
                 active_groupbuys = active_groupbuys.order_by('-start_time')  # 최신 공구가 먼저 표시
                 ended_groupbuys = ended_groupbuys.order_by('-start_time')  # 마감된 공구도 최신순
             elif sort_param == '인기순(참여자많은순)' or sort_param == 'popular':
-                active_groupbuys = active_groupbuys.order_by('-current_participants')  # 참여자 많은 순으로 정렬
-                ended_groupbuys = ended_groupbuys.order_by('-current_participants')  # 마감된 공구도 참여자 많은 순
+                # 인기순 정렬 시 최종선택 이전 상태(recruiting, bidding, voting)인 공구만 필터링
+                active_groupbuys = active_groupbuys.filter(
+                    status__in=['recruiting', 'bidding', 'voting']
+                ).order_by('-current_participants')  # 참여자 많은 순으로 정렬
+                ended_groupbuys = ended_groupbuys.filter(
+                    status__in=['recruiting', 'bidding', 'voting']
+                ).order_by('-current_participants')  # 마감된 공구도 참여자 많은 순
             else:
                 # 기본 정렬은 최신순
                 active_groupbuys = active_groupbuys.order_by('-start_time')
