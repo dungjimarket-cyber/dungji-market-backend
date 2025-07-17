@@ -36,7 +36,7 @@ from api.admin_views import AdminViewSet
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, find_username, reset_password
 from api.views_social import social_login_dispatch, kakao_callback
 
 router = DefaultRouter()
@@ -58,13 +58,15 @@ urlpatterns = [
     path('api/auth/', include([
         path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
         path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-        path('register/', register_user, name='register'),
+        path('register/', register_user_v2, name='register'),  # 새로운 회원가입 API 사용
+        path('register-old/', register_user, name='register_old'),  # 기존 API 보존
+        path('check-nickname/', check_nickname, name='check_nickname'),
+        path('find-username/', find_username, name='find_username'),
+        path('reset-password/', reset_password, name='reset_password'),
         path('sns-login/', create_sns_user, name='sns_login'),
         path('profile/', UserProfileView.as_view(), name='profile'),
         path('social/<str:provider>/', social_login_dispatch, name='social_login'),
         path('callback/kakao/', kakao_callback, name='kakao_callback'),
-        path('find-username/', __import__('api.views_auth').views_auth.FindUsernameView.as_view(), name='find_username'),
-        path('reset-password/', __import__('api.views_auth').views_auth.ResetPasswordView.as_view(), name='reset_password'),
     ])),
 
     path('api/', include(router.urls)),
