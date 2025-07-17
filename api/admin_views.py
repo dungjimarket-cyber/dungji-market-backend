@@ -41,6 +41,48 @@ class AdminViewSet(viewsets.ViewSet):
     authentication_classes = [JWTAuthentication]
     parser_classes = [MultiPartParser, FormParser]
     
+    @action(detail=True, methods=['post'], url_path='update_product_image')
+    def update_product_image(self, request, pk=None):
+        """
+        상품 이미지를 업데이트하는 API
+        
+        프론트엔드 어드민에서 이미지 업로드 시 사용됩니다.
+        """
+        try:
+            product = Product.objects.get(pk=pk)
+            
+            # 이미지 파일이 요청에 포함되어 있는지 확인
+            if 'image' not in request.FILES:
+                return Response({'error': '이미지 파일이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            image_file = request.FILES['image']
+            
+            # 기존 이미지가 있으면 S3에서 삭제
+            if product.image:
+                try:
+                    delete_file_from_s3(product.image.name)
+                except Exception as e:
+                    # 기존 파일 삭제 실패해도 계속 진행
+                    pass
+            
+            # S3에 새 이미지 업로드
+            uploaded_url = upload_file_to_s3(image_file)
+            
+            # 제품 모델 업데이트
+            product.image = image_file
+            product.image_url = uploaded_url  # image_url 필드도 함께 업데이트
+            product.save()
+            
+            return Response({
+                'success': True,
+                'image_url': uploaded_url
+            }, status=status.HTTP_200_OK)
+            
+        except Product.DoesNotExist:
+            return Response({'error': '상품을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @action(detail=False, methods=['get'])
     def group_purchases(self, request):
         """

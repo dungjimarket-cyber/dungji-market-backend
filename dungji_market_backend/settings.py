@@ -203,7 +203,8 @@ if USE_S3:
     AWS_S3_OBJECT_PARAMETERS = {
         'CacheControl': 'max-age=86400',
     }
-    AWS_DEFAULT_ACL = 'public-read'
+    # AWS_DEFAULT_ACL = 'public-read'  # 최신 S3 버킷은 ACL을 지원하지 않는 경우가 많음
+    AWS_DEFAULT_ACL = None  # ACL을 사용하지 않도록 설정
     AWS_LOCATION = 'media'
     
     # S3 스토리지 설정

@@ -126,7 +126,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ['id', 'name', 'slug', 'description', 'category', 'category_name',
-                'category_detail_type', 'product_type', 'base_price', 'image_url', 
+                'category_detail_type', 'product_type', 'base_price', 'image', 'image_url', 
                 'is_available', 'active_groupbuy', 'release_date', 'attributes',
                 'telecom_detail', 'electronics_detail', 'rental_detail', 
                 'subscription_detail', 'standard_detail', 'custom_values']
@@ -144,6 +144,22 @@ class ProductSerializer(serializers.ModelSerializer):
                 'max_participants': active.max_participants
             }
         return None
+        
+    def create(self, validated_data):
+        # 이미지 필드가 있으면 이미지 URL도 설정
+        if 'image' in validated_data and validated_data['image']:
+            # S3에 업로드된 이미지의 URL을 image_url 필드에도 저장
+            validated_data['image_url'] = validated_data['image'].url
+        
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # 이미지 필드가 있으면 이미지 URL도 업데이트
+        if 'image' in validated_data and validated_data['image']:
+            # S3에 업로드된 이미지의 URL을 image_url 필드에도 저장
+            validated_data['image_url'] = validated_data['image'].url
+        
+        return super().update(instance, validated_data)
 
 class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
