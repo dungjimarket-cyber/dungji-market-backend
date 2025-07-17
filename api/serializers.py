@@ -188,7 +188,11 @@ class GroupBuySerializer(serializers.ModelSerializer):
         
         # 통신 상품인 경우 telecom_detail 정보 확인
         if 'telecom_detail' in product_info:
-            telecom_detail = product_info.get('telecom_detail', {})
+            # None인 경우 빈 딕셔너리로 초기화
+            if product_info['telecom_detail'] is None:
+                product_info['telecom_detail'] = {}
+            
+            telecom_detail = product_info['telecom_detail']
             
             # GroupBuyTelecomDetail 모델에서 통신 정보 가져오기
             try:
