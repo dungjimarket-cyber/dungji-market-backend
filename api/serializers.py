@@ -172,6 +172,9 @@ class GroupBuySerializer(serializers.ModelSerializer):
     product_details = serializers.SerializerMethodField()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=True)
     
+    # 수정 모드에서 product 전체 정보를 위한 필드 추가
+    product_info = ProductSerializer(source='product', read_only=True)
+    
     telecom_detail = GroupBuyTelecomDetailSerializer(read_only=True)
     
     # 지역 정보 필드 명시적 추가
@@ -183,7 +186,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = GroupBuy
-        fields = ['id', 'title', 'description', 'product', 'product_name', 'creator', 'creator_name',
+        fields = ['id', 'title', 'description', 'product', 'product_name', 'product_info', 'creator', 'creator_name',
                 'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 
                 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'product_details', 'regions']
         extra_kwargs = {

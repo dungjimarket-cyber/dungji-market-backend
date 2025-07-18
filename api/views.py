@@ -149,17 +149,29 @@ def create_sns_user(request):
         # Check if user exists by email
         user = User.objects.filter(email=email).first()
         if user:
-            if user.sns_type != 'email':
+            # 이미 동일한 SNS 계정으로 가입된 경우
+            if user.sns_type == sns_type and user.sns_id == sns_id:
+                logger.info(f"동일한 SNS 계정으로 재로그인: user_id={user.id}, sns_type={sns_type}")
+                # 프로필 이미지 업데이트
+                if profile_image:
+                    user.profile_image = profile_image
+                user.last_login = timezone.now()
+                user.save()
+            # 다른 SNS 계정이지만 같은 이메일인 경우
+            elif user.sns_type and user.sns_type != 'email':
+                logger.warning(f"이메일 중복: 기존 sns_type={user.sns_type}, 새로운 sns_type={sns_type}")
                 return Response(
-                    {'error': 'Email already registered with different SNS provider'},
+                    {'error': f'이 이메일은 이미 {user.sns_type} 계정으로 가입되어 있습니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            # Update existing email user with SNS info
-            user.sns_id = sns_id
-            user.sns_type = sns_type
-            if profile_image:
-                user.profile_image = profile_image
-            user.save()
+            # 이메일로만 가입된 사용자인 경우 SNS 정보 업데이트
+            elif user.sns_type == 'email' or not user.sns_type:
+                logger.info(f"이메일 사용자를 SNS 계정으로 업데이트: user_id={user.id}")
+                user.sns_id = sns_id
+                user.sns_type = sns_type
+                if profile_image:
+                    user.profile_image = profile_image
+                user.save()
         else:
             # Create new user
             logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}")
@@ -910,8 +922,30 @@ class GroupBuyViewSet(ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """공구 정보 업데이트 메서드 - 다중 지역 처리 포함"""
+        print(f"\n[GroupBuy Update] Received data: {request.data}")
+        print(f"[GroupBuy Update] Request user: {request.user}")
+        
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        print(f"[GroupBuy Update] Instance: {instance.id}, Creator: {instance.creator}")
+        
+        # Check if user is the creator
+        if instance.creator != request.user:
+            return Response(
+                {'error': '본인이 작성한 공구만 수정할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Remove creator field from update data if present
+        data = request.data.copy()
+        if 'creator' in data:
+            data.pop('creator')
+        
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        
+        if not serializer.is_valid():
+            print(f"[GroupBuy Update] Validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer.is_valid(raise_exception=True)
         groupbuy = serializer.save()
         
