@@ -626,14 +626,15 @@ class Bid(models.Model):
 
     def save(self, *args, **kwargs):
         # 입찰 자격 확인 (새로 생성되는 경우에만)
-        if not self.pk:
-            try:
-                self.check_seller_eligibility()
-            except Exception as e:
-                self.status = 'ineligible'
-                # 예외 발생 시 일단 저장하고 상태만 변경
-                super().save(*args, **kwargs)
-                return
+        # TODO: 결제 시스템 구현 후 아래 주석 해제
+        # if not self.pk:
+        #     try:
+        #         self.check_seller_eligibility()
+        #     except Exception as e:
+        #         self.status = 'ineligible'
+        #         # 예외 발생 시 일단 저장하고 상태만 변경
+        #         super().save(*args, **kwargs)
+        #         return
         
         # status 필드와 is_selected 필드 동기화
         if self.status == 'selected':

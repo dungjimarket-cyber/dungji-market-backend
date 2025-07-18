@@ -194,10 +194,10 @@ class BidViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
             
-        # 입찰 상태가 대기중인 경우만 취소 가능
-        if bid.status != 'pending':
+        # 입찰 상태가 대기중이거나 자격미달인 경우만 취소 가능
+        if bid.status not in ['pending', 'ineligible']:
             return Response(
-                {"detail": "이미 확정되거나 거부된 입찰은 취소할 수 없습니다."}, 
+                {"detail": f"입찰 상태가 '{bid.status}'이므로 취소할 수 없습니다. 'pending' 또는 'ineligible' 상태의 입찰만 취소 가능합니다."}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
