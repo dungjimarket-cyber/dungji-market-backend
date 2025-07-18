@@ -783,17 +783,37 @@ class GroupBuyViewSet(ModelViewSet):
                 regions_data = request.data['regions'][:3]
                 
                 for region_data in regions_data:
-                    # 지역 코드로 Region 객체 찾기
+                    # 지역 코드로 Region 객체 찾기 (기존 방식)
                     region_code = region_data.get('code')
+                    region = None
+                    
                     if region_code:
-                        region = Region.objects.filter(code=region_code).first()
-                        if region:
-                            # GroupBuyRegion 생성
-                            GroupBuyRegion.objects.create(
-                                groupbuy=groupbuy,
-                                region=region
-                            )
-                            print(f"[지역 추가] {region.name} (코드: {region.code})")
+                        # 코드가 시도_시군구 형식인 경우 시도명과 시군구명으로 분리하여 검색
+                        if '_' in region_code:
+                            parts = region_code.split('_', 1)
+                            if len(parts) == 2:
+                                sido = parts[0]
+                                sigungu = parts[1]
+                                # 시도명과 시군구명으로 지역 검색
+                                region = Region.objects.filter(
+                                    full_name__contains=sido,
+                                    full_name__contains=sigungu,
+                                    level=1  # 시군구 레벨
+                                ).first()
+                                if region:
+                                    print(f"[지역 검색 성공] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
+                        
+                        # 기존 방식으로도 검색 시도
+                        if not region:
+                            region = Region.objects.filter(code=region_code).first()
+                    
+                    if region:
+                        # GroupBuyRegion 생성
+                        GroupBuyRegion.objects.create(
+                            groupbuy=groupbuy,
+                            region=region
+                        )
+                        print(f"[지역 추가] {region.name} (코드: {region.code})")
                 
                 # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
                 if regions_data and len(regions_data) > 0:
@@ -962,17 +982,37 @@ class GroupBuyViewSet(ModelViewSet):
             regions_data = request.data['regions'][:3]
             
             for region_data in regions_data:
-                # 지역 코드로 Region 객체 찾기
+                # 지역 코드로 Region 객체 찾기 (기존 방식)
                 region_code = region_data.get('code')
+                region = None
+                
                 if region_code:
-                    region = Region.objects.filter(code=region_code).first()
-                    if region:
-                        # GroupBuyRegion 생성
-                        GroupBuyRegion.objects.create(
-                            groupbuy=groupbuy,
-                            region=region
-                        )
-                        print(f"[지역 추가] {region.name} (코드: {region.code})")
+                    # 코드가 시도_시군구 형식인 경우 시도명과 시군구명으로 분리하여 검색
+                    if '_' in region_code:
+                        parts = region_code.split('_', 1)
+                        if len(parts) == 2:
+                            sido = parts[0]
+                            sigungu = parts[1]
+                            # 시도명과 시군구명으로 지역 검색
+                            region = Region.objects.filter(
+                                full_name__contains=sido,
+                                full_name__contains=sigungu,
+                                level=1  # 시군구 레벨
+                            ).first()
+                            if region:
+                                print(f"[지역 검색 성공] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
+                    
+                    # 기존 방식으로도 검색 시도
+                    if not region:
+                        region = Region.objects.filter(code=region_code).first()
+                
+                if region:
+                    # GroupBuyRegion 생성
+                    GroupBuyRegion.objects.create(
+                        groupbuy=groupbuy,
+                        region=region
+                    )
+                    print(f"[지역 추가] {region.name} (코드: {region.code})")
             
             # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
             if regions_data and len(regions_data) > 0:
