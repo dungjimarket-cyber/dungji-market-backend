@@ -557,6 +557,9 @@ class GroupBuyViewSet(ModelViewSet):
             queryset = queryset.filter(end_time__gt=now)
         elif status_param == 'completed':
             queryset = queryset.filter(end_time__lte=now)
+        elif status_param == 'in_progress':
+            # 최종선택 이전 상태(recruiting, bidding, voting)만 필터링
+            queryset = queryset.filter(status__in=['recruiting', 'bidding', 'voting'])
 
         # category 필터 처리
         if category_id:
@@ -864,10 +867,12 @@ class GroupBuyViewSet(ModelViewSet):
 
     @action(detail=False)
     def popular(self, request):
+        # 최종선택 이전 상태(recruiting, bidding, voting)인 공구만 필터링
         popular_groupbuys = GroupBuy.objects.annotate(
             curent_participants=Count('participation')
         ).filter(
-            end_time__gt=timezone.now()
+            end_time__gt=timezone.now(),
+            status__in=['recruiting', 'bidding', 'voting']  # 최종선택 이전 상태만
         ).order_by('-curent_participants')[:3]
         
         # 공구 상태 자동 업데이트
