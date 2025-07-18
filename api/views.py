@@ -112,20 +112,23 @@ def create_sns_user(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if user exists by sns_id
-        user = User.objects.filter(sns_id=sns_id).first()
+        # 1차: SNS ID로 사용자 확인 (가장 중요한 체크)
+        # 카카오 계정의 고유 ID로 사용자를 찾아서 PC/모바일 중복 가입 방지
+        user = User.objects.filter(sns_id=sns_id, sns_type=sns_type).first()
         if user:
+            logger.info(f"SNS ID로 기존 사용자 찾음: user_id={user.id}, sns_id={sns_id}, sns_type={sns_type}")
             # 기존 사용자 정보 업데이트
             user.last_login = timezone.now()
             
-            # 이메일이 비어있고 새로운 이메일이 있는 경우 업데이트
-            if (not user.email or user.email == '') and email:
-                logger.info(f"기존 사용자({user.id})의 이메일 업데이트: {email}")
+            # 이메일이 변경되었거나 비어있었던 경우 업데이트
+            # (카카오는 PC/모바일에서 다른 이메일을 제공할 수 있음)
+            if email and email != user.email:
+                logger.info(f"사용자({user.id})의 이메일 업데이트: {user.email} -> {email}")
                 user.email = email
             
             # 프로필 이미지 매번 업데이트 (변경사항이 있을 수 있으므로)
             if profile_image:
-                logger.info(f"기존 사용자({user.id})의 프로필 이미지 업데이트: {profile_image}")
+                logger.info(f"사용자({user.id})의 프로필 이미지 업데이트")
                 user.profile_image = profile_image
                 
             user.save()
@@ -146,52 +149,63 @@ def create_sns_user(request):
                 'refresh': str(refresh)
             })
 
-        # Check if user exists by email
-        user = User.objects.filter(email=email).first()
-        if user:
-            # 이미 동일한 SNS 계정으로 가입된 경우
-            if user.sns_type == sns_type and user.sns_id == sns_id:
-                logger.info(f"동일한 SNS 계정으로 재로그인: user_id={user.id}, sns_type={sns_type}")
-                # 프로필 이미지 업데이트
-                if profile_image:
-                    user.profile_image = profile_image
-                user.last_login = timezone.now()
-                user.save()
-            # 다른 SNS 계정이지만 같은 이메일인 경우
-            elif user.sns_type and user.sns_type != 'email':
-                logger.warning(f"이메일 중복: 기존 sns_type={user.sns_type}, 새로운 sns_type={sns_type}")
-                return Response(
-                    {'error': f'이 이메일은 이미 {user.sns_type} 계정으로 가입되어 있습니다.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            # 이메일로만 가입된 사용자인 경우 SNS 정보 업데이트
-            elif user.sns_type == 'email' or not user.sns_type:
-                logger.info(f"이메일 사용자를 SNS 계정으로 업데이트: user_id={user.id}")
-                user.sns_id = sns_id
-                user.sns_type = sns_type
-                if profile_image:
-                    user.profile_image = profile_image
-                user.save()
-        else:
-            # Create new user
-            logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}")
-            logger.info(f"새 사용자 프로필 이미지: {profile_image}")
-            
-            # 사용자 생성
-            user = User.objects.create_user(
-                username=email,
-                email=email,
-                password=None,  # SNS users don't need password
-                first_name=name,
-                sns_type=sns_type,
-                sns_id=sns_id
-            )
-            
-            # 프로필 이미지 별도 설정
-            if profile_image:
-                user.profile_image = profile_image
-                user.save()
-                logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
+        # 2차: 이메일로 사용자 확인 (SNS ID로 찾지 못한 경우만)
+        if email and email != f'{sns_id}@{sns_type}.user':  # 자동 생성 이메일이 아닌 경우만
+            user = User.objects.filter(email=email).first()
+            if user:
+                # 같은 이메일을 가진 다른 SNS 타입의 계정이 있는 경우
+                if user.sns_type and user.sns_type != 'email' and user.sns_type != sns_type:
+                    logger.warning(f"이메일 중복: 기존 sns_type={user.sns_type}, 새로운 sns_type={sns_type}")
+                    return Response(
+                        {'error': f'이 이메일은 이미 {user.sns_type} 계정으로 가입되어 있습니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # 이메일로만 가입된 사용자인 경우 SNS 정보 업데이트
+                elif user.sns_type == 'email' or not user.sns_type:
+                    logger.info(f"이메일 사용자를 SNS 계정으로 연결: user_id={user.id}")
+                    user.sns_id = sns_id
+                    user.sns_type = sns_type
+                    if profile_image:
+                        user.profile_image = profile_image
+                    user.save()
+                    
+                    # JWT 토큰 발급
+                    refresh = RefreshToken.for_user(user)
+                    return Response({
+                        'jwt': {
+                            'access': str(refresh.access_token),
+                            'refresh': str(refresh),
+                        },
+                        'user_id': user.id,
+                        'username': user.get_full_name() or user.username,
+                        'phone_number': user.phone_number,
+                        'profile_image': user.profile_image,
+                        'sns_type': user.sns_type,
+                        'sns_id': user.sns_id,
+                        'email': user.email,
+                        'access': str(refresh.access_token),
+                        'refresh': str(refresh)
+                    })
+        
+        # 3차: 새 사용자 생성 (SNS ID로도, 이메일로도 찾지 못한 경우)
+        logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}")
+        logger.info(f"새 사용자 프로필 이미지: {profile_image}")
+        
+        # 사용자 생성
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=None,  # SNS users don't need password
+            first_name=name,
+            sns_type=sns_type,
+            sns_id=sns_id
+        )
+        
+        # 프로필 이미지 별도 설정
+        if profile_image:
+            user.profile_image = profile_image
+            user.save()
+            logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
 
         # JWT 토큰 발급
         refresh = RefreshToken.for_user(user)
