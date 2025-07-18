@@ -796,8 +796,7 @@ class GroupBuyViewSet(ModelViewSet):
                                 sigungu = parts[1]
                                 # 시도명과 시군구명으로 지역 검색
                                 region = Region.objects.filter(
-                                    full_name__contains=sido,
-                                    full_name__contains=sigungu,
+                                    Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
                                     level=1  # 시군구 레벨
                                 ).first()
                                 if region:
@@ -995,8 +994,7 @@ class GroupBuyViewSet(ModelViewSet):
                             sigungu = parts[1]
                             # 시도명과 시군구명으로 지역 검색
                             region = Region.objects.filter(
-                                full_name__contains=sido,
-                                full_name__contains=sigungu,
+                                Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
                                 level=1  # 시군구 레벨
                             ).first()
                             if region:
