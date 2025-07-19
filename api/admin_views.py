@@ -13,7 +13,7 @@ import logging
 from .models import GroupBuy, Bid, BidToken, Product
 from .serializers import GroupBuySerializer
 from .utils.s3_utils import upload_file_to_s3, delete_file_from_s3
-from .utils.email_sender import send_email
+from .utils.email_sender import EmailSender
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -387,10 +387,10 @@ class AdminViewSet(viewsets.ViewSet):
             
             # 이메일 알림 발송
             try:
-                send_email(
-                    to_email=user.email,
+                EmailSender.send_notification_email(
+                    recipient_email=user.email,
                     subject='[둥지마켓] 사업자 인증이 승인되었습니다',
-                    template_name='business_verification_approved.html',
+                    template_name='emails/business_verification_approved.html',
                     context={
                         'user_name': user.first_name or user.username,
                     }
@@ -428,10 +428,10 @@ class AdminViewSet(viewsets.ViewSet):
             
             # 이메일 알림 발송
             try:
-                send_email(
-                    to_email=user.email,
+                EmailSender.send_notification_email(
+                    recipient_email=user.email,
                     subject='[둥지마켓] 사업자 인증이 거절되었습니다',
-                    template_name='business_verification_rejected.html',
+                    template_name='emails/business_verification_rejected.html',
                     context={
                         'user_name': user.first_name or user.username,
                         'rejection_reason': rejection_reason
