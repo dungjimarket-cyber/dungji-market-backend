@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, Bid
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, Bid, ParticipantConsent
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
@@ -424,3 +424,44 @@ class BidSerializer(serializers.ModelSerializer):
             'groupbuy': {'required': True},
             'amount': {'required': True, 'min_value': 0},
         }
+
+
+class ParticipantConsentSerializer(serializers.ModelSerializer):
+    """참여자 동의 관련 시리얼라이저"""
+    participant_name = serializers.CharField(source='participation.user.username', read_only=True)
+    groupbuy_title = serializers.CharField(source='participation.groupbuy.title', read_only=True)
+    bid_amount = serializers.IntegerField(source='bid.amount', read_only=True)
+    bid_type = serializers.CharField(source='bid.bid_type', read_only=True)
+    remaining_time = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ParticipantConsent
+        fields = ['id', 'participation', 'bid', 'status', 'agreed_at', 'disagreed_at', 
+                  'consent_deadline', 'created_at', 'participant_name', 'groupbuy_title',
+                  'bid_amount', 'bid_type', 'remaining_time']
+        read_only_fields = ['id', 'participation', 'bid', 'agreed_at', 'disagreed_at', 
+                           'created_at', 'consent_deadline']
+    
+    def get_remaining_time(self, obj):
+        """동의 마감까지 남은 시간 계산"""
+        from django.utils import timezone
+        now = timezone.now()
+        if obj.status == 'pending' and obj.consent_deadline > now:
+            delta = obj.consent_deadline - now
+            hours = int(delta.total_seconds() // 3600)
+            minutes = int((delta.total_seconds() % 3600) // 60)
+            return f"{hours}시간 {minutes}분"
+        return None
+
+
+class ParticipantConsentUpdateSerializer(serializers.Serializer):
+    """참여자 동의 상태 업데이트용 시리얼라이저"""
+    action = serializers.ChoiceField(choices=['agree', 'disagree'])
+    
+    def update(self, instance, validated_data):
+        action = validated_data.get('action')
+        if action == 'agree':
+            instance.agree()
+        elif action == 'disagree':
+            instance.disagree()
+        return instance

@@ -385,6 +385,51 @@ class GroupBuy(models.Model):
                 groupbuy=self,
                 message=f"공구 {self.product.name}의 상태가 {status_display}로 변경되었습니다."
             )
+    
+    def start_consent_process(self, selected_bid, consent_hours=24):
+        """선택된 입찰에 대한 참여자 동의 프로세스 시작"""
+        from datetime import timedelta
+        
+        consent_deadline = timezone.now() + timedelta(hours=consent_hours)
+        participations = Participation.objects.filter(groupbuy=self)
+        
+        for participation in participations:
+            ParticipantConsent.objects.create(
+                participation=participation,
+                bid=selected_bid,
+                consent_deadline=consent_deadline
+            )
+            
+            # 동의 요청 알림 발송
+            Notification.objects.create(
+                user=participation.user,
+                groupbuy=self,
+                message=f"공구 '{self.title}'의 최종 가격이 확정되었습니다. {consent_hours}시간 내에 동의 여부를 선택해주세요."
+            )
+    
+    def check_all_consents(self):
+        """모든 참여자의 동의 상태 확인"""
+        participations = Participation.objects.filter(groupbuy=self)
+        consents = ParticipantConsent.objects.filter(
+            participation__in=participations,
+            bid__groupbuy=self
+        )
+        
+        total = consents.count()
+        agreed = consents.filter(status='agreed').count()
+        disagreed = consents.filter(status='disagreed').count()
+        pending = consents.filter(status='pending').count()
+        expired = consents.filter(status='expired').count()
+        
+        return {
+            'total': total,
+            'agreed': agreed,
+            'disagreed': disagreed,
+            'pending': pending,
+            'expired': expired,
+            'all_agreed': total > 0 and agreed == total,
+            'can_proceed': total > 0 and agreed >= (total * 0.8)  # 80% 이상 동의 시 진행 가능
+        }
 
     class Meta:
         verbose_name = '공동구매'
@@ -795,6 +840,53 @@ class Settlement(models.Model):
         verbose_name = '정산 내역'
         verbose_name_plural = '정산 내역 관리'
         ordering = ['-settlement_date']
+
+
+class ParticipantConsent(models.Model):
+    """참여자 동의 상태를 추적하는 모델"""
+    CONSENT_STATUS_CHOICES = (
+        ('pending', '대기중'),
+        ('agreed', '동의'),
+        ('disagreed', '거부'),
+        ('expired', '만료'),
+    )
+    
+    participation = models.OneToOneField('Participation', on_delete=models.CASCADE, related_name='consent', verbose_name='참여')
+    bid = models.ForeignKey('Bid', on_delete=models.CASCADE, related_name='consents', verbose_name='선택된 입찰')
+    status = models.CharField(max_length=20, choices=CONSENT_STATUS_CHOICES, default='pending', verbose_name='동의 상태')
+    agreed_at = models.DateTimeField(null=True, blank=True, verbose_name='동의 시간')
+    disagreed_at = models.DateTimeField(null=True, blank=True, verbose_name='거부 시간')
+    consent_deadline = models.DateTimeField(verbose_name='동의 마감 시간')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성 시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정 시간')
+    
+    class Meta:
+        verbose_name = '참여자 동의'
+        verbose_name_plural = '참여자 동의 관리'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.participation.user.username} - {self.participation.groupbuy.title} 동의: {self.get_status_display()}"
+    
+    def agree(self):
+        """참여자가 동의함"""
+        self.status = 'agreed'
+        self.agreed_at = timezone.now()
+        self.save()
+    
+    def disagree(self):
+        """참여자가 거부함"""
+        self.status = 'disagreed'
+        self.disagreed_at = timezone.now()
+        self.save()
+    
+    def check_expiry(self):
+        """동의 기한 만료 확인"""
+        if self.status == 'pending' and timezone.now() > self.consent_deadline:
+            self.status = 'expired'
+            self.save()
+            return True
+        return False
 
 
 class Review(models.Model):

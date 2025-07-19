@@ -33,6 +33,7 @@ from api.views_seller import (
 from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
 from api.admin_views import AdminViewSet
+from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -52,6 +53,7 @@ router.register(r'seller', SellerViewSet, basename='seller')
 router.register(r'regions', RegionViewSet, basename='region')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'admin', AdminViewSet, basename='admin')
+router.register(r'consents', ParticipantConsentViewSet, basename='consent')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -82,6 +84,8 @@ urlpatterns = [
     path('api/bid-tokens/', get_bid_tokens, name='get_bid_tokens'),
     # 사용자 참여 정보 API
     path('api/users/me/participations/', ParticipationViewSet.as_view({'get': 'me'}), name='user_participations'),
+    # 동의 프로세스 시작 API
+    path('api/groupbuys/<int:pk>/start-consent/', start_consent_process, name='start_consent_process'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

@@ -4,7 +4,7 @@ from .models import (
     Category, Product, GroupBuy, Bid, Penalty, User, Badge,
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
-    ProductCustomValue
+    ProductCustomValue, ParticipantConsent
 )
 from django.utils.html import mark_safe
 
@@ -242,3 +242,19 @@ class BidAdmin(admin.ModelAdmin):
     def display_amount(self, obj):
         return f"{obj.amount // 10000}****"  # 부분 마스킹 처리
     display_amount.short_description = '입찰 금액'
+
+
+@admin.register(ParticipantConsent)
+class ParticipantConsentAdmin(admin.ModelAdmin):
+    list_display = ['get_participant_name', 'get_groupbuy_title', 'status', 'agreed_at', 'disagreed_at', 'consent_deadline']
+    list_filter = ['status', 'created_at']
+    search_fields = ['participation__user__username', 'participation__groupbuy__title']
+    readonly_fields = ['agreed_at', 'disagreed_at', 'created_at', 'updated_at']
+    
+    def get_participant_name(self, obj):
+        return obj.participation.user.username
+    get_participant_name.short_description = '참여자'
+    
+    def get_groupbuy_title(self, obj):
+        return obj.participation.groupbuy.title
+    get_groupbuy_title.short_description = '공구명'
