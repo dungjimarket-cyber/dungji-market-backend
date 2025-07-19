@@ -1413,6 +1413,72 @@ class GroupBuyViewSet(ModelViewSet):
             'has_bids': has_bids,
             'can_leave': can_leave
         })
+    
+    @action(detail=True, methods=['get'])
+    def participants_detail(self, request, pk=None):
+        """공구 참여자 상세 정보를 반환하는 API
+        
+        공구 생성자 또는 관리자만 접근 가능하며,
+        참여자의 상세 정보와 동의 상태를 반환합니다.
+        """
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 권한 확인: 공구 생성자이거나 관리자인 경우만 접근 가능
+        if not (groupbuy.creator == user or user.is_staff or user.is_superuser):
+            return Response(
+                {'error': '공구 생성자 또는 관리자만 참여자 정보를 조회할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 활성 참여자 조회 (삭제되지 않은 참여자)
+        participations = Participation.objects.filter(
+            groupbuy=groupbuy
+        ).select_related('user').prefetch_related('consent')
+        
+        # 참여자 정보 구성
+        participants_data = []
+        for participation in participations:
+            participant_info = {
+                'id': participation.id,
+                'user': {
+                    'id': participation.user.id,
+                    'username': participation.user.username,
+                    'email': participation.user.email,
+                },
+                'joined_at': participation.joined_at,
+                'is_leader': participation.is_leader,
+            }
+            
+            # 동의 상태 정보 추가 (존재하는 경우)
+            try:
+                if hasattr(participation, 'consent'):
+                    consent = participation.consent
+                    participant_info['consent_status'] = {
+                        'status': consent.status,
+                        'agreed_at': consent.agreed_at,
+                        'disagreed_at': consent.disagreed_at,
+                        'consent_deadline': consent.consent_deadline,
+                    }
+                else:
+                    participant_info['consent_status'] = None
+            except:
+                participant_info['consent_status'] = None
+                
+            participants_data.append(participant_info)
+        
+        # 응답 데이터 구성
+        response_data = {
+            'total_count': len(participants_data),
+            'participants': participants_data,
+            'groupbuy': {
+                'id': groupbuy.id,
+                'title': groupbuy.title,
+                'status': groupbuy.status,
+            }
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class ParticipationViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
