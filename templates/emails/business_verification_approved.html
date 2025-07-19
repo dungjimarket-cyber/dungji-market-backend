@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>둥지마켓 - 사업자 인증 승인</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #ff6b6b;
+            text-decoration: none;
+        }
+        .content {
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #2d3436;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #ff6b6b;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .benefits-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        .benefits-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #28a745;
+            font-weight: bold;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="#" class="logo">둥지마켓</a>
+        </div>
+        
+        <div class="content">
+            <h1>축하합니다! 사업자 인증이 승인되었습니다 🎉</h1>
+            
+            <p>안녕하세요, {{ user_name }}님!</p>
+            
+            <p>둥지마켓 판매회원(어미새)으로 등록하신 사업자 정보가 성공적으로 검증되었습니다.</p>
+            
+            <div class="highlight">
+                <strong>이제 다음과 같은 기능을 이용하실 수 있습니다:</strong>
+                <ul class="benefits-list">
+                    <li>공동구매 입찰 참여</li>
+                    <li>대량 판매 기회 확보</li>
+                    <li>판매자 전용 대시보드 이용</li>
+                    <li>정산 및 통계 확인</li>
+                </ul>
+            </div>
+            
+            <p>입찰에 참여하시려면 입찰권이 필요합니다. 지금 바로 입찰권을 구매하고 첫 공동구매에 입찰해보세요!</p>
+            
+            <div style="text-align: center;">
+                <a href="https://dungjimarket.com/mypage/seller" class="cta-button">판매자 대시보드 바로가기</a>
+            </div>
+            
+            <p>둥지마켓과 함께 성공적인 비즈니스 파트너십을 만들어가시길 바랍니다.</p>
+            
+            <p>감사합니다.</p>
+        </div>
+        
+        <div class="footer">
+            <p>본 메일은 발신 전용입니다. 문의사항은 고객센터를 이용해주세요.</p>
+            <p>&copy; 2025 둥지마켓. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
