@@ -123,6 +123,32 @@ curl http://your-domain.com/
 - 카카오 앱의 Redirect URI 설정 확인
 - CORS 설정 확인
 
+#### 8.4 CORS 오류
+**증상**: "Access to fetch at 'https://api.dungjimarket.com/...' from origin 'https://dungjimarket.com' has been blocked by CORS policy"
+
+**해결방법**:
+1. Django settings.py에서 CORS_ALLOWED_ORIGINS 확인:
+   ```python
+   CORS_ALLOWED_ORIGINS = [
+       "https://dungjimarket.com",
+       "https://www.dungjimarket.com",
+       # 다른 허용된 도메인들...
+   ]
+   ```
+
+2. Nginx에서 CORS 헤더를 추가하지 않도록 확인 (Django가 처리하도록 함)
+   - `nginx.prod.conf`에서 `add_header 'Access-Control-Allow-Origin'` 제거
+
+3. Django 재시작:
+   ```bash
+   docker-compose -f docker-compose.prod.yml restart web
+   ```
+
+4. 캐시 문제인 경우:
+   - 브라우저 캐시 지우기
+   - Django 서버 재시작
+   - Nginx 재시작
+
 ### 9. 성능 최적화
 
 #### 9.1 Gunicorn 워커 수 조정

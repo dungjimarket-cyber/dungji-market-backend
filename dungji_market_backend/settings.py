@@ -30,6 +30,7 @@ ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "https://dungjimarket.com",
     "https://www.dungjimarket.com",
     "http://13.125.227.190:8000",
     "https://api.dungjimarket.com",
@@ -39,8 +40,31 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # 개발 환경에서만 모든 오리진 허용
 
+# CORS 추가 설정
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
 # CSRF 설정
 CSRF_TRUSTED_ORIGINS = [
+    "https://dungjimarket.com",
     "https://api.dungjimarket.com",
     "http://api.dungjimarket.com",
     "https://www.dungjimarket.com",
