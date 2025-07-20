@@ -549,7 +549,7 @@ def get_category_fields(request, category_id):
         return Response({'error': '카테고리를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
 # views.py
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import serializers  # serializers 모듈 import 추가
 
@@ -563,6 +563,14 @@ class GroupBuyViewSet(ModelViewSet):
         status_param = self.request.query_params.get('status', None)
         category_id = self.request.query_params.get('category', None)
         sort_param = self.request.query_params.get('sort', None)
+        
+        # 통신사 관련 필터
+        telecom_carrier = self.request.query_params.get('telecom_carrier', None)
+        subscription_type = self.request.query_params.get('subscription_type', None)
+        plan_info = self.request.query_params.get('plan_info', None)
+        
+        # 제조사 필터
+        manufacturer = self.request.query_params.get('manufacturer', None)
         
         # 현재 시간 가져오기
         now = timezone.now()
@@ -588,6 +596,46 @@ class GroupBuyViewSet(ModelViewSet):
         # category 필터 처리
         if category_id:
             queryset = queryset.filter(product__category_id=category_id)
+            
+        # 통신사 필터 처리
+        if telecom_carrier:
+            # GroupBuyTelecomDetail과 조인하여 통신사로 필터링
+            queryset = queryset.filter(telecom_detail__telecom_carrier=telecom_carrier)
+            
+        # 가입유형 필터 처리
+        if subscription_type:
+            # GroupBuyTelecomDetail과 조인하여 가입유형으로 필터링
+            queryset = queryset.filter(telecom_detail__subscription_type=subscription_type)
+            
+        # 요금제 필터 처리
+        if plan_info:
+            # GroupBuyTelecomDetail과 조인하여 요금제로 필터링
+            queryset = queryset.filter(telecom_detail__plan_info=plan_info)
+            
+        # 제조사 필터 처리
+        if manufacturer:
+            # 제조사 이름으로 상품명 필터링
+            # 제조사명이 포함된 상품을 찾기
+            manufacturer_keywords = {
+                '삼성': ['Samsung', 'Galaxy', '갤럭시', '삼성'],
+                '애플': ['Apple', 'iPhone', 'iPad', '아이폰', '아이패드', '애플'],
+                'LG': ['LG'],
+                '샤오미': ['Xiaomi', 'Mi', '샤오미'],
+                '구글': ['Google', 'Pixel', '구글', '픽셀'],
+                '모토로라': ['Motorola', 'Moto', '모토로라'],
+                '원플러스': ['OnePlus', '원플러스']
+            }
+            
+            # 제조사에 해당하는 키워드들로 OR 조건 생성
+            if manufacturer in manufacturer_keywords:
+                keywords = manufacturer_keywords[manufacturer]
+                q_objects = Q()
+                for keyword in keywords:
+                    q_objects |= Q(product__name__icontains=keyword)
+                queryset = queryset.filter(q_objects)
+            else:
+                # 직접 제조사명으로 검색
+                queryset = queryset.filter(product__name__icontains=manufacturer)
             
         # 정렬 처리 - 마감된 공구는 항상 후순위로 정렬
         # 1. 활성 공구와 마감된 공구를 분리
@@ -626,7 +674,6 @@ class GroupBuyViewSet(ModelViewSet):
         ended_groupbuys = ended_groupbuys.annotate(sort_order=Value(1, output_field=IntegerField()))
         
         # QuerySet 합치기 (UNION)
-        from django.db.models import Q
         result_queryset = GroupBuy.objects.filter(
             Q(id__in=active_groupbuys.values('id')) | 
             Q(id__in=ended_groupbuys.values('id'))
