@@ -568,9 +568,18 @@ class GroupBuyViewSet(ModelViewSet):
 
         # status 필터 처리
         if status_param == 'active':
+            # 진행중: 마감시간이 지나지 않은 공구
             queryset = queryset.filter(end_time__gt=now)
+        elif status_param == 'ended':
+            # 종료: 마감시간이 지났거나 completed 상태인 공구
+            queryset = queryset.filter(
+                Q(end_time__lte=now) | Q(status__in=['completed', 'cancelled', 'final_selection', 'seller_confirmation'])
+            )
         elif status_param == 'completed':
-            queryset = queryset.filter(end_time__lte=now)
+            # 완료: completed 상태이거나 마감시간이 지난 공구
+            queryset = queryset.filter(
+                Q(status='completed') | Q(end_time__lte=now)
+            )
         elif status_param == 'in_progress':
             # 최종선택 이전 상태(recruiting, bidding, voting)만 필터링
             queryset = queryset.filter(status__in=['recruiting', 'bidding', 'voting'])

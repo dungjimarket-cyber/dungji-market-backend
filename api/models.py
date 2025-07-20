@@ -926,3 +926,6 @@ def handle_status_change(sender, instance, **kwargs):
     update_fields = kwargs.get('update_fields')
     if update_fields is None or 'status' in update_fields:
         instance.notify_status_change()
+
+# Import PhoneVerification model
+from .models_verification import PhoneVerification

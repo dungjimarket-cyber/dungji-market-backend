@@ -37,8 +37,9 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, find_username, reset_password
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, check_email, find_username, reset_password
 from api.views_social import social_login_dispatch, kakao_callback
+from api.views_verification import send_verification_code, verify_code, check_verification_status
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -63,12 +64,17 @@ urlpatterns = [
         path('register/', register_user_v2, name='register'),  # 새로운 회원가입 API 사용
         path('register-old/', register_user, name='register_old'),  # 기존 API 보존
         path('check-nickname/', check_nickname, name='check_nickname'),
+        path('check-email/', check_email, name='check_email'),
         path('find-username/', find_username, name='find_username'),
         path('reset-password/', reset_password, name='reset_password'),
         path('sns-login/', create_sns_user, name='sns_login'),
         path('profile/', UserProfileView.as_view(), name='profile'),
         path('social/<str:provider>/', social_login_dispatch, name='social_login'),
         path('callback/kakao/', kakao_callback, name='kakao_callback'),
+        # 휴대폰 인증 API
+        path('phone/send-code/', send_verification_code, name='send_verification_code'),
+        path('phone/verify/', verify_code, name='verify_code'),
+        path('phone/status/', check_verification_status, name='check_verification_status'),
     ])),
 
     path('api/', include(router.urls)),

@@ -175,6 +175,37 @@ def register_user_v2(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def check_email(request):
+    """
+    이메일 중복 확인 API
+    """
+    try:
+        email = request.data.get('email')
+        
+        if not email:
+            return Response(
+                {'error': '이메일을 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 이메일 중복 확인
+        is_available = not User.objects.filter(email=email).exists()
+        
+        return Response({
+            'available': is_available,
+            'email': email
+        })
+    
+    except Exception as e:
+        logger.error(f"이메일 중복 확인 오류: {str(e)}")
+        return Response(
+            {'error': '처리 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def check_nickname(request):
     """
     닉네임 중복 확인 API

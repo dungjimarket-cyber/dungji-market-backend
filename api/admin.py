@@ -4,7 +4,7 @@ from .models import (
     Category, Product, GroupBuy, Bid, Penalty, User, Badge,
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
-    ProductCustomValue, ParticipantConsent
+    ProductCustomValue, ParticipantConsent, PhoneVerification
 )
 from django.utils.html import mark_safe
 
@@ -258,3 +258,41 @@ class ParticipantConsentAdmin(admin.ModelAdmin):
     def get_groupbuy_title(self, obj):
         return obj.participation.groupbuy.title
     get_groupbuy_title.short_description = '공구명'
+
+
+@admin.register(PhoneVerification)
+class PhoneVerificationAdmin(admin.ModelAdmin):
+    """휴대폰 인증 관리"""
+    list_display = ['phone_number', 'status', 'purpose', 'user', 'created_at', 'expires_at', 'attempt_count']
+    list_filter = ['status', 'purpose', 'created_at']
+    search_fields = ['phone_number', 'user__username', 'user__email']
+    readonly_fields = ['verification_code', 'created_at', 'expires_at', 'verified_at', 'ip_address']
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('phone_number', 'verification_code', 'status', 'purpose')
+        }),
+        ('인증 정보', {
+            'fields': ('created_at', 'expires_at', 'verified_at', 'attempt_count', 'max_attempts')
+        }),
+        ('사용자 정보', {
+            'fields': ('user', 'ip_address')
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """관리자 페이지에서 직접 생성 불가"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """수정 불가"""
+        return False
+    
+    actions = ['cleanup_expired']
+    
+    def cleanup_expired(self, request, queryset):
+        """만료된 인증 정리"""
+        PhoneVerification.cleanup_expired()
+        self.message_user(request, "만료된 인증이 정리되었습니다.")
+    cleanup_expired.short_description = "만료된 인증 정리"
