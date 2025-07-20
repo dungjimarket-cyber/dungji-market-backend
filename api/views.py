@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group, Permission
+from django.db import transaction
 from django.db.models import Q, Count, F, Sum, Avg, Case, When, Value, IntegerField
 from rest_framework.decorators import action
 from django.http import JsonResponse, HttpResponse
@@ -817,32 +818,69 @@ class GroupBuyViewSet(ModelViewSet):
             if 'regions' in request.data and isinstance(request.data['regions'], list) and request.data['regions']:
                 from .models import GroupBuyRegion, Region
                 
+                print(f"\n[다중 지역 처리 시작] regions 데이터: {request.data['regions']}")
+                
                 # 최대 3개 지역으로 제한
                 regions_data = request.data['regions'][:3]
                 
-                for region_data in regions_data:
-                    # 지역 코드로 Region 객체 찾기 (기존 방식)
+                for idx, region_data in enumerate(regions_data):
+                    print(f"\n[지역 {idx+1}] 처리 중: {region_data}")
+                    
+                    # 지역 코드로 Region 객체 찾기
                     region_code = region_data.get('code')
+                    region_name = region_data.get('name')
                     region = None
                     
                     if region_code:
-                        # 코드가 시도_시군구 형식인 경우 시도명과 시군구명으로 분리하여 검색
-                        if '_' in region_code:
-                            parts = region_code.split('_', 1)
-                            if len(parts) == 2:
-                                sido = parts[0]
-                                sigungu = parts[1]
-                                # 시도명과 시군구명으로 지역 검색
-                                region = Region.objects.filter(
-                                    Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
-                                    level=1  # 시군구 레벨
-                                ).first()
-                                if region:
-                                    print(f"[지역 검색 성공] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
-                        
-                        # 기존 방식으로도 검색 시도
-                        if not region:
-                            region = Region.objects.filter(code=region_code).first()
+                        # 1. 먼저 정확한 코드로 검색
+                        region = Region.objects.filter(code=region_code).first()
+                        if region:
+                            print(f"[지역 검색 성공 - 코드 매칭] {region.name} (코드: {region.code})")
+                        else:
+                            # 2. 코드가 시도_시군구 형식인 경우 처리
+                            if '_' in region_code:
+                                parts = region_code.split('_', 1)
+                                if len(parts) == 2:
+                                    sido = parts[0]
+                                    sigungu = parts[1]
+                                    # 시도명과 시군구명으로 지역 검색
+                                    # 먼저 정확한 이름으로 검색
+                                    region = Region.objects.filter(
+                                        name=sigungu,
+                                        full_name__contains=sido,
+                                        level=1  # 시군구 레벨
+                                    ).first()
+                                    
+                                    # 못 찾으면 부분 매칭으로 재시도
+                                    if not region:
+                                        region = Region.objects.filter(
+                                            Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
+                                            level=1  # 시군구 레벨
+                                        ).first()
+                                    if region:
+                                        print(f"[지역 검색 성공 - 이름 매칭] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
+                                    else:
+                                        print(f"[지역 검색 실패] 시도: {sido}, 시군구: {sigungu}")
+                                        # 디버깅을 위해 해당 지역명이 DB에 있는지 확인
+                                        similar_regions = Region.objects.filter(
+                                            Q(name__icontains=sigungu) | Q(full_name__icontains=sigungu),
+                                            level=1
+                                        )[:5]
+                                        if similar_regions:
+                                            print(f"  유사한 지역 목록:")
+                                            for r in similar_regions:
+                                                print(f"    - {r.name} (full: {r.full_name}, code: {r.code})")
+                            else:
+                                print(f"[지역 검색 실패] 코드 {region_code}에 해당하는 지역을 찾을 수 없습니다.")
+                    
+                    # 3. 이름으로 검색 시도 (코드로 찾지 못한 경우)
+                    if not region and region_name:
+                        # 시군구 레벨에서 이름으로 검색
+                        region = Region.objects.filter(name=region_name, level=1).first()
+                        if region:
+                            print(f"[지역 검색 성공 - 이름으로 검색] {region.name} (코드: {region.code})")
+                        else:
+                            print(f"[지역 검색 실패] 이름 {region_name}에 해당하는 지역을 찾을 수 없습니다.")
                     
                     if region:
                         # GroupBuyRegion 생성
@@ -850,7 +888,9 @@ class GroupBuyViewSet(ModelViewSet):
                             groupbuy=groupbuy,
                             region=region
                         )
-                        print(f"[지역 추가] {region.name} (코드: {region.code})")
+                        print(f"[지역 추가 완료] {region.name} (코드: {region.code})")
+                    else:
+                        print(f"[지역 추가 실패] region_data: {region_data}")
                 
                 # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
                 if regions_data and len(regions_data) > 0:
@@ -862,6 +902,8 @@ class GroupBuyViewSet(ModelViewSet):
                             groupbuy.region_name = first_region.name
                             groupbuy.save()
                             print(f"[기본 지역 설정] {first_region.name}")
+                
+                print(f"\n[다중 지역 처리 완료] 총 {GroupBuyRegion.objects.filter(groupbuy=groupbuy).count()}개 지역 저장됨")
             
             # 생성자를 참여자로 자동 추가 (리더로 설정)
             Participation.objects.create(
@@ -1036,35 +1078,55 @@ class GroupBuyViewSet(ModelViewSet):
         if 'regions' in request.data and isinstance(request.data['regions'], list) and request.data['regions']:
             from .models import GroupBuyRegion, Region
             
+            print(f"\n[업데이트 - 다중 지역 처리 시작] regions 데이터: {request.data['regions']}")
+            
             # 기존 지역 정보 삭제
-            GroupBuyRegion.objects.filter(groupbuy=groupbuy).delete()
+            deleted_count = GroupBuyRegion.objects.filter(groupbuy=groupbuy).delete()[0]
+            print(f"[기존 지역 삭제] {deleted_count}개 지역 삭제됨")
             
             # 최대 3개 지역으로 제한
             regions_data = request.data['regions'][:3]
             
-            for region_data in regions_data:
-                # 지역 코드로 Region 객체 찾기 (기존 방식)
+            for idx, region_data in enumerate(regions_data):
+                print(f"\n[지역 {idx+1}] 처리 중: {region_data}")
+                
+                # 지역 코드로 Region 객체 찾기
                 region_code = region_data.get('code')
+                region_name = region_data.get('name')
                 region = None
                 
                 if region_code:
-                    # 코드가 시도_시군구 형식인 경우 시도명과 시군구명으로 분리하여 검색
-                    if '_' in region_code:
-                        parts = region_code.split('_', 1)
-                        if len(parts) == 2:
-                            sido = parts[0]
-                            sigungu = parts[1]
-                            # 시도명과 시군구명으로 지역 검색
-                            region = Region.objects.filter(
-                                Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
-                                level=1  # 시군구 레벨
-                            ).first()
-                            if region:
-                                print(f"[지역 검색 성공] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
-                    
-                    # 기존 방식으로도 검색 시도
-                    if not region:
-                        region = Region.objects.filter(code=region_code).first()
+                    # 1. 먼저 정확한 코드로 검색
+                    region = Region.objects.filter(code=region_code).first()
+                    if region:
+                        print(f"[지역 검색 성공 - 코드 매칭] {region.name} (코드: {region.code})")
+                    else:
+                        # 2. 코드가 시도_시군구 형식인 경우 처리
+                        if '_' in region_code:
+                            parts = region_code.split('_', 1)
+                            if len(parts) == 2:
+                                sido = parts[0]
+                                sigungu = parts[1]
+                                # 시도명과 시군구명으로 지역 검색
+                                region = Region.objects.filter(
+                                    Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
+                                    level=1  # 시군구 레벨
+                                ).first()
+                                if region:
+                                    print(f"[지역 검색 성공 - 이름 매칭] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
+                                else:
+                                    print(f"[지역 검색 실패] 시도: {sido}, 시군구: {sigungu}")
+                        else:
+                            print(f"[지역 검색 실패] 코드 {region_code}에 해당하는 지역을 찾을 수 없습니다.")
+                
+                # 3. 이름으로 검색 시도 (코드로 찾지 못한 경우)
+                if not region and region_name:
+                    # 시군구 레벨에서 이름으로 검색
+                    region = Region.objects.filter(name=region_name, level=1).first()
+                    if region:
+                        print(f"[지역 검색 성공 - 이름으로 검색] {region.name} (코드: {region.code})")
+                    else:
+                        print(f"[지역 검색 실패] 이름 {region_name}에 해당하는 지역을 찾을 수 없습니다.")
                 
                 if region:
                     # GroupBuyRegion 생성
@@ -1072,7 +1134,9 @@ class GroupBuyViewSet(ModelViewSet):
                         groupbuy=groupbuy,
                         region=region
                     )
-                    print(f"[지역 추가] {region.name} (코드: {region.code})")
+                    print(f"[지역 추가 완료] {region.name} (코드: {region.code})")
+                else:
+                    print(f"[지역 추가 실패] region_data: {region_data}")
             
             # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
             if regions_data and len(regions_data) > 0:
@@ -1084,6 +1148,8 @@ class GroupBuyViewSet(ModelViewSet):
                         groupbuy.region_name = first_region.name
                         groupbuy.save()
                         print(f"[기본 지역 설정] {first_region.name}")
+            
+            print(f"\n[업데이트 - 다중 지역 처리 완료] 총 {GroupBuyRegion.objects.filter(groupbuy=groupbuy).count()}개 지역 저장됨")
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
