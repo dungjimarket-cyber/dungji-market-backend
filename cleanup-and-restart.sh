@@ -11,9 +11,7 @@ sudo docker-compose -f docker-compose.prod.yml down
 sudo docker container prune -f
 
 # 사용하지 않는 이미지 제거 (선택사항)
-# sudo docker image prune -f
-
-# 볼륨은 유지 (데이터 보존)
+sudo docker image prune -f
 
 echo "새로운 컨테이너 빌드 및 시작..."
 sudo docker-compose -f docker-compose.prod.yml up --build -d
