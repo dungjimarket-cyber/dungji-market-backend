@@ -572,6 +572,9 @@ class GroupBuyViewSet(ModelViewSet):
         # 제조사 필터
         manufacturer = self.request.query_params.get('manufacturer', None)
         
+        # 지역 검색 필터
+        region_search = self.request.query_params.get('region_search', None)
+        
         # 현재 시간 가져오기
         now = timezone.now()
 
@@ -636,6 +639,17 @@ class GroupBuyViewSet(ModelViewSet):
             else:
                 # 직접 제조사명으로 검색
                 queryset = queryset.filter(product__name__icontains=manufacturer)
+        
+        # 지역 검색 처리
+        if region_search:
+            # 지역명으로 검색 (시/도 또는 시/군/구 이름 포함)
+            # 1. 전국 비대면 공구는 제외
+            # 2. 지역 이름에 검색어가 포함된 공구 필터링
+            queryset = queryset.filter(
+                Q(regions__region__name__icontains=region_search) |  # 관련된 지역 이름에 검색어 포함
+                Q(region__icontains=region_search) |  # 구 region 필드 (호환성)
+                Q(region_name__icontains=region_search)  # 구 region_name 필드 (호환성)
+            ).exclude(region_type='nationwide').distinct()  # 전국 비대면 제외 및 중복 제거
             
         # 정렬 처리 - 마감된 공구는 항상 후순위로 정렬
         # 1. 활성 공구와 마감된 공구를 분리
