@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -38,6 +39,10 @@ def register_user_v2(request):
         password = data.get('password')
         role = data.get('role', 'buyer')
         
+        # 이메일 필드 추가 (이메일 회원가입용)
+        email = data.get('email', '')
+        username_field = data.get('username', '')  # 프론트엔드에서 username으로도 전송될 수 있음
+        
         # 선택 필드
         region = data.get('region', '')
         profile_image = files.get('profile_image')
@@ -48,6 +53,10 @@ def register_user_v2(request):
         business_address = data.get('business_address', '')
         is_remote_sales_enabled = data.get('is_remote_sales_enabled', 'false').lower() == 'true'
         business_reg_image = files.get('business_reg_image')
+        
+        # 소셜 로그인 정보
+        social_provider = data.get('social_provider', '')
+        social_id = data.get('social_id', '')
         
         # 유효성 검사
         if not nickname or not phone_number or not password:
@@ -65,8 +74,8 @@ def register_user_v2(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 닉네임 중복 확인
-        if User.objects.filter(username=nickname).exists():
+        # 닉네임 중복 확인 (소셜 회원가입이거나 이메일이 없는 경우에만)
+        if (not email or social_provider) and User.objects.filter(username=nickname).exists():
             return Response(
                 {'error': '이미 사용 중인 닉네임입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -79,6 +88,20 @@ def register_user_v2(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 이메일 회원가입인 경우 이메일 중복 확인
+        if email and not social_provider:
+            if User.objects.filter(email=email).exists():
+                return Response(
+                    {'error': '이미 사용 중인 이메일입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # username으로도 이메일이 사용될 예정이므로 username 중복 체크도 필요
+            if User.objects.filter(username=email).exists():
+                return Response(
+                    {'error': '이미 사용 중인 이메일입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         # 판매자인 경우 추가 검증
         if role == 'seller':
             if not business_reg_number or not business_address:
@@ -89,13 +112,24 @@ def register_user_v2(request):
         
         with transaction.atomic():
             # 사용자 생성
+            # 이메일이 제공된 경우 실제 이메일 사용, 아니면 임시 이메일
+            user_email = email if email else f'{nickname}@dungji.com'
+            
+            # 이메일 회원가입인 경우 username을 이메일로 설정 (로그인 시 이메일 사용)
+            # 소셜 회원가입인 경우 username을 닉네임으로 설정
+            if email and not social_provider:
+                username_for_db = email  # 이메일 회원가입은 이메일을 username으로 사용
+            else:
+                username_for_db = nickname  # 소셜 회원가입은 닉네임을 username으로 사용
+            
             user = User.objects.create(
-                username=nickname,
-                email=f'{nickname}@dungji.com',  # 임시 이메일
+                username=username_for_db,
+                email=user_email,
                 phone_number=phone_number,
                 first_name=business_name if role == 'seller' and business_name else nickname,
                 role=role,
-                sns_type='email',
+                sns_type=social_provider if social_provider else 'email',
+                sns_id=social_id if social_id else None,
                 is_remote_sales_enabled=is_remote_sales_enabled if role == 'seller' else False
             )
             
@@ -112,9 +146,10 @@ def register_user_v2(request):
                         city = region_parts[1]
                         
                         # Region 모델에서 해당 지역 찾기
+                        # full_name에 시/도와 시/군/구가 모두 포함된 지역 검색
                         region_obj = Region.objects.filter(
-                            province=province,
-                            city=city
+                            Q(full_name__contains=province) & Q(full_name__contains=city),
+                            level=1  # 시/군/구 레벨
                         ).first()
                         
                         if region_obj:
@@ -153,7 +188,7 @@ def register_user_v2(request):
             
             user.save()
             
-            logger.info(f"회원가입 완료: {nickname} (ID: {user.id}, Role: {role})")
+            logger.info(f"회원가입 완료: nickname={nickname}, username={user.username}, email={user.email} (ID: {user.id}, Role: {role})")
             
             return Response(
                 {
@@ -354,8 +389,10 @@ def get_user_profile(request):
             'is_remote_sales_enabled': user.is_remote_sales_enabled,
             'remote_sales_verified': user.remote_sales_verified,
             'address_region': {
-                'province': user.address_region.province,
-                'city': user.address_region.city
+                'code': user.address_region.code,
+                'name': user.address_region.name,
+                'full_name': user.address_region.full_name,
+                'level': user.address_region.level
             } if user.address_region else None,
             'address_detail': user.address_detail,
             'penalty_points': user.penalty_points,
@@ -413,8 +450,8 @@ def update_user_profile(request):
                     city = region_parts[1]
                     
                     region_obj = Region.objects.filter(
-                        province=province,
-                        city=city
+                        Q(full_name__contains=province) & Q(full_name__contains=city),
+                        level=1  # 시/군/구 레벨
                     ).first()
                     
                     if region_obj:
