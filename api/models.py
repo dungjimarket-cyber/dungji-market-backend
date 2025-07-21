@@ -929,3 +929,5 @@ def handle_status_change(sender, instance, **kwargs):
 
 # Import PhoneVerification model
 from .models_verification import PhoneVerification
+# Import BidVote model
+from .models_voting import BidVote

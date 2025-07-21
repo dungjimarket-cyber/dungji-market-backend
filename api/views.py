@@ -1638,44 +1638,107 @@ class UserProfileView(APIView):
 
     def get(self, request):
         user = request.user
-        return Response({
+        response_data = {
             'id': user.id,
             'email': user.email,
             'username': user.username,  # 닉네임 수정을 위해 get_full_name() 사용하지 않고 username만 반환
             'profile_image': user.profile_image,
             'sns_type': user.sns_type,
-        })
+            'phone_number': user.phone_number,
+            'address_detail': user.address_detail,
+            'role': user.role,
+            'is_business_verified': user.is_business_verified,
+        }
+        
+        # 주소 지역 정보 추가
+        if user.address_region:
+            response_data['address_region'] = {
+                'id': user.address_region.id,
+                'name': user.address_region.name,
+                'full_name': user.address_region.full_name,
+            }
+        else:
+            response_data['address_region'] = None
+            
+        return Response(response_data)
 
     def patch(self, request):
         user = request.user
         email = request.data.get('email')
         username = request.data.get('username')
+        phone_number = request.data.get('phone_number')
+        address_region_id = request.data.get('address_region_id')
+        address_detail = request.data.get('address_detail')
         
         changed = False
         
         # 이메일 업데이트 처리
-        if email:
+        if email is not None:
             if User.objects.filter(email=email).exclude(id=user.id).exists():
                 return Response({'error': '이미 사용 중인 이메일입니다.'}, status=status.HTTP_400_BAD_REQUEST)
             user.email = email
             changed = True
         
         # 닉네임(사용자명) 업데이트 처리
-        if username:
+        if username is not None:
+            if User.objects.filter(username=username).exclude(id=user.id).exists():
+                return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
             user.username = username
+            changed = True
+        
+        # 휴대폰 번호 업데이트 처리
+        if phone_number is not None:
+            if phone_number and User.objects.filter(phone_number=phone_number).exclude(id=user.id).exists():
+                return Response({'error': '이미 사용 중인 휴대폰 번호입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            user.phone_number = phone_number
+            changed = True
+        
+        # 주소 지역 업데이트 처리
+        if address_region_id is not None:
+            if address_region_id:
+                try:
+                    region = Region.objects.get(id=address_region_id)
+                    user.address_region = region
+                    changed = True
+                except Region.DoesNotExist:
+                    return Response({'error': '유효하지 않은 지역입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                user.address_region = None
+                changed = True
+        
+        # 상세 주소 업데이트 처리
+        if address_detail is not None:
+            user.address_detail = address_detail
             changed = True
             
         # 변경사항이 있으면 저장
         if changed:
             user.save()
-
-        return Response({
+        
+        # 응답 데이터 구성
+        response_data = {
             'id': user.id,
             'email': user.email,
-            'username': user.username,  # 닉네임 수정을 위해 get_full_name() 사용하지 않고 username만 반환
+            'username': user.username,
             'profile_image': user.profile_image,
             'sns_type': user.sns_type,
-        })
+            'phone_number': user.phone_number,
+            'address_detail': user.address_detail,
+            'role': user.role,
+            'is_business_verified': user.is_business_verified,
+        }
+        
+        # 주소 지역 정보 추가
+        if user.address_region:
+            response_data['address_region'] = {
+                'id': user.address_region.id,
+                'name': user.address_region.name,
+                'full_name': user.address_region.full_name,
+            }
+        else:
+            response_data['address_region'] = None
+            
+        return Response(response_data)
 
 class WishlistViewSet(ModelViewSet):
     """찜하기 기능을 위한 ViewSet"""
