@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from .models import Bid, Settlement, GroupBuy, BidToken
 from .serializers_bid import BidSerializer, SettlementSerializer
 from django.shortcuts import get_object_or_404
+from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -113,7 +114,7 @@ class BidViewSet(viewsets.ModelViewSet):
             status='active',
         ).filter(
             # 유효기간이 없거나(None) 유효기간이 있는 경우 만료일이 현재보다 더 나중인 경우
-            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
         ).first()
         
         # 입찰권이 없으면 오류 발생
