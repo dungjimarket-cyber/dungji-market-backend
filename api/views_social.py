@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 KAKAO_CLIENT_ID = os.environ.get('KAKAO_CLIENT_ID', '')
 if not KAKAO_CLIENT_ID:
     logger.error("KAKAO_CLIENT_ID 환경변수가 설정되지 않았습니다. .env 파일을 확인해주세요.")
-    KAKAO_CLIENT_ID = '48a8af8c364ef5e225460c2086473554'  # 이 키는 프론트엔드 .env.local에서 삽입
+    KAKAO_CLIENT_ID = 'a197177aee0ddaf6b827a6225aa48653'  # 이 키는 프론트엔드 .env.local에서 삽입
 
 # 환경별 리다이렉트 URI 설정
 REDIRECT_URIS = {
