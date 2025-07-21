@@ -193,6 +193,34 @@ def create_sns_user(request):
         logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}")
         logger.info(f"새 사용자 프로필 이미지: {profile_image}")
         
+        # 카카오 간편가입 시 자동 닉네임 생성
+        if sns_type == 'kakao':
+            # role이 전달되지 않은 경우 기본적으로 buyer로 설정
+            role = data.get('role', 'buyer')
+            
+            # 역할에 따른 닉네임 프리픽스 설정
+            if role == 'seller':
+                nickname_prefix = '어미새'
+            else:
+                nickname_prefix = '참새'
+            
+            # 고유한 번호 생성을 위해 현재 해당 프리픽스를 가진 사용자 수 확인
+            import random
+            for attempt in range(10):  # 최대 10번 시도
+                random_num = random.randint(1, 999999999999)
+                generated_nickname = f"{nickname_prefix}{random_num}"
+                
+                # 중복 체크
+                if not User.objects.filter(first_name=generated_nickname).exists():
+                    name = generated_nickname
+                    break
+            else:
+                # 10번 시도 후에도 중복이면 timestamp 사용
+                import time
+                name = f"{nickname_prefix}{int(time.time())}"
+            
+            logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}")
+        
         # 사용자 생성
         user = User.objects.create_user(
             username=email,

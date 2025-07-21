@@ -222,6 +222,24 @@ class BidViewSet(viewsets.ModelViewSet):
         # 입찰 취소 실행
         bid.delete()
         
+        # 단독 입찰 취소 시 공구 상태 확인 및 업데이트
+        remaining_bids = Bid.objects.filter(groupbuy=groupbuy, status='pending').count()
+        if remaining_bids == 0 and groupbuy.status == 'bidding':
+            # 입찰이 0개가 되면 공구 상태를 다시 모집중으로 변경
+            groupbuy.status = 'recruiting'
+            groupbuy.save()
+            
+            # 공구 생성자에게 알림 전송
+            from api.utils.notification_service import NotificationService
+            notification_service = NotificationService()
+            notification_service.create_notification(
+                user=groupbuy.creator,
+                type='bid_cancelled',
+                title='모든 입찰이 취소되었습니다',
+                message=f'{groupbuy.title} 공구의 모든 입찰이 취소되어 다시 모집중 상태로 변경되었습니다.',
+                related_object=groupbuy
+            )
+        
         return Response({"detail": "입찰이 성공적으로 취소되었습니다."}, status=status.HTTP_204_NO_CONTENT)
         
         # 자신의 입찰만 포기 가능
