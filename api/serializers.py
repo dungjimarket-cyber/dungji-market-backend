@@ -273,18 +273,24 @@ class GroupBuySerializer(serializers.ModelSerializer):
         from .models import GroupBuyRegion
         
         # GroupBuyRegion 모델을 통해 연결된 지역 정보 가져오기
-        regions = GroupBuyRegion.objects.filter(groupbuy=obj).select_related('region')
+        regions = GroupBuyRegion.objects.filter(groupbuy=obj).select_related('region', 'region__parent')
         
         # 지역 정보 포맷팅
         result = []
         for region_link in regions:
             region = region_link.region
             if region:
+                # full_name이나 시/도 + 시/군/구 조합으로 표시
+                # full_name이 '서울특별시 강남구' 형태로 저장되어 있음
+                display_name = region.full_name or region.name
+                
                 result.append({
+                    'id': region.code,
                     'code': region.code,
-                    'name': region.name,
+                    'name': display_name,  # 전체 이름으로 변경
                     'full_name': region.full_name or region.name,
-                    'level': region.level or 2
+                    'level': region.level or 2,
+                    'parent': region.parent.name if region.parent else None
                 })
         
         return result

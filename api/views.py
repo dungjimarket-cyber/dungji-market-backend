@@ -22,6 +22,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.authtoken.models import Token
 from .models import Category, Product, GroupBuy, Participation, Wishlist, Review, Bid
+from .models_region import Region
 from .serializers import CategorySerializer, ProductSerializer, GroupBuySerializer, ParticipationSerializer, WishlistSerializer, ReviewSerializer, BidSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .utils import update_groupbuy_status
@@ -646,8 +647,8 @@ class GroupBuyViewSet(ModelViewSet):
             # 1. 전국 비대면 공구는 제외
             # 2. 지역 이름에 검색어가 포함된 공구 필터링
             queryset = queryset.filter(
-                Q(regions__region__name__icontains=region_search) |  # 관련된 지역 이름에 검색어 포함
-                Q(region__icontains=region_search) |  # 구 region 필드 (호환성)
+                Q(regions__region__name__icontains=region_search) |  # GroupBuyRegion을 통해 Region의 name 검색
+                Q(region__name__icontains=region_search) |  # 직접 연결된 region의 name 검색
                 Q(region_name__icontains=region_search)  # 구 region_name 필드 (호환성)
             ).exclude(region_type='nationwide').distinct()  # 전국 비대면 제외 및 중복 제거
             
