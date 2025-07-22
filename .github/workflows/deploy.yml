@@ -12,17 +12,29 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v3
 
+    - name: Debug EC2_HOST
+      run: |
+        echo "Checking if EC2_HOST is set..."
+        if [ -z "${{ secrets.EC2_HOST }}" ]; then
+          echo "EC2_HOST is not set!"
+        else
+          echo "EC2_HOST is set (hidden for security)"
+        fi
+
     - name: Copy files to EC2
       uses: appleboy/scp-action@v0.1.6
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
         source: "."
         target: "~/dungji-market-backend"
         # 제외할 파일들
         rm: true
         strip_components: 0
+        timeout: 30s
+        command_timeout: 10m
 
     - name: SSH and restart Docker
       uses: appleboy/ssh-action@v0.1.8
