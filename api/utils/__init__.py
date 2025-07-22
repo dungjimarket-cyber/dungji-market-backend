@@ -32,22 +32,91 @@ def update_groupbuy_status(groupbuy):
     
     # 투표 단계 -> 판매자 확정 대기 또는 취소
     elif groupbuy.status == 'voting' and now > groupbuy.voting_end:
-        # 확정된 입찰이 있는지 확인 (투표 결과)
-        confirmed_votes = groupbuy.vote_set.filter(choice='confirm').count()
-        if confirmed_votes >= 1:
-            # 낙찰자 선정 로직은 GroupBuy.handle_voting_timeout에서 처리됨
+        # 투표 결과 확인 및 낙찰자 선정
+        from ..models_voting import BidVote
+        from ..models_bid import Bid
+        from django.db.models import Count
+        
+        # 투표 수 집계
+        total_votes = BidVote.objects.filter(groupbuy=groupbuy).count()
+        
+        if total_votes > 0:
+            # 각 입찰별 투표 수 집계
+            bid_votes = Bid.objects.filter(groupbuy=groupbuy).annotate(
+                vote_count=Count('votes')
+            ).order_by('-vote_count')
+            
+            # 최다 득표 입찰 확인
+            if bid_votes:
+                winning_bid = bid_votes.first()
+                max_votes = winning_bid.vote_count
+                
+                # 동점자 확인
+                tied_bids = [bid for bid in bid_votes if bid.vote_count == max_votes]
+                
+                if len(tied_bids) == 1:
+                    # 단독 최다 득표자가 낙찰
+                    winning_bid.is_winner = True
+                    winning_bid.save()
+                    logger.info(f"공구 '{groupbuy.title}' 낙찰자 선정: {winning_bid.seller.username} (득표수: {max_votes})")
+                    
+                    # 낙찰자에게 알림 발송
+                    from ..models import Notification
+                    Notification.objects.create(
+                        user=winning_bid.seller,
+                        groupbuy=groupbuy,
+                        message=f"축하합니다! '{groupbuy.product.name}' 공구에 낙찰되셨습니다. 24시간 내에 판매 확정을 진행해주세요.",
+                        notification_type='bid_winner'
+                    )
+                else:
+                    # 동점자가 있는 경우: 먼저 입찰한 사람이 낙찰
+                    winning_bid = min(tied_bids, key=lambda b: b.created_at)
+                    winning_bid.is_winner = True
+                    winning_bid.save()
+                    logger.info(f"공구 '{groupbuy.title}' 동점 상황 - 선착순 낙찰자: {winning_bid.seller.username}")
+                    
+                    # 낙찰자에게 알림 발송
+                    from ..models import Notification
+                    Notification.objects.create(
+                        user=winning_bid.seller,
+                        groupbuy=groupbuy,
+                        message=f"축하합니다! '{groupbuy.product.name}' 공구에 낙찰되셨습니다. (동점 - 선착순 선정) 24시간 내에 판매 확정을 진행해주세요.",
+                        notification_type='bid_winner'
+                    )
+                
+                # 낙찰되지 않은 입찰자들에게 알림
+                for bid in bid_votes:
+                    if not bid.is_winner:
+                        Notification.objects.create(
+                            user=bid.seller,
+                            groupbuy=groupbuy,
+                            message=f"'{groupbuy.product.name}' 공구의 최종 선정 결과, 아쉽게도 낙찰되지 않으셨습니다.",
+                            notification_type='bid_not_selected'
+                        )
+            
             groupbuy.status = 'seller_confirmation'
-            # 판매자 확정 기한은 투표 종료 후 24시간
             groupbuy.save()
             logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> {groupbuy.status}")
             groupbuy.notify_status_change()
             return True
         else:
-            # 확정된 입찰이 없으면 공구 취소
+            # 투표가 없으면 공구 취소
             groupbuy.status = 'cancelled'
             groupbuy.save()
-            logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> {groupbuy.status} (확정된 투표 없음)")
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> {groupbuy.status} (투표 없음)")
             groupbuy.notify_status_change()
+            
+            # 모든 입찰자에게 취소 알림
+            from ..models import Notification
+            bids = Bid.objects.filter(groupbuy=groupbuy)
+            for bid in bids:
+                Notification.objects.create(
+                    user=bid.seller,
+                    groupbuy=groupbuy,
+                    message=f"'{groupbuy.product.name}' 공구가 참여자 투표 부족으로 취소되었습니다.",
+                    notification_type='groupbuy_cancelled'
+                )
+            
             return True
     
     # 판매자 확정 대기 -> 완료

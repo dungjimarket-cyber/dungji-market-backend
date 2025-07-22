@@ -40,7 +40,7 @@ from rest_framework_simplejwt.views import (
 from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, check_email, find_username, reset_password
 from api.views_social import social_login_dispatch, kakao_callback
 from api.views_verification import send_verification_code, verify_code, check_verification_status
-from api.views_voting import vote_for_bid, get_my_vote, get_voting_results
+from api.views_voting import vote_for_bid, get_my_vote, get_voting_results, get_winning_bid
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -97,6 +97,7 @@ urlpatterns = [
     path('api/groupbuys/<int:groupbuy_id>/vote/', vote_for_bid, name='vote_for_bid'),
     path('api/groupbuys/<int:groupbuy_id>/my-vote/', get_my_vote, name='get_my_vote'),
     path('api/groupbuys/<int:groupbuy_id>/voting-results/', get_voting_results, name='get_voting_results'),
+    path('api/groupbuys/<int:groupbuy_id>/winning-bid/', get_winning_bid, name='get_winning_bid'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

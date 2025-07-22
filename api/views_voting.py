@@ -160,3 +160,54 @@ def get_voting_results(request, groupbuy_id):
         'results': results,
         'voting_end_time': groupbuy.voting_end
     })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_winning_bid(request, groupbuy_id):
+    """
+    공구의 낙찰된 입찰 정보 조회
+    - seller_confirmation 또는 completed 상태에서만 조회 가능
+    """
+    groupbuy = get_object_or_404(GroupBuy, id=groupbuy_id)
+    
+    # 낙찰자 정보는 seller_confirmation 또는 completed 상태에서만 조회 가능
+    if groupbuy.status not in ['seller_confirmation', 'completed']:
+        return Response(
+            {'detail': '아직 낙찰자가 선정되지 않았습니다.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 낙찰된 입찰 찾기
+    winning_bid = Bid.objects.filter(
+        groupbuy=groupbuy,
+        is_winner=True
+    ).select_related('seller').first()
+    
+    if not winning_bid:
+        return Response(
+            {'detail': '낙찰된 입찰이 없습니다.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # 투표 통계
+    total_votes = BidVote.objects.filter(groupbuy=groupbuy).count()
+    vote_count = BidVote.objects.filter(bid=winning_bid).count()
+    
+    return Response({
+        'bid': {
+            'id': winning_bid.id,
+            'seller': {
+                'id': winning_bid.seller.id,
+                'username': winning_bid.seller.username,
+                'business_name': getattr(winning_bid.seller, 'business_name', None),
+                'profile_image': getattr(winning_bid.seller, 'profile_image', None) if hasattr(winning_bid.seller, 'profile_image') else None
+            },
+            'bid_type': winning_bid.bid_type,
+            'amount': winning_bid.amount,
+            'message': winning_bid.message,
+            'created_at': winning_bid.created_at,
+            'vote_count': vote_count
+        },
+        'total_votes': total_votes,
+        'total_participants': groupbuy.current_participants
+    })
