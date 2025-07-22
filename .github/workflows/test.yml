@@ -40,10 +40,16 @@ jobs:
         
     - name: Create .env file
       run: |
-        echo "SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}" >> .env
+        echo "SECRET_KEY=django-insecure-test-key-for-github-actions-only" >> .env
         echo "DEBUG=True" >> .env
         echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/dungji_test" >> .env
         echo "ENVIRONMENT=test" >> .env
+        echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> .env
+        echo "DB_NAME=dungji_test" >> .env
+        echo "DB_USER=postgres" >> .env
+        echo "DB_PASSWORD=postgres" >> .env
+        echo "DB_HOST=localhost" >> .env
+        echo "DB_PORT=5432" >> .env
         
     - name: Run migrations
       run: |

@@ -42,25 +42,42 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        timeout: 30s
+        command_timeout: 10m
         script: |
           cd ~/dungji-market-backend
           
           # 환경 변수 파일이 있는지 확인
           if [ ! -f .env ]; then
-            echo "Warning: .env file not found. Please create it manually on the server."
+            echo "ERROR: .env file not found!"
+            echo "Please create .env file on the server first."
+            exit 1
           fi
+          
+          echo "Starting deployment..."
           
           # Docker Compose 재시작
           docker-compose down
           docker-compose up --build -d
           
+          # 잠시 대기 (컨테이너가 완전히 시작될 때까지)
+          sleep 10
+          
           # 마이그레이션 실행
+          echo "Running migrations..."
           docker-compose exec -T web python manage.py migrate
           
           # Static 파일 수집
+          echo "Collecting static files..."
           docker-compose exec -T web python manage.py collectstatic --noinput
           
           # 컨테이너 상태 확인
+          echo "Checking container status..."
           docker-compose ps
+          
+          # 헬스 체크
+          echo "Performing health check..."
+          curl -f http://localhost:8000/admin/ || echo "Warning: Admin page not accessible"
           
           echo "Deployment completed successfully!"
