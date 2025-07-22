@@ -232,6 +232,9 @@ def kakao_callback(request):
             access_token = jwt_data.get('access', '')
             refresh_token = jwt_data.get('refresh', '')
             
+            # 신규 사용자 여부 확인
+            is_new_user = response.data.get('is_new_user', False)
+            
             # 원래 요청된 next URL로 리다이렉트 (토큰 포함)
             redirect_url = state
             
@@ -239,7 +242,11 @@ def kakao_callback(request):
             separator = '&' if '?' in redirect_url else '?'
             complete_url = f"{redirect_url}{separator}access_token={access_token}&refresh_token={refresh_token}"
             
-            logger.info(f"로그인 성공. 리다이렉트: {complete_url}")
+            # 신규 사용자인 경우 플래그 추가
+            if is_new_user:
+                complete_url += "&is_new_user=true"
+            
+            logger.info(f"로그인 성공. 리다이렉트: {complete_url}, 신규 사용자: {is_new_user}")
             return redirect(complete_url)
         else:
             logger.error(f"SNS 로그인 처리 실패: {response.data}")

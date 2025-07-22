@@ -117,6 +117,8 @@ def create_sns_user(request):
         # 1차: SNS ID로 사용자 확인 (가장 중요한 체크)
         # 카카오 계정의 고유 ID로 사용자를 찾아서 PC/모바일 중복 가입 방지
         user = User.objects.filter(sns_id=sns_id, sns_type=sns_type).first()
+        is_new_user = False  # 신규 사용자 여부 플래그
+        
         if user:
             logger.info(f"SNS ID로 기존 사용자 찾음: user_id={user.id}, sns_id={sns_id}, sns_type={sns_type}")
             # 기존 사용자 정보 업데이트
@@ -148,7 +150,8 @@ def create_sns_user(request):
                 'sns_id': user.sns_id,
                 'email': user.email,
                 'access': str(refresh.access_token),
-                'refresh': str(refresh)
+                'refresh': str(refresh),
+                'is_new_user': is_new_user  # 신규 사용자 여부 추가
             })
 
         # 2차: 이메일로 사용자 확인 (SNS ID로 찾지 못한 경우만)
@@ -186,7 +189,8 @@ def create_sns_user(request):
                         'sns_id': user.sns_id,
                         'email': user.email,
                         'access': str(refresh.access_token),
-                        'refresh': str(refresh)
+                        'refresh': str(refresh),
+                        'is_new_user': is_new_user  # 신규 사용자 여부 추가
                     })
         
         # 3차: 새 사용자 생성 (SNS ID로도, 이메일로도 찾지 못한 경우)
@@ -230,6 +234,7 @@ def create_sns_user(request):
             sns_type=sns_type,
             sns_id=sns_id
         )
+        is_new_user = True  # 신규 사용자로 플래그 설정
         
         # 프로필 이미지 별도 설정
         if profile_image:
@@ -259,6 +264,7 @@ def create_sns_user(request):
             'email': user.email,
             'access': access_token,
             'refresh': refresh_token,
+            'is_new_user': is_new_user  # 신규 사용자 여부 추가
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
