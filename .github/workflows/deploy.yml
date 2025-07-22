@@ -12,11 +12,6 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v3
 
-    - name: Decode EC2 PEM key
-      run: |
-        echo "${{ secrets.EC2_SSH_KEY }}" | base64 -d > key.pem
-        chmod 600 key.pem
-
     - name: Debug EC2_HOST
       run: |
         echo "Checking if EC2_HOST is set..."
@@ -31,7 +26,7 @@ jobs:
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
-        key: key.pem
+        key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
         source: "."
         target: "~/dungji-market-backend"
@@ -45,7 +40,7 @@ jobs:
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
-        key: key.pem
+        key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
         timeout: 30s
         command_timeout: 10m
