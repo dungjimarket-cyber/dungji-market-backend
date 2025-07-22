@@ -50,11 +50,18 @@ jobs:
         echo "DB_PASSWORD=postgres" >> .env
         echo "DB_HOST=localhost" >> .env
         echo "DB_PORT=5432" >> .env
+        echo "USE_S3=False" >> .env
+        echo "MEDIA_URL=/media/" >> .env
+        echo "STATIC_URL=/static/" >> .env
+        
+    - name: Check Django settings
+      run: |
+        python manage.py check --deploy || true
         
     - name: Run migrations
       run: |
-        python manage.py migrate
+        python manage.py migrate --no-input
         
-    - name: Run tests
+    - name: Run tests  
       run: |
-        python manage.py test
+        python manage.py test api --no-input -v 2
