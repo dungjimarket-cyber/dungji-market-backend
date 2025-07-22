@@ -1,0 +1,54 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [ main ]  # main 브랜치에 push 될 때만
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+
+    - name: Copy files to EC2
+      uses: appleboy/scp-action@v0.1.6
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "."
+        target: "~/dungji-market-backend"
+        # 제외할 파일들
+        rm: true
+        strip_components: 0
+
+    - name: SSH and restart Docker
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd ~/dungji-market-backend
+          
+          # 환경 변수 파일이 있는지 확인
+          if [ ! -f .env ]; then
+            echo "Warning: .env file not found. Please create it manually on the server."
+          fi
+          
+          # Docker Compose 재시작
+          docker-compose down
+          docker-compose up --build -d
+          
+          # 마이그레이션 실행
+          docker-compose exec -T web python manage.py migrate
+          
+          # Static 파일 수집
+          docker-compose exec -T web python manage.py collectstatic --noinput
+          
+          # 컨테이너 상태 확인
+          docker-compose ps
+          
+          echo "Deployment completed successfully!"

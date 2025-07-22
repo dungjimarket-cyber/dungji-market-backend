@@ -1,179 +1,136 @@
-# Dungji Market Backend 배포 가이드
+# 둥지마켓 백엔드 배포 가이드
 
-## AWS Docker 배포 문제 해결
+## GitHub Actions 설정
 
-### 1. 현재 로그에서 발견된 문제들
+### 1. GitHub Secrets 설정
 
-1. **반복되는 초기화 로그**
-   - 원인: Gunicorn의 각 워커가 모듈을 로드할 때마다 모듈 레벨 로깅이 실행됨
-   - 해결: DEBUG 모드에서만 로깅하도록 수정됨
+GitHub 리포지토리의 Settings > Secrets and variables > Actions에서 다음 시크릿을 추가해야 합니다:
 
-2. **개발 환경으로 실행**
-   - 원인: DJANGO_ENV가 'development'로 설정됨
-   - 해결: .env.production 파일 사용 및 DJANGO_ENV=production 설정
+- `EC2_HOST`: EC2 인스턴스의 퍼블릭 IP 주소 (예: 13.125.xxx.xxx)
+- `EC2_SSH_KEY`: EC2 접속용 SSH 프라이빗 키 (전체 내용 복사)
+- `DJANGO_SECRET_KEY`: Django SECRET_KEY (선택사항, 테스트용)
 
-3. **"Not Found: /" 경고**
-   - 원인: 루트 경로에 대한 엔드포인트가 없음
-   - 해결: 헬스체크 엔드포인트 추가
-
-### 2. 프로덕션 배포 준비
-
-#### 2.1 환경 변수 설정
-```bash
-# .env.production 파일을 복사하고 실제 값으로 수정
-cp .env.production .env
-```
-
-주요 설정:
-- `DEBUG=False`
-- `DJANGO_ENV=production`
-- `ALLOWED_HOSTS=your-domain.com,www.your-domain.com`
-- `DATABASE_URL` - PostgreSQL 권장
-- `AWS_*` - S3 설정
-- `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET` - 카카오 앱 설정에서 프로덕션 URL 추가 필요
-
-#### 2.2 카카오 로그인 설정
-1. [카카오 개발자 콘솔](https://developers.kakao.com) 접속
-2. 앱 설정 > 플랫폼 > Web 플랫폼 등록
-   - 사이트 도메인: `https://your-domain.com`
-3. 앱 설정 > 카카오 로그인
-   - Redirect URI: `https://your-domain.com/api/auth/callback/kakao`
-
-### 3. Docker 배포
-
-#### 3.1 프로덕션용 Docker Compose 사용
-```bash
-# 프로덕션 환경에서 실행
-docker-compose -f docker-compose.prod.yml up -d
-
-# 로그 확인
-docker-compose -f docker-compose.prod.yml logs -f
-
-# 재시작
-docker-compose -f docker-compose.prod.yml restart
-```
-
-#### 3.2 Nginx 설정 수정
-`nginx.prod.conf` 파일에서 도메인 변경:
-```nginx
-server_name your-domain.com www.your-domain.com;
-```
-
-### 4. SSL 인증서 설정 (Let's Encrypt)
+### 2. EC2 서버 초기 설정
 
 ```bash
-# Certbot 설치 및 인증서 발급
-docker run -it --rm \
-  -v /etc/letsencrypt:/etc/letsencrypt \
-  -v /var/lib/letsencrypt:/var/lib/letsencrypt \
-  -p 80:80 \
-  certbot/certbot certonly --standalone \
-  -d your-domain.com -d www.your-domain.com
+# 1. SSH로 EC2 접속
+ssh -i your-key.pem ubuntu@your-ec2-ip
+
+# 2. 필요한 패키지 설치
+sudo apt update
+sudo apt install -y docker.io docker-compose
+
+# 3. ubuntu 사용자를 docker 그룹에 추가
+sudo usermod -aG docker ubuntu
+
+# 4. 로그아웃 후 재접속
+
+# 5. 프로젝트 디렉토리 생성
+mkdir -p ~/dungji-market-backend
+
+# 6. .env 파일 생성
+cd ~/dungji-market-backend
+nano .env
 ```
 
-인증서 발급 후 `nginx.prod.conf`의 HTTPS 섹션 주석 해제
+### 3. .env 파일 내용
 
-### 5. 데이터베이스 마이그레이션
+```env
+# Django Settings
+SECRET_KEY=your-secret-key-here
+DEBUG=False
+ALLOWED_HOSTS=your-domain.com,your-ec2-ip
+
+# Database
+DB_NAME=dungji_market
+DB_USER=postgres
+DB_PASSWORD=your-strong-password
+DB_HOST=db
+DB_PORT=5432
+
+# AWS S3 (선택사항)
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_STORAGE_BUCKET_NAME=your-bucket-name
+AWS_S3_REGION_NAME=ap-northeast-2
+
+# Email (선택사항)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+
+# Kakao OAuth
+KAKAO_CLIENT_ID=your-kakao-client-id
+KAKAO_CLIENT_SECRET=your-kakao-client-secret
+
+# 환경 설정
+ENVIRONMENT=production
+```
+
+### 4. 배포 프로세스
+
+1. `main` 브랜치에 코드 푸시
+2. GitHub Actions가 자동으로 실행
+3. 코드가 EC2로 복사됨
+4. Docker Compose로 서비스 재시작
+5. 마이그레이션 및 정적 파일 수집
+
+### 5. 수동 배포 명령어
 
 ```bash
-# 컨테이너 내부에서 실행
-docker-compose -f docker-compose.prod.yml exec web python manage.py migrate
-docker-compose -f docker-compose.prod.yml exec web python manage.py createsuperuser
+# EC2에서 직접 배포하는 경우
+cd ~/dungji-market-backend
+git pull origin main
+docker-compose down
+docker-compose up --build -d
+docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py collectstatic --noinput
 ```
 
-### 6. 정적 파일 수집
+### 6. 로그 확인
 
-```bash
-docker-compose -f docker-compose.prod.yml exec web python manage.py collectstatic --noinput
-```
-
-### 7. 모니터링 및 로그
-
-#### 7.1 로그 확인
 ```bash
 # 전체 로그
-docker-compose -f docker-compose.prod.yml logs
+docker-compose logs
 
-# 특정 서비스 로그
-docker-compose -f docker-compose.prod.yml logs web
-docker-compose -f docker-compose.prod.yml logs nginx
+# 웹 서비스 로그
+docker-compose logs web
 
 # 실시간 로그
-docker-compose -f docker-compose.prod.yml logs -f
+docker-compose logs -f
 ```
 
-#### 7.2 헬스체크
+### 7. 문제 해결
+
 ```bash
-curl http://your-domain.com/
-# 응답: {"status": "ok", "service": "dungji-market-backend"}
+# 컨테이너 상태 확인
+docker-compose ps
+
+# 컨테이너 재시작
+docker-compose restart web
+
+# 데이터베이스 접속
+docker-compose exec db psql -U postgres -d dungji_market
+
+# Django 셸 접속
+docker-compose exec web python manage.py shell
 ```
 
-### 8. 문제 해결
+### 8. SSL 인증서 설정 (Let's Encrypt)
 
-#### 8.1 502 Bad Gateway
-- Gunicorn이 실행 중인지 확인
-- `docker-compose -f docker-compose.prod.yml ps`
-
-#### 8.2 정적 파일이 로드되지 않음
-- 정적 파일 수집 확인
-- Nginx 볼륨 마운트 확인
-
-#### 8.3 카카오 로그인 실패
-- ALLOWED_HOSTS 설정 확인
-- 카카오 앱의 Redirect URI 설정 확인
-- CORS 설정 확인
-
-#### 8.4 CORS 오류
-**증상**: "Access to fetch at 'https://api.dungjimarket.com/...' from origin 'https://dungjimarket.com' has been blocked by CORS policy"
-
-**해결방법**:
-1. Django settings.py에서 CORS_ALLOWED_ORIGINS 확인:
-   ```python
-   CORS_ALLOWED_ORIGINS = [
-       "https://dungjimarket.com",
-       "https://www.dungjimarket.com",
-       # 다른 허용된 도메인들...
-   ]
-   ```
-
-2. Nginx에서 CORS 헤더를 추가하지 않도록 확인 (Django가 처리하도록 함)
-   - `nginx.prod.conf`에서 `add_header 'Access-Control-Allow-Origin'` 제거
-
-3. Django 재시작:
-   ```bash
-   docker-compose -f docker-compose.prod.yml restart web
-   ```
-
-4. 캐시 문제인 경우:
-   - 브라우저 캐시 지우기
-   - Django 서버 재시작
-   - Nginx 재시작
-
-### 9. 성능 최적화
-
-#### 9.1 Gunicorn 워커 수 조정
-```yaml
-# docker-compose.prod.yml
-command: gunicorn ... --workers 3  # CPU 코어 수 × 2 + 1
-```
-
-#### 9.2 Redis 캐싱 추가 (선택사항)
-```yaml
-redis:
-  image: redis:alpine
-  restart: always
-  networks:
-    - dungji_network
-```
-
-### 10. 백업
-
-#### 10.1 데이터베이스 백업
 ```bash
-docker-compose -f docker-compose.prod.yml exec db pg_dump -U username dbname > backup.sql
+# 초기 인증서 발급
+sudo certbot certonly --webroot -w /var/www/certbot -d your-domain.com
+
+# 자동 갱신 설정
+sudo crontab -e
+# 추가: 0 0 * * * certbot renew --quiet
 ```
 
-#### 10.2 미디어 파일 백업
-```bash
-docker run --rm -v dungji-market_media_volume:/data -v $(pwd):/backup alpine tar czf /backup/media-backup.tar.gz -C /data .
-```
+## 주의사항
+
+1. `.env` 파일은 절대 Git에 커밋하지 마세요
+2. EC2 보안 그룹에서 필요한 포트(80, 443, 8000)를 열어두세요
+3. 정기적으로 서버 업데이트를 수행하세요
+4. 백업 정책을 수립하고 실행하세요
