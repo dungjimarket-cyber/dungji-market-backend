@@ -122,6 +122,7 @@ class ProductSerializer(serializers.ModelSerializer):
     subscription_detail = SubscriptionProductDetailSerializer(read_only=True)
     standard_detail = StandardProductDetailSerializer(read_only=True)
     custom_values = ProductCustomValueSerializer(many=True, read_only=True)
+    image = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -146,13 +147,26 @@ class ProductSerializer(serializers.ModelSerializer):
             }
         return None
     
+    def get_image(self, obj):
+        """이미지 필드 URL 반환"""
+        if obj.image:
+            # S3 URL은 이미 절대 URL이므로 그대로 반환
+            image_url = obj.image.url
+            # S3 URL인지 확인 (https://로 시작하면 절대 URL)
+            if image_url.startswith('http://') or image_url.startswith('https://'):
+                return image_url
+            # 로컬 파일인 경우에만 절대 URL 빌드
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(image_url)
+            return image_url
+        return None
+    
     def get_image_url(self, obj):
         """이미지 URL 반환 - 업로드된 이미지가 있으면 우선 사용"""
         if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
+            # get_image 메서드 재사용
+            return self.get_image(obj)
         return obj.image_url or None
         
     def create(self, validated_data):

@@ -7,6 +7,14 @@ from .models import (
     ProductCustomValue, ParticipantConsent, PhoneVerification
 )
 from django.utils.html import mark_safe
+from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+# 설정 확인 로깅
+logger.info(f"Admin 로드 시 USE_S3: {settings.USE_S3}")
+logger.info(f"Admin 로드 시 DEFAULT_FILE_STORAGE: {getattr(settings, 'DEFAULT_FILE_STORAGE', 'Not set')}")
 
 # Admin 사이트 타이틀 한글화
 AdminSite.site_header = '둥지마켓 관리자'

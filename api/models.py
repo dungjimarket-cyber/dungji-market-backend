@@ -7,9 +7,13 @@ from django.db.models import Case, When, F
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.text import slugify
+from django.conf import settings
+import logging
 
 # 지역 정보 모델 import
 from .models_region import Region
+
+logger = logging.getLogger(__name__)
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -169,9 +173,6 @@ class Product(models.Model):
             self.category_name = self.category.name
         
         # 디버깅을 위한 로그
-        import logging
-        logger = logging.getLogger(__name__)
-        
         # 이미지가 업로드되었는지 확인
         if self.image:
             logger.info(f"Product save: 이미지 필드 있음 - {self.image}")
@@ -179,9 +180,9 @@ class Product(models.Model):
             logger.info(f"Product save: 이미지 name - {getattr(self.image, 'name', 'No name')}")
             
             # Django의 ImageField는 자동으로 S3에 업로드됨
-            from django.conf import settings
             logger.info(f"Product save: USE_S3 = {getattr(settings, 'USE_S3', False)}")
             logger.info(f"Product save: DEFAULT_FILE_STORAGE = {getattr(settings, 'DEFAULT_FILE_STORAGE', 'Not set')}")
+            logger.info(f"Product save: AWS_STORAGE_BUCKET_NAME = {getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'Not set')}")
         
         super().save(*args, **kwargs)
         
