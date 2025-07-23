@@ -407,6 +407,9 @@ class ReviewSerializer(serializers.ModelSerializer):
         # 참여 여부 확인
         is_purchased = Participation.objects.filter(user=user, groupbuy=groupbuy).exists()
         
+        # Remove is_purchased from validated_data if it exists, as we're setting it manually
+        validated_data.pop('is_purchased', None)
+        
         review = Review.objects.create(
             **validated_data,
             user=user,

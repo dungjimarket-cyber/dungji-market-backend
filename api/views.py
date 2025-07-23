@@ -2093,7 +2093,7 @@ class ReviewViewSet(ModelViewSet):
             })
             
         # 리뷰 저장
-        serializer.save(user=self.request.user)
+        serializer.save()
     
     @action(detail=False, methods=['get'])
     def groupbuy_reviews(self, request):
