@@ -700,6 +700,10 @@ def user_profile(request):
                 'penalty_expiry': user.penalty_expiry,
                 'current_penalty_level': user.current_penalty_level,
                 'created_at': user.date_joined,
+                'business_address_province': user.business_address_province,
+                'business_address_city': user.business_address_city,
+                'business_number': user.business_number,
+                'is_remote_sales': user.is_remote_sales,
             }
             
             return Response(profile_data)
@@ -762,6 +766,18 @@ def user_profile(request):
                 except Exception as e:
                     logger.error(f"지역 업데이트 오류: {str(e)}")
             
+            # 판매자 주소 업데이트
+            if 'business_address_province' in data:
+                user.business_address_province = data['business_address_province']
+            
+            if 'business_address_city' in data:
+                user.business_address_city = data['business_address_city']
+            
+            if 'business_number' in data:
+                user.business_number = data['business_number']
+            
+            if 'is_remote_sales' in data:
+                user.is_remote_sales = data['is_remote_sales']
             
             # 프로필 이미지 업데이트
             if 'profile_image' in files:
