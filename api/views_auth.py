@@ -1,6 +1,6 @@
 import logging
 from django.contrib.auth import authenticate
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
@@ -10,7 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import User, Region
+from .models import User, Region, GroupBuy, Participation
 from .utils.s3_utils import upload_file_to_s3
 from .serializers_jwt import CustomTokenObtainPairSerializer
 import json
@@ -65,10 +65,8 @@ def register_user_v2(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # role 검증 (프론트엔드는 'user' 보내지만 백엔드는 'buyer' 사용)
-        if role == 'user':
-            role = 'buyer'
-        elif role not in ['buyer', 'seller']:
+        # role 검증
+        if role not in ['buyer', 'seller']:
             return Response(
                 {'error': '올바르지 않은 회원 유형입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -397,8 +395,9 @@ def get_user_profile(request):
                 'level': user.address_region.level
             } if user.address_region else None,
             'address_detail': user.address_detail,
-            'penalty_points': user.penalty_points,
-            'bid_count': user.bid_count,
+            'penalty_count': user.penalty_count,
+            'penalty_expiry': user.penalty_expiry,
+            'current_penalty_level': user.current_penalty_level,
             'created_at': user.date_joined,
         }
         
@@ -573,4 +572,70 @@ def reset_password(request):
         return Response(
             {'error': '사용자 정보를 찾을 수 없습니다.'},
             status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def withdraw_user(request):
+    """
+    회원 탈퇴 API
+    """
+    try:
+        user = request.user
+        password = request.data.get('password')
+        reason = request.data.get('reason', '')
+        
+        # 비밀번호 확인 (이메일 회원가입 사용자만)
+        if user.sns_type == 'email':
+            if not password:
+                return Response(
+                    {'error': '비밀번호를 입력해주세요.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not check_password(password, user.password):
+                return Response(
+                    {'error': '비밀번호가 일치하지 않습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 진행 중인 공구 확인 (참여자로 있는 경우)
+        active_participations = Participation.objects.filter(
+            user=user,
+            groupbuy__status__in=['recruiting', 'bidding', 'voting', 'seller_confirmation']
+        ).exists()
+        
+        if active_participations:
+            return Response(
+                {'error': '진행 중인 공구가 있어 탈퇴할 수 없습니다. 공구 종료 후 다시 시도해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 생성한 진행 중인 공구 확인
+        active_created_groupbuys = GroupBuy.objects.filter(
+            creator=user,
+            status__in=['recruiting', 'bidding', 'voting', 'seller_confirmation']
+        ).exists()
+        
+        if active_created_groupbuys:
+            return Response(
+                {'error': '진행 중인 생성 공구가 있어 탈퇴할 수 없습니다. 공구 종료 후 다시 시도해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 탈퇴 사유 로깅
+        logger.info(f"회원 탈퇴 - User ID: {user.id}, Username: {user.username}, Reason: {reason}")
+        
+        # 사용자 삭제
+        user.delete()
+        
+        return Response({
+            'message': '회원 탈퇴가 완료되었습니다.'
+        })
+        
+    except Exception as e:
+        logger.error(f"회원 탈퇴 오류: {str(e)}")
+        return Response(
+            {'error': '회원 탈퇴 처리 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
