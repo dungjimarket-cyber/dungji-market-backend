@@ -169,15 +169,23 @@ class ProductAdmin(admin.ModelAdmin):
     
     def save_model(self, request, obj, form, change):
         """모델 저장 시 이미지 처리"""
-        # Django admin은 기본적으로 ImageField를 올바르게 처리하므로
-        # 추가적인 처리는 필요 없음
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 이미지 필드가 변경되었는지 확인
+        if 'image' in form.changed_data:
+            logger.info(f"ProductAdmin: 이미지 필드 변경 감지 - {form.cleaned_data.get('image')}")
+        
+        # 기본 저장 처리
         super().save_model(request, obj, form, change)
         
-        # 저장 후 이미지 URL 확인 (디버깅용)
+        # 저장 후 이미지 정보 로깅
         if obj.image:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"상품 이미지 저장됨: {obj.image.url}")
+            logger.info(f"ProductAdmin: 상품 '{obj.name}' 이미지 저장 완료")
+            logger.info(f"ProductAdmin: 이미지 경로 - {obj.image.name}")
+            logger.info(f"ProductAdmin: 이미지 URL - {obj.image.url}")
+        else:
+            logger.info(f"ProductAdmin: 상품 '{obj.name}' 이미지 없음")
     
     def get_inline_instances(self, request, obj=None):
         inline_instances = []

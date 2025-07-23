@@ -250,14 +250,17 @@ class AdminViewSet(viewsets.ViewSet):
                 try:
                     product = Product.objects.get(pk=product_id)
                     
-                    # 기존 이미지가 있는 경우 S3에서 삭제
-                    if product.image_url:
-                        delete_file_from_s3(product.image_url)
+                    # 기존 이미지가 있는 경우 삭제
+                    if product.image:
+                        product.image.delete(save=False)
                     
-                    # 새 이미지 URL로 업데이트
-                    product.image_url = image_url
+                    # 새 이미지 파일로 업데이트
+                    product.image = image_file
                     product.save()
                     product_updated = True
+                    
+                    # 실제 저장된 URL 가져오기
+                    image_url = product.image.url if product.image else image_url
                     
                 except Product.DoesNotExist:
                     pass  # 상품이 없는 경우 이미지 URL만 반환

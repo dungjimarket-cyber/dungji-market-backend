@@ -233,7 +233,7 @@ if USE_S3:
     AWS_LOCATION = 'media'
     
     # S3 스토리지 설정
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    DEFAULT_FILE_STORAGE = 'api.storage_backends.MediaStorage'
 
 # 보안 설정
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

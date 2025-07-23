@@ -168,17 +168,26 @@ class Product(models.Model):
         if self.category and not self.category_name:
             self.category_name = self.category.name
         
-        # 이미지가 업로드되었고 S3를 사용하는 경우 처리
-        if self.image and hasattr(self.image, 'file'):
+        # 디버깅을 위한 로그
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 이미지가 업로드되었는지 확인
+        if self.image:
+            logger.info(f"Product save: 이미지 필드 있음 - {self.image}")
+            logger.info(f"Product save: 이미지 필드 타입 - {type(self.image)}")
+            logger.info(f"Product save: 이미지 name - {getattr(self.image, 'name', 'No name')}")
+            
+            # Django의 ImageField는 자동으로 S3에 업로드됨
             from django.conf import settings
-            from storages.backends.s3boto3 import S3Boto3Storage
-            
-            # DEFAULT_FILE_STORAGE가 S3로 설정되어 있는지 확인
-            if hasattr(settings, 'DEFAULT_FILE_STORAGE') and 'S3Boto3Storage' in settings.DEFAULT_FILE_STORAGE:
-                # Django-storages가 자동으로 S3에 업로드하므로 별도 처리 불필요
-                pass
-            
+            logger.info(f"Product save: USE_S3 = {getattr(settings, 'USE_S3', False)}")
+            logger.info(f"Product save: DEFAULT_FILE_STORAGE = {getattr(settings, 'DEFAULT_FILE_STORAGE', 'Not set')}")
+        
         super().save(*args, **kwargs)
+        
+        # 저장 후 이미지 URL 확인
+        if self.image:
+            logger.info(f"Product save 후: 이미지 URL - {self.image.url if self.image else 'None'}")
 
 # 통신 상품 특화 정보 (휴대폰, 인터넷 등)
 class TelecomProductDetail(models.Model):
