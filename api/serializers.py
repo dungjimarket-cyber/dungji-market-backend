@@ -370,7 +370,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'user_name', 'user_profile_image', 'groupbuy', 'groupbuy_title',
                 'rating', 'content', 'created_at', 'updated_at', 'is_purchased']
         extra_kwargs = {
-            'user': {'required': True, 'write_only': True},
+            'user': {'read_only': True},
             'groupbuy': {'required': True},
             'rating': {'required': True},
             'content': {'required': True},
