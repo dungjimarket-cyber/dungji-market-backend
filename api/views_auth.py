@@ -383,6 +383,7 @@ def get_user_profile(request):
             'first_name': user.first_name,
             'last_name': user.last_name,
             'role': user.role,
+            'sns_type': user.sns_type,  # SNS 로그인 타입 추가
             'profile_image': user.profile_image,
             'business_reg_number': user.business_reg_number,
             'is_business_verified': user.is_business_verified,
@@ -411,7 +412,7 @@ def get_user_profile(request):
         )
 
 
-@api_view(['PUT'])
+@api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_user_profile(request):
     """
@@ -423,6 +424,17 @@ def update_user_profile(request):
         files = request.FILES
         
         # 업데이트 가능한 필드들
+        if 'username' in data:
+            # 닉네임(username) 중복 확인
+            username = data['username']
+            if User.objects.filter(username=username).exclude(id=user.id).exists():
+                return Response(
+                    {'error': '이미 사용 중인 닉네임입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            user.username = username
+            user.nickname = username  # nickname 필드도 동기화
+        
         if 'phone_number' in data:
             # 휴대폰 번호 중복 확인
             phone_number = data['phone_number'].replace('-', '')
@@ -443,22 +455,30 @@ def update_user_profile(request):
             user.address_detail = data['address_detail']
         
         # 지역 업데이트
-        if 'region' in data:
+        if 'address_region_id' in data:
             try:
-                region_parts = data['region'].split()
-                if len(region_parts) >= 2:
-                    province = region_parts[0]
-                    city = region_parts[1]
-                    
-                    region_obj = Region.objects.filter(
-                        Q(full_name__contains=province) & Q(full_name__contains=city),
-                        level=1  # 시/군/구 레벨
-                    ).first()
-                    
+                region_code = data['address_region_id']
+                if region_code:
+                    region_obj = Region.objects.filter(code=region_code).first()
                     if region_obj:
                         user.address_region = region_obj
+                else:
+                    user.address_region = None
             except Exception as e:
                 logger.error(f"지역 업데이트 오류: {str(e)}")
+        
+        # 판매자 주소 업데이트
+        if 'business_address_province' in data:
+            user.business_address_province = data['business_address_province']
+        
+        if 'business_address_city' in data:
+            user.business_address_city = data['business_address_city']
+        
+        if 'business_number' in data:
+            user.business_number = data['business_number']
+        
+        if 'is_remote_sales' in data:
+            user.is_remote_sales = data['is_remote_sales']
         
         # 프로필 이미지 업데이트
         if 'profile_image' in files:
