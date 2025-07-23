@@ -37,13 +37,11 @@ class User(AbstractUser):
     sns_type = models.CharField(max_length=10, choices=SNS_TYPE_CHOICES, default='email')
     sns_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
     
-    # 판매자 주소 정보 (시/군/구 단위)
-    address_region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='users', verbose_name='사업장 지역')
+    # 활동 지역 정보 (시/군/구 단위) - 구매자/판매자 공통
+    address_region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='users', verbose_name='활동 지역')
     address_detail = models.CharField(max_length=255, blank=True, null=True, verbose_name='상세 주소')
     
     # 판매자 추가 정보
-    business_address_province = models.CharField(max_length=50, blank=True, null=True, verbose_name='사업장 시/도')
-    business_address_city = models.CharField(max_length=50, blank=True, null=True, verbose_name='사업장 시/군/구')
     business_number = models.CharField(max_length=20, blank=True, null=True, verbose_name='사업자등록번호')
     is_remote_sales = models.BooleanField(default=False, verbose_name='비대면 판매 가능')
     
