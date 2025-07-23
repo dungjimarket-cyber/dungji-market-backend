@@ -14,6 +14,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=dungji_market_backend.settings
       - PYTHONUNBUFFERED=1
+      - DEBUG=False
+      - USE_S3=True
     command: sh -c '
       python manage.py migrate &&
       python manage.py collectstatic --noinput &&
