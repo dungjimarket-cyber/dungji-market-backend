@@ -198,9 +198,9 @@ def create_sns_user(request):
         logger.info(f"새 사용자 프로필 이미지: {profile_image}")
         
         # 카카오 간편가입 시 자동 닉네임 생성
-        if sns_type == 'kakao':
-            # role이 전달되지 않은 경우 기본적으로 buyer로 설정
-            role = data.get('role', 'buyer')
+        if sns_type == 'kakao' and (not name or name == ''):
+            # role이 전달되지 않은 경우 기본적으로 user로 설정 
+            role = data.get('role', 'user')
             
             # 역할에 따른 닉네임 프리픽스 설정
             if role == 'seller':
@@ -214,8 +214,9 @@ def create_sns_user(request):
                 random_num = random.randint(1, 999999999999)
                 generated_nickname = f"{nickname_prefix}{random_num}"
                 
-                # 중복 체크
-                if not User.objects.filter(first_name=generated_nickname).exists():
+                # 중복 체크 - first_name과 username 모두 체크
+                if not User.objects.filter(first_name=generated_nickname).exists() and \
+                   not User.objects.filter(username=generated_nickname).exists():
                     name = generated_nickname
                     break
             else:
@@ -223,7 +224,7 @@ def create_sns_user(request):
                 import time
                 name = f"{nickname_prefix}{int(time.time())}"
             
-            logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}")
+            logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}, role: {role}")
         
         # 사용자 생성
         user = User.objects.create_user(
@@ -232,7 +233,8 @@ def create_sns_user(request):
             password=None,  # SNS users don't need password
             first_name=name,
             sns_type=sns_type,
-            sns_id=sns_id
+            sns_id=sns_id,
+            role=role if 'role' in locals() and role else 'user'  # role 설정
         )
         is_new_user = True  # 신규 사용자로 플래그 설정
         
@@ -827,7 +829,7 @@ class GroupBuyViewSet(ModelViewSet):
         # 동일한 상품으로 이미 생성된 공구가 있는지 확인 (모든 사용자 대상)
         existing_groupbuy = GroupBuy.objects.filter(
             product_id=product_id,
-            status__in=['recruiting', 'in_progress'] # 진행 중인 공구만 체크
+            status__in=['recruiting', 'in_progress', 'bidding'] # 진행 중인 공구만 체크
         ).first()
         
         # 통신 제품인 경우 통신사/가입유형/요금제 정보가 다르면 중복 허용
@@ -836,8 +838,7 @@ class GroupBuyViewSet(ModelViewSet):
                 # 통신 정보가 없는 경우 중복 공구 생성 불가
                 error_msg = {
                     'non_field_errors': [
-                        f'이미 동일한 제품({existing_groupbuy.product_name})으로 진행 중인 공구가 있습니다. '
-                        f'다른 제품을 선택하거나, 통신 제품의 경우 통신사/가입유형/요금제 정보를 다르게 입력하여 등록해주세요.'
+                        f'이미 해당 상품으로 진행 중인 공동구매가 있습니다.'
                     ]
                 }
                 return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
@@ -856,8 +857,7 @@ class GroupBuyViewSet(ModelViewSet):
                     # 통신 정보가 같은 경우 중복 생성 불가
                     error_msg = {
                         'non_field_errors': [
-                            f'이미 동일한 제품과 동일한 통신 정보로 진행 중인 공구가 있습니다. '
-                            f'다른 제품을 선택하거나, 통신사/가입유형/요금제 정보를 다르게 입력하여 등록해주세요.'
+                            f'이미 해당 상품으로 진행 중인 공동구매가 있습니다.'
                         ]
                     }
                     return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
@@ -1251,7 +1251,7 @@ class GroupBuyViewSet(ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'popular', 'recent']:
+        if self.action in ['list', 'retrieve', 'popular', 'recent', 'bids', 'winning_bid', 'voting_results']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -1428,6 +1428,190 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
+    @action(detail=True, methods=['post'])
+    def vote(self, request, pk=None):
+        """공구 참여자가 원하는 판매자의 입찰에 투표"""
+        from .models_voting import BidVote
+        from django.db import transaction
+        
+        groupbuy = self.get_object()
+        user = request.user
+        bid_id = request.data.get('bid_id')
+        
+        if not bid_id:
+            return Response(
+                {'error': '입찰을 선택해주세요.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 공구 참여자인지 확인
+        if not groupbuy.participants.filter(id=user.id).exists():
+            return Response(
+                {'error': '공구 참여자만 투표할 수 있습니다.'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # 공구 상태가 voting인지 확인
+        if groupbuy.status != 'voting':
+            return Response(
+                {'error': '현재 투표 기간이 아닙니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 투표 마감 시간 확인
+        if groupbuy.voting_end and timezone.now() > groupbuy.voting_end:
+            return Response(
+                {'error': '투표 시간이 종료되었습니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            # 입찰 확인
+            bid = Bid.objects.get(id=bid_id, groupbuy=groupbuy)
+            
+            with transaction.atomic():
+                # 기존 투표가 있으면 업데이트, 없으면 생성
+                vote, created = BidVote.objects.update_or_create(
+                    participant=user,
+                    groupbuy=groupbuy,
+                    defaults={'bid': bid}
+                )
+                
+            return Response({
+                'message': '투표가 완료되었습니다.',
+                'bid_id': bid.id,
+                'seller': bid.seller.username
+            }, status=status.HTTP_200_OK)
+            
+        except Bid.DoesNotExist:
+            return Response(
+                {'error': '유효하지 않은 입찰입니다.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"투표 중 오류 발생: {str(e)}")
+            return Response(
+                {'error': '투표 처리 중 오류가 발생했습니다.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def my_vote(self, request, pk=None):
+        """현재 사용자의 투표 상태 조회"""
+        from .models_voting import BidVote
+        
+        groupbuy = self.get_object()
+        user = request.user
+        
+        try:
+            vote = BidVote.objects.get(participant=user, groupbuy=groupbuy)
+            return Response({
+                'bid_id': vote.bid.id,
+                'seller': vote.bid.seller.username,
+                'voted_at': vote.created_at
+            })
+        except BidVote.DoesNotExist:
+            return Response(
+                {'message': '아직 투표하지 않았습니다.'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['get'])
+    def bids(self, request, pk=None):
+        """공구의 입찰 목록 조회"""
+        groupbuy = self.get_object()
+        bids = Bid.objects.filter(groupbuy=groupbuy).select_related('seller').order_by('-amount')
+        
+        # 입찰 데이터 직렬화
+        bid_data = []
+        for bid in bids:
+            bid_data.append({
+                'id': bid.id,
+                'seller': {
+                    'id': bid.seller.id,
+                    'username': bid.seller.username,
+                    'business_name': getattr(bid.seller, 'business_name', ''),
+                    'profile_image': getattr(bid.seller, 'profile_image', ''),
+                    'rating': getattr(bid.seller, 'rating', None)
+                },
+                'bid_type': bid.bid_type,
+                'amount': bid.amount,
+                'message': bid.message or '',
+                'created_at': bid.created_at,
+                'is_selected': bid.is_selected
+            })
+        
+        return Response(bid_data)
+    
+    @action(detail=True, methods=['get'])
+    def winning_bid(self, request, pk=None):
+        """낙찰된 입찰 정보 조회"""
+        from .models_voting import BidVote
+        from django.db.models import Count
+        
+        groupbuy = self.get_object()
+        
+        # 낙찰된 입찰 찾기
+        winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
+        
+        if not winning_bid:
+            return Response(
+                {'message': '아직 낙찰된 입찰이 없습니다.'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 투표 수 계산
+        vote_count = BidVote.objects.filter(groupbuy=groupbuy, bid=winning_bid).count()
+        total_votes = BidVote.objects.filter(groupbuy=groupbuy).count()
+        
+        return Response({
+            'bid': {
+                'id': winning_bid.id,
+                'seller': {
+                    'id': winning_bid.seller.id,
+                    'username': winning_bid.seller.username,
+                    'business_name': getattr(winning_bid.seller, 'business_name', ''),
+                    'profile_image': getattr(winning_bid.seller, 'profile_image', '')
+                },
+                'bid_type': winning_bid.bid_type,
+                'amount': winning_bid.amount,
+                'message': winning_bid.message or '',
+                'created_at': winning_bid.created_at,
+                'vote_count': vote_count
+            },
+            'total_votes': total_votes,
+            'total_participants': groupbuy.current_participants
+        })
+    
+    @action(detail=True, methods=['get'])
+    def voting_results(self, request, pk=None):
+        """투표 결과 조회"""
+        from .models_voting import BidVote
+        from django.db.models import Count
+        
+        groupbuy = self.get_object()
+        
+        # 투표 집계
+        results = BidVote.objects.filter(groupbuy=groupbuy).values(
+            'bid__id', 'bid__seller__username', 'bid__amount'
+        ).annotate(
+            vote_count=Count('id')
+        ).order_by('-vote_count')
+        
+        # 전체 참여자 수
+        total_participants = groupbuy.current_participants
+        
+        # 투표한 사람 수
+        total_votes = BidVote.objects.filter(groupbuy=groupbuy).count()
+        
+        return Response({
+            'total_participants': total_participants,
+            'total_votes': total_votes,
+            'abstention_count': total_participants - total_votes,
+            'results': list(results),
+            'voting_end': groupbuy.voting_end
+        })
+    
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
         """사용자가 공구에서 탈퇴하는 API"""
