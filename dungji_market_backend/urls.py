@@ -37,7 +37,7 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile
 from api.views_social import social_login_dispatch, kakao_callback
 from api.views_verification import send_verification_code, verify_code, check_verification_status
 from api.views_voting import vote_for_bid, get_my_vote, get_voting_results, get_winning_bid
@@ -70,8 +70,7 @@ urlpatterns = [
         path('reset-password/', reset_password, name='reset_password'),
         path('withdraw/', withdraw_user, name='withdraw_user'),
         path('sns-login/', create_sns_user, name='sns_login'),
-        path('profile/', get_user_profile, name='profile'),
-        path('profile/', update_user_profile, name='update_profile'),
+        path('profile/', user_profile, name='profile'),
         path('social/<str:provider>/', social_login_dispatch, name='social_login'),
         path('callback/kakao/', kakao_callback, name='kakao_callback'),
         # 휴대폰 인증 API

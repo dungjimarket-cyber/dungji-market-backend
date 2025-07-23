@@ -372,10 +372,16 @@ class ReviewSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'user': {'required': True, 'write_only': True},
             'groupbuy': {'required': True},
-            'rating': {'required': True, 'min_value': 1, 'max_value': 5},
+            'rating': {'required': True},
             'content': {'required': True},
             'is_purchased': {'read_only': True}
         }
+    
+    def validate_rating(self, value):
+        """rating 필드 검증"""
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("별점은 1점에서 5점 사이여야 합니다.")
+        return value
     
     def validate(self, data):
         """

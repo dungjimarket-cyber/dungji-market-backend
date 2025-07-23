@@ -659,3 +659,22 @@ def withdraw_user(request):
             {'error': '회원 탈퇴 처리 중 오류가 발생했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def user_profile(request):
+    """
+    통합 사용자 프로필 API
+    GET: 프로필 조회
+    PATCH: 프로필 수정
+    """
+    if request.method == 'GET':
+        return get_user_profile(request)
+    elif request.method == 'PATCH':
+        return update_user_profile(request)
+    else:
+        return Response(
+            {'error': '지원하지 않는 메서드입니다.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
