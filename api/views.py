@@ -1871,7 +1871,8 @@ class UserProfileView(APIView):
         # 주소 지역 정보 추가
         if user.address_region:
             response_data['address_region'] = {
-                'id': user.address_region.id,
+                'id': user.address_region.code,  # code is the primary key
+                'code': user.address_region.code,
                 'name': user.address_region.name,
                 'full_name': user.address_region.full_name,
             }
@@ -1915,7 +1916,7 @@ class UserProfileView(APIView):
         if address_region_id is not None:
             if address_region_id:
                 try:
-                    region = Region.objects.get(id=address_region_id)
+                    region = Region.objects.get(code=address_region_id)
                     user.address_region = region
                     changed = True
                 except Region.DoesNotExist:
@@ -1949,7 +1950,8 @@ class UserProfileView(APIView):
         # 주소 지역 정보 추가
         if user.address_region:
             response_data['address_region'] = {
-                'id': user.address_region.id,
+                'id': user.address_region.code,  # code is the primary key
+                'code': user.address_region.code,
                 'name': user.address_region.name,
                 'full_name': user.address_region.full_name,
             }
