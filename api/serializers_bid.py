@@ -8,7 +8,7 @@ class BidSerializer(serializers.ModelSerializer):
     """
     입찰 관리를 위한 시리얼라이저
     """
-    seller_name = serializers.CharField(source='seller.username', read_only=True)
+    seller_name = serializers.CharField(source='seller.nickname', read_only=True)
     groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
     product_name = serializers.CharField(source='groupbuy.product.name', read_only=True)
     deadline = serializers.CharField(source='groupbuy.end_time', read_only=True)

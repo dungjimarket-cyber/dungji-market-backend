@@ -19,13 +19,14 @@ class User(AbstractUser):
     )
     
     def __str__(self):
-        return f"{self.username} ({self.get_role_display()})"
+        return f"{self.nickname} ({self.get_role_display()})"
     SNS_TYPE_CHOICES = (
         ('google', 'Google'),
         ('kakao', 'Kakao'),
         ('email', 'Email'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='buyer')
+    nickname = models.CharField(max_length=100, default='', verbose_name='닉네임', help_text='사용자가 표시될 이름')
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
     profile_image = models.URLField(blank=True)  # 외부 스토리지 사용 가정
     business_reg_number = models.CharField(max_length=20, blank=True, null=True)
@@ -332,8 +333,12 @@ class GroupBuy(models.Model):
             self.product_name = self.product.name
             
         # 생성자 닉네임 자동 저장
-        if self.creator and not self.creator_nickname:
-            self.creator_nickname = self.creator.username
+        if self.creator:
+            # nickname 필드가 있으면 사용, 없으면 username 사용
+            if hasattr(self.creator, 'nickname') and self.creator.nickname:
+                self.creator_nickname = self.creator.nickname
+            else:
+                self.creator_nickname = self.creator.username
             
         super().save(*args, **kwargs)
         

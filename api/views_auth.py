@@ -126,7 +126,8 @@ def register_user_v2(request):
                 username=username_for_db,
                 email=user_email,
                 phone_number=phone_number,
-                first_name=business_name if role == 'seller' and business_name else nickname,
+                nickname=business_name if role == 'seller' and business_name else nickname,
+                first_name=business_name if role == 'seller' and business_name else nickname,  # 임시로 유지
                 role=role,
                 sns_type=social_provider if social_provider else 'email',
                 sns_id=social_id if social_id else None,
@@ -378,6 +379,7 @@ def get_user_profile(request):
         profile_data = {
             'id': user.id,
             'username': user.username,
+            'nickname': user.nickname,  # nickname 필드 추가
             'email': user.email,
             'phone_number': user.phone_number,
             'first_name': user.first_name,
