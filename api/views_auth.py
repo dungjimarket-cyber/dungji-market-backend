@@ -670,9 +670,155 @@ def user_profile(request):
     PATCH: 프로필 수정
     """
     if request.method == 'GET':
-        return get_user_profile(request)
+        # GET 요청 처리 - get_user_profile의 로직을 직접 사용
+        try:
+            user = request.user
+            
+            profile_data = {
+                'id': user.id,
+                'username': user.username,
+                'nickname': user.nickname,
+                'email': user.email,
+                'phone_number': user.phone_number,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.role,
+                'sns_type': user.sns_type,
+                'profile_image': user.profile_image,
+                'business_reg_number': user.business_reg_number,
+                'is_business_verified': user.is_business_verified,
+                'is_remote_sales_enabled': user.is_remote_sales_enabled,
+                'remote_sales_verified': user.remote_sales_verified,
+                'address_region': {
+                    'code': user.address_region.code,
+                    'name': user.address_region.name,
+                    'full_name': user.address_region.full_name,
+                    'level': user.address_region.level
+                } if user.address_region else None,
+                'address_detail': user.address_detail,
+                'penalty_count': user.penalty_count,
+                'penalty_expiry': user.penalty_expiry,
+                'current_penalty_level': user.current_penalty_level,
+                'created_at': user.date_joined,
+                'business_address_province': user.business_address_province,
+                'business_address_city': user.business_address_city,
+                'business_number': user.business_number,
+                'is_remote_sales': user.is_remote_sales,
+            }
+            
+            return Response(profile_data)
+        
+        except Exception as e:
+            logger.error(f"프로필 조회 오류: {str(e)}")
+            return Response(
+                {'error': '프로필 조회 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     elif request.method == 'PATCH':
-        return update_user_profile(request)
+        # PATCH 요청 처리 - update_user_profile의 로직을 직접 사용
+        try:
+            user = request.user
+            data = request.data
+            files = request.FILES
+            
+            # 업데이트 가능한 필드들
+            if 'username' in data:
+                # 닉네임(username) 중복 확인
+                username = data['username']
+                if User.objects.filter(username=username).exclude(id=user.id).exists():
+                    return Response(
+                        {'error': '이미 사용 중인 닉네임입니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.username = username
+                user.nickname = username  # nickname 필드도 동기화
+            
+            if 'phone_number' in data:
+                # 휴대폰 번호 중복 확인
+                phone_number = data['phone_number'].replace('-', '')
+                if User.objects.filter(phone_number=phone_number).exclude(id=user.id).exists():
+                    return Response(
+                        {'error': '이미 등록된 휴대폰 번호입니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.phone_number = phone_number
+            
+            if 'first_name' in data:
+                user.first_name = data['first_name']
+            
+            if 'last_name' in data:
+                user.last_name = data['last_name']
+            
+            if 'address_detail' in data:
+                user.address_detail = data['address_detail']
+            
+            # 지역 업데이트
+            if 'address_region_id' in data:
+                try:
+                    region_code = data['address_region_id']
+                    if region_code:
+                        region_obj = Region.objects.filter(code=region_code).first()
+                        if region_obj:
+                            user.address_region = region_obj
+                    else:
+                        user.address_region = None
+                except Exception as e:
+                    logger.error(f"지역 업데이트 오류: {str(e)}")
+            
+            # 판매자 주소 업데이트
+            if 'business_address_province' in data:
+                user.business_address_province = data['business_address_province']
+            
+            if 'business_address_city' in data:
+                user.business_address_city = data['business_address_city']
+            
+            if 'business_number' in data:
+                user.business_number = data['business_number']
+            
+            if 'is_remote_sales' in data:
+                user.is_remote_sales = data['is_remote_sales']
+            
+            # 프로필 이미지 업데이트
+            if 'profile_image' in files:
+                try:
+                    profile_image = files['profile_image']
+                    file_url = upload_file_to_s3(
+                        profile_image,
+                        f'profiles/{user.id}_{profile_image.name}'
+                    )
+                    user.profile_image = file_url
+                except Exception as e:
+                    logger.error(f"프로필 이미지 업데이트 실패: {str(e)}")
+            
+            # 판매자 전용 필드
+            if user.role == 'seller':
+                if 'business_reg_number' in data:
+                    user.business_reg_number = data['business_reg_number']
+                
+                if 'is_remote_sales_enabled' in data:
+                    user.is_remote_sales_enabled = data['is_remote_sales_enabled'].lower() == 'true'
+            
+            user.save()
+            
+            return Response({
+                'message': '프로필이 업데이트되었습니다.',
+                'profile': {
+                    'username': user.username,
+                    'phone_number': user.phone_number,
+                    'first_name': user.first_name,
+                    'profile_image': user.profile_image,
+                    'role': user.role
+                }
+            })
+        
+        except Exception as e:
+            logger.error(f"프로필 업데이트 오류: {str(e)}")
+            return Response(
+                {'error': '프로필 업데이트 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     else:
         return Response(
             {'error': '지원하지 않는 메서드입니다.'},
