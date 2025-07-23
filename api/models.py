@@ -41,6 +41,12 @@ class User(AbstractUser):
     address_region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='users', verbose_name='사업장 지역')
     address_detail = models.CharField(max_length=255, blank=True, null=True, verbose_name='상세 주소')
     
+    # 판매자 추가 정보
+    business_address_province = models.CharField(max_length=50, blank=True, null=True, verbose_name='사업장 시/도')
+    business_address_city = models.CharField(max_length=50, blank=True, null=True, verbose_name='사업장 시/군/구')
+    business_number = models.CharField(max_length=20, blank=True, null=True, verbose_name='사업자등록번호')
+    is_remote_sales = models.BooleanField(default=False, verbose_name='비대면 판매 가능')
+    
     # 비대면 판매 관련 필드
     is_remote_sales_enabled = models.BooleanField(default=False, verbose_name='비대면 판매 가능 여부')
     remote_sales_verified = models.BooleanField(default=False, verbose_name='비대면 판매 인증 완료')
