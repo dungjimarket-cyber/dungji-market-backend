@@ -122,6 +122,7 @@ class ProductSerializer(serializers.ModelSerializer):
     subscription_detail = SubscriptionProductDetailSerializer(read_only=True)
     standard_detail = StandardProductDetailSerializer(read_only=True)
     custom_values = ProductCustomValueSerializer(many=True, read_only=True)
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -144,6 +145,15 @@ class ProductSerializer(serializers.ModelSerializer):
                 'max_participants': active.max_participants
             }
         return None
+    
+    def get_image_url(self, obj):
+        """이미지 URL 반환 - 업로드된 이미지가 있으면 우선 사용"""
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return obj.image_url or None
         
     def create(self, validated_data):
         # 이미지 필드가 있으면 이미지 URL도 설정

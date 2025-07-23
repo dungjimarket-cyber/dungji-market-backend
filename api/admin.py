@@ -45,12 +45,33 @@ from .forms import UserCreationForm, UserChangeForm
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['username', 'email', 'role']
-    list_filter = ['role', 'is_active', 'is_staff']
-    search_fields = ['username', 'email']
+    list_display = ['username', 'email', 'role', 'is_business_verified', 'display_business_reg_file']
+    list_filter = ['role', 'is_active', 'is_staff', 'is_business_verified']
+    search_fields = ['username', 'email', 'business_number']
     ordering = ['username']
+    readonly_fields = ('display_business_reg_file_preview',)
+    
+    def display_business_reg_file(self, obj):
+        """어드민 목록에서 사업자등록증 표시"""
+        if obj.business_reg_file:
+            return mark_safe(f'<a href="{obj.business_reg_file.url}" target="_blank">보기</a>')
+        return "없음"
+    display_business_reg_file.short_description = '사업자등록증'
+    
+    def display_business_reg_file_preview(self, obj):
+        """어드민 상세 페이지에서 사업자등록증 미리보기"""
+        if obj.business_reg_file:
+            if obj.business_reg_file.name.lower().endswith('.pdf'):
+                return mark_safe(f'<a href="{obj.business_reg_file.url}" target="_blank">PDF 다운로드</a>')
+            else:
+                return mark_safe(f'<img src="{obj.business_reg_file.url}" width="400" />')
+        return "사업자등록증 없음"
+    display_business_reg_file_preview.short_description = '사업자등록증 미리보기'
+    
     fieldsets = (
         (None, {'fields': ('username', 'email', 'role', 'password')}),
+        ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+        ('사업자정보', {'fields': ('business_number', 'business_reg_file', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
     )
@@ -147,6 +168,18 @@ class ProductAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def save_model(self, request, obj, form, change):
+        """모델 저장 시 이미지 처리"""
+        # Django admin은 기본적으로 ImageField를 올바르게 처리하므로
+        # 추가적인 처리는 필요 없음
+        super().save_model(request, obj, form, change)
+        
+        # 저장 후 이미지 URL 확인 (디버깅용)
+        if obj.image:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"상품 이미지 저장됨: {obj.image.url}")
     
     def get_inline_instances(self, request, obj=None):
         inline_instances = []

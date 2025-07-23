@@ -167,6 +167,17 @@ class Product(models.Model):
         # 카테고리 이름 자동 저장
         if self.category and not self.category_name:
             self.category_name = self.category.name
+        
+        # 이미지가 업로드되었고 S3를 사용하는 경우 처리
+        if self.image and hasattr(self.image, 'file'):
+            from django.conf import settings
+            from storages.backends.s3boto3 import S3Boto3Storage
+            
+            # DEFAULT_FILE_STORAGE가 S3로 설정되어 있는지 확인
+            if hasattr(settings, 'DEFAULT_FILE_STORAGE') and 'S3Boto3Storage' in settings.DEFAULT_FILE_STORAGE:
+                # Django-storages가 자동으로 S3에 업로드하므로 별도 처리 불필요
+                pass
+            
         super().save(*args, **kwargs)
 
 # 통신 상품 특화 정보 (휴대폰, 인터넷 등)

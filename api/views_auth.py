@@ -3,7 +3,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Max, IntegerField
+from django.db.models.functions import Cast, Substr
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,8 +15,38 @@ from .models import User, Region, GroupBuy, Participation
 from .utils.s3_utils import upload_file_to_s3
 from .serializers_jwt import CustomTokenObtainPairSerializer
 import json
+import re
 
 logger = logging.getLogger(__name__)
+
+def generate_auto_nickname(role='buyer'):
+    """
+    카카오톡 가입 시 자동 닉네임 생성
+    - buyer: 참새1, 참새2, ...
+    - seller: 어미새1, 어미새2, ...
+    """
+    prefix = '참새' if role == 'buyer' else '어미새'
+    
+    # 해당 패턴의 닉네임 중 가장 큰 번호 찾기
+    pattern = f'^{prefix}\\d+$'
+    existing_users = User.objects.filter(
+        username__regex=pattern
+    ).annotate(
+        nickname_number=Cast(
+            Substr('username', len(prefix) + 1),
+            output_field=IntegerField()
+        )
+    ).aggregate(max_number=Max('nickname_number'))
+    
+    # 다음 번호 계산
+    next_number = (existing_users['max_number'] or 0) + 1
+    
+    # 중복 체크를 위한 반복
+    while True:
+        new_nickname = f'{prefix}{next_number}'
+        if not User.objects.filter(username=new_nickname).exists():
+            return new_nickname
+        next_number += 1
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """JWT 토큰에 사용자 정보를 추가하는 커스텀 뷰"""
@@ -57,6 +88,11 @@ def register_user_v2(request):
         # 소셜 로그인 정보
         social_provider = data.get('social_provider', '')
         social_id = data.get('social_id', '')
+        
+        # 카카오톡 가입 시 닉네임 자동 생성
+        if social_provider == 'kakao' and not nickname:
+            nickname = generate_auto_nickname(role)
+            logger.info(f"카카오톡 가입 자동 닉네임 생성: {nickname}")
         
         # 유효성 검사
         if not nickname or not phone_number or not password:
