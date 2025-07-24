@@ -198,9 +198,11 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # 추가 정적 파일 디렉토리 설정
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+# static 디렉토리가 존재하는 경우에만 추가
+STATICFILES_DIRS = []
+static_dir = os.path.join(BASE_DIR, 'static')
+if os.path.exists(static_dir):
+    STATICFILES_DIRS.append(static_dir)
 
 # 정적 파일 수집 방법 설정
 STATICFILES_FINDERS = [
@@ -214,6 +216,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
 
 # AWS S3 설정
 USE_S3 = os.getenv('USE_S3', 'False') == 'True'
+
+# 디버깅을 위한 로깅
+import logging
+logger = logging.getLogger('django')
+logger.info(f"Settings loading: USE_S3 = {USE_S3}")
+logger.info(f"Settings loading: USE_S3 env = {os.getenv('USE_S3')}")
 
 if USE_S3:
     # django-storages 설정
@@ -234,6 +242,10 @@ if USE_S3:
     
     # S3 스토리지 설정
     DEFAULT_FILE_STORAGE = 'api.storage_backends.MediaStorage'
+    
+    logger.info(f"Settings: S3 enabled with bucket {AWS_STORAGE_BUCKET_NAME}")
+else:
+    logger.info("Settings: S3 disabled, using local storage")
 
 # 보안 설정
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
