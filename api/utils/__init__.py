@@ -34,7 +34,7 @@ def update_groupbuy_status(groupbuy):
     
     # 1. recruiting 상태에서 입찰이 생기면 bidding으로 변경
     if groupbuy.status == 'recruiting':
-        from api.models_bid import Bid
+        from api.models import Bid
         if Bid.objects.filter(groupbuy=groupbuy).exists():
             groupbuy.status = 'bidding'
             groupbuy.save()
@@ -43,7 +43,7 @@ def update_groupbuy_status(groupbuy):
     
     # 2. 공구 마감 시간이 지났으면 voting으로 변경
     if groupbuy.status in ['recruiting', 'bidding'] and now > groupbuy.end_time:
-        from api.models_bid import Bid
+        from api.models import Bid
         # 입찰이 있는 경우만 voting으로, 없으면 cancelled
         if Bid.objects.filter(groupbuy=groupbuy).exists():
             groupbuy.status = 'voting'
@@ -62,7 +62,7 @@ def update_groupbuy_status(groupbuy):
     elif groupbuy.status == 'voting' and now > groupbuy.voting_end:
         # 투표 결과 확인 및 낙찰자 선정
         from ..models_voting import BidVote
-        from ..models_bid import Bid
+        from ..models import Bid
         from django.db.models import Count
         
         # 투표 수 집계
