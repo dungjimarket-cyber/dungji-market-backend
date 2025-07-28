@@ -920,14 +920,14 @@ class GroupBuyViewSet(ModelViewSet):
                                     region = Region.objects.filter(
                                         name=sigungu,
                                         full_name__contains=sido,
-                                        level=1  # 시군구 레벨
+                                        level__in=[1, 2]  # 시군구 레벨 (1 또는 2)
                                     ).first()
                                     
                                     # 못 찾으면 부분 매칭으로 재시도
                                     if not region:
                                         region = Region.objects.filter(
                                             Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
-                                            level=1  # 시군구 레벨
+                                            level__in=[1, 2]  # 시군구 레벨 (1 또는 2)
                                         ).first()
                                     if region:
                                         print(f"[지역 검색 성공 - 이름 매칭] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
@@ -936,7 +936,7 @@ class GroupBuyViewSet(ModelViewSet):
                                         # 디버깅을 위해 해당 지역명이 DB에 있는지 확인
                                         similar_regions = Region.objects.filter(
                                             Q(name__icontains=sigungu) | Q(full_name__icontains=sigungu),
-                                            level=1
+                                            level__in=[1, 2]
                                         )[:5]
                                         if similar_regions:
                                             print(f"  유사한 지역 목록:")
@@ -948,7 +948,7 @@ class GroupBuyViewSet(ModelViewSet):
                     # 3. 이름으로 검색 시도 (코드로 찾지 못한 경우)
                     if not region and region_name:
                         # 시군구 레벨에서 이름으로 검색
-                        region = Region.objects.filter(name=region_name, level=1).first()
+                        region = Region.objects.filter(name=region_name, level__in=[1, 2]).first()
                         if region:
                             print(f"[지역 검색 성공 - 이름으로 검색] {region.name} (코드: {region.code})")
                         else:
@@ -1182,7 +1182,7 @@ class GroupBuyViewSet(ModelViewSet):
                                 # 시도명과 시군구명으로 지역 검색
                                 region = Region.objects.filter(
                                     Q(full_name__contains=sido) & Q(full_name__contains=sigungu),
-                                    level=1  # 시군구 레벨
+                                    level__in=[1, 2]  # 시군구 레벨 (1 또는 2)
                                 ).first()
                                 if region:
                                     print(f"[지역 검색 성공 - 이름 매칭] 시도: {sido}, 시군구: {sigungu} -> {region.name}")
@@ -1194,7 +1194,7 @@ class GroupBuyViewSet(ModelViewSet):
                 # 3. 이름으로 검색 시도 (코드로 찾지 못한 경우)
                 if not region and region_name:
                     # 시군구 레벨에서 이름으로 검색
-                    region = Region.objects.filter(name=region_name, level=1).first()
+                    region = Region.objects.filter(name=region_name, level__in=[1, 2]).first()
                     if region:
                         print(f"[지역 검색 성공 - 이름으로 검색] {region.name} (코드: {region.code})")
                     else:
