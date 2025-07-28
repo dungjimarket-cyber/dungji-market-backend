@@ -41,6 +41,10 @@ from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_ni
 from api.views_social import social_login_dispatch, kakao_callback
 from api.views_verification import send_verification_code, verify_code, check_verification_status
 from api.views_voting import vote_for_bid, get_my_vote, get_voting_results, get_winning_bid
+from api.views_final_selection import (
+    buyer_final_decision, seller_final_decision, 
+    get_final_decision_status, get_contact_info
+)
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -99,6 +103,11 @@ urlpatterns = [
     path('api/groupbuys/<int:groupbuy_id>/my-vote/', get_my_vote, name='get_my_vote'),
     path('api/groupbuys/<int:groupbuy_id>/voting-results/', get_voting_results, name='get_voting_results'),
     path('api/groupbuys/<int:groupbuy_id>/winning-bid/', get_winning_bid, name='get_winning_bid'),
+    # 최종선택 관련 API
+    path('api/groupbuys/<int:groupbuy_id>/buyer-decision/', buyer_final_decision, name='buyer_final_decision'),
+    path('api/groupbuys/<int:groupbuy_id>/seller-decision/', seller_final_decision, name='seller_final_decision'),
+    path('api/groupbuys/<int:groupbuy_id>/decision-status/', get_final_decision_status, name='get_final_decision_status'),
+    path('api/groupbuys/<int:groupbuy_id>/contact-info/', get_contact_info, name='get_contact_info'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

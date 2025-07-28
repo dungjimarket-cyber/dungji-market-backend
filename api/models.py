@@ -592,6 +592,19 @@ class Participation(models.Model):
     # 참여 당시의 닉네임 저장 (사용자가 닉네임을 변경해도 참여 당시 닉네임 보존)
     nickname = models.CharField(max_length=150, blank=True, null=True, verbose_name='참여 닉네임')
     
+    # 최종선택 관련 필드
+    final_decision = models.CharField(
+        max_length=20,
+        choices=(
+            ('pending', '대기중'),
+            ('confirmed', '구매확정'),
+            ('cancelled', '구매포기'),
+        ),
+        default='pending',
+        verbose_name='최종선택'
+    )
+    final_decision_at = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 일시')
+    
     def __str__(self):
         leader_mark = "[리더]" if self.is_leader else ""
         return f"{self.user.username} - {self.groupbuy.title} {leader_mark}"
@@ -649,6 +662,19 @@ class Bid(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='상태')
     # 입찰권 관련 필드 추가
     bid_token = models.ForeignKey(BidToken, on_delete=models.SET_NULL, null=True, blank=True, related_name='bids', verbose_name='사용된 입찰권')
+    
+    # 최종선택 관련 필드
+    final_decision = models.CharField(
+        max_length=20,
+        choices=(
+            ('pending', '대기중'),
+            ('confirmed', '판매확정'),
+            ('cancelled', '판매포기'),
+        ),
+        default='pending',
+        verbose_name='최종선택'
+    )
+    final_decision_at = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 일시')
     
     @property
     def masked_amount(self):

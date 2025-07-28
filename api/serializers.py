@@ -187,9 +187,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class GroupBuySerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
-    # creator_name 필드를 모델의 creator_nickname 필드를 사용하도록 변경
-    # 계획적 호환성을 위해 필드 이름은 creator_name으로 유지
-    creator_name = serializers.CharField(source='creator_nickname', read_only=True)
+    # creator_name 필드를 실시간 creator의 nickname을 사용하도록 변경
+    # 이렇게 하면 사용자가 닉네임을 변경해도 항상 최신 닉네임이 표시됨
+    creator_name = serializers.SerializerMethodField()
     # 방장(creator) 사용자 이름을 명확하게 노출
     host_username = serializers.CharField(source='creator.username', read_only=True)
     # product_details는 GroupBuy 모델의 product_details 필드와 product의 정보를 병합하여 제공
@@ -288,6 +288,19 @@ class GroupBuySerializer(serializers.ModelSerializer):
         
         # 최종 product_details 반환
         return product_info
+    
+    def get_creator_name(self, obj):
+        """
+        생성자의 현재 닉네임을 반환합니다.
+        creator_nickname 필드 대신 실시간으로 creator의 nickname을 조회합니다.
+        """
+        if obj.creator:
+            # nickname 필드가 있으면 사용, 없으면 username 사용
+            if hasattr(obj.creator, 'nickname') and obj.creator.nickname:
+                return obj.creator.nickname
+            else:
+                return obj.creator.username
+        return None
     
     def get_regions(self, obj):
         """

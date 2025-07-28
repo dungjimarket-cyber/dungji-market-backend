@@ -194,7 +194,8 @@ def register_user_v2(request):
             
             # 판매자 전용 필드 설정
             if role == 'seller':
-                user.business_reg_number = business_reg_number
+                # 사업자등록번호 하이픈 제거 후 저장
+                user.business_reg_number = business_reg_number.replace('-', '')
                 user.address_detail = business_address
                 
                 # 사업자등록증 이미지 업로드
@@ -470,6 +471,11 @@ def update_user_profile(request):
                 )
             user.username = username
             user.nickname = username  # nickname 필드도 동기화
+            
+            # 닉네임 변경시 생성한 모든 공구의 creator_nickname 업데이트
+            from .models import GroupBuy
+            GroupBuy.objects.filter(creator=user).update(creator_nickname=username)
+            logger.info(f"User {user.id} changed nickname, updated {GroupBuy.objects.filter(creator=user).count()} GroupBuy records")
         
         if 'phone_number' in data:
             # 휴대폰 번호 중복 확인
@@ -761,6 +767,11 @@ def user_profile(request):
                     )
                 user.username = username
                 user.nickname = username  # nickname 필드도 동기화
+                
+                # 닉네임 변경시 생성한 모든 공구의 creator_nickname 업데이트
+                from .models import GroupBuy
+                GroupBuy.objects.filter(creator=user).update(creator_nickname=username)
+                logger.info(f"User {user.id} changed nickname, updated {GroupBuy.objects.filter(creator=user).count()} GroupBuy records")
             
             if 'phone_number' in data:
                 # 휴대폰 번호 중복 확인
