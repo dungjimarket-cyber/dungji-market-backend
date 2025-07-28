@@ -617,12 +617,16 @@ class GroupBuyViewSet(ModelViewSet):
 
         # status 필터 처리
         if status_param == 'active':
-            # 진행중: 마감시간이 지나지 않은 공구
-            queryset = queryset.filter(end_time__gt=now)
-        elif status_param == 'ended':
-            # 종료: 마감시간이 지났거나 completed 상태인 공구
+            # 진행중: 마감시간이 지나지 않고 recruiting 또는 bidding 상태인 공구
             queryset = queryset.filter(
-                Q(end_time__lte=now) | Q(status__in=['completed', 'cancelled', 'final_selection', 'seller_confirmation'])
+                end_time__gt=now,
+                status__in=['recruiting', 'bidding']
+            )
+        elif status_param == 'ended':
+            # 종료: 마감시간이 지났거나 voting/final_selection/seller_confirmation/completed/cancelled 상태인 공구
+            queryset = queryset.filter(
+                Q(end_time__lte=now) | 
+                Q(status__in=['voting', 'final_selection', 'seller_confirmation', 'completed', 'cancelled'])
             )
         elif status_param == 'completed':
             # 완료: completed 상태이거나 마감시간이 지난 공구
@@ -688,68 +692,19 @@ class GroupBuyViewSet(ModelViewSet):
                 Q(region_name__icontains=region_search)  # 구 region_name 필드 (호환성)
             ).exclude(region_type='nationwide').distinct()  # 전국 비대면 제외 및 중복 제거
             
-        # 정렬 처리 - 마감된 공구는 항상 후순위로 정렬
-        # 1. 활성 공구와 마감된 공구를 분리
-        active_groupbuys = queryset.filter(end_time__gt=now)
-        ended_groupbuys = queryset.filter(end_time__lte=now)
-        
-        # 2. 각각 정렬 적용
-        if sort_param:
-            # 한글 정렬 옵션 처리
-            if sort_param == '최신순' or sort_param == 'newest':
-                active_groupbuys = active_groupbuys.order_by('-start_time')  # 최신 공구가 먼저 표시
-                ended_groupbuys = ended_groupbuys.order_by('-start_time')  # 마감된 공구도 최신순
-            elif sort_param == '인기순(참여자많은순)' or sort_param == 'popular':
-                # 인기순 정렬 시 최종선택 이전 상태(recruiting, bidding, voting)인 공구만 필터링
-                active_groupbuys = active_groupbuys.filter(
-                    status__in=['recruiting', 'bidding', 'voting']
-                ).order_by('-current_participants')  # 참여자 많은 순으로 정렬
-                ended_groupbuys = ended_groupbuys.filter(
-                    status__in=['recruiting', 'bidding', 'voting']
-                ).order_by('-current_participants')  # 마감된 공구도 참여자 많은 순
-            else:
-                # 기본 정렬은 최신순
-                active_groupbuys = active_groupbuys.order_by('-start_time')
-                ended_groupbuys = ended_groupbuys.order_by('-start_time')
+        # 정렬 처리 - 탭별로 단순화
+        if sort_param == 'popular':
+            # 인기순: 참여자 많은 순으로 정렬
+            queryset = queryset.order_by('-current_participants', '-created_at')
         else:
-            # 기본 정렬은 최신순
-            active_groupbuys = active_groupbuys.order_by('-start_time')
-            ended_groupbuys = ended_groupbuys.order_by('-start_time')
+            # 최신순 (기본 정렬)
+            queryset = queryset.order_by('-created_at')
         
-        # 3. 활성 공구와 마감된 공구 합치기
-        # 리스트 대신 QuerySet을 유지하기 위해 annotate와 order_by를 사용
-        # 활성 공구는 sort_order=0, 마감된 공구는 sort_order=1로 설정하여 정렬
-        from django.db.models import Value, IntegerField
-        
-        active_groupbuys = active_groupbuys.annotate(sort_order=Value(0, output_field=IntegerField()))
-        ended_groupbuys = ended_groupbuys.annotate(sort_order=Value(1, output_field=IntegerField()))
-        
-        # QuerySet 합치기 (UNION)
-        result_queryset = GroupBuy.objects.filter(
-            Q(id__in=active_groupbuys.values('id')) | 
-            Q(id__in=ended_groupbuys.values('id'))
-        ).select_related('product', 'product__category')
-        
-        # sort_order 값을 기준으로 정렬 (활성 공구 먼저)
-        result_queryset = result_queryset.annotate(
-            sort_order=Case(
-                When(end_time__gt=now, then=Value(0)),
-                default=Value(1),
-                output_field=IntegerField()
-            )
-        ).order_by('sort_order')
-        
-        # 각 그룹 내에서 원래 정렬 적용
-        if sort_param == '최신순' or sort_param == 'newest' or not sort_param:
-            result_queryset = result_queryset.order_by('sort_order', '-start_time')
-        elif sort_param == '인기순(참여자많은순)' or sort_param == 'popular':
-            result_queryset = result_queryset.order_by('sort_order', '-current_participants')
-            
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
         for groupbuy in queryset[:100]:
             update_groupbuy_status(groupbuy)
 
-        return result_queryset
+        return queryset
         
     def create(self, request, *args, **kwargs):
         """공구 생성 API"""

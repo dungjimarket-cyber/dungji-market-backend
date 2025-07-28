@@ -12,6 +12,12 @@ def update_groupbuy_status(groupbuy):
     
     현재 시간과 공구의 각종 마감 시간을 비교하여 상태를 자동으로 업데이트합니다.
     
+    상태 전환 규칙:
+    1. recruiting: 입찰이 없는 상태
+    2. bidding: 입찰이 1건 이상 있는 상태  
+    3. voting (최종선택중): 공구 마감 후 12시간 동안
+    4. completed (공구종료): 최종선택 기간 종료 후
+    
     Args:
         groupbuy: 업데이트할 GroupBuy 객체
         
@@ -20,15 +26,37 @@ def update_groupbuy_status(groupbuy):
     """
     now = timezone.now()
     original_status = groupbuy.status
+    changed = False
     
-    # 입찰 중 -> 입찰 확정 대기 (투표 단계)
-    if groupbuy.status == 'bidding' and now > groupbuy.end_time:
-        groupbuy.status = 'voting'
-        groupbuy.voting_end = now + timedelta(hours=12)
-        groupbuy.save()
-        logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> {groupbuy.status}")
-        groupbuy.notify_status_change()
-        return True
+    # 이미 종료된 상태면 변경하지 않음
+    if groupbuy.status in ['completed', 'cancelled']:
+        return False
+    
+    # 1. recruiting 상태에서 입찰이 생기면 bidding으로 변경
+    if groupbuy.status == 'recruiting':
+        from api.models_bid import Bid
+        if Bid.objects.filter(groupbuy=groupbuy).exists():
+            groupbuy.status = 'bidding'
+            groupbuy.save()
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: recruiting -> bidding (입찰 발생)")
+            changed = True
+    
+    # 2. 공구 마감 시간이 지났으면 voting으로 변경
+    if groupbuy.status in ['recruiting', 'bidding'] and now > groupbuy.end_time:
+        from api.models_bid import Bid
+        # 입찰이 있는 경우만 voting으로, 없으면 cancelled
+        if Bid.objects.filter(groupbuy=groupbuy).exists():
+            groupbuy.status = 'voting'
+            groupbuy.voting_end = groupbuy.end_time + timedelta(hours=12)
+            groupbuy.save()
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> voting")
+            groupbuy.notify_status_change()
+            changed = True
+        else:
+            groupbuy.status = 'cancelled'
+            groupbuy.save()
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> cancelled (입찰 없음)")
+            changed = True
     
     # 투표 단계 -> 판매자 확정 대기 또는 취소
     elif groupbuy.status == 'voting' and now > groupbuy.voting_end:
@@ -119,7 +147,7 @@ def update_groupbuy_status(groupbuy):
             
             return True
     
-    # 판매자 확정 대기 -> 완료
+    # 3. 판매자 확정 대기 -> 완료
     elif groupbuy.status == 'seller_confirmation' and now > (groupbuy.voting_end + timedelta(hours=24)):
         groupbuy.status = 'completed'
         groupbuy.save()
@@ -127,7 +155,7 @@ def update_groupbuy_status(groupbuy):
         groupbuy.notify_status_change()
         return True
     
-    return False
+    return changed or original_status != groupbuy.status
 
 def update_groupbuys_status():
     """
@@ -138,8 +166,8 @@ def update_groupbuys_status():
     """
     from ..models import GroupBuy  # 순환 참조 방지를 위해 함수 내에서 import
     
-    # 진행 중인 모든 공구 조회
-    active_statuses = ['bidding', 'voting', 'seller_confirmation']
+    # 진행 중인 모든 공구 조회 (recruiting 포함)
+    active_statuses = ['recruiting', 'bidding', 'voting', 'seller_confirmation']
     active_groupbuys = GroupBuy.objects.filter(status__in=active_statuses)
     
     updated_count = 0
