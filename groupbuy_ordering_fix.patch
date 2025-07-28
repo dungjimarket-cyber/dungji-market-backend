@@ -1,0 +1,16 @@
+--- a/api/views.py
++++ b/api/views.py
+@@ -695,10 +695,10 @@ class GroupBuyViewSet(ModelViewSet):
+             
+         # 정렬 처리 - 탭별로 단순화
+         if sort_param == 'popular':
+             # 인기순: 참여자 많은 순으로 정렬
+-            queryset = queryset.order_by('-current_participants', '-created_at')
++            queryset = queryset.order_by('-current_participants', '-start_time')
+         else:
+             # 최신순 (기본 정렬)
+-            queryset = queryset.order_by('-created_at')
++            queryset = queryset.order_by('-start_time')
+         
+         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
+         for groupbuy in queryset[:100]:
