@@ -117,12 +117,20 @@ def verify_code(request):
         {
             "phone_number": "010-1234-5678",
             "code": "123456",
-            "purpose": "signup"
+            "purpose": "signup",
+            "name": "홍길동",  # optional
+            "birthdate": "1990-01-01",  # optional
+            "gender": "M"  # optional, M/F
         }
     """
     phone_number = request.data.get('phone_number', '').strip()
     code = request.data.get('code', '').strip()
     purpose = request.data.get('purpose', 'signup')
+    
+    # 추가 정보 (선택사항)
+    name = request.data.get('name', '').strip()
+    birthdate = request.data.get('birthdate', '').strip()
+    gender = request.data.get('gender', '').strip().upper()
     
     if not phone_number or not code:
         return Response(
@@ -161,10 +169,32 @@ def verify_code(request):
         request.session[f'verified_phone_{purpose}'] = normalized_phone
         request.session[f'verified_phone_{purpose}_at'] = timezone.now().isoformat()
         
+        # 추가 정보가 제공된 경우 세션에 저장
+        if name:
+            request.session[f'verified_phone_{purpose}_name'] = name
+        if birthdate:
+            request.session[f'verified_phone_{purpose}_birthdate'] = birthdate
+        if gender in ['M', 'F']:
+            request.session[f'verified_phone_{purpose}_gender'] = gender
+        
+        # 인증 레코드에도 추가 정보 저장 (선택사항)
+        if name or birthdate or gender:
+            verification.additional_info = {
+                'name': name,
+                'birthdate': birthdate,
+                'gender': gender
+            }
+            verification.save()
+        
         return Response({
             'message': message,
             'verified': True,
-            'phone_number': sms_service.format_phone_number(normalized_phone)
+            'phone_number': sms_service.format_phone_number(normalized_phone),
+            'additional_info': {
+                'name': name,
+                'birthdate': birthdate,
+                'gender': gender
+            } if (name or birthdate or gender) else None
         }, status=status.HTTP_200_OK)
     else:
         return Response({

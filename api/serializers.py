@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, Bid, ParticipantConsent
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, Bid, ParticipantConsent, NoShowReport
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
@@ -517,3 +517,103 @@ class ParticipantConsentUpdateSerializer(serializers.Serializer):
         elif action == 'disagree':
             instance.disagree()
         return instance
+
+
+class NoShowReportSerializer(serializers.ModelSerializer):
+    """노쇼 신고 시리얼라이저"""
+    reporter_name = serializers.CharField(source='reporter.username', read_only=True)
+    reported_user_name = serializers.CharField(source='reported_user.username', read_only=True)
+    groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
+    
+    class Meta:
+        model = NoShowReport
+        fields = ['id', 'reporter', 'reporter_name', 'reported_user', 'reported_user_name',
+                 'groupbuy', 'groupbuy_title', 'participation', 'bid', 'report_type',
+                 'content', 'evidence_image', 'status', 'admin_comment', 'created_at',
+                 'updated_at', 'processed_at', 'processed_by']
+        read_only_fields = ['id', 'reporter', 'status', 'admin_comment', 'created_at',
+                           'updated_at', 'processed_at', 'processed_by']
+    
+    def validate(self, data):
+        """유효성 검사"""
+        user = self.context['request'].user
+        groupbuy = data.get('groupbuy')
+        reported_user = data.get('reported_user')
+        report_type = data.get('report_type')
+        
+        # 자기 자신 신고 방지
+        if user == reported_user:
+            raise serializers.ValidationError({
+                'reported_user': '자기 자신을 신고할 수 없습니다.'
+            })
+        
+        # 신고 유형별 검증
+        if report_type == 'buyer_noshow':
+            # 구매자 노쇼: 판매자가 구매자를 신고
+            if user.role != 'seller':
+                raise serializers.ValidationError({
+                    'report_type': '구매자 노쇼는 판매자만 신고할 수 있습니다.'
+                })
+            
+            # 해당 공구에서 선택된 입찰이 있는지 확인
+            from .models_bid import Bid
+            selected_bid = Bid.objects.filter(
+                groupbuy=groupbuy,
+                seller=user,
+                status='selected'
+            ).first()
+            
+            if not selected_bid:
+                raise serializers.ValidationError({
+                    'groupbuy': '해당 공구에서 선택된 입찰이 없습니다.'
+                })
+            
+            # 신고 대상이 참여자인지 확인
+            participation = Participation.objects.filter(
+                user=reported_user,
+                groupbuy=groupbuy
+            ).first()
+            
+            if not participation:
+                raise serializers.ValidationError({
+                    'reported_user': '신고 대상이 해당 공구 참여자가 아닙니다.'
+                })
+            
+            data['bid'] = selected_bid
+            data['participation'] = participation
+            
+        elif report_type == 'seller_noshow':
+            # 판매자 노쇼: 구매자가 판매자를 신고
+            if user.role != 'buyer':
+                raise serializers.ValidationError({
+                    'report_type': '판매자 노쇼는 구매자만 신고할 수 있습니다.'
+                })
+            
+            # 신고자가 참여자인지 확인
+            participation = Participation.objects.filter(
+                user=user,
+                groupbuy=groupbuy
+            ).first()
+            
+            if not participation:
+                raise serializers.ValidationError({
+                    'groupbuy': '해당 공구에 참여하지 않았습니다.'
+                })
+            
+            # 신고 대상이 선택된 판매자인지 확인
+            from .models_bid import Bid
+            selected_bid = Bid.objects.filter(
+                groupbuy=groupbuy,
+                seller=reported_user,
+                status='selected'
+            ).first()
+            
+            if not selected_bid:
+                raise serializers.ValidationError({
+                    'reported_user': '신고 대상이 선택된 판매자가 아닙니다.'
+                })
+            
+            data['bid'] = selected_bid
+            data['participation'] = participation
+        
+        return data

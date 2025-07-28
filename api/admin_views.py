@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class UserSerializer(serializers.ModelSerializer):
     active_tokens_count = serializers.SerializerMethodField()
     business_reg_number = serializers.CharField(read_only=True)
-    business_license_image = serializers.CharField(source='business_license_image.url', read_only=True, allow_null=True)
+    business_license_image = serializers.URLField(read_only=True, allow_null=True)
     is_business_verified = serializers.BooleanField(read_only=True)
     
     class Meta:
@@ -452,6 +452,71 @@ class AdminViewSet(viewsets.ViewSet):
             logger.error(f"사업자 인증 거절 오류: {str(e)}")
             return Response(
                 {'error': '거절 처리 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def upload_business_license(self, request, pk=None):
+        """
+        사업자등록증 이미지 업로드
+        """
+        try:
+            user = get_object_or_404(User, id=pk, role='seller')
+            
+            # 이미지 파일 확인
+            if 'business_license' not in request.FILES:
+                return Response(
+                    {'error': '사업자등록증 이미지 파일이 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            image_file = request.FILES['business_license']
+            
+            # 이미지 파일 타입 검증
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+            if image_file.content_type not in allowed_types:
+                return Response(
+                    {'error': '지원되지 않는 이미지 형식입니다. JPEG, PNG, GIF, WEBP 형식만 허용됩니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 파일 크기 제한 (10MB)
+            if image_file.size > 10 * 1024 * 1024:
+                return Response(
+                    {'error': '이미지 크기는 10MB를 초과할 수 없습니다.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 기존 이미지가 있으면 S3에서 삭제
+            if user.business_license_image:
+                try:
+                    delete_file_from_s3(user.business_license_image)
+                except Exception as e:
+                    logger.warning(f"기존 사업자등록증 이미지 삭제 실패: {str(e)}")
+            
+            # S3에 새 이미지 업로드
+            image_url = upload_file_to_s3(image_file)
+            
+            if not image_url:
+                return Response(
+                    {'error': '이미지 업로드 중 오류가 발생했습니다.'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # 사용자 정보 업데이트
+            user.business_license_image = image_url
+            user.save()
+            
+            return Response({
+                'message': '사업자등록증이 성공적으로 업로드되었습니다.',
+                'user': UserSerializer(user).data,
+                'business_license_image': image_url
+            })
+            
+        except Exception as e:
+            logger.error(f"사업자등록증 업로드 오류: {str(e)}")
+            return Response(
+                {'error': '업로드 처리 중 오류가 발생했습니다.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     

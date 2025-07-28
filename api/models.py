@@ -977,6 +977,50 @@ class Review(models.Model):
     def __str__(self):
         return f"{self.user.username}의 리뷰: {self.groupbuy.title} ({self.rating}점)"
 
+class NoShowReport(models.Model):
+    """노쇼 신고 모델"""
+    REPORT_STATUS_CHOICES = [
+        ('pending', '검토중'),
+        ('confirmed', '확인됨'),
+        ('rejected', '반려됨'),
+    ]
+    
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='noshow_reports_made', verbose_name='신고자')
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='noshow_reports_received', verbose_name='피신고자')
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, related_name='noshow_reports', verbose_name='공동구매')
+    participation = models.ForeignKey(Participation, on_delete=models.CASCADE, related_name='noshow_reports', verbose_name='참여 정보', null=True, blank=True)
+    bid = models.ForeignKey('Bid', on_delete=models.CASCADE, related_name='noshow_reports', verbose_name='입찰 정보', null=True, blank=True)
+    
+    report_type = models.CharField(max_length=20, choices=[
+        ('buyer_noshow', '구매자 노쇼'),
+        ('seller_noshow', '판매자 노쇼'),
+    ], verbose_name='신고 유형')
+    
+    content = models.TextField(verbose_name='신고 내용')
+    evidence_image = models.ImageField(upload_to='noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지')
+    
+    status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='pending', verbose_name='처리 상태')
+    admin_comment = models.TextField(blank=True, verbose_name='관리자 코멘트')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='신고일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일')
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_noshow_reports', verbose_name='처리자')
+    
+    class Meta:
+        verbose_name = '노쇼 신고'
+        verbose_name_plural = '노쇼 신고 관리'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['reporter', 'reported_user', 'groupbuy'],
+                name='unique_noshow_report_per_user_groupbuy'
+            )
+        ]
+    
+    def __str__(self):
+        return f'{self.reporter.username}이 {self.reported_user.username}을 신고 ({self.groupbuy.title})'
+
 @receiver(post_save, sender=GroupBuy)
 def handle_status_change(sender, instance, **kwargs):
     update_fields = kwargs.get('update_fields')

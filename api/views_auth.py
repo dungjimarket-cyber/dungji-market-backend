@@ -89,6 +89,13 @@ def register_user_v2(request):
         social_provider = data.get('social_provider', '')
         social_id = data.get('social_id', '')
         
+        # 카카오톡 가입 시 판매회원 차단
+        if social_provider == 'kakao' and role == 'seller':
+            return Response(
+                {'error': '카카오톡으로는 판매회원 가입이 불가능합니다. 일반 회원가입을 이용해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # 카카오톡 가입 시 닉네임 자동 생성
         if social_provider == 'kakao' and not nickname:
             nickname = generate_auto_nickname(role)
@@ -108,8 +115,16 @@ def register_user_v2(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 닉네임 중복 확인 (소셜 회원가입이거나 이메일이 없는 경우에만)
-        if (not email or social_provider) and User.objects.filter(username=nickname).exists():
+        # 일반 회원가입인 경우 username 중복 확인
+        if not social_provider and username_field:
+            if User.objects.filter(username=username_field).exists():
+                return Response(
+                    {'error': '이미 사용 중인 아이디입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 닉네임 중복 확인
+        if User.objects.filter(nickname=nickname).exists():
             return Response(
                 {'error': '이미 사용 중인 닉네임입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -122,15 +137,9 @@ def register_user_v2(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 이메일 회원가입인 경우 이메일 중복 확인
-        if email and not social_provider:
+        # 이메일 중복 확인 (이메일이 제공된 경우)
+        if email:
             if User.objects.filter(email=email).exists():
-                return Response(
-                    {'error': '이미 사용 중인 이메일입니다.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            # username으로도 이메일이 사용될 예정이므로 username 중복 체크도 필요
-            if User.objects.filter(username=email).exists():
                 return Response(
                     {'error': '이미 사용 중인 이메일입니다.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -149,24 +158,43 @@ def register_user_v2(request):
             # 이메일이 제공된 경우 실제 이메일 사용, 아니면 임시 이메일
             user_email = email if email else f'{nickname}@dungji.com'
             
-            # 이메일 회원가입인 경우 username을 이메일로 설정 (로그인 시 이메일 사용)
-            # 소셜 회원가입인 경우 username을 닉네임으로 설정
-            if email and not social_provider:
-                username_for_db = email  # 이메일 회원가입은 이메일을 username으로 사용
+            # username 설정
+            # 일반 회원가입인 경우 username_field 사용
+            # 소셜 회원가입인 경우 nickname 사용
+            if not social_provider and username_field:
+                username_for_db = username_field  # 일반 회원가입은 아이디 사용
             else:
                 username_for_db = nickname  # 소셜 회원가입은 닉네임을 username으로 사용
+            
+            # 휴대폰 인증 시 저장된 추가 정보 가져오기
+            verified_name = request.session.get('verified_phone_signup_name', '')
+            verified_birthdate = request.session.get('verified_phone_signup_birthdate', '')
+            verified_gender = request.session.get('verified_phone_signup_gender', '')
             
             user = User.objects.create(
                 username=username_for_db,
                 email=user_email,
                 phone_number=phone_number,
                 nickname=business_name if role == 'seller' and business_name else nickname,
-                first_name=business_name if role == 'seller' and business_name else nickname,  # 임시로 유지
+                first_name=verified_name or (business_name if role == 'seller' and business_name else nickname),  # 인증 시 입력한 이름 우선 사용
                 role=role,
                 sns_type=social_provider if social_provider else 'email',
                 sns_id=social_id if social_id else None,
                 is_remote_sales_enabled=is_remote_sales_enabled if role == 'seller' else False
             )
+            
+            # 추가 정보가 있으면 프로필에 저장 (필요시 User 모델에 필드 추가)
+            if verified_birthdate or verified_gender:
+                # TODO: User 모델에 birthdate, gender 필드가 있다면 여기서 저장
+                # user.birthdate = verified_birthdate
+                # user.gender = verified_gender
+                # user.save()
+                logger.info(f"휴대폰 인증 추가 정보: 이름={verified_name}, 생년월일={verified_birthdate}, 성별={verified_gender}")
+            
+            # 인증 세션 정보 삭제
+            for key in ['verified_phone_signup', 'verified_phone_signup_at', 'verified_phone_signup_name', 
+                       'verified_phone_signup_birthdate', 'verified_phone_signup_gender']:
+                request.session.pop(key, None)
             
             # 비밀번호 설정
             user.set_password(password)
@@ -240,6 +268,37 @@ def register_user_v2(request):
         logger.error(f"회원가입 오류: {str(e)}")
         return Response(
             {'error': '회원가입 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_username(request):
+    """
+    아이디 중복 확인 API
+    """
+    try:
+        username = request.data.get('username')
+        
+        if not username:
+            return Response(
+                {'error': '아이디를 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 아이디 중복 확인
+        is_available = not User.objects.filter(username=username).exists()
+        
+        return Response({
+            'available': is_available,
+            'username': username
+        })
+    
+    except Exception as e:
+        logger.error(f"아이디 중복 확인 오류: {str(e)}")
+        return Response(
+            {'error': '처리 중 오류가 발생했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

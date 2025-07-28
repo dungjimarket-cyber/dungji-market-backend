@@ -208,21 +208,40 @@ def create_sns_user(request):
             else:
                 nickname_prefix = '참새'
             
-            # 고유한 번호 생성을 위해 현재 해당 프리픽스를 가진 사용자 수 확인
-            import random
-            for attempt in range(10):  # 최대 10번 시도
-                random_num = random.randint(1, 999999999999)
-                generated_nickname = f"{nickname_prefix}{random_num}"
-                
-                # 중복 체크 - first_name과 username 모두 체크
-                if not User.objects.filter(first_name=generated_nickname).exists() and \
-                   not User.objects.filter(username=generated_nickname).exists():
-                    name = generated_nickname
-                    break
+            # 순차적인 번호 생성을 위해 현재 해당 프리픽스를 가진 사용자들의 번호 확인
+            from django.db.models import Q
+            import re
+            
+            # 참새로 시작하는 닉네임들 찾기 (nickname 필드 사용)
+            existing_nicknames = User.objects.filter(
+                Q(nickname__startswith=nickname_prefix)
+            ).values_list('nickname', flat=True)
+            
+            # 사용된 번호들 추출
+            used_numbers = []
+            pattern = re.compile(rf'^{nickname_prefix}(\d+)$')
+            
+            for nickname in existing_nicknames:
+                if nickname:  # nickname이 None이 아닌 경우만 처리
+                    match = pattern.match(nickname)
+                    if match:
+                        used_numbers.append(int(match.group(1)))
+            
+            # 가장 작은 사용 가능한 번호 찾기
+            if not used_numbers:
+                next_number = 1
             else:
-                # 10번 시도 후에도 중복이면 timestamp 사용
-                import time
-                name = f"{nickname_prefix}{int(time.time())}"
+                # 1부터 시작해서 빈 번호 찾기
+                used_numbers.sort()
+                next_number = 1
+                for num in used_numbers:
+                    if num == next_number:
+                        next_number += 1
+                    else:
+                        break
+            
+            generated_nickname = f"{nickname_prefix}{next_number}"
+            name = generated_nickname
             
             logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}, role: {role}")
         
@@ -232,6 +251,7 @@ def create_sns_user(request):
             email=email,
             password=None,  # SNS users don't need password
             first_name=name,
+            nickname=name,  # nickname 필드에도 동일하게 설정
             sns_type=sns_type,
             sns_id=sns_id,
             role=role if 'role' in locals() and role else 'user'  # role 설정
@@ -695,10 +715,10 @@ class GroupBuyViewSet(ModelViewSet):
         # 정렬 처리 - 탭별로 단순화
         if sort_param == 'popular':
             # 인기순: 참여자 많은 순으로 정렬
-            queryset = queryset.order_by('-current_participants', '-created_at')
+            queryset = queryset.order_by('-current_participants', '-start_time')
         else:
             # 최신순 (기본 정렬)
-            queryset = queryset.order_by('-created_at')
+            queryset = queryset.order_by('-start_time')
         
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
         for groupbuy in queryset[:100]:
@@ -781,10 +801,11 @@ class GroupBuyViewSet(ModelViewSet):
         product_id = data.get('product')
         creator_id = data.get('creator')
         
-        # 동일한 상품으로 이미 생성된 공구가 있는지 확인 (모든 사용자 대상)
+        # 동일한 상품으로 이미 생성된 공구가 있는지 확인 (같은 생성자가 만든 경우만)
         existing_groupbuy = GroupBuy.objects.filter(
             product_id=product_id,
-            status__in=['recruiting', 'in_progress', 'bidding'] # 진행 중인 공구만 체크
+            creator_id=creator_id,
+            status__in=['recruiting', 'bidding', 'voting', 'seller_confirmation'] # 진행 중인 공구만 체크
         ).first()
         
         # 통신 제품인 경우 통신사/가입유형/요금제 정보가 다르면 중복 허용
@@ -792,8 +813,8 @@ class GroupBuyViewSet(ModelViewSet):
             if not has_telecom_info:
                 # 통신 정보가 없는 경우 중복 공구 생성 불가
                 error_msg = {
-                    'non_field_errors': [
-                        f'이미 해당 상품으로 진행 중인 공동구매가 있습니다.'
+                    'product': [
+                        '이미 해당 상품으로 진행 중인 공동구매가 있습니다. 기존 공구가 완료된 후 새로운 공구를 생성해주세요.'
                     ]
                 }
                 return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)
@@ -811,8 +832,8 @@ class GroupBuyViewSet(ModelViewSet):
                       existing_telecom_detail.plan_info == telecom_info.get('plan_info', '')):
                     # 통신 정보가 같은 경우 중복 생성 불가
                     error_msg = {
-                        'non_field_errors': [
-                            f'이미 해당 상품으로 진행 중인 공동구매가 있습니다.'
+                        'product': [
+                            '이미 해당 상품으로 진행 중인 공동구매가 있습니다. 기존 공구가 완료된 후 새로운 공구를 생성해주세요.'
                         ]
                     }
                     return Response(error_msg, status=status.HTTP_400_BAD_REQUEST)

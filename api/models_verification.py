@@ -56,6 +56,14 @@ class PhoneVerification(models.Model):
     # IP 주소 (보안용)
     ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name='IP 주소')
     
+    # 추가 정보 (이름, 생년월일, 성별 등)
+    additional_info = models.JSONField(
+        default=dict, 
+        blank=True, 
+        verbose_name='추가 정보',
+        help_text='인증 시 제공된 추가 정보 (이름, 생년월일, 성별 등)'
+    )
+    
     class Meta:
         verbose_name = '휴대폰 인증'
         verbose_name_plural = '휴대폰 인증'

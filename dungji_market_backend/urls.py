@@ -37,7 +37,7 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile
 from api.views_social import social_login_dispatch, kakao_callback
 from api.views_verification import send_verification_code, verify_code, check_verification_status
 from api.views_voting import vote_for_bid, get_my_vote, get_voting_results, get_winning_bid
@@ -45,6 +45,7 @@ from api.views_final_selection import (
     buyer_final_decision, seller_final_decision, 
     get_final_decision_status, get_contact_info
 )
+from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -60,6 +61,7 @@ router.register(r'regions', RegionViewSet, basename='region')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'admin', AdminViewSet, basename='admin')
 router.register(r'consents', ParticipantConsentViewSet, basename='consent')
+router.register(r'noshow-reports', NoShowReportViewSet, basename='noshow-report')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -68,6 +70,7 @@ urlpatterns = [
         path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
         path('register/', register_user_v2, name='register'),  # 새로운 회원가입 API 사용
         path('register-old/', register_user, name='register_old'),  # 기존 API 보존
+        path('check-username/', check_username, name='check_username'),
         path('check-nickname/', check_nickname, name='check_nickname'),
         path('check-email/', check_email, name='check_email'),
         path('find-username/', find_username, name='find_username'),
@@ -108,6 +111,8 @@ urlpatterns = [
     path('api/groupbuys/<int:groupbuy_id>/seller-decision/', seller_final_decision, name='seller_final_decision'),
     path('api/groupbuys/<int:groupbuy_id>/decision-status/', get_final_decision_status, name='get_final_decision_status'),
     path('api/groupbuys/<int:groupbuy_id>/contact-info/', get_contact_info, name='get_contact_info'),
+    # 노쇼 신고 관련 API
+    path('api/noshow-reports/check-eligibility/', check_noshow_report_eligibility, name='check_noshow_report_eligibility'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

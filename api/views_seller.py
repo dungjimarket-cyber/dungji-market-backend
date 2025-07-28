@@ -90,6 +90,18 @@ class SellerProfileView(APIView):
         # 응답 데이터 구성
         data = {
             "name": user.get_full_name() or user.username,
+            "nickname": user.nickname if hasattr(user, 'nickname') else user.username,
+            "username": user.username,
+            "email": user.email,
+            "phone": user.phone_number if hasattr(user, 'phone_number') else '',
+            "businessNumber": user.business_reg_number if hasattr(user, 'business_reg_number') else '',
+            "isRemoteSales": user.is_remote_sales_enabled if hasattr(user, 'is_remote_sales_enabled') else False,
+            "address": user.address_detail if hasattr(user, 'address_detail') else '',
+            "addressRegion": {
+                "code": user.address_region.code,
+                "name": user.address_region.name,
+                "full_name": user.address_region.full_name
+            } if hasattr(user, 'address_region') and user.address_region else None,
             "profileImage": request.build_absolute_uri(user.userprofile.profile_image.url) if hasattr(user, 'userprofile') and user.userprofile.profile_image else None,
             "isVip": hasattr(user, 'userprofile') and user.userprofile.is_vip,
             "rating": rating,
@@ -98,10 +110,76 @@ class SellerProfileView(APIView):
             "pendingSales": pending_sales,
             "completedSales": completed_sales,
             "remainingBids": remaining_bids,
-            "hasUnlimitedBids": has_unlimited_bids
+            "hasUnlimitedBids": has_unlimited_bids,
+            "notificationEnabled": True  # 기본값
         }
         
         return Response(data)
+    
+    def patch(self, request):
+        """
+        판매자 프로필 정보 수정
+        """
+        user = request.user
+        
+        # 판매자 권한 체크
+        if user.role != 'seller':
+            return Response(
+                {"detail": "판매자 권한이 없습니다."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 업데이트 가능한 필드들
+        allowed_fields = [
+            'nickname', 'description', 'phone', 'address', 
+            'business_number', 'is_remote_sales', 'address_region_id',
+            'profile_image'
+        ]
+        
+        # 요청 데이터 필터링
+        update_data = {}
+        for field in allowed_fields:
+            if field in request.data:
+                # 필드명 변환 (프론트엔드 -> 백엔드)
+                if field == 'phone':
+                    update_data['phone_number'] = request.data[field].replace('-', '')
+                elif field == 'business_number':
+                    update_data['business_reg_number'] = request.data[field].replace('-', '')
+                elif field == 'is_remote_sales':
+                    update_data['is_remote_sales_enabled'] = request.data[field]
+                elif field == 'address':
+                    update_data['address_detail'] = request.data[field]
+                elif field == 'address_region_id':
+                    # 지역 코드로 Region 객체 찾기
+                    from .models import Region
+                    try:
+                        region = Region.objects.get(code=request.data[field])
+                        update_data['address_region'] = region
+                    except Region.DoesNotExist:
+                        return Response(
+                            {"detail": "유효하지 않은 지역 코드입니다."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                else:
+                    update_data[field] = request.data[field]
+        
+        # 닉네임 중복 확인
+        if 'nickname' in update_data:
+            if User.objects.filter(nickname=update_data['nickname']).exclude(id=user.id).exists():
+                return Response(
+                    {"detail": "이미 사용 중인 닉네임입니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 사용자 정보 업데이트
+        for field, value in update_data.items():
+            if hasattr(user, field):
+                setattr(user, field, value)
+        
+        user.save()
+        
+        # 업데이트된 프로필 정보 반환
+        return self.get(request)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
