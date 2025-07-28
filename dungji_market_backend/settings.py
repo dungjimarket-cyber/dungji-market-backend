@@ -74,6 +74,7 @@ CSRF_TRUSTED_ORIGINS = [
 # Application definition
 
 INSTALLED_APPS = [
+    "whitenoise.runserver_nostatic",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -112,6 +113,7 @@ SIMPLE_JWT = {
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",   # 여기에 추가
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -119,8 +121,18 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "api.middleware.RequestLoggingMiddleware",  # 개발 환경용 요청 로깅
+    "api.middleware.RequestLoggingMiddleware",
 ]
+
+# Storage backend settings (Django 5.1+)
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+    "default": {
+        "BACKEND": "api.storage_backends.MediaStorage",
+    },
+}
 
 ROOT_URLCONF = "dungji_market_backend.urls"
 
@@ -196,19 +208,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# 추가 정적 파일 디렉토리 설정
-# static 디렉토리가 존재하는 경우에만 추가
-STATICFILES_DIRS = []
-static_dir = os.path.join(BASE_DIR, 'static')
-if os.path.exists(static_dir):
-    STATICFILES_DIRS.append(static_dir)
-
-# 정적 파일 수집 방법 설정
-STATICFILES_FINDERS = [
-    'django.contrib.staticfiles.finders.FileSystemFinder',
-    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
-]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Media files
 MEDIA_URL = '/media/'
@@ -239,9 +239,6 @@ if USE_S3:
     # AWS_DEFAULT_ACL = 'public-read'  # 최신 S3 버킷은 ACL을 지원하지 않는 경우가 많음
     AWS_DEFAULT_ACL = None  # ACL을 사용하지 않도록 설정
     AWS_LOCATION = 'media'
-    
-    # S3 스토리지 설정
-    DEFAULT_FILE_STORAGE = 'api.storage_backends.MediaStorage'
     
     logger.info(f"Settings: S3 enabled with bucket {AWS_STORAGE_BUCKET_NAME}")
 else:
