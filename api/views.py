@@ -2058,6 +2058,25 @@ class ReviewViewSet(ModelViewSet):
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
     
+    def create(self, request, *args, **kwargs):
+        """리뷰 생성 API with detailed error logging"""
+        logger.info(f"리뷰 생성 요청 - 사용자: {request.user.username}")
+        logger.info(f"요청 데이터: {request.data}")
+        
+        serializer = self.get_serializer(data=request.data)
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except serializers.ValidationError as e:
+            logger.error(f"리뷰 생성 검증 오류: {e.detail}")
+            raise
+        except Exception as e:
+            logger.error(f"리뷰 생성 중 예상치 못한 오류: {str(e)}")
+            raise
+    
     def perform_create(self, serializer):
         """리뷰 작성 시 현재 사용자 정보 자동 설정 및 자신의 공구에는 리뷰 작성 불가"""
         groupbuy = serializer.validated_data.get('groupbuy')
