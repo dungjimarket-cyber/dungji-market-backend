@@ -21,7 +21,7 @@ class MediaStorage(S3Boto3Storage):
         return result
     
     def url(self, name):
-        """파일 URL 반환 시 로깅 추가"""
-        url = super().url(name)
-        logger.info(f"S3 파일 URL: {name} -> {url}")
-        return url
+        """파일 URL 반환"""
+        # 로깅 비활성화 - 너무 많은 로그 생성 방지
+        # logger.info(f"S3 파일 URL: {name} -> {url}")
+        return super().url(name)
