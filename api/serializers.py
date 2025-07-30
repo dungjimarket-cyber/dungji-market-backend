@@ -438,21 +438,17 @@ class ReviewSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        user = self.context['request'].user
+        # user는 perform_create에서 설정되므로 여기서는 is_purchased만 설정
+        user = validated_data.get('user')  # perform_create에서 전달된 user
         groupbuy = validated_data.get('groupbuy')
         
         # 참여 여부 확인
         is_purchased = Participation.objects.filter(user=user, groupbuy=groupbuy).exists()
         
-        # Remove is_purchased from validated_data if it exists, as we're setting it manually
-        validated_data.pop('is_purchased', None)
+        # is_purchased 설정
+        validated_data['is_purchased'] = is_purchased
         
-        review = Review.objects.create(
-            **validated_data,
-            user=user,
-            is_purchased=is_purchased
-        )
-        return review
+        return super().create(validated_data)
 
 
 class BidSerializer(serializers.ModelSerializer):

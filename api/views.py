@@ -2068,8 +2068,8 @@ class ReviewViewSet(ModelViewSet):
                 'non_field_errors': ['자신이 만든 공구에는 리뷰를 작성할 수 없습니다.']
             })
             
-        # 리뷰 저장
-        serializer.save()
+        # 리뷰 저장 - 현재 사용자를 작성자로 설정
+        serializer.save(user=self.request.user)
     
     @action(detail=False, methods=['get'])
     def groupbuy_reviews(self, request):
