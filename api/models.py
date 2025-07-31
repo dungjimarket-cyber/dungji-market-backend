@@ -1031,3 +1031,5 @@ def handle_status_change(sender, instance, **kwargs):
 from .models_verification import PhoneVerification
 # Import BidVote model
 from .models_voting import BidVote
+# Import Banner and Event models
+from .models_banner import Banner, Event

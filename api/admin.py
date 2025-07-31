@@ -4,7 +4,7 @@ from .models import (
     Category, Product, GroupBuy, Bid, Penalty, User, Badge,
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
-    ProductCustomValue, ParticipantConsent, PhoneVerification
+    ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event
 )
 from django.utils.html import mark_safe
 from django.conf import settings
@@ -378,3 +378,121 @@ class PhoneVerificationAdmin(admin.ModelAdmin):
         PhoneVerification.cleanup_expired()
         self.message_user(request, "만료된 인증이 정리되었습니다.")
     cleanup_expired.short_description = "만료된 인증 정리"
+
+
+@admin.register(Banner)
+class BannerAdmin(admin.ModelAdmin):
+    list_display = ['title', 'banner_type', 'order', 'is_active', 'start_date', 'end_date', 'event', 'created_at']
+    list_filter = ['banner_type', 'is_active', 'start_date', 'end_date']
+    search_fields = ['title', 'link_url']
+    ordering = ['order', '-created_at']
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('title', 'banner_type', 'order', 'is_active')
+        }),
+        ('이미지', {
+            'fields': ('image', 'image_url'),
+            'description': '이미지를 업로드하거나 URL을 직접 입력하세요. 이미지 업로드 시 자동으로 S3에 업로드됩니다.'
+        }),
+        ('링크', {
+            'fields': ('event', 'link_url'),
+            'description': '이벤트를 선택하거나 외부 링크 URL을 입력하세요. 이벤트가 우선됩니다.'
+        }),
+        ('표시 기간', {
+            'fields': ('start_date', 'end_date'),
+            'description': '배너가 표시될 기간을 설정하세요. 비워두면 항상 표시됩니다.'
+        }),
+        ('메타 정보', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at', 'image_url']
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # 새로 생성하는 경우
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # 유효한 배너인지 표시하기 위해 어노테이션 추가 가능
+        return qs
+    
+    actions = ['activate_banners', 'deactivate_banners']
+    
+    def activate_banners(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated}개의 배너가 활성화되었습니다.')
+    activate_banners.short_description = '선택한 배너 활성화'
+    
+    def deactivate_banners(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated}개의 배너가 비활성화되었습니다.')
+    deactivate_banners.short_description = '선택한 배너 비활성화'
+
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    list_display = ['title', 'event_type', 'status', 'start_date', 'end_date', 'is_active', 'view_count', 'created_at']
+    list_filter = ['event_type', 'status', 'is_active', 'start_date', 'end_date']
+    search_fields = ['title', 'content', 'short_description']
+    ordering = ['-start_date', '-created_at']
+    prepopulated_fields = {'slug': ('title',)}
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('title', 'slug', 'event_type', 'status', 'is_active')
+        }),
+        ('이벤트 내용', {
+            'fields': ('short_description', 'content'),
+            'description': 'HTML 태그를 사용할 수 있습니다.'
+        }),
+        ('이미지', {
+            'fields': ('thumbnail', 'thumbnail_url', 'content_image', 'content_image_url'),
+            'description': '썸네일은 목록에서 표시되고, 본문 이미지는 상세 페이지에서 표시됩니다.'
+        }),
+        ('기간 설정', {
+            'fields': ('start_date', 'end_date')
+        }),
+        ('통계', {
+            'fields': ('view_count',),
+            'classes': ('collapse',)
+        }),
+        ('메타 정보', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at', 'thumbnail_url', 'content_image_url', 'view_count', 'status']
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # 새로 생성하는 경우
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(self.readonly_fields)
+        if obj:  # 수정하는 경우
+            readonly.append('slug')  # 슬러그는 수정 불가
+        return readonly
+    
+    actions = ['activate_events', 'deactivate_events', 'reset_view_count']
+    
+    def activate_events(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated}개의 이벤트가 활성화되었습니다.')
+    activate_events.short_description = '선택한 이벤트 활성화'
+    
+    def deactivate_events(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated}개의 이벤트가 비활성화되었습니다.')
+    deactivate_events.short_description = '선택한 이벤트 비활성화'
+    
+    def reset_view_count(self, request, queryset):
+        updated = queryset.update(view_count=0)
+        self.message_user(request, f'{updated}개의 이벤트 조회수가 초기화되었습니다.')
+    reset_view_count.short_description = '조회수 초기화'

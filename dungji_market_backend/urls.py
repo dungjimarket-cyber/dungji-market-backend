@@ -46,6 +46,7 @@ from api.views_final_selection import (
     get_final_decision_status, get_contact_info
 )
 from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility
+from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -115,6 +116,11 @@ urlpatterns = [
     path('api/groupbuys/<int:groupbuy_id>/contact-info/', get_contact_info, name='get_contact_info'),
     # 노쇼 신고 관련 API
     path('api/noshow-reports/check-eligibility/', check_noshow_report_eligibility, name='check_noshow_report_eligibility'),
+    # 배너 및 이벤트 API
+    path('api/banners/', BannerListView.as_view(), name='banner_list'),
+    path('api/banners/main/', get_main_banners, name='main_banners'),
+    path('api/events/', EventListView.as_view(), name='event_list'),
+    path('api/events/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
