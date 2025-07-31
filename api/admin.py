@@ -9,6 +9,7 @@ from .models import (
 from django.utils.html import mark_safe
 from django.conf import settings
 import logging
+from .views_auth import kakao_unlink
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,23 @@ from .forms import UserCreationForm, UserChangeForm
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['username', 'email', 'role', 'is_business_verified', 'display_business_reg_file']
-    list_filter = ['role', 'is_active', 'is_staff', 'is_business_verified']
+    list_display = ['username', 'email', 'role', 'get_sns_type', 'is_business_verified', 'display_business_reg_file']
+    list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified']
     search_fields = ['username', 'email', 'business_number']
     ordering = ['username']
-    readonly_fields = ('display_business_reg_file_preview',)
+    readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id')
+    
+    def get_sns_type(self, obj):
+        """가입 유형 표시"""
+        if obj.sns_type == 'kakao':
+            return mark_safe('<span style="color: #FEE500; background: #3C1E1E; padding: 2px 8px; border-radius: 4px;">카카오</span>')
+        elif obj.sns_type == 'google':
+            return mark_safe('<span style="color: #4285F4; background: #F1F3F4; padding: 2px 8px; border-radius: 4px;">구글</span>')
+        elif obj.sns_type == 'email':
+            return mark_safe('<span style="color: #666; background: #F5F5F5; padding: 2px 8px; border-radius: 4px;">이메일</span>')
+        return obj.sns_type or '직접가입'
+    get_sns_type.short_description = '가입유형'
+    get_sns_type.admin_order_field = 'sns_type'
     
     def display_business_reg_file(self, obj):
         """어드민 목록에서 사업자등록증 표시"""
@@ -76,6 +89,7 @@ class UserAdmin(admin.ModelAdmin):
     
     fieldsets = (
         (None, {'fields': ('username', 'email', 'role', 'password')}),
+        ('가입정보', {'fields': ('sns_type', 'sns_id')}),
         ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
         ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -93,6 +107,27 @@ class UserAdmin(admin.ModelAdmin):
     def __init__(self, model, admin_site):
         self.list_display_links = ('username',)
         super().__init__(model, admin_site)
+    
+    def delete_model(self, request, obj):
+        """개별 사용자 삭제 시 카카오 연결 해제"""
+        if obj.sns_type == 'kakao' and obj.sns_id:
+            kakao_unlink_success = kakao_unlink(obj.sns_id)
+            if not kakao_unlink_success:
+                logger.warning(f"관리자 삭제: 카카오 연결 끊기 실패했지만 삭제는 진행합니다. User ID: {obj.id}")
+            else:
+                logger.info(f"관리자 삭제: 카카오 연결 끊기 성공. User ID: {obj.id}")
+        super().delete_model(request, obj)
+    
+    def delete_queryset(self, request, queryset):
+        """다중 사용자 삭제 시 카카오 연결 해제"""
+        for user in queryset:
+            if user.sns_type == 'kakao' and user.sns_id:
+                kakao_unlink_success = kakao_unlink(user.sns_id)
+                if not kakao_unlink_success:
+                    logger.warning(f"관리자 대량 삭제: 카카오 연결 끊기 실패했지만 삭제는 진행합니다. User ID: {user.id}")
+                else:
+                    logger.info(f"관리자 대량 삭제: 카카오 연결 끊기 성공. User ID: {user.id}")
+        super().delete_queryset(request, queryset)
 
 @admin.register(Badge)
 class BadgeAdmin(admin.ModelAdmin):

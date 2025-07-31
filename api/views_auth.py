@@ -16,8 +16,45 @@ from .utils.s3_utils import upload_file_to_s3
 from .serializers_jwt import CustomTokenObtainPairSerializer
 import json
 import re
+import requests
+import os
 
 logger = logging.getLogger(__name__)
+
+def kakao_unlink(user_id):
+    """
+    카카오 연결 끊기 API 호출
+    """
+    try:
+        # 카카오 API 키 가져오기
+        kakao_admin_key = os.environ.get('KAKAO_ADMIN_KEY')
+        if not kakao_admin_key:
+            logger.warning("카카오 Admin Key가 설정되지 않았습니다.")
+            return False
+        
+        # 카카오 unlink API 호출
+        url = "https://kapi.kakao.com/v1/user/unlink"
+        headers = {
+            "Authorization": f"KakaoAK {kakao_admin_key}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = {
+            "target_id_type": "user_id",
+            "target_id": user_id
+        }
+        
+        response = requests.post(url, headers=headers, data=data)
+        
+        if response.status_code == 200:
+            logger.info(f"카카오 연결 끊기 성공: user_id={user_id}")
+            return True
+        else:
+            logger.error(f"카카오 연결 끊기 실패: status={response.status_code}, response={response.text}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"카카오 연결 끊기 오류: {str(e)}")
+        return False
 
 def generate_auto_nickname(role='buyer'):
     """
@@ -738,8 +775,14 @@ def withdraw_user(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 카카오 사용자인 경우 연결 끊기
+        if user.sns_type == 'kakao' and user.sns_id:
+            kakao_unlink_success = kakao_unlink(user.sns_id)
+            if not kakao_unlink_success:
+                logger.warning(f"카카오 연결 끊기 실패했지만 탈퇴는 진행합니다. User ID: {user.id}")
+        
         # 탈퇴 사유 로깅
-        logger.info(f"회원 탈퇴 - User ID: {user.id}, Username: {user.username}, Reason: {reason}")
+        logger.info(f"회원 탈퇴 - User ID: {user.id}, Username: {user.username}, SNS Type: {user.sns_type}, Reason: {reason}")
         
         # 사용자 삭제
         user.delete()
