@@ -88,8 +88,8 @@ def get_main_banners(request):
     now = timezone.now()
     
     banners = Banner.objects.filter(
-        is_active=True,
-        banner_type='main'  # 메인 배너만 필터링
+        is_active=True
+        # 모든 타입의 활성화된 배너를 메인에서 표시
     ).select_related('event').filter(
         models.Q(start_date__isnull=True) | models.Q(start_date__lte=now)
     ).filter(
