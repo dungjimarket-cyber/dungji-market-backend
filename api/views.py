@@ -136,10 +136,14 @@ def create_sns_user(request):
                 user.profile_image = profile_image
                 
             user.save()
-            refresh = RefreshToken.for_user(user)
+            # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
+            from api.serializers_jwt import CustomTokenObtainPairSerializer
+            refresh = CustomTokenObtainPairSerializer.get_token(user)
+            access_token = refresh.access_token
+            
             return Response({
                 'jwt': {
-                    'access': str(refresh.access_token),
+                    'access': str(access_token),
                     'refresh': str(refresh),
                 },
                 'user_id': user.id,
@@ -149,7 +153,7 @@ def create_sns_user(request):
                 'sns_type': user.sns_type,
                 'sns_id': user.sns_id,
                 'email': user.email,
-                'access': str(refresh.access_token),
+                'access': str(access_token),
                 'refresh': str(refresh),
                 'is_new_user': is_new_user  # 신규 사용자 여부 추가
             })
@@ -174,11 +178,14 @@ def create_sns_user(request):
                         user.profile_image = profile_image
                     user.save()
                     
-                    # JWT 토큰 발급
-                    refresh = RefreshToken.for_user(user)
+                    # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
+                    from api.serializers_jwt import CustomTokenObtainPairSerializer
+                    refresh = CustomTokenObtainPairSerializer.get_token(user)
+                    access_token = refresh.access_token
+                    
                     return Response({
                         'jwt': {
-                            'access': str(refresh.access_token),
+                            'access': str(access_token),
                             'refresh': str(refresh),
                         },
                         'user_id': user.id,
@@ -264,8 +271,9 @@ def create_sns_user(request):
             user.save()
             logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
 
-        # JWT 토큰 발급
-        refresh = RefreshToken.for_user(user)
+        # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
+        from api.serializers_jwt import CustomTokenObtainPairSerializer
+        refresh = CustomTokenObtainPairSerializer.get_token(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
         
