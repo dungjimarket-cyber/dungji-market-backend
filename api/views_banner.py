@@ -4,6 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.db import models
 from .models import Banner, Event
 from .serializers_banner import BannerSerializer, EventSerializer, EventListSerializer
 
@@ -87,7 +88,8 @@ def get_main_banners(request):
     now = timezone.now()
     
     banners = Banner.objects.filter(
-        is_active=True
+        is_active=True,
+        banner_type='main'  # 메인 배너만 필터링
     ).select_related('event').filter(
         models.Q(start_date__isnull=True) | models.Q(start_date__lte=now)
     ).filter(
@@ -96,9 +98,6 @@ def get_main_banners(request):
     
     serializer = BannerSerializer(banners, many=True)
     return Response({
-        'count': banners.count(),
+        'count': len(banners),
         'results': serializer.data
     })
-
-
-from django.db import models
