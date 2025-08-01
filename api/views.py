@@ -1315,19 +1315,44 @@ class GroupBuyViewSet(ModelViewSet):
     def pending_selection(self, request):
         """최종 선택 대기중인 공구 목록 조회
         
-        사용자가 참여한 공구 중 확정된(confirmed) 상태이거나 
-        모집이 완료되었지만 아직 최종 선택을 하지 않은 공구 목록 반환
+        사용자가 참여한 공구 중 최종선택(final_selection) 상태인 공구 목록 반환
         """
-        # 사용자가 참여한 공구 중 'confirmed' 상태인 공구 또는
-        # 'recruiting' 상태지만 모집 완료된(current_participants == max_participants) 공구
+        # 사용자가 참여한 공구 중 'final_selection' 상태인 공구
         pending = self.get_queryset().filter(
-            participants=request.user
-        ).filter(
-            Q(status='confirmed') | 
-            Q(status='recruiting', current_participants__gte=F('max_participants'))
+            participants=request.user,
+            status='final_selection'
         )
         
         serializer = self.get_serializer(pending, many=True)
+        return Response(serializer.data)
+        
+    @action(detail=False, methods=['get'])
+    def purchase_confirmed(self, request):
+        """구매 확정된 공구 목록 조회
+        
+        사용자가 참여한 공구 중 seller_confirmation 상태인 공구 목록 반환
+        (판매자가 확정하고 구매자가 기다리는 상태)
+        """
+        confirmed = self.get_queryset().filter(
+            participants=request.user,
+            status='seller_confirmation'
+        )
+        
+        serializer = self.get_serializer(confirmed, many=True)
+        return Response(serializer.data)
+        
+    @action(detail=False, methods=['get'])
+    def purchase_completed(self, request):
+        """구매 완료된 공구 목록 조회
+        
+        사용자가 참여한 공구 중 completed 상태인 공구 목록 반환
+        """
+        completed = self.get_queryset().filter(
+            participants=request.user,
+            status='completed'
+        )
+        
+        serializer = self.get_serializer(completed, many=True)
         return Response(serializer.data)
         
     @action(detail=True, methods=['post'])
