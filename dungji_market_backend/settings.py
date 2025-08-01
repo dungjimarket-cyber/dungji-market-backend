@@ -282,3 +282,13 @@ LOGGING = {
         },
     },
 }
+
+# 파일 업로드 크기 제한 설정
+# 메모리에 저장되는 최대 파일 크기 (50MB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
+
+# 전체 POST 데이터 최대 크기 (50MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
+
+# 파일 업로드시 임시 디렉토리 사용 기준 크기 (2.5MB 이상은 임시 파일로)
+FILE_UPLOAD_TEMP_DIR = None
