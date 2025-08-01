@@ -468,7 +468,7 @@ class BidSerializer(serializers.ModelSerializer):
                  'bid_type', 'amount', 'message', 'contract_period', 'created_at', 'updated_at',
                  'is_selected', 'status', 'current_participants', 'max_participants']
         extra_kwargs = {
-            'seller': {'required': True, 'write_only': True},
+            'seller': {'required': True},
             'groupbuy': {'required': True},
             'amount': {'required': True, 'min_value': 0},
         }
