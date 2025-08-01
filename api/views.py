@@ -620,6 +620,7 @@ class GroupBuyViewSet(ModelViewSet):
         status_param = self.request.query_params.get('status', None)
         category_id = self.request.query_params.get('category', None)
         sort_param = self.request.query_params.get('sort', None)
+        ordering_param = self.request.query_params.get('ordering', None)
         
         # 통신사 관련 필터
         telecom_carrier = self.request.query_params.get('telecom_carrier', None)
@@ -636,26 +637,33 @@ class GroupBuyViewSet(ModelViewSet):
         now = timezone.now()
 
         # status 필터 처리
-        if status_param == 'active':
-            # 진행중: 마감시간이 지나지 않고 recruiting 또는 bidding 상태인 공구
-            queryset = queryset.filter(
-                end_time__gt=now,
-                status__in=['recruiting', 'bidding']
-            )
-        elif status_param == 'ended':
-            # 종료: 마감시간이 지났거나 voting/final_selection/seller_confirmation/completed/cancelled 상태인 공구
-            queryset = queryset.filter(
-                Q(end_time__lte=now) | 
-                Q(status__in=['voting', 'final_selection', 'seller_confirmation', 'completed', 'cancelled'])
-            )
-        elif status_param == 'completed':
-            # 완료: completed 상태이거나 마감시간이 지난 공구
-            queryset = queryset.filter(
-                Q(status='completed') | Q(end_time__lte=now)
-            )
-        elif status_param == 'in_progress':
-            # 최종선택 이전 상태(recruiting, bidding, voting)만 필터링
-            queryset = queryset.filter(status__in=['recruiting', 'bidding', 'voting'])
+        if status_param:
+            # 쉼표로 구분된 상태값 처리
+            if ',' in status_param:
+                status_list = [s.strip() for s in status_param.split(',')]
+                queryset = queryset.filter(status__in=status_list)
+            else:
+                # 기존 단일 값 처리
+                if status_param == 'active':
+                    # 진행중: 마감시간이 지나지 않고 recruiting 또는 bidding 상태인 공구
+                    queryset = queryset.filter(
+                        end_time__gt=now,
+                        status__in=['recruiting', 'bidding']
+                    )
+                elif status_param == 'ended':
+                    # 종료: 마감시간이 지났거나 voting/final_selection/seller_confirmation/completed/cancelled 상태인 공구
+                    queryset = queryset.filter(
+                        Q(end_time__lte=now) | 
+                        Q(status__in=['voting', 'final_selection', 'seller_confirmation', 'completed', 'cancelled'])
+                    )
+                elif status_param == 'completed':
+                    # 완료: completed 상태이거나 마감시간이 지난 공구
+                    queryset = queryset.filter(
+                        Q(status='completed') | Q(end_time__lte=now)
+                    )
+                elif status_param == 'in_progress':
+                    # 최종선택 이전 상태(recruiting, bidding, voting)만 필터링
+                    queryset = queryset.filter(status__in=['recruiting', 'bidding', 'voting'])
 
         # category 필터 처리
         if category_id:
@@ -712,8 +720,11 @@ class GroupBuyViewSet(ModelViewSet):
                 Q(region_name__icontains=region_search)  # 구 region_name 필드 (호환성)
             ).exclude(region_type='nationwide').distinct()  # 전국 비대면 제외 및 중복 제거
             
-        # 정렬 처리 - 탭별로 단순화
-        if sort_param == 'popular':
+        # 정렬 처리 - ordering 파라미터 우선 사용
+        if ordering_param:
+            # ordering 파라미터가 있으면 그대로 사용
+            queryset = queryset.order_by(ordering_param)
+        elif sort_param == 'popular':
             # 인기순: 참여자 많은 순으로 정렬
             queryset = queryset.order_by('-current_participants', '-start_time')
         else:
