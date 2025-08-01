@@ -723,7 +723,9 @@ class GroupBuyViewSet(ModelViewSet):
         # 정렬 처리 - ordering 파라미터 우선 사용
         if ordering_param:
             # ordering 파라미터가 있으면 그대로 사용
-            queryset = queryset.order_by(ordering_param)
+            # 쉼표로 구분된 여러 필드 지원
+            ordering_fields = [field.strip() for field in ordering_param.split(',')]
+            queryset = queryset.order_by(*ordering_fields)
         elif sort_param == 'popular':
             # 인기순: 참여자 많은 순으로 정렬
             queryset = queryset.order_by('-current_participants', '-start_time')
