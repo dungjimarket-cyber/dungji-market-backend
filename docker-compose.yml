@@ -38,6 +38,3 @@ services:
 volumes:
   static_volume:
   media_volume:
-
-environment:
-    - CLIENT_MAX_BODY_SIZE=50M

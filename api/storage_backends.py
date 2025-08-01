@@ -8,6 +8,9 @@ class MediaStorage(S3Boto3Storage):
     """S3 미디어 파일 스토리지 백엔드"""
     location = 'media'
     file_overwrite = False
+    # ACL 설정 제거 (S3 버킷이 ACL을 지원하지 않는 경우)
+    default_acl = None
+    object_parameters = {'CacheControl': 'max-age=86400'}
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

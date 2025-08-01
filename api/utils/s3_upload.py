@@ -26,15 +26,24 @@ def upload_to_s3(file_field, folder_name='uploads'):
         ext = file_field.name.split('.')[-1]
         file_name = f"{folder_name}/{uuid.uuid4().hex}_{datetime.now().strftime('%Y%m%d%H%M%S')}.{ext}"
         
-        # S3에 업로드
+        # 파일 포인터를 처음으로 되돌리기
+        if hasattr(file_field, 'seek'):
+            file_field.seek(0)
+        
+        # S3에 업로드 (ACL 제거)
+        extra_args = {
+            'ContentType': file_field.content_type if hasattr(file_field, 'content_type') else 'application/octet-stream'
+        }
+        
+        # ACL이 필요한 경우에만 추가
+        if settings.AWS_DEFAULT_ACL:
+            extra_args['ACL'] = settings.AWS_DEFAULT_ACL
+            
         s3_client.upload_fileobj(
             file_field,
             settings.AWS_STORAGE_BUCKET_NAME,
             file_name,
-            ExtraArgs={
-                'ACL': 'public-read',
-                'ContentType': file_field.content_type if hasattr(file_field, 'content_type') else 'application/octet-stream'
-            }
+            ExtraArgs=extra_args
         )
         
         # URL 생성
