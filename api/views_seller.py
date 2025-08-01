@@ -101,8 +101,8 @@ class SellerProfileView(APIView):
                 "code": user.address_region.code,
                 "name": user.address_region.name,
                 "full_name": user.address_region.full_name
-            } if hasattr(user, 'address_region') and user.address_region else None,
-            "profileImage": request.build_absolute_uri(user.userprofile.profile_image.url) if hasattr(user, 'userprofile') and user.userprofile.profile_image else None,
+            } if user.address_region else None,
+            "profileImage": user.profile_image if hasattr(user, 'profile_image') and user.profile_image else None,
             "isVip": hasattr(user, 'userprofile') and user.userprofile.is_vip,
             "rating": rating,
             "activeBids": active_bids,
