@@ -440,7 +440,7 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ['event_type', 'status', 'is_active', 'start_date', 'end_date']
     search_fields = ['title', 'content', 'short_description']
     ordering = ['-start_date', '-created_at']
-    prepopulated_fields = {'slug': ('title',)}
+    prepopulated_fields = {}  # 동적으로 설정
     
     fieldsets = (
         ('기본 정보', {
@@ -479,6 +479,11 @@ class EventAdmin(admin.ModelAdmin):
         if obj:  # 수정하는 경우
             readonly.append('slug')  # 슬러그는 수정 불가
         return readonly
+    
+    def get_prepopulated_fields(self, request, obj=None):
+        if obj is None:  # 새로 생성하는 경우에만
+            return {'slug': ('title',)}
+        return {}
     
     actions = ['activate_events', 'deactivate_events', 'reset_view_count']
     
