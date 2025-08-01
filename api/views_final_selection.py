@@ -333,10 +333,11 @@ def get_contact_info(request, groupbuy_id):
             seller = winning_bid.seller
             return Response({
                 'role': 'seller',
-                'name': seller.username,
+                'name': seller.nickname if seller.nickname else seller.username,
                 'phone': seller.phone_number,
                 'business_name': seller.business_name,
-                'business_number': seller.business_number
+                'business_number': seller.business_number,
+                'address': seller.address if hasattr(seller, 'address') else None
             })
         
         # 판매자인 경우 - 구매자들 정보 조회
@@ -363,7 +364,7 @@ def get_contact_info(request, groupbuy_id):
             for participation in confirmed_participations:
                 buyer = participation.user
                 buyers_info.append({
-                    'name': buyer.username,
+                    'name': buyer.nickname if buyer.nickname else buyer.username,
                     'phone': buyer.phone_number,
                     'address': buyer.address_region
                 })

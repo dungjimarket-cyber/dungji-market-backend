@@ -42,8 +42,8 @@ class SellerProfileView(APIView):
         #         status=status.HTTP_403_FORBIDDEN
         #     )
         
-        # 활성 입찰 수 계산 (입찰기록 - 모든 입찰 기록)
-        active_bids = Bid.objects.filter(seller=user).count()
+        # 활성 입찰 수 계산 (입찰기록 - pending 상태의 입찰만)
+        active_bids = Bid.objects.filter(seller=user, status='pending').count()
         
         # 선택 대기 중인 입찰 수 계산 (최종선택 대기중 - 공구가 종료되고 선택 대기 중인 입찰)
         pending_selection = Bid.objects.filter(
