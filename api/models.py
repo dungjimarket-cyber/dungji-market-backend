@@ -56,6 +56,10 @@ class User(AbstractUser):
     remote_sales_expiry_date = models.DateTimeField(null=True, blank=True, verbose_name='비대면 인증 만료일')
     business_license_image = models.URLField(blank=True, null=True, verbose_name='사업자등록증 이미지')
     delivery_history_image = models.URLField(blank=True, null=True, verbose_name='택배 송장 이미지')
+    
+    # 휴대폰 인증 시 수집한 개인정보
+    birth_date = models.DateField(null=True, blank=True, verbose_name='생년월일')
+    gender = models.CharField(max_length=1, choices=[('M', '남성'), ('F', '여성')], null=True, blank=True, verbose_name='성별')
     # Fix reverse accessor clashes
     groups = models.ManyToManyField(
         'auth.Group',

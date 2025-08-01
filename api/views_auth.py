@@ -220,13 +220,29 @@ def register_user_v2(request):
                 is_remote_sales_enabled=is_remote_sales_enabled if role == 'seller' else False
             )
             
-            # 추가 정보가 있으면 프로필에 저장 (필요시 User 모델에 필드 추가)
+            # 추가 정보가 있으면 프로필에 저장
             if verified_birthdate or verified_gender:
-                # TODO: User 모델에 birthdate, gender 필드가 있다면 여기서 저장
-                # user.birthdate = verified_birthdate
-                # user.gender = verified_gender
-                # user.save()
-                logger.info(f"휴대폰 인증 추가 정보: 이름={verified_name}, 생년월일={verified_birthdate}, 성별={verified_gender}")
+                # 생년월일 형식 변환 (YYYYMMDD -> YYYY-MM-DD)
+                if verified_birthdate and len(verified_birthdate) == 8:
+                    try:
+                        from datetime import datetime
+                        birth_date_obj = datetime.strptime(verified_birthdate, '%Y%m%d').date()
+                        user.birth_date = birth_date_obj
+                    except ValueError:
+                        logger.error(f"생년월일 형식 오류: {verified_birthdate}")
+                
+                # 성별 저장
+                if verified_gender:
+                    # verified_gender가 '남' 또는 '여'로 오는 경우 변환
+                    if verified_gender == '남':
+                        user.gender = 'M'
+                    elif verified_gender == '여':
+                        user.gender = 'F'
+                    else:
+                        user.gender = verified_gender
+                
+                user.save()
+                logger.info(f"휴대폰 인증 추가 정보 저장 완료: 이름={verified_name}, 생년월일={user.birth_date}, 성별={user.gender}")
             
             # 인증 세션 정보 삭제
             for key in ['verified_phone_signup', 'verified_phone_signup_at', 'verified_phone_signup_name', 
@@ -533,6 +549,8 @@ def get_user_profile(request):
             'penalty_expiry': user.penalty_expiry,
             'current_penalty_level': user.current_penalty_level,
             'created_at': user.date_joined,
+            'birth_date': user.birth_date.isoformat() if user.birth_date else None,
+            'gender': user.gender,
         }
         
         return Response(profile_data)
@@ -840,6 +858,8 @@ def user_profile(request):
                 'created_at': user.date_joined,
                 'business_number': user.business_number,
                 'is_remote_sales': user.is_remote_sales,
+                'birth_date': user.birth_date.isoformat() if user.birth_date else None,
+                'gender': user.gender,
             }
             
             return Response(profile_data)
