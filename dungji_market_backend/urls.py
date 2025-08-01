@@ -38,6 +38,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile
+from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback
 from api.views_verification import send_verification_code, verify_code, check_verification_status
 from api.views_voting import vote_for_bid, get_my_vote, get_voting_results, get_winning_bid
@@ -87,6 +88,9 @@ urlpatterns = [
         path('phone/send-code/', send_verification_code, name='send_verification_code'),
         path('phone/verify/', verify_code, name='verify_code'),
         path('phone/status/', check_verification_status, name='check_verification_status'),
+        # 토큰 갱신 및 검증 API
+        path('token/refresh-force/', refresh_user_token, name='refresh_user_token'),
+        path('token/verify-role/', verify_token_role, name='verify_token_role'),
     ])),
 
     path('api/', include(router.urls)),
