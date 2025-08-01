@@ -41,7 +41,7 @@ def register_user(request):
         email = data.get('email')
         password = data.get('password')
         name = data.get('name', '')
-        role = data.get('role', 'user')  # 기본값은 일반 사용자
+        role = data.get('role', 'buyer')  # 기본값은 구매자
         
         # 로깅 추가
         logger.info(f"회원가입 요청: email={email}, name={name}, role={role}")
@@ -58,10 +58,10 @@ def register_user(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # role 값이 유효한지 확인 (seller 또는 user만 허용)
-        if role not in ['seller', 'user']:
+        # role 값이 유효한지 확인 (seller 또는 buyer만 허용)
+        if role not in ['seller', 'buyer']:
             return Response(
-                {'error': 'Invalid role. Must be either "seller" or "user".'},
+                {'error': 'Invalid role. Must be either "seller" or "buyer".'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
@@ -199,8 +199,8 @@ def create_sns_user(request):
         
         # 카카오 간편가입 시 자동 닉네임 생성
         if sns_type == 'kakao' and (not name or name == ''):
-            # role이 전달되지 않은 경우 기본적으로 user로 설정 
-            role = data.get('role', 'user')
+            # role이 전달되지 않은 경우 기본적으로 buyer로 설정 
+            role = data.get('role', 'buyer')
             
             # 역할에 따른 닉네임 프리픽스 설정
             if role == 'seller':
@@ -254,7 +254,7 @@ def create_sns_user(request):
             nickname=name,  # nickname 필드에도 동일하게 설정
             sns_type=sns_type,
             sns_id=sns_id,
-            role=role if 'role' in locals() and role else 'user'  # role 설정
+            role=role if 'role' in locals() and role else 'buyer'  # role 설정
         )
         is_new_user = True  # 신규 사용자로 플래그 설정
         

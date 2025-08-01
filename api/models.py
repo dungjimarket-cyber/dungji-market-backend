@@ -315,7 +315,8 @@ class GroupBuy(models.Model):
     STATUS_CHOICES = (
         ('recruiting', '모집중'),
         ('bidding', '입찰진행중'),
-        ('voting', '최종선택중'),
+        ('voting', '투표중'),
+        ('final_selection', '최종선택중'),
         ('seller_confirmation', '판매자확정대기'),
         ('completed', '완료'),
         ('cancelled', '취소됨'),
@@ -384,9 +385,15 @@ class GroupBuy(models.Model):
             self.save()
         elif self.status == 'bidding' and now >= self.end_time:
             self.status = 'voting'
-            from datetime import timedelta
-            self.voting_end = now + timedelta(hours=12)
             self.save()
+        elif self.status == 'voting':
+            # 투표 완료 후 final_selection 상태로 전환
+            selected_bid = self.bid_set.filter(is_selected=True).first()
+            if selected_bid:
+                self.status = 'final_selection'
+                from datetime import timedelta
+                self.voting_end = now + timedelta(hours=12)
+                self.save()
 
     def handle_voting_timeout(self):
         if timezone.now() > self.voting_end:
@@ -397,10 +404,25 @@ class GroupBuy(models.Model):
                 self.status = 'cancelled'
             self.save()
 
+    def handle_final_selection_timeout(self):
+        """최종선택 시간 초과 처리"""
+        if self.status == 'final_selection' and self.voting_end and timezone.now() > self.voting_end:
+            # 최종선택을 완료한 참여자들만 completed 상태로 진행
+            confirmed_participations = self.participation_set.filter(final_decision='confirmed')
+            selected_bid = self.bid_set.filter(is_selected=True, final_decision='confirmed').first()
+            
+            if confirmed_participations.exists() and selected_bid:
+                self.status = 'completed'
+            else:
+                self.status = 'cancelled'
+            self.save()
+
     def check_auto_transitions(self):
         now = timezone.now()
         if self.status == 'voting' and now > self.voting_end:
             self.handle_voting_timeout()
+        elif self.status == 'final_selection' and self.voting_end and now > self.voting_end:
+            self.handle_final_selection_timeout()
         elif self.status == 'seller_confirmation' and now > self.voting_end + timezone.timedelta(hours=24):
             self.status = 'completed'
             self.save()

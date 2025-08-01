@@ -1,0 +1,38 @@
+FROM python:3.9
+
+# 시스템 패키지 업데이트 및 cron 설치
+RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 패키지 설치
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# cron job 설정 파일 생성
+RUN echo '*/5 * * * * cd /app && python manage.py update_groupbuy_status >> /var/log/cron.log 2>&1' > /etc/cron.d/groupbuy-scheduler
+
+# cron job 파일에 적절한 권한 설정
+RUN chmod 0644 /etc/cron.d/groupbuy-scheduler
+
+# cron job을 crontab에 등록
+RUN crontab /etc/cron.d/groupbuy-scheduler
+
+# 로그 디렉토리 생성
+RUN mkdir -p /var/log && touch /var/log/cron.log
+
+# cron과 로그 출력을 함께 실행하는 스크립트 생성
+RUN echo '#!/bin/bash\n\
+echo "Cron 스케줄러 시작"\n\
+service cron start\n\
+echo "공구 상태 업데이트 스케줄러가 시작되었습니다 (5분 간격)"\n\
+tail -f /var/log/cron.log' > /start-scheduler.sh
+
+RUN chmod +x /start-scheduler.sh
+
+# 시작 명령어
+CMD ["/start-scheduler.sh"]

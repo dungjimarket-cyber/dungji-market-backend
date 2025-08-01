@@ -18,7 +18,7 @@ class Command(BaseCommand):
                     username=f'testuser{i+1}',
                     defaults={
                         'email': f'testuser{i+1}@test.com',
-                        'role': 'user',
+                        'role': 'buyer',
                         'phone_number': f'010-1234-{5000+i}'
                     }
                 )

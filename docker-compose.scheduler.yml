@@ -1,0 +1,27 @@
+# 실제 cron을 사용하는 스케줄러 서비스
+# 사용법: docker-compose -f docker-compose.yml -f docker-compose.scheduler.yml up
+
+version: '3'
+
+services:
+  # 실제 cron을 사용하는 스케줄러 (더 정확한 타이밍)
+  cron-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    volumes:
+      - .:/app
+      - scheduler_logs:/var/log
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=dungji_market_backend.settings
+      - PYTHONUNBUFFERED=1
+      - DEBUG=False
+      - USE_S3=True
+    restart: always
+    depends_on:
+      - web
+
+volumes:
+  scheduler_logs:
