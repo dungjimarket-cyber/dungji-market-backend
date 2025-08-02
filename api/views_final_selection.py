@@ -259,6 +259,79 @@ def get_final_decision_status(request, groupbuy_id):
         )
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_contact_info(request, groupbuy_id):
+    """
+    최종선택 완료 후 연락처 정보 조회
+    """
+    user = request.user
+    
+    try:
+        groupbuy = GroupBuy.objects.get(id=groupbuy_id)
+        
+        # 구매자인 경우 - 판매자 정보 조회
+        if user.role == 'buyer':
+            participation = Participation.objects.filter(user=user, groupbuy=groupbuy).first()
+            if not participation or participation.final_decision != 'confirmed':
+                return Response(
+                    {'error': '구매확정 후에만 연락처를 확인할 수 있습니다.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
+            if winning_bid and winning_bid.seller:
+                seller = winning_bid.seller
+                return Response({
+                    'role': 'seller',
+                    'name': seller.username,
+                    'phone': seller.phone_number,
+                    'business_name': seller.business_name if hasattr(seller, 'business_name') else None,
+                    'business_number': seller.business_number if hasattr(seller, 'business_number') else None,
+                    'address': seller.address_detail if hasattr(seller, 'address_detail') else None
+                })
+        
+        # 판매자인 경우 - 구매자들 정보 조회
+        elif user.role == 'seller':
+            bid = Bid.objects.filter(groupbuy=groupbuy, seller=user, is_selected=True).first()
+            if not bid or bid.final_decision != 'confirmed':
+                return Response(
+                    {'error': '판매확정 후에만 연락처를 확인할 수 있습니다.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            participations = Participation.objects.filter(
+                groupbuy=groupbuy,
+                final_decision='confirmed'
+            ).select_related('user')
+            
+            buyers_info = []
+            for p in participations:
+                buyers_info.append({
+                    'name': p.user.username,
+                    'phone': p.user.phone_number,
+                    'address': p.user.address_detail if hasattr(p.user, 'address_detail') else None
+                })
+            
+            return Response({
+                'role': 'buyers',
+                'buyers': buyers_info,
+                'total_count': len(buyers_info)
+            })
+        
+        else:
+            return Response(
+                {'error': '권한이 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+    except GroupBuy.DoesNotExist:
+        return Response(
+            {'error': '공구를 찾을 수 없습니다.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
 def check_all_decisions_completed(groupbuy):
     """
     모든 참여자와 판매자의 최종선택이 완료되었는지 확인하고

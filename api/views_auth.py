@@ -574,6 +574,8 @@ def update_user_profile(request):
         data = request.data
         files = request.FILES
         
+        logger.info(f"프로필 업데이트 요청 - User: {user.id}, Data: {data}")
+        
         # 업데이트 가능한 필드들
         if 'username' in data:
             # 닉네임(username) 중복 확인
@@ -648,7 +650,12 @@ def update_user_profile(request):
                 user.business_reg_number = data['business_reg_number']
             
             if 'is_remote_sales_enabled' in data:
-                user.is_remote_sales_enabled = data['is_remote_sales_enabled'].lower() == 'true'
+                # boolean 또는 문자열 처리
+                value = data['is_remote_sales_enabled']
+                if isinstance(value, bool):
+                    user.is_remote_sales_enabled = value
+                else:
+                    user.is_remote_sales_enabled = str(value).lower() == 'true'
         
         user.save()
         
@@ -664,7 +671,9 @@ def update_user_profile(request):
         })
     
     except Exception as e:
+        import traceback
         logger.error(f"프로필 업데이트 오류: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return Response(
             {'error': '프로필 업데이트 중 오류가 발생했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
