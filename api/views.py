@@ -1636,7 +1636,7 @@ class GroupBuyViewSet(ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):
-        """사용자가 공구에서 탈퇴하는 API"""
+        """사용자가 공구에서 나가기 API"""
         from django.db import transaction
         import logging
         
@@ -1668,12 +1668,12 @@ class GroupBuyViewSet(ModelViewSet):
             if has_bids:
                 logger.warning(f"Error: Cannot leave group buy with active bids")
                 return Response(
-                    {'error': '입찰이 진행 중인 공구에서는 탈퇴할 수 없습니다.'}, 
+                    {'error': '입찰이 진행 중인 공구에서는 나가기가 불가합니다.'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
         except Exception as e:
             logger.error(f"Unexpected error in leave API: {str(e)}")
-            error_message = f'공구 탈퇴 중 오류가 발생했습니다: {str(e)}'
+            error_message = f'공구 나가기 중 오류가 발생했습니다: {str(e)}'
             return Response(
                 {
                     'error': error_message,
@@ -1724,7 +1724,7 @@ class GroupBuyViewSet(ModelViewSet):
                 logger.warning(f"Creator cannot leave: has_bids={has_bids}, other_participants_exist={other_participants_exist}")
                 # 입찰자가 있거나 다른 참여자가 있으면 탈퇴 불가
                 return Response(
-                    {'error': '입찰자가 있거나 다른 참여자가 있는 공구의 생성자는 탈퇴할 수 없습니다.'}, 
+                    {'error': '입찰자가 있거나 다른 참여자가 있는 공구의 생성자는 나가기가 불가합니다.'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -1747,12 +1747,12 @@ class GroupBuyViewSet(ModelViewSet):
                 logger.info(f"Current participants decreased to {groupbuy.current_participants}")
             
             return Response({
-                'message': '공구 탈퇴가 완료되었습니다.',
+                'message': '공구 나가기가 완료되었습니다.',
                 'current_participants': groupbuy.current_participants
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error during non-creator leave: {str(e)}")
-            error_message = f'공구 탈퇴 중 오류가 발생했습니다: {str(e)}'
+            error_message = f'공구 나가기 중 오류가 발생했습니다: {str(e)}'
             return Response(
                 {
                     'error': error_message,
