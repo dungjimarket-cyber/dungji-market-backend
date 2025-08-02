@@ -947,7 +947,11 @@ def user_profile(request):
                 user.business_number = data['business_number']
             
             if 'is_remote_sales' in data:
-                user.is_remote_sales = data['is_remote_sales']
+                value = data['is_remote_sales']
+                if isinstance(value, bool):
+                    user.is_remote_sales = value
+                else:
+                    user.is_remote_sales = str(value).lower() == 'true'
             
             # 프로필 이미지 업데이트
             if 'profile_image' in files:
@@ -967,7 +971,11 @@ def user_profile(request):
                     user.business_reg_number = data['business_reg_number']
                 
                 if 'is_remote_sales_enabled' in data:
-                    user.is_remote_sales_enabled = data['is_remote_sales_enabled'].lower() == 'true'
+                    value = data['is_remote_sales_enabled']
+                    if isinstance(value, bool):
+                        user.is_remote_sales_enabled = value
+                    else:
+                        user.is_remote_sales_enabled = str(value).lower() == 'true'
             
             user.save()
             
