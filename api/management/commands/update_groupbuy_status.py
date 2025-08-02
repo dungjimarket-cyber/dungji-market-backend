@@ -58,7 +58,7 @@ class Command(BaseCommand):
                 
                 # 공구 상태를 final_selection으로 변경하고 12시간 타이머 설정
                 groupbuy.status = 'final_selection'
-                groupbuy.voting_end = now + timedelta(hours=12)  # 최종선택 12시간 타이머
+                groupbuy.final_selection_end = now + timedelta(hours=12)  # 최종선택 12시간 타이머
                 groupbuy.save()
                 
                 logger.info(f"공구 {groupbuy.id}의 투표가 종료되어 판매자 {winning_bid.seller.username}가 선정되었습니다. 최종선택 단계로 진입합니다.")
@@ -69,7 +69,7 @@ class Command(BaseCommand):
                     first_bid.is_selected = True
                     first_bid.save()
                     groupbuy.status = 'final_selection'
-                    groupbuy.voting_end = now + timedelta(hours=12)  # 최종선택 12시간 타이머
+                    groupbuy.final_selection_end = now + timedelta(hours=12)  # 최종선택 12시간 타이머
                     groupbuy.save()
                     logger.info(f"공구 {groupbuy.id}의 투표가 없어 첫 번째 입찰자를 자동 선정하고 최종선택 단계로 진입합니다.")
                 else:
@@ -81,7 +81,7 @@ class Command(BaseCommand):
         # 3. 최종선택 시간이 종료된 final_selection 상태의 공구 처리
         final_selection_expired = GroupBuy.objects.filter(
             status='final_selection',
-            voting_end__lte=now
+            final_selection_end__lte=now
         )
         
         for groupbuy in final_selection_expired:

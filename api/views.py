@@ -1307,7 +1307,22 @@ class GroupBuyViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def joined_groupbuys(self, request):
-        joined = self.get_queryset().filter(participants=request.user)
+        """참여중인 공구 목록 조회
+        
+        구매자: voting 이전 상태의 참여 공구
+        판매자: 사용하지 않음
+        """
+        user = request.user
+        
+        if user.role == 'buyer':
+            # voting, final_selection, completed 상태가 아닌 공구만
+            joined = self.get_queryset().filter(
+                participants=user,
+                status__in=['recruiting', 'bidding']
+            ).distinct()
+        else:
+            joined = self.get_queryset().none()
+            
         serializer = self.get_serializer(joined, many=True)
         return Response(serializer.data)
         
@@ -1315,13 +1330,29 @@ class GroupBuyViewSet(ModelViewSet):
     def pending_selection(self, request):
         """최종 선택 대기중인 공구 목록 조회
         
-        사용자가 참여한 공구 중 최종선택(final_selection) 상태인 공구 목록 반환
+        구매자: 참여한 공구 중 final_selection 상태이면서 최종선택하지 않은 공구
+        판매자: 낙찰된 공구 중 final_selection 상태이면서 최종선택하지 않은 공구
         """
-        # 사용자가 참여한 공구 중 'final_selection' 상태인 공구
-        pending = self.get_queryset().filter(
-            participants=request.user,
-            status='final_selection'
-        )
+        user = request.user
+        
+        if user.role == 'buyer':
+            # 구매자가 참여한 공구 중 final_selection 상태인 공구
+            pending = self.get_queryset().filter(
+                participants=user,
+                status='final_selection',
+                participation__user=user,
+                participation__final_decision='pending'
+            ).distinct()
+        elif user.role == 'seller':
+            # 판매자가 낙찰된 공구 중 final_selection 상태인 공구
+            pending = self.get_queryset().filter(
+                bid__seller=user,
+                bid__is_selected=True,
+                bid__final_decision='pending',
+                status='final_selection'
+            ).distinct()
+        else:
+            pending = self.get_queryset().none()
         
         serializer = self.get_serializer(pending, many=True)
         return Response(serializer.data)
@@ -1330,13 +1361,20 @@ class GroupBuyViewSet(ModelViewSet):
     def purchase_confirmed(self, request):
         """구매 확정된 공구 목록 조회
         
-        사용자가 참여한 공구 중 seller_confirmation 상태인 공구 목록 반환
-        (판매자가 확정하고 구매자가 기다리는 상태)
+        구매자가 구매확정한 공구 중 아직 거래가 완료되지 않은 공구
         """
-        confirmed = self.get_queryset().filter(
-            participants=request.user,
-            status='seller_confirmation'
-        )
+        user = request.user
+        
+        if user.role == 'buyer':
+            # 구매자가 구매확정한 공구
+            confirmed = self.get_queryset().filter(
+                participants=user,
+                participation__user=user,
+                participation__final_decision='confirmed',
+                status='final_selection'  # 아직 completed가 아닌 상태
+            ).distinct()
+        else:
+            confirmed = self.get_queryset().none()
         
         serializer = self.get_serializer(confirmed, many=True)
         return Response(serializer.data)
@@ -1347,10 +1385,81 @@ class GroupBuyViewSet(ModelViewSet):
         
         사용자가 참여한 공구 중 completed 상태인 공구 목록 반환
         """
+        user = request.user
+        
+        if user.role == 'buyer':
+            completed = self.get_queryset().filter(
+                participants=user,
+                status='completed'
+            ).distinct()
+        else:
+            completed = self.get_queryset().none()
+        
+        serializer = self.get_serializer(completed, many=True)
+        return Response(serializer.data)
+        
+    # 판매자용 API 엔드포인트들
+    @action(detail=False, methods=['get'])
+    def seller_bids(self, request):
+        """판매자의 입찰 내역 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 판매자가 입찰한 모든 공구 조회
+        from .models import Bid
+        bids = Bid.objects.filter(seller=request.user).select_related('groupbuy')
+        groupbuy_ids = bids.values_list('groupbuy_id', flat=True).distinct()
+        
+        groupbuys = self.get_queryset().filter(id__in=groupbuy_ids)
+        serializer = self.get_serializer(groupbuys, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_final_selection(self, request):
+        """판매자의 최종선택 대기중인 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 판매자가 낙찰된 공구 중 final_selection 상태이면서 최종선택하지 않은 공구
+        pending = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            bid__final_decision='pending',
+            status='final_selection'
+        ).distinct()
+        
+        serializer = self.get_serializer(pending, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_confirmed(self, request):
+        """판매자가 판매확정한 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 판매자가 판매확정한 공구
+        confirmed = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            bid__final_decision='confirmed',
+            status='final_selection'
+        ).distinct()
+        
+        serializer = self.get_serializer(confirmed, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_completed(self, request):
+        """판매자의 판매완료된 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 판매자가 참여한 completed 상태의 공구
         completed = self.get_queryset().filter(
-            participants=request.user,
+            bid__seller=request.user,
+            bid__is_selected=True,
             status='completed'
-        )
+        ).distinct()
         
         serializer = self.get_serializer(completed, many=True)
         return Response(serializer.data)

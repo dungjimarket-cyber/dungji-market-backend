@@ -344,6 +344,7 @@ class GroupBuy(models.Model):
     start_time = models.DateTimeField(default=now, verbose_name='시작 시간')  # 시작일을 현재 시간으로 기본값 설정
     end_time = models.DateTimeField(verbose_name='종료 시간')  # 종료 시간 명시적 관리
     voting_end = models.DateTimeField(null=True, blank=True, verbose_name='투표 종료 시간')  # 공구 마감 후 12시간
+    final_selection_end = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 종료 시간')  # 투표 종료 후 12시간
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='recruiting', verbose_name='상태')
     current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 참여자 수')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격

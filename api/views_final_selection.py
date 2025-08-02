@@ -37,8 +37,8 @@ def buyer_final_decision(request, groupbuy_id):
             )
         
         # 최종선택 기간 확인 (투표 종료 후 12시간 이내)
-        if groupbuy.voting_end:
-            deadline = groupbuy.voting_end
+        if groupbuy.final_selection_end:
+            deadline = groupbuy.final_selection_end
             if timezone.now() > deadline:
                 return Response(
                     {'error': '최종선택 기간이 종료되었습니다.'},
@@ -127,8 +127,8 @@ def seller_final_decision(request, groupbuy_id):
             )
         
         # 최종선택 기간 확인
-        if groupbuy.voting_end:
-            deadline = groupbuy.voting_end
+        if groupbuy.final_selection_end:
+            deadline = groupbuy.final_selection_end
             if timezone.now() > deadline:
                 return Response(
                     {'error': '최종선택 기간이 종료되었습니다.'},
@@ -157,9 +157,9 @@ def seller_final_decision(request, groupbuy_id):
             
             # 판매포기시 패널티 부과
             if decision == 'cancelled':
-                user.penalty_points += 10  # 패널티 점수 부과
+                user.penalty_count += 1  # 패널티 횟수 증가
                 user.save()
-                penalty_message = " 판매포기로 패널티 10점이 부과되었습니다."
+                penalty_message = " 판매포기로 패널티가 부과되었습니다."
             else:
                 penalty_message = ""
             
@@ -221,7 +221,7 @@ def get_final_decision_status(request, groupbuy_id):
                     'role': 'buyer',
                     'decision': participation.final_decision,
                     'decision_at': participation.final_decision_at,
-                    'deadline': groupbuy.voting_end
+                    'deadline': groupbuy.final_selection_end
                 })
             except Participation.DoesNotExist:
                 return Response({
@@ -240,7 +240,7 @@ def get_final_decision_status(request, groupbuy_id):
                     'role': 'seller',
                     'decision': bid.final_decision,
                     'decision_at': bid.final_decision_at,
-                    'deadline': groupbuy.voting_end
+                    'deadline': groupbuy.final_selection_end
                 })
             except Bid.DoesNotExist:
                 return Response({
@@ -370,96 +370,3 @@ def check_all_decisions_completed(groupbuy):
             )
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_contact_info(request, groupbuy_id):
-    """
-    최종선택 완료 후 상대방 연락처 정보 조회
-    """
-    user = request.user
-    
-    try:
-        groupbuy = GroupBuy.objects.get(id=groupbuy_id)
-        
-        # 구매자인 경우 - 판매자 정보 조회
-        if user.role == 'buyer':
-            participation = Participation.objects.get(user=user, groupbuy=groupbuy)
-            
-            # 구매확정한 경우만 조회 가능
-            if participation.final_decision != 'confirmed':
-                return Response({
-                    'error': '구매확정 후 연락처를 확인할 수 있습니다.'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # 판매자 정보 조회
-            winning_bid = Bid.objects.filter(
-                groupbuy=groupbuy,
-                is_selected=True,
-                final_decision='confirmed'
-            ).first()
-            
-            if not winning_bid:
-                return Response({
-                    'error': '판매자 정보를 찾을 수 없습니다.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            seller = winning_bid.seller
-            return Response({
-                'role': 'seller',
-                'name': seller.nickname if seller.nickname else seller.username,
-                'phone': seller.phone_number,
-                'business_name': seller.business_name,
-                'business_number': seller.business_number,
-                'address': seller.address if hasattr(seller, 'address') else None
-            })
-        
-        # 판매자인 경우 - 구매자들 정보 조회
-        elif user.role == 'seller':
-            bid = Bid.objects.get(
-                groupbuy=groupbuy,
-                seller=user,
-                is_selected=True
-            )
-            
-            # 판매확정한 경우만 조회 가능
-            if bid.final_decision != 'confirmed':
-                return Response({
-                    'error': '판매확정 후 연락처를 확인할 수 있습니다.'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # 구매확정한 참여자들 정보 조회
-            confirmed_participations = Participation.objects.filter(
-                groupbuy=groupbuy,
-                final_decision='confirmed'
-            ).select_related('user')
-            
-            buyers_info = []
-            for participation in confirmed_participations:
-                buyer = participation.user
-                buyers_info.append({
-                    'name': buyer.nickname if buyer.nickname else buyer.username,
-                    'phone': buyer.phone_number,
-                    'address': buyer.address_region
-                })
-            
-            return Response({
-                'role': 'buyers',
-                'buyers': buyers_info,
-                'total_count': len(buyers_info)
-            })
-        
-        else:
-            return Response({
-                'error': '권한이 없습니다.'
-            }, status=status.HTTP_403_FORBIDDEN)
-            
-    except GroupBuy.DoesNotExist:
-        return Response(
-            {'error': '공구를 찾을 수 없습니다.'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-    except (Participation.DoesNotExist, Bid.DoesNotExist):
-        return Response(
-            {'error': '참여 정보를 찾을 수 없습니다.'},
-            status=status.HTTP_404_NOT_FOUND
-        )
