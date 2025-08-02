@@ -630,7 +630,12 @@ def update_user_profile(request):
             user.business_number = data['business_number']
         
         if 'is_remote_sales' in data:
-            user.is_remote_sales = data['is_remote_sales']
+            # boolean 또는 문자열 처리
+            value = data['is_remote_sales']
+            if isinstance(value, bool):
+                user.is_remote_sales = value
+            else:
+                user.is_remote_sales = str(value).lower() == 'true'
         
         # 프로필 이미지 업데이트
         if 'profile_image' in files:
@@ -673,6 +678,7 @@ def update_user_profile(request):
     except Exception as e:
         import traceback
         logger.error(f"프로필 업데이트 오류: {str(e)}")
+        logger.error(f"오류 발생 위치 - User ID: {user.id}, Data: {data}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return Response(
             {'error': '프로필 업데이트 중 오류가 발생했습니다.'},

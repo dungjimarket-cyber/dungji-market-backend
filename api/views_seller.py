@@ -28,11 +28,7 @@ class SellerProfileView(APIView):
         
         # 디버깅 로그 추가
         print(f"[SellerProfileView] 인증 헤더: {request.headers.get('Authorization')}")
-        print(f"[SellerProfileView] 사용자: {user}, 인증 여부: {user.is_authenticated}")
-        if hasattr(user, 'userprofile'):
-            print(f"[SellerProfileView] 역할: {user.userprofile.role}")
-        else:
-            print("[SellerProfileView] userprofile 속성 없음")
+        print(f"[SellerProfileView] 사용자: {user.username} ({user.role}), 인증 여부: {user.is_authenticated}")
         
         # 개발 목적 임시 판매자 프로필 제공
         # 실제 환경에서는 아래 코드 주석 해제 필요
