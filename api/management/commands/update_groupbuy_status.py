@@ -15,15 +15,26 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         now = timezone.now()
         
-        # 1. 모집 마감 시간이 지난 recruiting 상태의 공구를 voting으로 변경
-        recruiting_expired = GroupBuy.objects.filter(
+        # 1. 입찰이 시작된 recruiting 상태의 공구를 bidding으로 변경
+        recruiting_with_bids = GroupBuy.objects.filter(
             status='recruiting',
+            bid__isnull=False
+        ).distinct()
+        
+        for groupbuy in recruiting_with_bids:
+            groupbuy.status = 'bidding'
+            groupbuy.save()
+            logger.info(f"공구 {groupbuy.id}에 입찰이 시작되어 bidding 상태로 변경했습니다.")
+        
+        # 2. 모집 마감 시간이 지난 공구들 처리
+        time_expired_groupbuys = GroupBuy.objects.filter(
+            status__in=['recruiting', 'bidding'],
             end_time__lte=now
         )
         
-        for groupbuy in recruiting_expired:
+        for groupbuy in time_expired_groupbuys:
             # 입찰이 있는 경우에만 voting으로 변경
-            if groupbuy.bid_set.exists():
+            if groupbuy.bid.exists():
                 groupbuy.status = 'voting'
                 # 투표 종료 시간 설정 (공구 마감 후 12시간)
                 groupbuy.voting_end = groupbuy.end_time + timedelta(hours=12)
@@ -50,7 +61,7 @@ class Command(BaseCommand):
             if vote_results:
                 # 최다 득표 입찰 찾기
                 winning_bid_id = vote_results[0]['bid']
-                winning_bid = groupbuy.bid_set.get(id=winning_bid_id)
+                winning_bid = groupbuy.bid.get(id=winning_bid_id)
                 
                 # 낙찰 처리
                 winning_bid.is_selected = True
@@ -64,7 +75,7 @@ class Command(BaseCommand):
                 logger.info(f"공구 {groupbuy.id}의 투표가 종료되어 판매자 {winning_bid.seller.username}가 선정되었습니다. 최종선택 단계로 진입합니다.")
             else:
                 # 투표가 없으면 첫 번째 입찰자를 자동 선정
-                first_bid = groupbuy.bid_set.order_by('created_at').first()
+                first_bid = groupbuy.bid.order_by('created_at').first()
                 if first_bid:
                     first_bid.is_selected = True
                     first_bid.save()
@@ -86,8 +97,8 @@ class Command(BaseCommand):
         
         for groupbuy in final_selection_expired:
             # 최종선택을 완료한 참여자들과 판매자 확인
-            confirmed_participations = groupbuy.participation_set.filter(final_decision='confirmed')
-            selected_bid = groupbuy.bid_set.filter(is_selected=True, final_decision='confirmed').first()
+            confirmed_participations = groupbuy.participation.filter(final_decision='confirmed')
+            selected_bid = groupbuy.bid.filter(is_selected=True, final_decision='confirmed').first()
             
             if confirmed_participations.exists() and selected_bid:
                 # 상호 확정된 경우 완료 처리

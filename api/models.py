@@ -643,6 +643,7 @@ class Participation(models.Model):
             groupbuy__product=self.groupbuy.product,
             groupbuy__status__in=['recruiting', 'bidding']
         ).exists():
+            from django.core.exceptions import ValidationError
             raise ValidationError("이미 동일한 상품의 공구에 참여중입니다.")
             
         # 참여 닉네임 자동 저장 (새로 생성되는 것인 경우에만)

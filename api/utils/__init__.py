@@ -59,7 +59,7 @@ def update_groupbuy_status(groupbuy):
             changed = True
     
     # 투표 단계 -> 판매자 확정 대기 또는 취소
-    elif groupbuy.status == 'voting' and now > groupbuy.voting_end:
+    elif groupbuy.status == 'voting' and groupbuy.voting_end and now > groupbuy.voting_end:
         # 투표 결과 확인 및 낙찰자 선정
         from ..models_voting import BidVote
         from ..models import Bid

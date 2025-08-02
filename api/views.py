@@ -1315,7 +1315,7 @@ class GroupBuyViewSet(ModelViewSet):
         user = request.user
         
         if user.role == 'buyer':
-            # voting, final_selection, completed 상태가 아닌 공구만
+            # 참여중인 공구: recruiting, bidding 상태만 (voting, final_selection, completed 제외)
             joined = self.get_queryset().filter(
                 participants=user,
                 status__in=['recruiting', 'bidding']
@@ -1499,9 +1499,9 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 공구 상태 확인
+        # 공구 상태 확인 - recruiting 또는 bidding 상태에서만 참여 가능
         now = timezone.now()
-        if groupbuy.status != 'recruiting' or now > groupbuy.end_time:
+        if groupbuy.status not in ['recruiting', 'bidding'] or now > groupbuy.end_time:
             return Response(
                 {'error': '참여할 수 없는 공구입니다. 모집이 종료되었거나 마감되었습니다.'}, 
                 status=status.HTTP_400_BAD_REQUEST
