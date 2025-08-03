@@ -16,6 +16,7 @@ services:
       - PYTHONUNBUFFERED=1
       - DEBUG=False
       - USE_S3=True
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,dungjimarket.com,www.dungjimarket.com,api.dungjimarket.com,54.180.82.238
     command: sh -c '
       python manage.py migrate &&
       python manage.py collectstatic --noinput &&
