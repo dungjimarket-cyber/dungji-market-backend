@@ -139,6 +139,36 @@ class BidViewSet(viewsets.ModelViewSet):
         bids = Bid.objects.filter(seller=request.user).order_by('-created_at')
         serializer = self.get_serializer(bids, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='seller/final-selection')
+    def seller_final_selection(self, request):
+        """
+        판매자의 최종선택 대기중 입찰 조회 API
+        """
+        if request.user.role != 'seller':
+            return Response(
+                {"detail": "판매회원만 접근할 수 있습니다."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # final_selection 상태이고 선택된 입찰만 조회
+        bids = Bid.objects.filter(
+            seller=request.user,
+            groupbuy__status='final_selection',
+            status='selected'
+        ).select_related('groupbuy', 'groupbuy__product').order_by('-created_at')
+        
+        # 직렬화할 때 final_selection_end 포함
+        data = []
+        for bid in bids:
+            bid_data = self.get_serializer(bid).data
+            bid_data['final_selection_end'] = bid.groupbuy.final_selection_end
+            bid_data['groupbuy_status'] = bid.groupbuy.status
+            bid_data['groupbuy_product_name'] = bid.groupbuy.product.name
+            bid_data['participants_count'] = bid.groupbuy.participation_set.count()
+            data.append(bid_data)
+        
+        return Response(data)
 
     @action(detail=True, methods=['post'], url_path='confirm')
     def confirm_bid(self, request, pk=None):

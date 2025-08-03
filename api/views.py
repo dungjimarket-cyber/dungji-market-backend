@@ -1294,6 +1294,59 @@ class GroupBuyViewSet(ModelViewSet):
             data['remaining_seconds'] = remaining_seconds
         else:
             data['remaining_seconds'] = 0
+        
+        # 입찰 정보 추가 (최종선택중인 경우)
+        if instance.status in ['final_selection', 'seller_confirmation', 'completed']:
+            from api.models import Bid
+            # 낙찰된 입찰 정보
+            winning_bid = instance.bid_set.filter(status='selected').first()
+            if winning_bid:
+                # 사용자가 참여자이거나 낙찰된 판매자인 경우에만 실제 금액 표시
+                user = request.user
+                is_participant = instance.participation_set.filter(user=user).exists()
+                is_winning_seller = winning_bid.seller == user
+                
+                if is_participant or is_winning_seller:
+                    data['winning_bid_amount'] = winning_bid.amount
+                else:
+                    # 미참여자는 마스킹 처리
+                    amount_str = str(winning_bid.amount)
+                    if len(amount_str) > 3:
+                        masked_amount = amount_str[0] + '*' * (len(amount_str) - 3) + '원'
+                    else:
+                        masked_amount = '***원'
+                    data['winning_bid_amount_masked'] = masked_amount
+                    data['winning_bid_amount'] = None
+                
+                # 전체 입찰 수
+                total_bids = instance.bid_set.count()
+                data['total_bids_count'] = total_bids
+                
+                # 입찰 내역 (상위 10개)
+                top_bids = instance.bid_set.order_by('-amount')[:10]
+                bid_list = []
+                for idx, bid in enumerate(top_bids, 1):
+                    if is_participant or is_winning_seller:
+                        bid_list.append({
+                            'rank': idx,
+                            'amount': bid.amount,
+                            'is_winner': bid.status == 'selected'
+                        })
+                    else:
+                        # 미참여자는 1위만 마스킹된 금액 표시
+                        if idx == 1:
+                            amount_str = str(bid.amount)
+                            if len(amount_str) > 3:
+                                masked_amount = amount_str[0] + '*' * (len(amount_str) - 3)
+                            else:
+                                masked_amount = '***'
+                            bid_list.append({
+                                'rank': idx,
+                                'amount_masked': masked_amount + '원',
+                                'is_winner': bid.status == 'selected'
+                            })
+                data['bid_ranking'] = bid_list
+        
         return Response(data)
 
     def perform_create(self, serializer):
@@ -1397,6 +1450,118 @@ class GroupBuyViewSet(ModelViewSet):
         
         serializer = self.get_serializer(completed, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def cancelled_groupbuys(self, request):
+        """취소된 공구 목록 조회
+        
+        구매자: 참여했던 공구 중 취소된 공구
+        판매자: 입찰했던 공구 중 취소된 공구
+        """
+        user = request.user
+        
+        if user.role == 'buyer':
+            # 구매자가 참여했던 공구 중 취소된 공구
+            # 1. 최종선택에서 포기를 선택한 경우
+            cancelled_by_choice = self.get_queryset().filter(
+                participation__user=user,
+                participation__final_decision='cancelled',
+                status__in=['cancelled', 'final_selection']
+            )
+            
+            # 2. 최종선택 기간 만료로 취소된 경우
+            from django.db.models import Q
+            from django.utils import timezone
+            now = timezone.now()
+            expired_final_selection = self.get_queryset().filter(
+                participation__user=user,
+                participation__final_decision='pending',
+                status='cancelled',
+                final_selection_end__lt=now
+            )
+            
+            # 3. 전반적으로 취소된 공구
+            general_cancelled = self.get_queryset().filter(
+                participation__user=user,
+                status='cancelled'
+            )
+            
+            # 합치고 중복 제거
+            cancelled = (cancelled_by_choice | expired_final_selection | general_cancelled).distinct()
+            
+            # 취소 사유 추가
+            result = []
+            for gb in cancelled:
+                data = self.get_serializer(gb).data
+                participation = gb.participation_set.filter(user=user).first()
+                
+                if participation and participation.final_decision == 'cancelled':
+                    data['cancel_reason'] = '구매 포기'
+                elif gb.status == 'cancelled' and gb.final_selection_end and gb.final_selection_end < now:
+                    data['cancel_reason'] = '최종선택 기간 만료'
+                elif gb.status == 'cancelled':
+                    # 낙찰자 포기 여부 확인
+                    selected_bid = gb.bid_set.filter(status='selected', final_decision='cancelled').first()
+                    if selected_bid:
+                        data['cancel_reason'] = '낙찰자의 판매포기로 인한 공구 진행 취소'
+                    else:
+                        data['cancel_reason'] = '공구 취소'
+                        
+                result.append(data)
+                
+        elif user.role == 'seller':
+            # 판매자가 입찰했던 공구 중 취소된 공구
+            from .models import Bid
+            
+            # 1. 판매 포기한 경우
+            cancelled_by_choice = self.get_queryset().filter(
+                bid__seller=user,
+                bid__final_decision='cancelled',
+                status__in=['cancelled', 'final_selection']
+            )
+            
+            # 2. 최종선택 기간 만료로 취소된 경우
+            expired_final_selection = self.get_queryset().filter(
+                bid__seller=user,
+                bid__is_selected=True,
+                bid__final_decision='pending',
+                status='cancelled',
+                final_selection_end__lt=timezone.now()
+            )
+            
+            # 3. 전반적으로 취소된 공구
+            general_cancelled = self.get_queryset().filter(
+                bid__seller=user,
+                status='cancelled'
+            )
+            
+            # 합치고 중복 제거
+            cancelled = (cancelled_by_choice | expired_final_selection | general_cancelled).distinct()
+            
+            # 취소 사유 추가
+            result = []
+            for gb in cancelled:
+                data = self.get_serializer(gb).data
+                bid = gb.bid_set.filter(seller=user).first()
+                
+                if bid and bid.final_decision == 'cancelled':
+                    data['cancel_reason'] = '판매 포기'
+                elif gb.status == 'cancelled' and gb.final_selection_end and gb.final_selection_end < timezone.now():
+                    data['cancel_reason'] = '최종선택 기간 만료'
+                elif gb.status == 'cancelled':
+                    # 구매자 전원 포기 여부 확인
+                    total_participants = gb.participation_set.count()
+                    cancelled_participants = gb.participation_set.filter(final_decision='cancelled').count()
+                    if total_participants > 0 and total_participants == cancelled_participants:
+                        data['cancel_reason'] = '구매자 전원 구매포기로 인한 공구 진행 취소'
+                    else:
+                        data['cancel_reason'] = '공구 취소'
+                        
+                result.append(data)
+        else:
+            result = []
+        
+        return Response(result)
         
     # 판매자용 API 엔드포인트들
     @action(detail=False, methods=['get'])
