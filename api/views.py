@@ -2153,6 +2153,102 @@ class ParticipationViewSet(ModelViewSet):
         participations = Participation.objects.filter(user=request.user)
         serializer = self.get_serializer(participations, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'], url_path='(?P<groupbuy_id>[^/.]+)/final-decision')
+    def final_decision(self, request, groupbuy_id=None):
+        """참여자의 최종 구매 결정 (구매확정/구매포기)"""
+        try:
+            # 참여 정보 확인
+            participation = Participation.objects.get(
+                user=request.user,
+                groupbuy_id=groupbuy_id
+            )
+            
+            # 공구 상태 확인
+            if participation.groupbuy.status != 'final_selection':
+                return Response(
+                    {'error': '최종선택 기간이 아닙니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 이미 결정한 경우
+            if participation.final_decision != 'pending':
+                return Response(
+                    {'error': '이미 최종선택을 완료했습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 결정 유형 검증
+            decision = request.data.get('decision')
+            if decision not in ['confirmed', 'cancelled']:
+                return Response(
+                    {'error': '올바르지 않은 선택입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 최종 결정 업데이트
+            participation.final_decision = decision
+            participation.save()
+            
+            # 알림 생성
+            from .models import Notification
+            if decision == 'confirmed':
+                Notification.objects.create(
+                    user=participation.user,
+                    groupbuy=participation.groupbuy,
+                    notification_type='purchase_confirmed',
+                    message=f"{participation.groupbuy.title} 공구의 구매를 확정했습니다. 판매자 정보를 확인하세요."
+                )
+            else:
+                Notification.objects.create(
+                    user=participation.user,
+                    groupbuy=participation.groupbuy,
+                    notification_type='purchase_cancelled',
+                    message=f"{participation.groupbuy.title} 공구의 구매를 포기했습니다."
+                )
+            
+            # 모든 참여자와 판매자가 결정을 완료했는지 확인
+            self._check_all_decisions_complete(participation.groupbuy)
+            
+            return Response({
+                'message': '최종선택이 완료되었습니다.',
+                'decision': decision
+            })
+            
+        except Participation.DoesNotExist:
+            return Response(
+                {'error': '참여 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _check_all_decisions_complete(self, groupbuy):
+        """모든 참여자와 판매자의 결정이 완료되었는지 확인"""
+        from .models import Bid
+        
+        # 참여자들의 결정 확인
+        pending_participants = groupbuy.participation_set.filter(final_decision='pending').exists()
+        
+        # 낙찰된 판매자의 결정 확인
+        winning_bid = groupbuy.bid_set.filter(status='selected').first()
+        seller_pending = winning_bid and winning_bid.final_decision == 'pending'
+        
+        # 모두 결정을 완료한 경우
+        if not pending_participants and not seller_pending:
+            # 구매 확정한 참여자가 있고 판매자도 확정한 경우
+            confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').exists()
+            seller_confirmed = winning_bid and winning_bid.final_decision == 'confirmed'
+            
+            if confirmed_participants and seller_confirmed:
+                groupbuy.status = 'completed'
+            else:
+                groupbuy.status = 'cancelled'
+            
+            groupbuy.save()
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]

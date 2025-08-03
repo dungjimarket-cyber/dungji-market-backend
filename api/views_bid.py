@@ -140,6 +140,131 @@ class BidViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(bids, many=True)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['post'], url_path='final-decision')
+    def final_decision(self, request, pk=None):
+        """
+        판매자의 최종 판매 결정 (판매확정/판매포기)
+        """
+        try:
+            # 입찰 정보 확인
+            bid = self.get_object()
+            
+            # 본인의 입찰인지 확인
+            if bid.seller != request.user:
+                return Response(
+                    {'error': '본인의 입찰만 결정할 수 있습니다.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # 낙찰된 입찰인지 확인
+            if bid.status != 'selected':
+                return Response(
+                    {'error': '낙찰된 입찰만 최종선택이 가능합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 공구 상태 확인
+            if bid.groupbuy.status != 'final_selection':
+                return Response(
+                    {'error': '최종선택 기간이 아닙니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 이미 결정한 경우
+            if bid.final_decision != 'pending':
+                return Response(
+                    {'error': '이미 최종선택을 완료했습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 결정 유형 검증
+            decision = request.data.get('decision')
+            if decision not in ['confirmed', 'cancelled']:
+                return Response(
+                    {'error': '올바르지 않은 선택입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 최종 결정 업데이트
+            bid.final_decision = decision
+            bid.save()
+            
+            # 판매 포기 시 패널티 부과
+            if decision == 'cancelled':
+                # 구매 확정한 참여자가 2명 이상인 경우에만 패널티 부과
+                confirmed_count = bid.groupbuy.participation_set.filter(
+                    final_decision='confirmed'
+                ).count()
+                
+                if confirmed_count >= 2:
+                    try:
+                        from api.models import UserProfile
+                        user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+                        user_profile.penalty_points += 10
+                        user_profile.save()
+                    except:
+                        pass
+            
+            # 알림 생성
+            from api.models import Notification
+            if decision == 'confirmed':
+                Notification.objects.create(
+                    user=bid.seller,
+                    groupbuy=bid.groupbuy,
+                    notification_type='sale_confirmed',
+                    message=f"{bid.groupbuy.title} 공구의 판매를 확정했습니다. 구매자 정보를 확인하세요."
+                )
+            else:
+                Notification.objects.create(
+                    user=bid.seller,
+                    groupbuy=bid.groupbuy,
+                    notification_type='sale_cancelled',
+                    message=f"{bid.groupbuy.title} 공구의 판매를 포기했습니다."
+                )
+            
+            # 모든 참여자와 판매자가 결정을 완료했는지 확인
+            self._check_all_decisions_complete(bid.groupbuy)
+            
+            return Response({
+                'message': '최종선택이 완료되었습니다.',
+                'decision': decision
+            })
+            
+        except Bid.DoesNotExist:
+            return Response(
+                {'error': '입찰 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _check_all_decisions_complete(self, groupbuy):
+        """모든 참여자와 판매자의 결정이 완료되었는지 확인"""
+        from api.models import Participation
+        
+        # 참여자들의 결정 확인
+        pending_participants = groupbuy.participation_set.filter(final_decision='pending').exists()
+        
+        # 낙찰된 판매자의 결정 확인
+        winning_bid = groupbuy.bid_set.filter(status='selected').first()
+        seller_pending = winning_bid and winning_bid.final_decision == 'pending'
+        
+        # 모두 결정을 완료한 경우
+        if not pending_participants and not seller_pending:
+            # 구매 확정한 참여자가 있고 판매자도 확정한 경우
+            confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').exists()
+            seller_confirmed = winning_bid and winning_bid.final_decision == 'confirmed'
+            
+            if confirmed_participants and seller_confirmed:
+                groupbuy.status = 'completed'
+            else:
+                groupbuy.status = 'cancelled'
+            
+            groupbuy.save()
+    
     @action(detail=False, methods=['get'], url_path='seller/final-selection')
     def seller_final_selection(self, request):
         """

@@ -24,7 +24,7 @@ def update_groupbuy_status(groupbuy):
         groupbuy.save(update_fields=['status'])
         return True
     
-    # 입찰 진행중이고 종료 시간이 지난 경우 -> 최종선택중으로 변경 (12시간 타이머 시작)
+    # 입찰 진행중이고 종료 시간이 지난 경우
     if groupbuy.status == 'bidding' and now > groupbuy.end_time:
         # 최소 참여자 수를 충족하지 못한 경우 취소
         if groupbuy.current_participants < groupbuy.min_participants:
@@ -32,37 +32,77 @@ def update_groupbuy_status(groupbuy):
             groupbuy.save(update_fields=['status'])
             return True
         
-        # 최종선택 상태로 변경하고 12시간 타이머 설정
-        groupbuy.status = 'voting'
-        groupbuy.voting_end = now + timedelta(hours=12)
-        groupbuy.save(update_fields=['status', 'voting_end'])
+        # 낙찰된 입찰이 있는지 확인
+        from .models import Bid
+        winning_bid = groupbuy.bid_set.filter(status='selected').first()
         
-        # 참여자들에게 알림 보내기
-        try:
-            from .models import Notification
-            for participant in groupbuy.participants.all():
+        if winning_bid:
+            # 최종선택 상태로 변경하고 12시간 타이머 설정
+            groupbuy.status = 'final_selection'
+            groupbuy.final_selection_end = now + timedelta(hours=12)
+            groupbuy.save(update_fields=['status', 'final_selection_end'])
+            
+            # 참여자들에게 알림 보내기
+            try:
+                from .models import Notification
+                # 구매자들에게 알림
+                for participant in groupbuy.participants.all():
+                    Notification.objects.create(
+                        user=participant,
+                        groupbuy=groupbuy,
+                        notification_type='final_selection_start',
+                        message=f"{groupbuy.title} 공구의 최종 선택이 시작되었습니다. 12시간 내에 구매 확정/포기를 선택해주세요."
+                    )
+                # 낙찰된 판매자에게 알림
                 Notification.objects.create(
-                    user=participant,
+                    user=winning_bid.seller,
                     groupbuy=groupbuy,
-                    notification_type='voting_start',
-                    message=f"{groupbuy.title} 공구의 최종 선택 시간이 시작되었습니다. 12시간 내에 판매자를 선택해주세요."
+                    notification_type='final_selection_start',
+                    message=f"{groupbuy.title} 공구에 낙찰되었습니다. 12시간 내에 판매 확정/포기를 선택해주세요."
                 )
-        except Exception as e:
-            print(f"알림 생성 중 오류: {e}")
+            except Exception as e:
+                print(f"알림 생성 중 오류: {e}")
+        else:
+            # 낙찰된 입찰이 없으면 취소
+            groupbuy.status = 'cancelled'
+            groupbuy.save(update_fields=['status'])
         
         return True
             
-    # 투표 중이고 투표 종료 시간(12시간)이 지난 경우
-    if groupbuy.status == 'voting' and groupbuy.voting_end and now > groupbuy.voting_end:
-        groupbuy.handle_voting_timeout()
-        return True
+    # 최종선택 중이고 최종선택 종료 시간(12시간)이 지난 경우
+    if groupbuy.status == 'final_selection' and groupbuy.final_selection_end and now > groupbuy.final_selection_end:
+        # 최종선택 시간 초과 처리
+        from .models import Bid, Participation
         
-    # 판매자 확정 대기 중이고 24시간이 지난 경우
-    if groupbuy.status == 'seller_confirmation' and groupbuy.voting_end:
-        if now > groupbuy.voting_end + timedelta(hours=24):
+        # 시간 내 선택하지 않은 참여자들을 포기로 처리
+        unconfirmed_participations = groupbuy.participation_set.filter(final_decision='pending')
+        unconfirmed_participations.update(final_decision='cancelled')
+        
+        # 시간 내 선택하지 않은 판매자를 포기로 처리 (패널티 부과)
+        winning_bid = groupbuy.bid_set.filter(status='selected').first()
+        if winning_bid and winning_bid.final_decision == 'pending':
+            winning_bid.final_decision = 'cancelled'
+            winning_bid.save()
+            
+            # 판매자에게 패널티 부과
+            try:
+                seller_profile = winning_bid.seller.userprofile
+                seller_profile.penalty_points += 10  # 패널티 점수 부과
+                seller_profile.save()
+            except:
+                pass
+        
+        # 구매 확정한 참여자와 판매 확정한 판매자가 모두 있는 경우 completed
+        confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').exists()
+        seller_confirmed = winning_bid and winning_bid.final_decision == 'confirmed'
+        
+        if confirmed_participants and seller_confirmed:
             groupbuy.status = 'completed'
-            groupbuy.save(update_fields=['status'])
-            return True
+        else:
+            groupbuy.status = 'cancelled'
+            
+        groupbuy.save(update_fields=['status'])
+        return True
             
     return False
 
