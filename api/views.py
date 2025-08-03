@@ -1517,6 +1517,8 @@ class GroupBuyViewSet(ModelViewSet):
         elif user.role == 'seller':
             # 판매자가 입찰했던 공구 중 취소된 공구
             from .models import Bid
+            from django.utils import timezone
+            now = timezone.now()
             
             # 1. 판매 포기한 경우
             cancelled_by_choice = self.get_queryset().filter(
@@ -1531,7 +1533,7 @@ class GroupBuyViewSet(ModelViewSet):
                 bid__is_selected=True,
                 bid__final_decision='pending',
                 status='cancelled',
-                final_selection_end__lt=timezone.now()
+                final_selection_end__lt=now
             )
             
             # 3. 전반적으로 취소된 공구
@@ -1551,7 +1553,7 @@ class GroupBuyViewSet(ModelViewSet):
                 
                 if bid and bid.final_decision == 'cancelled':
                     data['cancel_reason'] = '판매 포기'
-                elif gb.status == 'cancelled' and gb.final_selection_end and gb.final_selection_end < timezone.now():
+                elif gb.status == 'cancelled' and gb.final_selection_end and gb.final_selection_end < now:
                     data['cancel_reason'] = '최종선택 기간 만료'
                 elif gb.status == 'cancelled':
                     # 구매자 전원 포기 여부 확인
