@@ -1303,8 +1303,13 @@ class GroupBuyViewSet(ModelViewSet):
             if winning_bid:
                 # 사용자가 참여자이거나 낙찰된 판매자인 경우에만 실제 금액 표시
                 user = request.user
-                is_participant = instance.participation_set.filter(user=user).exists()
-                is_winning_seller = winning_bid.seller == user
+                is_participant = False
+                is_winning_seller = False
+                
+                # 인증된 사용자인 경우에만 참여자/판매자 확인
+                if user.is_authenticated:
+                    is_participant = instance.participation_set.filter(user=user).exists()
+                    is_winning_seller = winning_bid.seller == user
                 
                 if is_participant or is_winning_seller:
                     data['winning_bid_amount'] = winning_bid.amount
