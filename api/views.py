@@ -1367,13 +1367,14 @@ class GroupBuyViewSet(ModelViewSet):
     def joined_groupbuys(self, request):
         """참여중인 공구 목록 조회
         
-        구매자: voting 이전 상태의 참여 공구
+        구매자: recruiting, bidding 상태의 참여 공구 (voting, final_selection, completed, cancelled 제외)
         판매자: 사용하지 않음
         """
         user = request.user
         
         if user.role == 'buyer':
-            # 참여중인 공구: recruiting, bidding 상태만 (voting, final_selection, completed 제외)
+            # 참여중인 공구: recruiting, bidding 상태만 
+            # voting, final_selection, seller_confirmation, completed, cancelled 제외
             joined = self.get_queryset().filter(
                 participants=user,
                 status__in=['recruiting', 'bidding']
@@ -1797,6 +1798,66 @@ class GroupBuyViewSet(ModelViewSet):
                 {'error': '투표 처리 중 오류가 발생했습니다.'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=True, methods=['get'])
+    def contact_info(self, request, pk=None):
+        """구매/판매 확정 후 상대방 연락처 정보 조회"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 공구 상태 확인
+        if groupbuy.status not in ['final_selection', 'completed']:
+            return Response(
+                {'error': '연락처 정보는 최종선택 또는 완료 상태에서만 조회 가능합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 구매자인 경우 - 구매 확정했는지 확인
+        participation = groupbuy.participation_set.filter(user=user).first()
+        if participation and participation.final_decision == 'confirmed':
+            # 낙찰된 판매자 정보 제공
+            winning_bid = groupbuy.bid_set.filter(status='selected').first()
+            if winning_bid and winning_bid.final_decision == 'confirmed':
+                seller = winning_bid.seller
+                return Response({
+                    'role': 'buyer',
+                    'contact_info': {
+                        'name': seller.username,
+                        'business_name': getattr(seller, 'business_name', ''),
+                        'phone': seller.phone_number if seller.phone_number else '미등록',
+                        'email': seller.email,
+                        'profile_image': seller.profile_image
+                    }
+                })
+            else:
+                return Response(
+                    {'error': '판매자가 아직 판매를 확정하지 않았습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # 판매자인 경우 - 판매 확정했는지 확인
+        winning_bid = groupbuy.bid_set.filter(seller=user, status='selected').first()
+        if winning_bid and winning_bid.final_decision == 'confirmed':
+            # 구매 확정한 참여자들 정보 제공
+            confirmed_participations = groupbuy.participation_set.filter(final_decision='confirmed')
+            participants_info = []
+            for p in confirmed_participations:
+                participants_info.append({
+                    'name': p.user.username,
+                    'phone': p.user.phone_number if p.user.phone_number else '미등록',
+                    'email': p.user.email,
+                    'joined_at': p.joined_at
+                })
+            
+            return Response({
+                'role': 'seller',
+                'contact_info': participants_info
+            })
+        
+        return Response(
+            {'error': '연락처 정보를 조회할 권한이 없습니다.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
     
     @action(detail=True, methods=['get'])
     def my_vote(self, request, pk=None):
