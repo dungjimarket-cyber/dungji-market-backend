@@ -69,9 +69,9 @@ class NotificationScheduler:
         """
         now = timezone.now()
         
-        # 최종선택 단계 중인 공구 조회
+        # 구매자 최종선택 단계 중인 공구 조회
         confirmation_groupbuys = GroupBuy.objects.filter(
-            status='final_selection',
+            status='final_selection_buyers',
             final_selection_end__gt=now,
             final_selection_end__lte=now + timedelta(hours=12)
         )
@@ -94,7 +94,7 @@ class NotificationScheduler:
                         Notification.objects.create(
                             user=user,
                             groupbuy=groupbuy,
-                            message=f"투표 마감까지 {hours_left}시간 남았습니다. 확정/포기 여부를 선택해주세요.",
+                            message=f"구매자 최종선택 마감까지 {hours_left}시간 남았습니다. 구매 확정/포기를 선택해주세요.",
                             notification_type='reminder'
                         )
                         
@@ -106,15 +106,6 @@ class NotificationScheduler:
                                 groupbuy.id,
                                 hours_left
                             )
-                    
-                    # 이메일 발송
-                    if user.email:
-                        EmailSender.send_bid_confirmation_reminder(
-                            user.email,
-                            groupbuy.title,
-                            groupbuy.id,
-                            hours_left
-                        )
     
     @staticmethod
     def send_seller_confirmation_reminders():
@@ -125,131 +116,113 @@ class NotificationScheduler:
         """
         now = timezone.now()
         
-        # 판매자 확정 대기 중인 공구 조회
-        # final_selection_end + 24시간이 판매자 확정 마감 시간
+        # 판매자 최종선택 단계 중인 공구 조회
         seller_confirmation_groupbuys = GroupBuy.objects.filter(
-            status='seller_confirmation'
+            status='final_selection_seller',
+            seller_selection_end__gt=now,
+            seller_selection_end__lte=now + timedelta(hours=6)
         )
         
         for groupbuy in seller_confirmation_groupbuys:
-            # 판매자 확정 마감 시간 계산
-            seller_deadline = groupbuy.final_selection_end + timedelta(hours=24)
-            
-            # 현재 시간과 마감 시간 비교
-            if now <= seller_deadline <= now + timedelta(hours=12):
-                # 마감까지 남은 시간 계산 (시간 단위)
-                hours_left = int((seller_deadline - now).total_seconds() / 3600)
+            # 마감까지 남은 시간 계산 (시간 단위)
+            hours_left = int((groupbuy.seller_selection_end - now).total_seconds() / 3600)
                 
-                # 2시간 간격으로 알림 발송 (12, 10, 8, 6, 4, 2시간 전)
-                if hours_left in [12, 10, 8, 6, 4, 2] and hours_left > 0:
+            # 1시간 간격으로 알림 발송 (6, 5, 4, 3, 2, 1시간 전)
+            if hours_left in [6, 5, 4, 3, 2, 1] and hours_left > 0:
                     logger.info(f"공구 '{groupbuy.title}' 판매자 확정 {hours_left}시간 전 알림 발송")
                     
-                    # 낙찰자 조회 (이기는 입찰자 중 is_winner=True인 사람)
-                    winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_winner=True).first()
+                # 낙찰된 입찰 조회
+                winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
                     
-                    if winning_bid:
-                        seller = winning_bid.seller
-                        
-                        # 알림 생성
-                        Notification.objects.create(
-                            user=seller,
-                            groupbuy=groupbuy,
-                            message=f"판매자 확정까지 {hours_left}시간 남았습니다. 확정 여부를 선택해주세요.",
-                            notification_type='reminder'
+                if winning_bid and winning_bid.final_decision == 'pending':
+                    seller = winning_bid.seller
+                    
+                    # 알림 생성
+                    Notification.objects.create(
+                        user=seller,
+                        groupbuy=groupbuy,
+                        message=f"판매자 최종선택 마감까지 {hours_left}시간 남았습니다. 판매 확정/포기를 선택해주세요.",
+                        notification_type='reminder'
+                    )
+                    
+                    # 이메일 발송
+                    if seller.email:
+                        EmailSender.send_seller_confirmation_reminder(
+                            seller.email,
+                            groupbuy.title,
+                            groupbuy.id,
+                            hours_left
                         )
-                        
-                        # 이메일 발송
-                        if seller.email:
-                            EmailSender.send_seller_confirmation_reminder(
-                                seller.email,
-                                groupbuy.title,
-                                groupbuy.id,
-                                hours_left
-                            )
     
     @staticmethod
     def process_expired_confirmations():
         """
-        기한이 만료된 최종선택 단계의 공구를 처리합니다.
+        기한이 만료된 구매자 최종선택 단계의 공구를 처리합니다.
         
-        최종선택 기한이 지난 공구를 처리하고 확정하지 않은 참여자에게 패널티를 부여합니다.
+        구매자 최종선택 기한이 지난 공구를 처리하고 판매자 단계로 진행하거나 취소합니다.
         """
         now = timezone.now()
         
-        # 최종선택 기한이 지난 공구 조회
+        # 구매자 최종선택 기한이 지난 공구 조회
         expired_groupbuys = GroupBuy.objects.filter(
-            status='final_selection',
+            status='final_selection_buyers',
             final_selection_end__lt=now
         )
         
         for groupbuy in expired_groupbuys:
-            logger.info(f"공구 '{groupbuy.title}' 최종선택 기한 만료 처리")
+            logger.info(f"공구 '{groupbuy.title}' 구매자 최종선택 기한 만료 처리")
             
-            # 선택하지 않은 참여자 조회
+            # 선택하지 않은 참여자 조회 및 취소 처리
             participants = groupbuy.participation_set.all()
             not_confirmed_participants = participants.filter(final_decision='pending')
             
-            # 선택하지 않은 참여자들에게 패널티 부여
+            # 선택하지 않은 참여자들을 포기로 처리 (패널티는 나중에 구매 확정률 기준으로 부여)
             for participant in not_confirmed_participants:
-                # 패널티 부여
-                participant.user.penalty_points = participant.user.penalty_points + 10
-                participant.user.save()
-                
                 # 참여 상태를 취소로 변경
                 participant.final_decision = 'cancelled'
                 participant.save()
+                
                 # 알림 생성
                 Notification.objects.create(
                     user=participant.user,
                     groupbuy=groupbuy,
-                    message="최종선택 기한이 만료되어 자동으로 취소 처리되었습니다. 패널티 10점이 부여되었습니다.",
+                    message="구매자 최종선택 기한이 만료되어 자동으로 포기 처리되었습니다.",
                     notification_type='warning'
                 )
-                
-                # 이메일 발송
-                if participant.user.email:
-                    EmailSender.send_notification_email(
-                        participant.user.email,
-                        "[둥지마켓] 최종선택 기한 만료 및 패널티 부여 안내",
-                        'emails/final_selection_expired.html',
-                        {
-                            'groupbuy_title': groupbuy.title,
-                            'groupbuy_id': groupbuy.id,
-                            'penalty_points': 10,
-                            'site_url': 'https://dungji-market.com',
-                        }
-                    )
             
             # 확정한 참여자가 있는지 확인
-            confirmed_participants = participants.filter(final_decision='confirmed').count()
+            confirmed_count = participants.filter(final_decision='confirmed').count()
+            total_count = participants.count()
             
-            if confirmed_participants >= 1:
-                # 확정한 참여자가 있으면 판매자 확정 단계로 진행
-                groupbuy.status = 'seller_confirmation'
+            if confirmed_count > 0:
+                # 확정한 참여자가 있으면 판매자 최종선택 단계로 진행
+                groupbuy.status = 'final_selection_seller'
+                groupbuy.seller_selection_end = now + timedelta(hours=6)
                 groupbuy.save()
                 
-                # 낙찰자 선정 로직은 GroupBuy.handle_final_selection_timeout에서 처리됨
-                # 낙찰자 조회
-                winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_winner=True).first()
+                # 낙찰된 입찰 조회
+                winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
                 
                 if winning_bid and winning_bid.seller:
-                    # 낙찰자에게 알림
+                    # 판매자에게 알림
                     Notification.objects.create(
                         user=winning_bid.seller,
                         groupbuy=groupbuy,
-                        message="축하합니다! 귀하의 입찰이 낙찰되었습니다. 판매 확정 여부를 선택해주세요.",
-                        notification_type='success'
+                        message=f"{groupbuy.title} 공구의 판매자 최종 선택이 시작되었습니다. 6시간 내에 판매 확정/포기를 선택해주세요. (구매확정: {confirmed_count}/{total_count}명)",
+                        notification_type='seller_selection_start'
                     )
                     
                     # 이메일 발송
                     if winning_bid.seller.email:
                         EmailSender.send_notification_email(
                             winning_bid.seller.email,
-                            "[둥지마켓] 입찰 낙찰 안내",
-                            'emails/bid_won.html',
+                            "[둥지마켓] 판매자 최종선택 시작 안내",
+                            'emails/seller_selection_start.html',
                             {
                                 'groupbuy_title': groupbuy.title,
                                 'groupbuy_id': groupbuy.id,
+                                'confirmed_count': confirmed_count,
+                                'total_count': total_count,
                                 'site_url': 'https://dungji-market.com',
                             }
                         )
@@ -263,120 +236,154 @@ class NotificationScheduler:
                     Notification.objects.create(
                         user=participant.user,
                         groupbuy=groupbuy,
-                        message="최종선택 기한 내에 확정한 참여자가 없어 공구가 취소되었습니다.",
+                        message="구매자 최종선택 기한 내에 확정한 참여자가 없어 공구가 취소되었습니다.",
                         notification_type='failure'
                     )
                 
-                # 다른 입찰자들에게 알림
-                other_bids = Bid.objects.filter(groupbuy=groupbuy).exclude(is_selected=True)
-                for bid in other_bids:
+                # 모든 입찰자들에게 알림
+                all_bids = Bid.objects.filter(groupbuy=groupbuy)
+                for bid in all_bids:
                     if bid.seller:
                         Notification.objects.create(
                             user=bid.seller,
                             groupbuy=groupbuy,
-                            message="아쉽게도 귀하의 입찰이 낙찰되지 않았습니다.",
+                            message="공구 참여자들이 구매를 포기하여 공구가 취소되었습니다.",
                             notification_type='failure'
                         )
-                        
-                        # 이메일 발송
-                        if bid.seller.email:
-                            EmailSender.send_notification_email(
-                                bid.seller.email,
-                                "[둥지마켓] 입찰 결과 안내",
-                                'emails/bid_lost.html',
-                                {
-                                    'groupbuy_title': groupbuy.title,
-                                    'groupbuy_id': groupbuy.id,
-                                    'site_url': 'https://dungji-market.com',
-                                }
-                            )
     
     @staticmethod
     def process_expired_seller_confirmations():
         """
-        기한이 만료된 판매자 확정 대기 상태의 공구를 처리합니다.
+        기한이 만료된 판매자 최종선택 단계의 공구를 처리합니다.
         
-        판매자 확정 기한이 지난 공구를 자동으로 완료 처리합니다.
+        판매자 최종선택 기한이 지난 공구를 처리하고 공구를 완료/취소 처리합니다.
         """
         now = timezone.now()
         
-        # 판매자 확정 대기 상태의 공구 조회
+        # 판매자 최종선택 기한이 지난 공구 조회
         expired_groupbuys = GroupBuy.objects.filter(
-            status='seller_confirmation'
+            status='final_selection_seller',
+            seller_selection_end__lt=now
         )
         
         for groupbuy in expired_groupbuys:
-            # 판매자 확정 마감 시간 계산 (final_selection_end + 24시간)
-            seller_deadline = groupbuy.final_selection_end + timedelta(hours=24)
+            logger.info(f"공구 '{groupbuy.title}' 판매자 최종선택 기한 만료 처리")
             
-            # 현재 시간이 판매자 확정 마감 시간을 지났는지 확인
-            if now > seller_deadline:
-                logger.info(f"공구 '{groupbuy.title}' 판매자 확정 기한 만료 처리")
+            # 낙찰된 입찰 조회
+            winning_bid = Bid.objects.filter(
+                groupbuy=groupbuy,
+                status='selected'
+            ).first()
+            
+            # 판매자가 선택하지 않은 경우
+            if winning_bid and winning_bid.final_decision == 'pending':
+                winning_bid.final_decision = 'cancelled'
+                winning_bid.save()
                 
-                # 낙찰된 입찰 조회
-                winning_bid = Bid.objects.filter(
-                    groupbuy=groupbuy,
-                    is_selected=True
-                ).first()
+                # 구매 확정률 계산
+                confirmed_count = groupbuy.participation_set.filter(final_decision='confirmed').count()
+                total_count = groupbuy.participation_set.count()
+                confirmation_rate = confirmed_count / total_count if total_count > 0 else 0
                 
-                # 판매자가 확정하지 않은 경우 패널티 부여
-                if winning_bid and winning_bid.final_decision == 'pending':
-                    winning_bid.seller.penalty_points = winning_bid.seller.penalty_points + 20
-                    winning_bid.seller.save()
-                    winning_bid.final_decision = 'cancelled'
-                    winning_bid.save()
-                    
-                    # 공구 취소 처리
-                    groupbuy.status = 'cancelled'
-                    groupbuy.save()
-                    
-                    # 판매자에게 패널티 알림
-                    Notification.objects.create(
-                        user=winning_bid.seller,
-                        groupbuy=groupbuy,
-                        message="판매 확정 기한이 만료되어 공구가 취소되었습니다. 패널티 20점이 부여되었습니다.",
-                        notification_type='warning'
-                    )
+                # 50% 이하인 경우 패널티 면제
+                if confirmation_rate > 0.5:
+                    # 판매자에게 패널티 부여
+                    try:
+                        seller_profile = winning_bid.seller.userprofile
+                        seller_profile.penalty_points += 10  # 패널티 점수 부과
+                        seller_profile.save()
+                        
+                        # 패널티 알림
+                        Notification.objects.create(
+                            user=winning_bid.seller,
+                            groupbuy=groupbuy,
+                            message=f"판매자 최종선택 기한이 만료되어 공구가 취소되었습니다. 패널티 10점이 부여되었습니다. (구매확정률: {int(confirmation_rate*100)}%)",
+                            notification_type='warning'
+                        )
+                    except:
+                        pass
                 else:
-                    # 판매자가 이미 확정했다면 공구 완료 처리
-                    groupbuy.status = 'completed'
-                    groupbuy.save()
-                
-                if winning_bid and winning_bid.seller:
-                    # 판매자에게 알림
+                    # 패널티 면제 알림
                     Notification.objects.create(
                         user=winning_bid.seller,
                         groupbuy=groupbuy,
-                        message="판매자 확정 기한이 만료되어 자동으로 판매가 확정되었습니다.",
+                        message=f"판매자 최종선택 기한이 만료되어 공구가 취소되었습니다. 구매확정률이 50% 이하여서 패널티가 면제되었습니다. (구매확정률: {int(confirmation_rate*100)}%)",
                         notification_type='info'
                     )
                     
-                    # 이메일 발송
-                    if winning_bid.seller.email:
-                        EmailSender.send_notification_email(
-                            winning_bid.seller.email,
-                            "[둥지마켓] 판매 자동 확정 안내",
-                            'emails/seller_auto_confirmed.html',
-                            {
-                                'groupbuy_title': groupbuy.title,
-                                'groupbuy_id': groupbuy.id,
-                                'site_url': 'https://dungji-market.com',
-                            }
-                        )
+                    # 입찰권 환불 처리 (단품 입찰권만 환불, 무제한 구독권 제외)
+                    if winning_bid.bid_token and winning_bid.bid_token.token_type == 'single':
+                        try:
+                            # 입찰권 상태를 다시 활성으로 변경
+                            winning_bid.bid_token.status = 'active'
+                            winning_bid.bid_token.used_at = None
+                            winning_bid.bid_token.used_for = None
+                            winning_bid.bid_token.save()
+                            
+                            # 입찰과 입찰권 연결 해제
+                            winning_bid.bid_token = None
+                            winning_bid.save()
+                            
+                            # 환불 알림 추가
+                            Notification.objects.create(
+                                user=winning_bid.seller,
+                                groupbuy=groupbuy,
+                                message=f"구매확정률이 50% 이하여서 사용한 입찰권이 환불되었습니다.",
+                                notification_type='info'
+                            )
+                            logger.info(f"입찰권 자동 환불 완료 - 판매자: {winning_bid.seller.id}, 공구: {groupbuy.id}")
+                        except Exception as e:
+                            logger.error(f"입찰권 자동 환불 실패: {str(e)}")
+            
+            # 최종 상태 결정
+            seller_confirmed = winning_bid and winning_bid.final_decision == 'confirmed'
+            confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').exists()
+            
+            if confirmed_participants and seller_confirmed:
+                groupbuy.status = 'completed'
                 
                 # 모든 참여자에게 알림
-                participants = groupbuy.participation_set.all()
+                participants = groupbuy.participation_set.filter(final_decision='confirmed')
                 for participant in participants:
-                    # 판매자가 아닌 참여자에게만 알림 발송
-                    if winning_bid and winning_bid.seller and participant.user.id == winning_bid.seller.id:
-                        continue
-                    
                     Notification.objects.create(
                         user=participant.user,
                         groupbuy=groupbuy,
-                        message="공구가 완료되었습니다.",
-                        notification_type='info'
+                        message="공구가 성공적으로 완료되었습니다!",
+                        notification_type='success'
                     )
+            else:
+                groupbuy.status = 'cancelled'
+                
+                # 구매자 패널티 처리 (구매 확정 후 판매자가 포기한 경우에는 면제)
+                if seller_confirmed or (winning_bid and winning_bid.final_decision == 'pending'):
+                    # 판매자가 확정했거나 미선택인 경우에만 구매자 패널티
+                    cancelled_participations = groupbuy.participation_set.filter(final_decision='cancelled')
+                    for participation in cancelled_participations:
+                        try:
+                            user_profile = participation.user.userprofile
+                            user_profile.penalty_points += 5  # 구매자 패널티
+                            user_profile.save()
+                            
+                            Notification.objects.create(
+                                user=participation.user,
+                                groupbuy=groupbuy,
+                                message="구매를 포기하여 패널티 5점이 부여되었습니다.",
+                                notification_type='warning'
+                            )
+                        except:
+                            pass
+                
+                # 공구 취소 알림
+                all_participants = groupbuy.participation_set.all()
+                for participant in all_participants:
+                    Notification.objects.create(
+                        user=participant.user,
+                        groupbuy=groupbuy,
+                        message="공구가 취소되었습니다.",
+                        notification_type='failure'
+                    )
+            
+            groupbuy.save(update_fields=['status'])
     
     @staticmethod
     def run_all_tasks():

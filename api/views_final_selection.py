@@ -49,18 +49,18 @@ def buyer_final_decision(request, groupbuy_id):
                     {'error': '참여하지 않은 공구입니다.'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        elif groupbuy.status not in ['final_selection']:
+        elif groupbuy.status not in ['final_selection_buyers']:
             return Response(
-                {'error': '최종선택이 가능한 상태가 아닙니다.'},
+                {'error': '구매자 최종선택이 가능한 상태가 아닙니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 최종선택 기간 확인 (투표 종료 후 12시간 이내)
+        # 구매자 최종선택 기간 확인 (12시간)
         if groupbuy.final_selection_end:
             deadline = groupbuy.final_selection_end
             if timezone.now() > deadline:
                 return Response(
-                    {'error': '최종선택 기간이 종료되었습니다.'},
+                    {'error': '구매자 최종선택 기간이 종료되었습니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -92,8 +92,8 @@ def buyer_final_decision(request, groupbuy_id):
                 message=message
             )
             
-            # 모든 참여자가 최종선택을 완료했는지 확인
-            check_all_decisions_completed(groupbuy)
+            # 모든 구매자가 최종선택을 완료했는지 확인
+            check_buyer_decisions_completed(groupbuy)
         
         return Response({
             'success': True,
@@ -158,18 +158,18 @@ def seller_final_decision(request, groupbuy_id):
                     {'error': '낙찰받지 못한 공구입니다.'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        elif groupbuy.status not in ['final_selection', 'seller_confirmation']:
+        elif groupbuy.status not in ['final_selection_seller']:
             return Response(
-                {'error': '최종선택이 가능한 상태가 아닙니다.'},
+                {'error': '판매자 최종선택이 가능한 상태가 아닙니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 최종선택 기간 확인
-        if groupbuy.final_selection_end:
-            deadline = groupbuy.final_selection_end
+        # 판매자 최종선택 기간 확인 (6시간)
+        if groupbuy.seller_selection_end:
+            deadline = groupbuy.seller_selection_end
             if timezone.now() > deadline:
                 return Response(
-                    {'error': '최종선택 기간이 종료되었습니다.'},
+                    {'error': '판매자 최종선택 기간이 종료되었습니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -177,7 +177,7 @@ def seller_final_decision(request, groupbuy_id):
         bid = Bid.objects.get(
             groupbuy=groupbuy,
             seller=user,
-            is_selected=True
+            status='selected'
         )
         
         # 이미 최종선택을 한 경우
@@ -193,13 +193,44 @@ def seller_final_decision(request, groupbuy_id):
             bid.final_decision_at = timezone.now()
             bid.save()
             
-            # 판매포기시 패널티 부과
+            # 판매포기시 패널티 처리
+            penalty_message = ""
             if decision == 'cancelled':
-                user.penalty_count += 1  # 패널티 횟수 증가
-                user.save()
-                penalty_message = " 판매포기로 패널티가 부과되었습니다."
-            else:
-                penalty_message = ""
+                # 구매 확정률 계산
+                confirmed_count = groupbuy.participation_set.filter(final_decision='confirmed').count()
+                total_count = groupbuy.participation_set.count()
+                confirmation_rate = confirmed_count / total_count if total_count > 0 else 0
+                
+                # 50% 초과인 경우에만 패널티 부과
+                if confirmation_rate > 0.5:
+                    try:
+                        user_profile = user.userprofile
+                        user_profile.penalty_points += 10
+                        user_profile.save()
+                        penalty_message = f" 판매포기로 패널티 10점이 부과되었습니다. (구매확정률: {int(confirmation_rate*100)}%)"
+                    except:
+                        pass
+                else:
+                    penalty_message = f" 구매확정률이 50% 이하여서 패널티가 면제되었습니다. (구매확정률: {int(confirmation_rate*100)}%)"
+                    
+                    # 입찰권 환불 처리 (단품 입찰권만, 무제한 구독권 제외)
+                    if bid.bid_token and bid.bid_token.token_type == 'single':
+                        try:
+                            # 입찰권 상태를 다시 활성으로 변경
+                            bid.bid_token.status = 'active'
+                            bid.bid_token.used_at = None
+                            bid.bid_token.used_for = None
+                            bid.bid_token.save()
+                            
+                            # 입찰과 입찰권 연결 해제
+                            bid.bid_token = None
+                            bid.save()
+                            
+                            penalty_message += " 사용한 입찰권이 환불되었습니다."
+                            logger.info(f"입찰권 환불 완료 - 사용자: {user.id}, 공구: {groupbuy.id}")
+                        except Exception as e:
+                            logger.error(f"입찰권 환불 실패: {str(e)}")
+                            # 환불 실패해도 계속 진행
             
             # 알림 발송
             if decision == 'confirmed':
@@ -213,8 +244,8 @@ def seller_final_decision(request, groupbuy_id):
                 message=message
             )
             
-            # 모든 선택이 완료되었는지 확인
-            check_all_decisions_completed(groupbuy)
+            # 판매자 최종선택 완료 처리
+            check_seller_decision_completed(groupbuy)
         
         return Response({
             'success': True,
@@ -259,7 +290,8 @@ def get_final_decision_status(request, groupbuy_id):
                     'role': 'buyer',
                     'decision': participation.final_decision,
                     'decision_at': participation.final_decision_at,
-                    'deadline': groupbuy.final_selection_end
+                    'deadline': groupbuy.final_selection_end,
+                    'groupbuy_status': groupbuy.status
                 })
             except Participation.DoesNotExist:
                 return Response({
@@ -272,13 +304,14 @@ def get_final_decision_status(request, groupbuy_id):
                 bid = Bid.objects.get(
                     groupbuy=groupbuy,
                     seller=user,
-                    is_selected=True
+                    status='selected'
                 )
                 return Response({
                     'role': 'seller',
                     'decision': bid.final_decision,
                     'decision_at': bid.final_decision_at,
-                    'deadline': groupbuy.final_selection_end
+                    'deadline': groupbuy.seller_selection_end,
+                    'groupbuy_status': groupbuy.status
                 })
             except Bid.DoesNotExist:
                 return Response({
@@ -317,7 +350,7 @@ def get_contact_info(request, groupbuy_id):
                     status=status.HTTP_403_FORBIDDEN
                 )
             
-            winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
+            winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
             if winning_bid and winning_bid.seller:
                 seller = winning_bid.seller
                 return Response({
@@ -331,7 +364,7 @@ def get_contact_info(request, groupbuy_id):
         
         # 판매자인 경우 - 구매자들 정보 조회
         elif user.role == 'seller':
-            bid = Bid.objects.filter(groupbuy=groupbuy, seller=user, is_selected=True).first()
+            bid = Bid.objects.filter(groupbuy=groupbuy, seller=user, status='selected').first()
             if not bid or bid.final_decision != 'confirmed':
                 return Response(
                     {'error': '판매확정 후에만 연락처를 확인할 수 있습니다.'},
@@ -370,41 +403,68 @@ def get_contact_info(request, groupbuy_id):
         )
 
 
-def check_all_decisions_completed(groupbuy):
+def check_buyer_decisions_completed(groupbuy):
     """
-    모든 참여자와 판매자의 최종선택이 완료되었는지 확인하고
-    완료된 경우 공구 상태를 업데이트
+    모든 구매자의 최종선택이 완료되었는지 확인하고
+    완료된 경우 판매자 최종선택 단계로 전환
     """
     # 구매자들의 최종선택 확인
     participations = Participation.objects.filter(groupbuy=groupbuy)
     buyer_decisions_completed = all(p.final_decision != 'pending' for p in participations)
     
-    # 판매자의 최종선택 확인
-    winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
-    seller_decision_completed = winning_bid and winning_bid.final_decision != 'pending'
+    if buyer_decisions_completed:
+        confirmed_count = participations.filter(final_decision='confirmed').count()
+        total_count = participations.count()
+        
+        if confirmed_count > 0:
+            # 판매자 최종선택 단계로 전환
+            groupbuy.status = 'final_selection_seller'
+            groupbuy.seller_selection_end = timezone.now() + timezone.timedelta(hours=6)
+            groupbuy.save()
+            
+            # 판매자에게 알림
+            winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
+            if winning_bid:
+                Notification.objects.create(
+                    user=winning_bid.seller,
+                    groupbuy=groupbuy,
+                    message=f"{groupbuy.title} 공구의 판매자 최종 선택이 시작되었습니다. 6시간 내에 판매 확정/포기를 선택해주세요. (구매확정: {confirmed_count}/{total_count}명)"
+                )
+        else:
+            # 구매 확정자가 없으면 공구 취소
+            groupbuy.status = 'cancelled'
+            groupbuy.save()
+
+
+def check_seller_decision_completed(groupbuy):
+    """
+    판매자의 최종선택이 완료되었는지 확인하고
+    공구를 완료 또는 취소 처리
+    """
+    winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
     
-    # 모두 완료된 경우 공구 상태 업데이트
-    if buyer_decisions_completed and seller_decision_completed:
-        groupbuy.status = 'completed'
-        groupbuy.save()
+    if winning_bid and winning_bid.final_decision != 'pending':
+        confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').exists()
         
-        # 완료 알림 발송
-        message = f"{groupbuy.title} 공구의 최종선택이 모두 완료되었습니다."
-        
-        # 모든 참여자에게 알림
-        for participation in participations:
-            Notification.objects.create(
-                user=participation.user,
-                groupbuy=groupbuy,
-                message=message
-            )
-        
-        # 판매자에게도 알림
-        if winning_bid:
-            Notification.objects.create(
-                user=winning_bid.seller,
-                groupbuy=groupbuy,
-                message=message
-            )
+        if confirmed_participants and winning_bid.final_decision == 'confirmed':
+            # 공구 성공
+            groupbuy.status = 'completed'
+            groupbuy.save()
+            
+            # 성공 알림
+            message = f"{groupbuy.title} 공구가 성공적으로 완료되었습니다!"
+            
+            # 구매 확정한 참여자들에게 알림
+            confirmed_participations = groupbuy.participation_set.filter(final_decision='confirmed')
+            for participation in confirmed_participations:
+                Notification.objects.create(
+                    user=participation.user,
+                    groupbuy=groupbuy,
+                    message=message
+                )
+        else:
+            # 공구 취소
+            groupbuy.status = 'cancelled'
+            groupbuy.save()
 
 

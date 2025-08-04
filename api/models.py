@@ -319,8 +319,8 @@ class GroupBuy(models.Model):
     STATUS_CHOICES = (
         ('recruiting', '모집중'),
         ('bidding', '입찰진행중'),
-        ('final_selection', '최종선택중'),
-        ('seller_confirmation', '판매자확정대기'),
+        ('final_selection_buyers', '구매자 최종선택중'),
+        ('final_selection_seller', '판매자 최종선택중'),
         ('completed', '완료'),
         ('cancelled', '취소됨'),
     )
@@ -342,8 +342,9 @@ class GroupBuy(models.Model):
     max_participants = models.PositiveSmallIntegerField(default=100, verbose_name='최대 참여자 수')
     start_time = models.DateTimeField(default=now, verbose_name='시작 시간')  # 시작일을 현재 시간으로 기본값 설정
     end_time = models.DateTimeField(verbose_name='종료 시간')  # 종료 시간 명시적 관리
-    final_selection_end = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 종료 시간')  # 공구 마감 후 12시간
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='recruiting', verbose_name='상태')
+    final_selection_end = models.DateTimeField(null=True, blank=True, verbose_name='구매자 최종선택 종료 시간')  # 공구 마감 후 12시간
+    seller_selection_end = models.DateTimeField(null=True, blank=True, verbose_name='판매자 최종선택 종료 시간')  # 구매자 선택 완료 후 6시간
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='recruiting', verbose_name='상태')
     current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 참여자 수')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')
@@ -387,10 +388,10 @@ class GroupBuy(models.Model):
             self.status = 'bidding'
             self.save()
         elif self.status == 'bidding' and now >= self.end_time:
-            # 입찰 마감 후 바로 final_selection 상태로 전환
-            selected_bid = self.bid_set.filter(is_selected=True).first()
+            # 입찰 마감 후 구매자 최종선택 상태로 전환
+            selected_bid = self.bid_set.filter(status='selected').first()
             if selected_bid:
-                self.status = 'final_selection'
+                self.status = 'final_selection_buyers'
                 from datetime import timedelta
                 # final_selection_end를 입찰 마감 후 12시간으로 설정
                 self.final_selection_end = now + timedelta(hours=12)
@@ -403,10 +404,29 @@ class GroupBuy(models.Model):
 
     def handle_final_selection_timeout(self):
         """최종선택 시간 초과 처리"""
-        if self.status == 'final_selection' and self.final_selection_end and timezone.now() > self.final_selection_end:
+        now = timezone.now()
+        
+        # 구매자 최종선택 시간 초과 처리
+        if self.status == 'final_selection_buyers' and self.final_selection_end and now > self.final_selection_end:
+            # 구매 확정한 참여자가 있는지 확인
+            confirmed_count = self.participation_set.filter(final_decision='confirmed').count()
+            
+            if confirmed_count > 0:
+                # 판매자 최종선택 단계로 전환
+                self.status = 'final_selection_seller'
+                from datetime import timedelta
+                self.seller_selection_end = now + timedelta(hours=6)
+                self.save()
+            else:
+                # 구매 확정자가 없으면 취소
+                self.status = 'cancelled'
+                self.save()
+                
+        # 판매자 최종선택 시간 초과 처리
+        elif self.status == 'final_selection_seller' and self.seller_selection_end and now > self.seller_selection_end:
             # 구매자와 판매자의 최종선택 상태 확인
             confirmed_participations = self.participation_set.filter(final_decision='confirmed')
-            selected_bid = self.bid_set.filter(is_selected=True, final_decision='confirmed').first()
+            selected_bid = self.bid_set.filter(status='selected', final_decision='confirmed').first()
             
             if confirmed_participations.exists() and selected_bid:
                 # 양쪽 모두 확정한 경우
