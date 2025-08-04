@@ -40,7 +40,7 @@ jobs:
         strip_components: 0
         timeout: 60s
         command_timeout: 15m
-        
+
     - name: Upload .env to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -65,6 +65,11 @@ jobs:
           echo "🚀 Starting deployment process..."
           cd ~/dungji-market-backend
           
+          if lsof -i :8000; then
+            echo "🛑 Port 8000 is already in use. Killing..."
+            fuser -k 8000/tcp || true
+          fi
+
           # .env 파일 확인
           if [ ! -f .env ]; then
             echo "❌ ERROR: .env file not found!"
