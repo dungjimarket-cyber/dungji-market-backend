@@ -40,6 +40,15 @@ jobs:
         strip_components: 0
         timeout: 60s
         command_timeout: 15m
+        
+    - name: Upload .env to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "${{ secrets.ENV_FILE }}" > ~/dungji-market-backend/.env
 
     - name: Deploy application
       uses: appleboy/ssh-action@v1.0.3
