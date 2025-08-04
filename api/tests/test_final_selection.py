@@ -48,7 +48,7 @@ class FinalSelectionTestCase(TestCase):
             base_price=100000
         )
         
-        # 공구 생성 (final_selection 상태)
+        # 공구 생성 (final_selection_buyers 상태)
         self.groupbuy = GroupBuy.objects.create(
             title='Test GroupBuy',
             description='Test Description',
@@ -59,7 +59,7 @@ class FinalSelectionTestCase(TestCase):
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
             final_selection_end=timezone.now() + timedelta(hours=11),
-            status='final_selection'
+            status='final_selection_buyers'
         )
         
         # 참여자 생성
@@ -79,12 +79,13 @@ class FinalSelectionTestCase(TestCase):
             groupbuy=self.groupbuy,
             seller=self.seller1,
             amount=95000,
-            is_selected=True
+            status='selected'  # is_selected 대신 status='selected' 사용
         )
         self.bid2 = Bid.objects.create(
             groupbuy=self.groupbuy,
             seller=self.seller2,
-            amount=98000
+            amount=98000,
+            status='pending'
         )
         
         # 현재 참여자 수 업데이트
@@ -268,6 +269,17 @@ class FinalSelectionTestCase(TestCase):
 
     def test_mypage_pending_selection_seller(self):
         """판매자 마이페이지 최종선택 대기중 목록"""
+        # 구매자 전원이 선택을 완료한 후 판매자 선택 단계로 이동
+        self.participation1.final_decision = 'confirmed'
+        self.participation1.save()
+        self.participation2.final_decision = 'confirmed'
+        self.participation2.save()
+        
+        # 공구 상태를 final_selection_seller로 변경
+        self.groupbuy.status = 'final_selection_seller'
+        self.groupbuy.seller_selection_end = timezone.now() + timedelta(hours=5)
+        self.groupbuy.save()
+        
         self.client.force_authenticate(user=self.seller1)
         
         response = self.client.get('/api/groupbuys/pending_selection/')
@@ -370,7 +382,7 @@ class CronJobTestCase(TestCase):
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
             final_selection_end=timezone.now() - timedelta(minutes=1),
-            status='final_selection',
+            status='final_selection_buyers',
             current_participants=1
         )
         
@@ -385,7 +397,7 @@ class CronJobTestCase(TestCase):
             groupbuy=groupbuy,
             seller=self.seller,
             amount=95000,
-            is_selected=True
+            status='selected'
         )
         
         # cron job 실행
@@ -409,7 +421,7 @@ class CronJobTestCase(TestCase):
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
             final_selection_end=timezone.now() + timedelta(hours=1),
-            status='final_selection',
+            status='final_selection_buyers',
             current_participants=1
         )
         
@@ -426,12 +438,12 @@ class CronJobTestCase(TestCase):
             groupbuy=groupbuy,
             seller=self.seller,
             amount=95000,
-            is_selected=True,
+            status='selected',
             final_decision='confirmed'
         )
         
-        # cron job 실행 전에는 final_selection 상태
-        self.assertEqual(groupbuy.status, 'final_selection')
+        # cron job 실행 전에는 final_selection_buyers 상태
+        self.assertEqual(groupbuy.status, 'final_selection_buyers')
         
         # 수동으로 완료 확인 로직 호출
         from api.views_final_selection import check_all_decisions_completed

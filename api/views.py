@@ -1389,26 +1389,26 @@ class GroupBuyViewSet(ModelViewSet):
     def pending_selection(self, request):
         """최종 선택 대기중인 공구 목록 조회
         
-        구매자: 참여한 공구 중 final_selection 상태이면서 최종선택하지 않은 공구
-        판매자: 낙찰된 공구 중 final_selection 상태이면서 최종선택하지 않은 공구
+        구매자: 참여한 공구 중 final_selection_buyers 상태이면서 최종선택하지 않은 공구
+        판매자: 낙찰된 공구 중 final_selection_seller 상태이면서 최종선택하지 않은 공구
         """
         user = request.user
         
         if user.role == 'buyer':
-            # 구매자가 참여한 공구 중 final_selection 상태인 공구
+            # 구매자가 참여한 공구 중 final_selection_buyers 상태인 공구
             pending = self.get_queryset().filter(
                 participants=user,
-                status='final_selection',
+                status='final_selection_buyers',
                 participation__user=user,
                 participation__final_decision='pending'
             ).distinct()
         elif user.role == 'seller':
-            # 판매자가 낙찰된 공구 중 final_selection 상태인 공구
+            # 판매자가 낙찰된 공구 중 final_selection_seller 상태인 공구
             pending = self.get_queryset().filter(
                 bid__seller=user,
-                bid__is_selected=True,
+                bid__status='selected',  # is_selected 대신 status='selected' 사용
                 bid__final_decision='pending',
-                status='final_selection'
+                status='final_selection_seller'
             ).distinct()
         else:
             pending = self.get_queryset().none()
@@ -1613,9 +1613,9 @@ class GroupBuyViewSet(ModelViewSet):
         # 판매자가 판매확정한 공구
         confirmed = self.get_queryset().filter(
             bid__seller=request.user,
-            bid__is_selected=True,
+            bid__status='selected',  # is_selected 대신 status='selected' 사용
             bid__final_decision='confirmed',
-            status='final_selection'
+            status__in=['final_selection_seller', 'completed']  # 새로운 상태에 맞게 수정
         ).distinct()
         
         serializer = self.get_serializer(confirmed, many=True)
