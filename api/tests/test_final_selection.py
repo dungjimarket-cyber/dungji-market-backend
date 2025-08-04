@@ -127,6 +127,16 @@ class FinalSelectionTestCase(TestCase):
 
     def test_seller_final_decision_confirmed(self):
         """판매자 판매확정 테스트"""
+        # 구매자들이 모두 확정한 후 판매자 단계로 전환
+        self.participation1.final_decision = 'confirmed'
+        self.participation1.save()
+        self.participation2.final_decision = 'confirmed'
+        self.participation2.save()
+        
+        self.groupbuy.status = 'final_selection_seller'
+        self.groupbuy.seller_selection_end = timezone.now() + timedelta(hours=5)
+        self.groupbuy.save()
+        
         self.client.force_authenticate(user=self.seller1)
         
         response = self.client.post(
@@ -143,6 +153,16 @@ class FinalSelectionTestCase(TestCase):
 
     def test_seller_final_decision_cancelled_penalty(self):
         """판매자 판매포기 시 패널티 테스트"""
+        # 구매자들이 모두 확정한 후 판매자 단계로 전환
+        self.participation1.final_decision = 'confirmed'
+        self.participation1.save()
+        self.participation2.final_decision = 'confirmed'
+        self.participation2.save()
+        
+        self.groupbuy.status = 'final_selection_seller'
+        self.groupbuy.seller_selection_end = timezone.now() + timedelta(hours=5)
+        self.groupbuy.save()
+        
         self.client.force_authenticate(user=self.seller1)
         
         initial_penalty = self.seller1.penalty_count
@@ -210,6 +230,16 @@ class FinalSelectionTestCase(TestCase):
 
     def test_non_winning_seller_cannot_decide(self):
         """낙찰되지 않은 판매자는 최종선택 불가"""
+        # 구매자들이 모두 확정한 후 판매자 단계로 전환
+        self.participation1.final_decision = 'confirmed'
+        self.participation1.save()
+        self.participation2.final_decision = 'confirmed'
+        self.participation2.save()
+        
+        self.groupbuy.status = 'final_selection_seller'
+        self.groupbuy.seller_selection_end = timezone.now() + timedelta(hours=5)
+        self.groupbuy.save()
+        
         self.client.force_authenticate(user=self.seller2)
         
         response = self.client.post(
@@ -217,7 +247,7 @@ class FinalSelectionTestCase(TestCase):
             {'decision': 'confirmed'}
         )
         
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_get_final_decision_status(self):
         """최종선택 상태 조회 테스트"""
@@ -345,7 +375,7 @@ class FinalSelectionTestCase(TestCase):
         self.assertEqual(response.data[0]['id'], recruiting_groupbuy.id)
 
 
-class CronJobTestCase(TestCase):
+class CronJobTestCase(APITestCase):
     def setUp(self):
         self.buyer = User.objects.create_user(
             username='buyer',
@@ -445,9 +475,10 @@ class CronJobTestCase(TestCase):
         # cron job 실행 전에는 final_selection_buyers 상태
         self.assertEqual(groupbuy.status, 'final_selection_buyers')
         
-        # 수동으로 완료 확인 로직 호출
-        from api.views_final_selection import check_all_decisions_completed
-        check_all_decisions_completed(groupbuy)
+        # 수동으로 완료 확인 로직 호출 
+        # check_all_decisions_completed는 더 이상 필요하지 않음 - utils.py에서 자동 처리됨
+        from api.utils import update_groupbuys_status
+        update_groupbuys_status([groupbuy])
         
         # 상태 확인
         groupbuy.refresh_from_db()

@@ -1430,7 +1430,7 @@ class GroupBuyViewSet(ModelViewSet):
                 participants=user,
                 participation__user=user,
                 participation__final_decision='confirmed',
-                status='final_selection'  # 아직 completed가 아닌 상태
+                status__in=['final_selection_buyers', 'final_selection_seller', 'completed']  # 구매 확정 후 가능한 상태들
             ).distinct()
         else:
             confirmed = self.get_queryset().none()

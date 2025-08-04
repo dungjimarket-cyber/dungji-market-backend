@@ -42,10 +42,10 @@ class BiddingStatusTestCase(TestCase):
         )
 
     def test_status_transition_recruiting_to_bidding(self):
-        """입찰이 시작되면 recruiting에서 bidding으로 상태 전환"""
-        from django.core.management import call_command
+        """시작 시간이 되면 recruiting에서 bidding으로 상태 전환"""
+        from api.utils import update_groupbuys_status
         
-        # recruiting 상태의 공구 생성
+        # recruiting 상태의 공구 생성 (시작 시간이 과거)
         groupbuy = GroupBuy.objects.create(
             title='Test GroupBuy',
             description='Test Description',
@@ -53,7 +53,7 @@ class BiddingStatusTestCase(TestCase):
             creator=self.buyer1,
             min_participants=2,
             max_participants=10,
-            start_time=timezone.now(),
+            start_time=timezone.now() - timedelta(minutes=1),  # 시작 시간이 1분 전
             end_time=timezone.now() + timedelta(hours=24),
             status='recruiting'
         )
@@ -61,17 +61,10 @@ class BiddingStatusTestCase(TestCase):
         # 초기 상태 확인
         self.assertEqual(groupbuy.status, 'recruiting')
         
-        # 입찰 생성
-        bid = Bid.objects.create(
-            groupbuy=groupbuy,
-            seller=self.seller1,
-            amount=95000
-        )
+        # 상태 업데이트 실행
+        update_groupbuys_status([groupbuy])
         
-        # cron job 실행
-        call_command('update_groupbuy_status')
-        
-        # 상태가 bidding으로 변경되었는지 확인
+        # status가 bidding으로 변경되었는지 확인
         groupbuy.refresh_from_db()
         self.assertEqual(groupbuy.status, 'bidding')
 
@@ -138,9 +131,9 @@ class BiddingStatusTestCase(TestCase):
         # cron job 실행
         call_command('update_groupbuy_status')
         
-        # final_selection 상태로 변경되었는지 확인
+        # final_selection_buyers 상태로 변경되었는지 확인
         groupbuy.refresh_from_db()
-        self.assertEqual(groupbuy.status, 'final_selection')
+        self.assertEqual(groupbuy.status, 'final_selection_buyers')
         self.assertIsNotNone(groupbuy.final_selection_end)
 
     def test_cannot_join_after_deadline(self):
@@ -168,6 +161,18 @@ class BiddingStatusTestCase(TestCase):
 
     def test_mypage_joined_groupbuys_includes_bidding(self):
         """마이페이지 참여중인 공구에 bidding 상태 포함"""
+        # 각 공구마다 다른 제품 생성
+        product2 = Product.objects.create(
+            name='Test Product 2',
+            category=self.category,
+            base_price=100000
+        )
+        product3 = Product.objects.create(
+            name='Test Product 3',
+            category=self.category,
+            base_price=100000
+        )
+        
         # recruiting 상태 공구
         recruiting_groupbuy = GroupBuy.objects.create(
             title='Recruiting GroupBuy',
@@ -185,7 +190,7 @@ class BiddingStatusTestCase(TestCase):
         bidding_groupbuy = GroupBuy.objects.create(
             title='Bidding GroupBuy',
             description='Test Description',
-            product=self.product,
+            product=product2,
             creator=self.buyer1,
             min_participants=2,
             max_participants=10,
@@ -198,14 +203,14 @@ class BiddingStatusTestCase(TestCase):
         final_selection_groupbuy = GroupBuy.objects.create(
             title='Final Selection GroupBuy',
             description='Test Description',
-            product=self.product,
+            product=product3,
             creator=self.buyer1,
             min_participants=2,
             max_participants=10,
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
             final_selection_end=timezone.now() + timedelta(hours=11),
-            status='final_selection'
+            status='final_selection_buyers'
         )
         
         # buyer2가 모든 공구에 참여
@@ -231,21 +236,87 @@ class BiddingStatusTestCase(TestCase):
 
     def test_status_display_consistency(self):
         """상태 표시의 일관성 확인"""
-        # 다양한 상태의 공구 생성
-        statuses = ['recruiting', 'bidding', 'final_selection', 'seller_confirmation', 'completed']
+        # 다양한 상태의 공구 생성 (새로운 상태값 사용)
+        products = []
+        for i in range(5):
+            products.append(Product.objects.create(
+                name=f'Product {i}',
+                category=self.category,
+                base_price=100000
+            ))
         
-        for i, status_name in enumerate(statuses):
-            GroupBuy.objects.create(
-                title=f'GroupBuy {status_name}',
-                description='Test Description',
-                product=self.product,
-                creator=self.buyer1,
-                min_participants=1,
-                max_participants=10,
-                start_time=timezone.now() - timedelta(hours=25 + i),
-                end_time=timezone.now() - timedelta(hours=1 + i),
-                status=status_name
-            )
+        # recruiting 상태 공구 (미래 시작)
+        recruiting_gb = GroupBuy.objects.create(
+            title='GroupBuy recruiting',
+            description='Test Description',
+            product=products[0],
+            creator=self.buyer1,
+            min_participants=1,
+            max_participants=10,
+            start_time=timezone.now() + timedelta(hours=1),
+            end_time=timezone.now() + timedelta(hours=25),
+            status='recruiting'
+        )
+        
+        # bidding 상태 공구 (진행중)
+        bidding_gb = GroupBuy.objects.create(
+            title='GroupBuy bidding',
+            description='Test Description',
+            product=products[1],
+            creator=self.buyer1,
+            min_participants=1,
+            max_participants=10,
+            start_time=timezone.now() - timedelta(hours=1),
+            end_time=timezone.now() + timedelta(hours=23),
+            status='bidding'
+        )
+        
+        # final_selection_buyers 상태 공구
+        buyers_gb = GroupBuy.objects.create(
+            title='GroupBuy buyers',
+            description='Test Description',
+            product=products[2],
+            creator=self.buyer1,
+            min_participants=1,
+            max_participants=10,
+            start_time=timezone.now() - timedelta(hours=25),
+            end_time=timezone.now() - timedelta(hours=1),
+            final_selection_end=timezone.now() + timedelta(hours=11),
+            status='final_selection_buyers'
+        )
+        # 입찰 추가
+        Bid.objects.create(groupbuy=buyers_gb, seller=self.seller1, amount=90000, status='selected')
+        
+        # final_selection_seller 상태 공구
+        seller_gb = GroupBuy.objects.create(
+            title='GroupBuy seller',
+            description='Test Description',
+            product=products[3],
+            creator=self.buyer1,
+            min_participants=1,
+            max_participants=10,
+            start_time=timezone.now() - timedelta(hours=26),
+            end_time=timezone.now() - timedelta(hours=2),
+            final_selection_end=timezone.now() - timedelta(hours=1),
+            seller_selection_end=timezone.now() + timedelta(hours=5),
+            status='final_selection_seller'
+        )
+        # 입찰과 참여자 추가
+        Bid.objects.create(groupbuy=seller_gb, seller=self.seller1, amount=90000, status='selected')
+        Participation.objects.create(user=self.buyer1, groupbuy=seller_gb, final_decision='confirmed')
+        
+        # completed 상태 공구
+        completed_gb = GroupBuy.objects.create(
+            title='GroupBuy completed',
+            description='Test Description',
+            product=products[4],
+            creator=self.buyer1,
+            min_participants=1,
+            max_participants=10,
+            start_time=timezone.now() - timedelta(hours=48),
+            end_time=timezone.now() - timedelta(hours=24),
+            status='completed'
+        )
         
         self.client.force_authenticate(user=self.buyer1)
         
@@ -256,5 +327,6 @@ class BiddingStatusTestCase(TestCase):
         
         # 각 상태가 올바르게 반환되는지 확인
         returned_statuses = [gb['status'] for gb in response.data]
-        for status_name in statuses:
+        expected_statuses = ['recruiting', 'bidding', 'final_selection_buyers', 'final_selection_seller', 'completed']
+        for status_name in expected_statuses:
             self.assertIn(status_name, returned_statuses)

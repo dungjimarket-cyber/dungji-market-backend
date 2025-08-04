@@ -129,14 +129,13 @@ class NotificationScheduler:
                 
             # 1시간 간격으로 알림 발송 (6, 5, 4, 3, 2, 1시간 전)
             if hours_left in [6, 5, 4, 3, 2, 1] and hours_left > 0:
-                    logger.info(f"공구 '{groupbuy.title}' 판매자 확정 {hours_left}시간 전 알림 발송")
-                    
+                logger.info(f"공구 '{groupbuy.title}' 판매자 확정 {hours_left}시간 전 알림 발송")
+                
                 # 낙찰된 입찰 조회
                 winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
-                    
+                
                 if winning_bid and winning_bid.final_decision == 'pending':
                     seller = winning_bid.seller
-                    
                     # 알림 생성
                     Notification.objects.create(
                         user=seller,
