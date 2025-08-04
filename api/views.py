@@ -1299,7 +1299,7 @@ class GroupBuyViewSet(ModelViewSet):
         if instance.status in ['final_selection', 'seller_confirmation', 'completed']:
             from api.models import Bid
             # 낙찰된 입찰 정보
-            winning_bid = instance.bid_set.filter(status='selected').first()
+            winning_bid = instance.bid_set.filter(is_selected=True).first()
             if winning_bid:
                 # 사용자가 참여자이거나 낙찰된 판매자인 경우에만 실제 금액 표시
                 user = request.user
