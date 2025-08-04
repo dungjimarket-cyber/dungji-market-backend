@@ -70,7 +70,11 @@ jobs:
           
           # 모든 Docker 컨테이너 중지 (포트 충돌 방지)
           echo "Stopping all Docker containers that might use port 8000..."
-          docker ps -q | xargs -r docker stop || true
+          sudo docker ps -q | xargs -r sudo docker stop || true
+          
+          # 모든 종료된 컨테이너 제거
+          echo "Removing all stopped containers..."
+          sudo docker container prune -f || true
           
           # netstat으로 포트 확인
           echo "Checking port usage with netstat..."
@@ -120,6 +124,19 @@ jobs:
           # sudo를 사용하여 권한 문제 해결
           sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker stop || true
           sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker rm -f || true
+          
+          # 특정 문제가 있는 컨테이너 강제 제거
+          echo "🧹 Force removing stuck containers..."
+          # Docker 데몬 재시작이 필요할 수 있음
+          if sudo docker ps -a | grep -q "580c0a899188"; then
+            echo "Found stuck container 580c0a899188, attempting force removal..."
+            sudo systemctl restart docker || true
+            sleep 5
+            sudo docker rm -f 580c0a899188 || true
+          fi
+          
+          # 모든 dungji 관련 컨테이너 강제 제거
+          sudo docker ps -a | grep -E "(dungji|8000)" | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
           # Docker 네트워크 정리
           echo "🧹 Cleaning up Docker networks..."
