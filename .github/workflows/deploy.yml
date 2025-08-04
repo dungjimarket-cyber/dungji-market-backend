@@ -113,20 +113,21 @@ jobs:
           
           # 기존 컨테이너 중지 및 정리
           echo "🛑 Stopping existing containers..."
-          docker-compose down --remove-orphans || true
+          sudo docker-compose down --remove-orphans || true
           
           # 모든 관련 컨테이너 강제 정리
           echo "🧹 Cleaning up any remaining containers..."
-          docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r docker stop || true
-          docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r docker rm || true
+          # sudo를 사용하여 권한 문제 해결
+          sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker stop || true
+          sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
           # Docker 네트워크 정리
           echo "🧹 Cleaning up Docker networks..."
-          docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r docker network rm || true
+          sudo docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r sudo docker network rm || true
           
           # 사용하지 않는 Docker 리소스 정리
           echo "🧹 Cleaning up unused Docker resources..."
-          docker system prune -f || true
+          sudo docker system prune -f || true
           
           # 포트 8000이 여전히 사용 중인지 최종 확인
           if sudo lsof -i :8000 2>/dev/null; then
@@ -140,7 +141,7 @@ jobs:
           
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
-          docker-compose -p dungji-market-backend up --build -d --force-recreate --remove-orphans
+          sudo docker-compose -p dungji-market-backend up --build -d --force-recreate --remove-orphans
           
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
@@ -148,15 +149,15 @@ jobs:
           
           # 컨테이너 상태 확인
           echo "📊 Checking container status..."
-          docker-compose ps
+          sudo docker-compose ps
           
           # 웹 서비스가 준비될 때까지 대기
           echo "🔍 Waiting for web service to be ready..."
           WEB_READY=false
           for i in {1..30}; do
-            if docker-compose ps | grep -q "web.*Up"; then
+            if sudo docker-compose ps | grep -q "web.*Up"; then
               echo "✅ Web container is running"
-              if docker-compose exec -T web python manage.py check --deploy 2>/dev/null; then
+              if sudo docker-compose exec -T web python manage.py check --deploy 2>/dev/null; then
                 echo "✅ Web service is ready"
                 WEB_READY=true
                 break
@@ -169,31 +170,31 @@ jobs:
           if [ "$WEB_READY" = false ]; then
             echo "❌ Web service failed to start within timeout"
             echo "Container logs:"
-            docker-compose logs web
+            sudo docker-compose logs web
             exit 1
           fi
           
           # 마이그레이션 실행
           echo "🔄 Running database migrations..."
-          docker-compose exec -T web python manage.py migrate --noinput
+          sudo docker-compose exec -T web python manage.py migrate --noinput
           
           # 정적 파일 수집
           echo "📦 Collecting static files..."
-          docker-compose exec -T web python manage.py collectstatic --noinput
+          sudo docker-compose exec -T web python manage.py collectstatic --noinput
           
           # 최종 상태 확인
           echo "🏥 Final health check..."
-          docker-compose ps
+          sudo docker-compose ps
           
           # 로그 출력
           echo "📋 Recent application logs:"
-          docker-compose logs --tail=20 web
+          sudo docker-compose logs --tail=20 web
           
           # 간단한 API 테스트
           echo "🧪 Testing API endpoint..."
           API_HEALTHY=false
           # 사용된 포트 확인
-          ACTUAL_PORT=$(docker-compose -p dungji-market-backend ps | grep web | grep -oP '0.0.0.0:\K[0-9]+' | head -1)
+          ACTUAL_PORT=$(sudo docker-compose -p dungji-market-backend ps | grep web | grep -oP '0.0.0.0:\K[0-9]+' | head -1)
           if [ -z "$ACTUAL_PORT" ]; then
             ACTUAL_PORT=8000
           fi
