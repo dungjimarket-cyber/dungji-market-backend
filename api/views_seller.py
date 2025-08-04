@@ -41,23 +41,28 @@ class SellerProfileView(APIView):
         # 활성 입찰 수 계산 (입찰기록 - 모든 입찰)
         active_bids = Bid.objects.filter(seller=user).count()
         
-        # 선택 대기 중인 입찰 수 계산 (최종선택 대기중 - 공구가 종료되고 선택 대기 중인 입찰)
+        # 선택 대기 중인 입찰 수 계산 (최종선택 대기중 - 낙찰되어 판매자 최종선택이 필요한 입찰)
         pending_selection = Bid.objects.filter(
-            seller=user, 
-            status='pending',
-            groupbuy__status='ended'  # 공구가 종료된 상태
+            seller=user,
+            status='selected',  # 낙찰된 입찰만
+            final_decision='pending',  # 판매자가 아직 최종선택하지 않음
+            groupbuy__status='final_selection_seller'  # 판매자 최종선택 단계
         ).count()
         
-        # 판매 확정 대기 중인 건 수 계산 (판매 확정 - selected 상태의 입찰)
+        # 판매 확정 대기 중인 건 수 계산 (판매 확정 - 낙찰되었지만 판매자가 확정하지 않은 입찰)
         pending_sales = Bid.objects.filter(
             seller=user, 
-            status='selected'
+            status='selected',  # 낙찰된 입찰
+            final_decision='confirmed',  # 판매자가 판매 확정한 것
+            groupbuy__status__in=['final_selection_seller', 'completed']  # 판매자 선택 단계 또는 완료
         ).count()
         
-        # 판매 완료 건 수 계산 (판매 완료 - confirmed 상태의 입찰)
+        # 판매 완료 건 수 계산 (판매 완료 - 완료된 공구에서 판매 확정한 입찰)
         completed_sales = Bid.objects.filter(
             seller=user, 
-            status='confirmed'
+            status='selected',  # 낙찰된 입찰
+            final_decision='confirmed',  # 판매자가 판매 확정
+            groupbuy__status='completed'  # 공구가 완료된 상태
         ).count()
         
         # 판매자 평점 계산 (리뷰가 있는 경우)
