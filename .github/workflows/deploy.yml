@@ -67,12 +67,33 @@ jobs:
           
           # 포트 8000을 사용하는 프로세스 종료
           echo "🔍 Checking for processes using port 8000..."
-          if lsof -i :8000; then
-            echo "🛑 Port 8000 is already in use. Killing processes..."
-            sudo fuser -k 8000/tcp || true
-            sleep 5  # 프로세스 종료 대기
+          
+          # 모든 Docker 컨테이너 중지 (포트 충돌 방지)
+          echo "Stopping all Docker containers that might use port 8000..."
+          docker ps -q | xargs -r docker stop || true
+          
+          # netstat으로 포트 확인
+          echo "Checking port usage with netstat..."
+          sudo netstat -tlnp | grep :8000 || true
+          
+          # lsof로 포트 확인
+          if sudo lsof -i :8000; then
+            echo "🛑 Port 8000 is in use. Force killing processes..."
+            sudo lsof -ti:8000 | xargs -r sudo kill -9 || true
+            sleep 5
+          fi
+          
+          # fuser로 추가 확인
+          sudo fuser -k 8000/tcp || true
+          sleep 2
+          
+          # 최종 확인
+          if sudo lsof -i :8000; then
+            echo "❌ ERROR: Port 8000 is still in use after cleanup!"
+            sudo lsof -i :8000
+            exit 1
           else
-            echo "✅ Port 8000 is available"
+            echo "✅ Port 8000 is now available"
           fi
 
           # 필수 파일 확인
@@ -99,13 +120,27 @@ jobs:
           docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r docker stop || true
           docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r docker rm || true
           
+          # Docker 네트워크 정리
+          echo "🧹 Cleaning up Docker networks..."
+          docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r docker network rm || true
+          
           # 사용하지 않는 Docker 리소스 정리
           echo "🧹 Cleaning up unused Docker resources..."
           docker system prune -f || true
           
+          # 포트 8000이 여전히 사용 중인지 최종 확인
+          if sudo lsof -i :8000 2>/dev/null; then
+            echo "⚠️  Port 8000 is still in use. Using alternative approach..."
+            # 컨테이너를 다른 포트로 실행하는 대안
+            export HOST_PORT=8001
+            echo "Using alternative port $HOST_PORT"
+          else
+            export HOST_PORT=8000
+          fi
+          
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
-          docker-compose up --build -d --force-recreate
+          docker-compose -p dungji-market-backend up --build -d --force-recreate --remove-orphans
           
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
@@ -157,8 +192,15 @@ jobs:
           # 간단한 API 테스트
           echo "🧪 Testing API endpoint..."
           API_HEALTHY=false
+          # 사용된 포트 확인
+          ACTUAL_PORT=$(docker-compose -p dungji-market-backend ps | grep web | grep -oP '0.0.0.0:\K[0-9]+' | head -1)
+          if [ -z "$ACTUAL_PORT" ]; then
+            ACTUAL_PORT=8000
+          fi
+          echo "Testing on port: $ACTUAL_PORT"
+          
           for i in {1..10}; do
-            if curl -f -s http://localhost:8000/api/health/ > /dev/null 2>&1; then
+            if curl -f -s http://localhost:$ACTUAL_PORT/api/health/ > /dev/null 2>&1; then
               echo "✅ API health check passed"
               API_HEALTHY=true
               break
@@ -173,4 +215,4 @@ jobs:
           fi
           
           echo "🎉 Deployment completed successfully!"
-          echo "📝 Application is running at: http://${{ secrets.EC2_HOST }}:8000"
+          echo "📝 Application is running at: http://${{ secrets.EC2_HOST }}:$ACTUAL_PORT"
