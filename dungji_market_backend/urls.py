@@ -48,6 +48,7 @@ from api.views_final_selection import (
 )
 from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
+from api.views_health import health_check
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -121,6 +122,8 @@ urlpatterns = [
     path('api/banners/main/', get_main_banners, name='main_banners'),
     path('api/events/', EventListView.as_view(), name='event_list'),
     path('api/events/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
+    # Health check API
+    path('api/health/', health_check, name='health_check'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

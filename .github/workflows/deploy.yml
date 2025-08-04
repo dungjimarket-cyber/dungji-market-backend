@@ -3,26 +3,32 @@ name: Deploy Backend to EC2
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # 수동 실행 허용
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production  # GitHub Environment 사용 (선택사항)
 
     steps:
     - name: Checkout source
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Debug EC2_HOST
+    - name: Validate secrets
       run: |
-        echo "Checking if EC2_HOST is set..."
+        echo "Validating required secrets..."
         if [ -z "${{ secrets.EC2_HOST }}" ]; then
-          echo "EC2_HOST is not set!"
-        else
-          echo "EC2_HOST is set (hidden for security)"
+          echo "❌ EC2_HOST secret is not set!"
+          exit 1
         fi
+        if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+          echo "❌ EC2_SSH_KEY secret is not set!"
+          exit 1
+        fi
+        echo "✅ All required secrets are configured"
 
     - name: Copy files to EC2
-      uses: appleboy/scp-action@v0.1.6
+      uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
@@ -32,42 +38,87 @@ jobs:
         target: "~/dungji-market-backend"
         rm: true
         strip_components: 0
-        timeout: 30s
-        command_timeout: 10m
+        timeout: 60s
+        command_timeout: 15m
 
-    - name: SSH and restart Docker
-      uses: appleboy/ssh-action@v0.1.8
+    - name: Deploy application
+      uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
-        timeout: 30s
-        command_timeout: 10m
+        timeout: 60s
+        command_timeout: 15m
         script: |
+          set -e  # Exit on any error
+          
+          echo "🚀 Starting deployment process..."
           cd ~/dungji-market-backend
           
+          # .env 파일 확인
           if [ ! -f .env ]; then
-            echo "ERROR: .env file not found!"
+            echo "❌ ERROR: .env file not found!"
             echo "Please create .env file on the server first."
+            echo "Refer to DEPLOYMENT.md for configuration details."
             exit 1
           fi
+          echo "✅ Environment file found"
           
-          echo "Starting deployment..."
-          docker-compose down
+          # 기존 컨테이너 중지
+          echo "🛑 Stopping existing containers..."
+          docker-compose down --remove-orphans || true
+          
+          # 사용하지 않는 Docker 리소스 정리
+          echo "🧹 Cleaning up unused Docker resources..."
+          docker system prune -f || true
+          
+          # 새 이미지 빌드 및 컨테이너 시작
+          echo "🏗️  Building and starting containers..."
           docker-compose up --build -d
-          sleep 10
           
-          echo "Running migrations..."
-          docker-compose exec -T web python manage.py migrate
+          # 컨테이너 시작 대기
+          echo "⏳ Waiting for containers to be ready..."
+          sleep 30
           
-          echo "Collecting static files..."
-          docker-compose exec -T web python manage.py collectstatic --noinput
-          
-          echo "Checking container status..."
+          # 컨테이너 상태 확인
+          echo "📊 Checking container status..."
           docker-compose ps
           
-          echo "Performing health check..."
-          curl -f http://localhost:8000/admin/ || echo "Warning: Admin page not accessible"
+          # 웹 서비스가 준비될 때까지 대기
+          echo "🔍 Waiting for web service to be ready..."
+          for i in {1..30}; do
+            if docker-compose exec -T web python manage.py check --deploy; then
+              echo "✅ Web service is ready"
+              break
+            fi
+            echo "Attempt $i/30: Web service not ready yet, waiting..."
+            sleep 10
+          done
           
-          echo "Deployment completed successfully!"
+          # 마이그레이션 실행
+          echo "🔄 Running database migrations..."
+          docker-compose exec -T web python manage.py migrate --noinput
+          
+          # 정적 파일 수집
+          echo "📦 Collecting static files..."
+          docker-compose exec -T web python manage.py collectstatic --noinput
+          
+          # 최종 상태 확인
+          echo "🏥 Final health check..."
+          docker-compose ps
+          
+          # 로그 출력
+          echo "📋 Recent application logs:"
+          docker-compose logs --tail=20 web
+          
+          # 간단한 API 테스트
+          echo "🧪 Testing API endpoint..."
+          if curl -f -s http://localhost:8000/api/health/ > /dev/null 2>&1; then
+            echo "✅ API health check passed"
+          else
+            echo "⚠️  API health check failed (this might be normal if endpoint doesn't exist)"
+          fi
+          
+          echo "🎉 Deployment completed successfully!"
+          echo "📝 Application is running at: http://${{ secrets.EC2_HOST }}:8000"
