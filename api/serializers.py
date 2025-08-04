@@ -136,7 +136,7 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_active_groupbuy(self, obj):
         active = GroupBuy.objects.filter(
             product=obj,
-            status__in=['recruiting', 'bidding', 'voting']
+            status__in=['recruiting', 'bidding', 'final_selection']
         ).first()
         if active:
             return {
@@ -211,7 +211,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'product_info', 'creator', 'creator_name',
-                'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 'voting_end',
+                'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 'final_selection_end',
                 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'product_details', 'regions']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
@@ -340,7 +340,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
         
         # 활성 상태의 공구에 대해서만 중복 체크
         if data.get('product') and data.get('creator'):
-            active_statuses = ['recruiting', 'bidding', 'voting', 'seller_confirmation']
+            active_statuses = ['recruiting', 'bidding', 'final_selection', 'seller_confirmation']
             existing_groupbuy = GroupBuy.objects.filter(
                 product=data['product'],
                 creator=data['creator'],

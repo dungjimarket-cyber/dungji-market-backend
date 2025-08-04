@@ -787,7 +787,7 @@ def withdraw_user(request):
         # 진행 중인 공구 확인 (참여자로 있는 경우)
         active_participations = Participation.objects.filter(
             user=user,
-            groupbuy__status__in=['recruiting', 'bidding', 'voting', 'seller_confirmation']
+            groupbuy__status__in=['recruiting', 'bidding', 'final_selection', 'seller_confirmation']
         ).exists()
         
         if active_participations:
@@ -799,7 +799,7 @@ def withdraw_user(request):
         # 생성한 진행 중인 공구 확인
         active_created_groupbuys = GroupBuy.objects.filter(
             creator=user,
-            status__in=['recruiting', 'bidding', 'voting', 'seller_confirmation']
+            status__in=['recruiting', 'bidding', 'final_selection', 'seller_confirmation']
         ).exists()
         
         if active_created_groupbuys:

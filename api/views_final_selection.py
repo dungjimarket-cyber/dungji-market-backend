@@ -29,8 +29,8 @@ def buyer_final_decision(request, groupbuy_id):
         # 공구 조회
         groupbuy = GroupBuy.objects.get(id=groupbuy_id)
         
-        # 공구 상태 확인 (voting 상태여야 함)
-        if groupbuy.status not in ['voting', 'final_selection']:
+        # 공구 상태 확인 (final_selection 상태여야 함)
+        if groupbuy.status not in ['final_selection']:
             return Response(
                 {'error': '최종선택이 가능한 상태가 아닙니다.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -120,7 +120,7 @@ def seller_final_decision(request, groupbuy_id):
         groupbuy = GroupBuy.objects.get(id=groupbuy_id)
         
         # 공구 상태 확인
-        if groupbuy.status not in ['voting', 'final_selection', 'seller_confirmation']:
+        if groupbuy.status not in ['final_selection', 'seller_confirmation']:
             return Response(
                 {'error': '최종선택이 가능한 상태가 아닙니다.'},
                 status=status.HTTP_400_BAD_REQUEST
