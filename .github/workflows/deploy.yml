@@ -68,6 +68,28 @@ jobs:
           # 포트 8000을 사용하는 프로세스 종료
           echo "🔍 Checking for processes using port 8000..."
           
+          # 문제가 있는 특정 컨테이너 처리
+          if sudo docker ps -a | grep -q "580c0a899188"; then
+            echo "⚠️  Found problematic container 580c0a899188"
+            echo "Attempting to resolve..."
+            
+            # Docker 서비스 재시작
+            sudo systemctl restart docker || true
+            sleep 5
+            
+            # 컨테이너 강제 제거 시도
+            sudo docker rm -f 580c0a899188 || true
+            
+            # 여전히 존재하면 Docker 런타임 파일 직접 제거
+            if sudo docker ps -a | grep -q "580c0a899188"; then
+              echo "Direct removal of container runtime files..."
+              sudo systemctl stop docker
+              sudo rm -rf /var/lib/docker/containers/580c0a899188*
+              sudo systemctl start docker
+              sleep 5
+            fi
+          fi
+          
           # 모든 Docker 컨테이너 중지 (포트 충돌 방지)
           echo "Stopping all Docker containers that might use port 8000..."
           sudo docker ps -q | xargs -r sudo docker stop || true
@@ -117,6 +139,9 @@ jobs:
           
           # 기존 컨테이너 중지 및 정리
           echo "🛑 Stopping existing containers..."
+          # docker-compose down이 실패할 수 있으므로 개별적으로 처리
+          sudo docker-compose stop || true
+          sudo docker-compose rm -f || true
           sudo docker-compose down --remove-orphans || true
           
           # 모든 관련 컨테이너 강제 정리
