@@ -449,11 +449,19 @@ class GroupBuy(models.Model):
         # STATUS_CHOICES에서 현재 상태의 한글 표시 가져오기
         status_display = dict(self.STATUS_CHOICES).get(self.status, self.status)
         
+        # 더 구체적인 메시지 생성
+        if self.status == 'final_selection_buyers':
+            message = f"공구 {self.product.name}의 구매자 최종선택이 시작되었습니다. 12시간 내에 구매 확정/포기를 선택해주세요."
+        elif self.status == 'final_selection_seller':
+            message = f"공구 {self.product.name}의 상태가 {status_display}로 변경되었습니다."
+        else:
+            message = f"공구 {self.product.name}의 상태가 {status_display}로 변경되었습니다."
+        
         for participant in self.participants.all():
             Notification.objects.create(
                 user=participant,
                 groupbuy=self,
-                message=f"공구 {self.product.name}의 상태가 {status_display}로 변경되었습니다."
+                message=message
             )
     
     def start_consent_process(self, selected_bid, consent_hours=24):
@@ -501,6 +509,26 @@ class GroupBuy(models.Model):
             'can_proceed': total > 0 and agreed >= (total * 0.8)  # 80% 이상 동의 시 진행 가능
         }
 
+    def clean(self):
+        """모델 검증"""
+        from django.core.exceptions import ValidationError
+        
+        # 유효한 상태값인지 확인
+        valid_statuses = [choice[0] for choice in self.STATUS_CHOICES]
+        if self.status and self.status not in valid_statuses:
+            # 잘못된 상태를 자동으로 수정
+            if self.status == 'final_selection':
+                self.status = 'final_selection_buyers'
+            elif self.status == 'seller_confirmation':
+                self.status = 'final_selection_seller'
+            else:
+                raise ValidationError(f"유효하지 않은 상태값입니다: {self.status}")
+    
+    def save(self, *args, **kwargs):
+        """저장 시 검증 수행"""
+        self.clean()
+        super().save(*args, **kwargs)
+    
     class Meta:
         verbose_name = '공동구매'
         verbose_name_plural = '공동구매 관리'
