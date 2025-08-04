@@ -29,8 +29,27 @@ def buyer_final_decision(request, groupbuy_id):
         # 공구 조회
         groupbuy = GroupBuy.objects.get(id=groupbuy_id)
         
-        # 공구 상태 확인 (final_selection 상태여야 함)
-        if groupbuy.status not in ['final_selection']:
+        # 공구 상태 확인
+        if groupbuy.status == 'completed':
+            # 이미 완료된 공구의 경우, 사용자의 최종선택 상태를 확인
+            try:
+                participation = Participation.objects.get(user=user, groupbuy=groupbuy)
+                if participation.final_decision == 'confirmed':
+                    return Response(
+                        {'message': '이미 구매확정을 완료한 공구입니다.'},
+                        status=status.HTTP_200_OK
+                    )
+                else:
+                    return Response(
+                        {'error': '이미 종료된 공구입니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Participation.DoesNotExist:
+                return Response(
+                    {'error': '참여하지 않은 공구입니다.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        elif groupbuy.status not in ['final_selection']:
             return Response(
                 {'error': '최종선택이 가능한 상태가 아닙니다.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -120,7 +139,26 @@ def seller_final_decision(request, groupbuy_id):
         groupbuy = GroupBuy.objects.get(id=groupbuy_id)
         
         # 공구 상태 확인
-        if groupbuy.status not in ['final_selection', 'seller_confirmation']:
+        if groupbuy.status == 'completed':
+            # 이미 완료된 공구의 경우, 판매자의 최종선택 상태를 확인
+            try:
+                bid = Bid.objects.get(seller=user, groupbuy=groupbuy, is_selected=True)
+                if bid.final_decision == 'confirmed':
+                    return Response(
+                        {'message': '이미 판매확정을 완료한 공구입니다.'},
+                        status=status.HTTP_200_OK
+                    )
+                else:
+                    return Response(
+                        {'error': '이미 종료된 공구입니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Bid.DoesNotExist:
+                return Response(
+                    {'error': '낙찰받지 못한 공구입니다.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        elif groupbuy.status not in ['final_selection', 'seller_confirmation']:
             return Response(
                 {'error': '최종선택이 가능한 상태가 아닙니다.'},
                 status=status.HTTP_400_BAD_REQUEST
