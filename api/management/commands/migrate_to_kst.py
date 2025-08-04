@@ -35,11 +35,7 @@ class Command(BaseCommand):
                 gb.end_time = gb.end_time + time_diff
                 updated = True
             
-            # voting_end
-            if gb.voting_end and gb.voting_end.hour <= 6:
-                gb.voting_end = gb.voting_end + time_diff
-                updated = True
-            
+            # voting_end 필드는 제거됨
             # final_selection_end
             if gb.final_selection_end and gb.final_selection_end.hour <= 6:
                 gb.final_selection_end = gb.final_selection_end + time_diff

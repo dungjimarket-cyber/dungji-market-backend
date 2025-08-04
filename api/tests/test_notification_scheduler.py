@@ -113,9 +113,9 @@ class NotificationSchedulerTestCase(TestCase):
 
     def test_send_bid_confirmation_reminders_notification_type(self):
         """Test that bid confirmation reminders have the correct notification_type."""
-        # Set the voting_end to be within the next 12 hours
-        self.groupbuy.status = 'voting'
-        self.groupbuy.voting_end = timezone.now() + timedelta(hours=6)
+        # Set the final_selection_end to be within the next 12 hours
+        self.groupbuy.status = 'final_selection'
+        self.groupbuy.final_selection_end = timezone.now() + timedelta(hours=6)
         self.groupbuy.save()
         
         # Mock the vote_set attribute since we don't have the Vote model in our test
@@ -136,9 +136,9 @@ class NotificationSchedulerTestCase(TestCase):
 
     def test_send_seller_confirmation_reminders_notification_type(self):
         """Test that seller confirmation reminders have the correct notification_type."""
-        # Set the voting_end to be 12 hours ago so seller confirmation deadline is in 12 hours
+        # Set the final_selection_end to be 12 hours ago so seller confirmation deadline is in 12 hours
         self.groupbuy.status = 'seller_confirmation'
-        self.groupbuy.voting_end = timezone.now() - timedelta(hours=12)
+        self.groupbuy.final_selection_end = timezone.now() - timedelta(hours=12)
         self.groupbuy.save()
         
         # Update the bid to be selected/winner
@@ -188,9 +188,9 @@ class NotificationSchedulerTestCase(TestCase):
             creator=user,
             product=product,
             region=region,
-            status='voting',
+            status='final_selection',
             start_time=timezone.now() - timedelta(hours=24),
-            voting_end=timezone.now() - timedelta(hours=12),
+            final_selection_end=timezone.now() - timedelta(hours=12),
             end_time=timezone.now() + timedelta(days=7)
         )
         
@@ -223,9 +223,9 @@ class NotificationSchedulerTestCase(TestCase):
 
     def test_process_expired_seller_confirmations_notification_type(self):
         """Test that expired seller confirmations have the correct notification_type."""
-        # Set the voting_end to be more than 24 hours in the past
+        # Set the final_selection_end to be more than 24 hours in the past
         self.groupbuy.status = 'seller_confirmation'
-        self.groupbuy.voting_end = timezone.now() - timedelta(hours=25)
+        self.groupbuy.final_selection_end = timezone.now() - timedelta(hours=25)
         self.groupbuy.save()
         
         # Update the bid to be selected/winner

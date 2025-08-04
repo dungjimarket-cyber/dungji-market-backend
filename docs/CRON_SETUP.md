@@ -5,9 +5,9 @@
 ## 1. 상태 전환 흐름
 
 ### 자동 전환되는 상태들:
-1. **`recruiting` → `voting`**: 모집 마감 시간 도달 시 (입찰이 있는 경우)
-2. **`recruiting` → `cancelled`**: 모집 마감 시간 도달 시 (입찰이 없는 경우)
-3. **`voting` → `final_selection`**: 투표 완료 후 (12시간 타이머 시작)
+1. **`recruiting` → `bidding`**: 첫 입찰 발생 시
+2. **`bidding` → `final_selection`**: 모집 마감 시간 도달 시 (입찰이 있는 경우)
+3. **`recruiting/bidding` → `cancelled`**: 모집 마감 시간 도달 시 (입찰이 없는 경우)
 4. **`final_selection` → `completed`**: 모든 최종선택 완료 시
 5. **`final_selection` → `cancelled`**: 12시간 타이머 만료 시 (선택 미완료)
 
@@ -20,9 +20,9 @@ python manage.py update_groupbuy_status
 ```
 
 ### 명령어 기능
-- 모집 마감된 공구의 투표 시작
-- 투표 완료된 공구의 최종선택 시작 (12시간 타이머)
-- 최종선택 시간 만료된 공구의 완료/취소 처리
+- 모집 마감된 공구의 최종선택 시작 (12시간 타이머)
+- 최종선택 시간 만료된 공구의 판매자 확정 대기 전환
+- 판매자 확정 시간 만료된 공구의 완료/취소 처리
 
 ## 3. Cron Job 설정
 
@@ -136,7 +136,7 @@ from django.utils import timezone
 print('현재 시간:', timezone.now())
 print('처리 대상 공구:')
 for gb in GroupBuy.objects.exclude(status__in=['completed', 'cancelled']):
-    print(f'공구 {gb.id}: {gb.status}, 마감시간: {gb.end_time}, 투표마감: {gb.voting_end}')
+    print(f'공구 {gb.id}: {gb.status}, 마감시간: {gb.end_time}, 최종선택마감: {gb.final_selection_end}')
 "
 ```
 

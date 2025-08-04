@@ -8,8 +8,8 @@ def update_groupbuy_status(groupbuy):
     
     상태 전환 플로우:
     1. recruiting (모집중) -> bidding (입찰진행중): 시작 시간 도달 시
-    2. bidding (입찰진행중) -> voting (최종선택중): 종료 시간 도달 시 (12시간 타이머 시작)
-    3. voting (최종선택중) -> seller_confirmation/cancelled: 12시간 후
+    2. bidding (입찰진행중) -> final_selection (최종선택중): 종료 시간 도달 시 (12시간 타이머 시작)
+    3. final_selection (최종선택중) -> seller_confirmation/cancelled: 12시간 후
     4. seller_confirmation -> completed: 추가 24시간 후
     """
     now = timezone.now()

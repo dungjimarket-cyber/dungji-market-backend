@@ -782,23 +782,6 @@ class Bid(models.Model):
             )
         ]
 
-class Vote(models.Model):
-    VOTE_CHOICE = (
-        ('confirm', '확정'),
-        ('cancel', '포기'),
-    )
-    
-    def __str__(self):
-        return f"{self.participation.user.username} - {self.get_choice_display()} ({self.participation.groupbuy.title})"
-    
-    participation = models.ForeignKey(Participation, on_delete=models.CASCADE, verbose_name='참여 정보')
-    choice = models.CharField(max_length=10, choices=VOTE_CHOICE, verbose_name='선택')
-    voted_at = models.DateTimeField(auto_now_add=True, verbose_name='투표 시간')
-    
-    class Meta:
-        verbose_name = '투표'
-        verbose_name_plural = '투표 관리'
-
 class Penalty(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자')
     reason = models.TextField(verbose_name='사유')

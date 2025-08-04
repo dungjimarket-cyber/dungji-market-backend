@@ -84,15 +84,10 @@ class NotificationScheduler:
             if hours_left in [12, 10, 8, 6, 4, 2] and hours_left > 0:
                 logger.info(f"공구 '{groupbuy.title}' 투표 마감 {hours_left}시간 전 알림 발송")
                 
-                # 참여자 중 투표하지 않은 사람들 조회
-                participants = groupbuy.participation_set.all()
-                
-                # 투표한 사람들 ID 목록
-                voted_user_ids = groupbuy.vote_set.values_list('participation__user_id', flat=True)
+                # 참여자 중 결정하지 않은 사람들 조회
+                participants = groupbuy.participation_set.filter(final_decision='pending')
                 
                 for participant in participants:
-                    # 투표하지 않은 참여자만 알림 발송
-                    if participant.user.id not in voted_user_ids:
                         user = participant.user
                         
                         # 알림 생성

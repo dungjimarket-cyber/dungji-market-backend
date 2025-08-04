@@ -110,8 +110,8 @@ class BiddingStatusTestCase(TestCase):
         groupbuy.refresh_from_db()
         self.assertEqual(groupbuy.current_participants, 2)
 
-    def test_bidding_to_voting_transition(self):
-        """공구 마감 시 bidding에서 voting으로 전환"""
+    def test_bidding_to_final_selection_transition(self):
+        """공구 마감 시 bidding에서 final_selection으로 전환"""
         from django.core.management import call_command
         
         # 마감된 bidding 상태의 공구 생성
@@ -138,10 +138,10 @@ class BiddingStatusTestCase(TestCase):
         # cron job 실행
         call_command('update_groupbuy_status')
         
-        # voting 상태로 변경되었는지 확인
+        # final_selection 상태로 변경되었는지 확인
         groupbuy.refresh_from_db()
-        self.assertEqual(groupbuy.status, 'voting')
-        self.assertIsNotNone(groupbuy.voting_end)
+        self.assertEqual(groupbuy.status, 'final_selection')
+        self.assertIsNotNone(groupbuy.final_selection_end)
 
     def test_cannot_join_after_deadline(self):
         """공구 마감 후에는 참여 불가"""
@@ -194,9 +194,9 @@ class BiddingStatusTestCase(TestCase):
             status='bidding'
         )
         
-        # voting 상태 공구 (포함되지 않아야 함)
-        voting_groupbuy = GroupBuy.objects.create(
-            title='Voting GroupBuy',
+        # final_selection 상태 공구 (포함되지 않아야 함)
+        final_selection_groupbuy = GroupBuy.objects.create(
+            title='Final Selection GroupBuy',
             description='Test Description',
             product=self.product,
             creator=self.buyer1,
@@ -204,12 +204,12 @@ class BiddingStatusTestCase(TestCase):
             max_participants=10,
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
-            voting_end=timezone.now() + timedelta(hours=11),
-            status='voting'
+            final_selection_end=timezone.now() + timedelta(hours=11),
+            status='final_selection'
         )
         
         # buyer2가 모든 공구에 참여
-        for groupbuy in [recruiting_groupbuy, bidding_groupbuy, voting_groupbuy]:
+        for groupbuy in [recruiting_groupbuy, bidding_groupbuy, final_selection_groupbuy]:
             Participation.objects.create(
                 user=self.buyer2,
                 groupbuy=groupbuy,
@@ -226,13 +226,13 @@ class BiddingStatusTestCase(TestCase):
         returned_ids = [gb['id'] for gb in response.data]
         self.assertIn(recruiting_groupbuy.id, returned_ids)
         self.assertIn(bidding_groupbuy.id, returned_ids)
-        self.assertNotIn(voting_groupbuy.id, returned_ids)
+        self.assertNotIn(final_selection_groupbuy.id, returned_ids)
         self.assertEqual(len(response.data), 2)
 
     def test_status_display_consistency(self):
         """상태 표시의 일관성 확인"""
         # 다양한 상태의 공구 생성
-        statuses = ['recruiting', 'bidding', 'voting', 'final_selection', 'completed']
+        statuses = ['recruiting', 'bidding', 'final_selection', 'seller_confirmation', 'completed']
         
         for i, status_name in enumerate(statuses):
             GroupBuy.objects.create(

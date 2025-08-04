@@ -5,7 +5,7 @@ from datetime import timedelta
 from rest_framework.test import APIClient
 from rest_framework import status
 from api.models import GroupBuy, Product, Category, Participation, Bid
-from api.models_voting import BidVote
+# BidVote 모델은 voting 제거로 삭제됨
 
 User = get_user_model()
 
@@ -58,7 +58,6 @@ class FinalSelectionTestCase(TestCase):
             max_participants=10,
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
-            voting_end=timezone.now() - timedelta(minutes=30),
             final_selection_end=timezone.now() + timedelta(hours=11),
             status='final_selection'
         )
@@ -370,7 +369,6 @@ class CronJobTestCase(TestCase):
             max_participants=10,
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
-            voting_end=timezone.now() - timedelta(hours=1),
             final_selection_end=timezone.now() - timedelta(minutes=1),
             status='final_selection',
             current_participants=1
@@ -410,7 +408,6 @@ class CronJobTestCase(TestCase):
             max_participants=10,
             start_time=timezone.now() - timedelta(hours=25),
             end_time=timezone.now() - timedelta(hours=1),
-            voting_end=timezone.now() - timedelta(hours=1),
             final_selection_end=timezone.now() + timedelta(hours=1),
             status='final_selection',
             current_participants=1
