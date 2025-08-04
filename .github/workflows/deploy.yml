@@ -127,15 +127,34 @@ jobs:
           
           # 특정 문제가 있는 컨테이너 강제 제거
           echo "🧹 Force removing stuck containers..."
-          # Docker 데몬 재시작이 필요할 수 있음
-          if sudo docker ps -a | grep -q "580c0a899188"; then
-            echo "Found stuck container 580c0a899188, attempting force removal..."
-            sudo systemctl restart docker || true
-            sleep 5
-            sudo docker rm -f 580c0a899188 || true
+          
+          # 포트 8000을 사용하는 프로세스 강제 종료
+          echo "Killing processes using port 8000..."
+          sudo fuser -k 8000/tcp || true
+          
+          # Docker 프로세스 확인 및 종료
+          echo "Checking for docker-proxy processes..."
+          sudo pkill -f "docker-proxy.*:8000" || true
+          sleep 2
+          
+          # 문제가 있는 컨테이너 ID 확인
+          STUCK_CONTAINERS=$(sudo docker ps -a | grep -E "(dungji|8000|580c0a899188)" | awk '{print $1}')
+          if [ ! -z "$STUCK_CONTAINERS" ]; then
+            echo "Found stuck containers: $STUCK_CONTAINERS"
+            
+            # Docker 데몬 재시작
+            echo "Restarting Docker daemon..."
+            sudo systemctl restart docker
+            sleep 10
+            
+            # 재시작 후 강제 제거
+            for container in $STUCK_CONTAINERS; do
+              echo "Force removing container: $container"
+              sudo docker rm -f $container || true
+            done
           fi
           
-          # 모든 dungji 관련 컨테이너 강제 제거
+          # 모든 dungji 관련 컨테이너 최종 정리
           sudo docker ps -a | grep -E "(dungji|8000)" | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
           # Docker 네트워크 정리
@@ -158,7 +177,11 @@ jobs:
           
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
-          sudo docker-compose -p dungji-market-backend up --build -d --force-recreate --remove-orphans
+          # 타임스탬프를 사용하여 고유한 프로젝트 이름 생성 (충돌 방지)
+          PROJECT_NAME="dungji-backend-$(date +%s)"
+          echo "Using project name: $PROJECT_NAME"
+          export PROJECT_NAME
+          sudo docker-compose -p $PROJECT_NAME up --build -d --force-recreate --remove-orphans
           
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
@@ -166,15 +189,15 @@ jobs:
           
           # 컨테이너 상태 확인
           echo "📊 Checking container status..."
-          sudo docker-compose ps
+          sudo docker-compose -p $PROJECT_NAME ps
           
           # 웹 서비스가 준비될 때까지 대기
           echo "🔍 Waiting for web service to be ready..."
           WEB_READY=false
           for i in {1..30}; do
-            if sudo docker-compose ps | grep -q "web.*Up"; then
+            if sudo docker-compose -p $PROJECT_NAME ps | grep -q "web.*Up"; then
               echo "✅ Web container is running"
-              if sudo docker-compose exec -T web python manage.py check --deploy 2>/dev/null; then
+              if sudo docker-compose -p $PROJECT_NAME exec -T web python manage.py check --deploy 2>/dev/null; then
                 echo "✅ Web service is ready"
                 WEB_READY=true
                 break
@@ -187,31 +210,31 @@ jobs:
           if [ "$WEB_READY" = false ]; then
             echo "❌ Web service failed to start within timeout"
             echo "Container logs:"
-            sudo docker-compose logs web
+            sudo docker-compose -p $PROJECT_NAME logs web
             exit 1
           fi
           
           # 마이그레이션 실행
           echo "🔄 Running database migrations..."
-          sudo docker-compose exec -T web python manage.py migrate --noinput
+          sudo docker-compose -p $PROJECT_NAME exec -T web python manage.py migrate --noinput
           
           # 정적 파일 수집
           echo "📦 Collecting static files..."
-          sudo docker-compose exec -T web python manage.py collectstatic --noinput
+          sudo docker-compose -p $PROJECT_NAME exec -T web python manage.py collectstatic --noinput
           
           # 최종 상태 확인
           echo "🏥 Final health check..."
-          sudo docker-compose ps
+          sudo docker-compose -p $PROJECT_NAME ps
           
           # 로그 출력
           echo "📋 Recent application logs:"
-          sudo docker-compose logs --tail=20 web
+          sudo docker-compose -p $PROJECT_NAME logs --tail=20 web
           
           # 간단한 API 테스트
           echo "🧪 Testing API endpoint..."
           API_HEALTHY=false
           # 사용된 포트 확인
-          ACTUAL_PORT=$(sudo docker-compose -p dungji-market-backend ps | grep web | grep -oP '0.0.0.0:\K[0-9]+' | head -1)
+          ACTUAL_PORT=$(sudo docker-compose -p $PROJECT_NAME ps | grep web | grep -oP '0.0.0.0:\K[0-9]+' | head -1)
           if [ -z "$ACTUAL_PORT" ]; then
             ACTUAL_PORT=8000
           fi
