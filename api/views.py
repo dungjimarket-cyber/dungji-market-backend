@@ -659,10 +659,10 @@ class GroupBuyViewSet(ModelViewSet):
                         status__in=['recruiting', 'bidding']
                     )
                 elif status_param == 'ended':
-                    # 종료: 마감시간이 지났거나 voting/final_selection/seller_confirmation/completed/cancelled 상태인 공구
+                    # 종료: 마감시간이 지났거나 final_selection/seller_confirmation/completed/cancelled 상태인 공구
                     queryset = queryset.filter(
                         Q(end_time__lte=now) | 
-                        Q(status__in=['voting', 'final_selection', 'seller_confirmation', 'completed', 'cancelled'])
+                        Q(status__in=['final_selection', 'seller_confirmation', 'completed', 'cancelled'])
                     )
                 elif status_param == 'completed':
                     # 완료: completed 상태이거나 마감시간이 지난 공구
@@ -670,8 +670,8 @@ class GroupBuyViewSet(ModelViewSet):
                         Q(status='completed') | Q(end_time__lte=now)
                     )
                 elif status_param == 'in_progress':
-                    # 최종선택 이전 상태(recruiting, bidding, voting)만 필터링
-                    queryset = queryset.filter(status__in=['recruiting', 'bidding', 'voting'])
+                    # 최종선택 이전 상태(recruiting, bidding)만 필터링
+                    queryset = queryset.filter(status__in=['recruiting', 'bidding'])
 
         # category 필터 처리
         if category_id:
@@ -826,7 +826,7 @@ class GroupBuyViewSet(ModelViewSet):
         existing_groupbuy = GroupBuy.objects.filter(
             product_id=product_id,
             creator_id=creator_id,
-            status__in=['recruiting', 'bidding', 'voting', 'seller_confirmation'] # 진행 중인 공구만 체크
+            status__in=['recruiting', 'bidding', 'seller_confirmation'] # 진행 중인 공구만 체크
         ).first()
         
         # 통신 제품인 경우 통신사/가입유형/요금제 정보가 다르면 중복 허용
@@ -1025,12 +1025,12 @@ class GroupBuyViewSet(ModelViewSet):
 
     @action(detail=False)
     def popular(self, request):
-        # 최종선택 이전 상태(recruiting, bidding, voting)인 공구만 필터링
+        # 최종선택 이전 상태(recruiting, bidding)인 공구만 필터링
         popular_groupbuys = GroupBuy.objects.annotate(
             curent_participants=Count('participation')
         ).filter(
             end_time__gt=timezone.now(),
-            status__in=['recruiting', 'bidding', 'voting']  # 최종선택 이전 상태만
+            status__in=['recruiting', 'bidding']  # 최종선택 이전 상태만
         ).order_by('-curent_participants')[:3]
         
         # 공구 상태 자동 업데이트
@@ -1248,7 +1248,7 @@ class GroupBuyViewSet(ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'popular', 'recent', 'bids', 'winning_bid', 'voting_results']:
+        if self.action in ['list', 'retrieve', 'popular', 'recent', 'bids', 'winning_bid']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -1367,14 +1367,14 @@ class GroupBuyViewSet(ModelViewSet):
     def joined_groupbuys(self, request):
         """참여중인 공구 목록 조회
         
-        구매자: recruiting, bidding 상태의 참여 공구 (voting, final_selection, completed, cancelled 제외)
+        구매자: recruiting, bidding 상태의 참여 공구 (final_selection, completed, cancelled 제외)
         판매자: 사용하지 않음
         """
         user = request.user
         
         if user.role == 'buyer':
             # 참여중인 공구: recruiting, bidding 상태만 
-            # voting, final_selection, seller_confirmation, completed, cancelled 제외
+            # final_selection, seller_confirmation, completed, cancelled 제외
             joined = self.get_queryset().filter(
                 participants=user,
                 status__in=['recruiting', 'bidding']
@@ -1732,72 +1732,8 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
-    @action(detail=True, methods=['post'])
-    def vote(self, request, pk=None):
-        """공구 참여자가 원하는 판매자의 입찰에 투표"""
-        from .models_voting import BidVote
-        from django.db import transaction
-        
-        groupbuy = self.get_object()
-        user = request.user
-        bid_id = request.data.get('bid_id')
-        
-        if not bid_id:
-            return Response(
-                {'error': '입찰을 선택해주세요.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # 공구 참여자인지 확인
-        if not groupbuy.participants.filter(id=user.id).exists():
-            return Response(
-                {'error': '공구 참여자만 투표할 수 있습니다.'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
-        # 공구 상태가 voting인지 확인
-        if groupbuy.status != 'voting':
-            return Response(
-                {'error': '현재 투표 기간이 아닙니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        # 투표 마감 시간 확인
-        if groupbuy.voting_end and timezone.now() > groupbuy.voting_end:
-            return Response(
-                {'error': '투표 시간이 종료되었습니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        try:
-            # 입찰 확인
-            bid = Bid.objects.get(id=bid_id, groupbuy=groupbuy)
-            
-            with transaction.atomic():
-                # 기존 투표가 있으면 업데이트, 없으면 생성
-                vote, created = BidVote.objects.update_or_create(
-                    participant=user,
-                    groupbuy=groupbuy,
-                    defaults={'bid': bid}
-                )
-                
-            return Response({
-                'message': '투표가 완료되었습니다.',
-                'bid_id': bid.id,
-                'seller': bid.seller.username
-            }, status=status.HTTP_200_OK)
-            
-        except Bid.DoesNotExist:
-            return Response(
-                {'error': '유효하지 않은 입찰입니다.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"투표 중 오류 발생: {str(e)}")
-            return Response(
-                {'error': '투표 처리 중 오류가 발생했습니다.'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+    # vote 메서드는 voting 상태를 제거하면서 삭제됨
+    # 최종선택은 final_selection 상태에서 처리됨
     
     @action(detail=True, methods=['get'])
     def contact_info(self, request, pk=None):
@@ -1859,26 +1795,7 @@ class GroupBuyViewSet(ModelViewSet):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    @action(detail=True, methods=['get'])
-    def my_vote(self, request, pk=None):
-        """현재 사용자의 투표 상태 조회"""
-        from .models_voting import BidVote
-        
-        groupbuy = self.get_object()
-        user = request.user
-        
-        try:
-            vote = BidVote.objects.get(participant=user, groupbuy=groupbuy)
-            return Response({
-                'bid_id': vote.bid.id,
-                'seller': vote.bid.seller.username,
-                'voted_at': vote.created_at
-            })
-        except BidVote.DoesNotExist:
-            return Response(
-                {'message': '아직 투표하지 않았습니다.'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+    # my_vote 메서드는 voting 상태를 제거하면서 삭제됨
     
     @action(detail=True, methods=['get'])
     def bids(self, request, pk=None):
@@ -1910,9 +1827,6 @@ class GroupBuyViewSet(ModelViewSet):
     @action(detail=True, methods=['get'])
     def winning_bid(self, request, pk=None):
         """낙찰된 입찰 정보 조회"""
-        from .models_voting import BidVote
-        from django.db.models import Count
-        
         groupbuy = self.get_object()
         
         # 낙찰된 입찰 찾기
@@ -1923,10 +1837,6 @@ class GroupBuyViewSet(ModelViewSet):
                 {'message': '아직 낙찰된 입찰이 없습니다.'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # 투표 수 계산
-        vote_count = BidVote.objects.filter(groupbuy=groupbuy, bid=winning_bid).count()
-        total_votes = BidVote.objects.filter(groupbuy=groupbuy).count()
         
         return Response({
             'bid': {
@@ -1940,41 +1850,12 @@ class GroupBuyViewSet(ModelViewSet):
                 'bid_type': winning_bid.bid_type,
                 'amount': winning_bid.amount,
                 'message': winning_bid.message or '',
-                'created_at': winning_bid.created_at,
-                'vote_count': vote_count
+                'created_at': winning_bid.created_at
             },
-            'total_votes': total_votes,
             'total_participants': groupbuy.current_participants
         })
     
-    @action(detail=True, methods=['get'])
-    def voting_results(self, request, pk=None):
-        """투표 결과 조회"""
-        from .models_voting import BidVote
-        from django.db.models import Count
-        
-        groupbuy = self.get_object()
-        
-        # 투표 집계
-        results = BidVote.objects.filter(groupbuy=groupbuy).values(
-            'bid__id', 'bid__seller__username', 'bid__amount'
-        ).annotate(
-            vote_count=Count('id')
-        ).order_by('-vote_count')
-        
-        # 전체 참여자 수
-        total_participants = groupbuy.current_participants
-        
-        # 투표한 사람 수
-        total_votes = BidVote.objects.filter(groupbuy=groupbuy).count()
-        
-        return Response({
-            'total_participants': total_participants,
-            'total_votes': total_votes,
-            'abstention_count': total_participants - total_votes,
-            'results': list(results),
-            'voting_end': groupbuy.voting_end
-        })
+    # voting_results 메서드는 voting 상태를 제거하면서 삭제됨
     
     @action(detail=True, methods=['post'])
     def leave(self, request, pk=None):

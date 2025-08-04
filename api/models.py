@@ -319,7 +319,6 @@ class GroupBuy(models.Model):
     STATUS_CHOICES = (
         ('recruiting', '모집중'),
         ('bidding', '입찰진행중'),
-        ('voting', '투표중'),
         ('final_selection', '최종선택중'),
         ('seller_confirmation', '판매자확정대기'),
         ('completed', '완료'),
@@ -389,47 +388,42 @@ class GroupBuy(models.Model):
             self.status = 'bidding'
             self.save()
         elif self.status == 'bidding' and now >= self.end_time:
-            self.status = 'voting'
-            self.save()
-        elif self.status == 'voting':
-            # 투표 완료 후 final_selection 상태로 전환
+            # 입찰 마감 후 바로 final_selection 상태로 전환
             selected_bid = self.bid_set.filter(is_selected=True).first()
             if selected_bid:
                 self.status = 'final_selection'
                 from datetime import timedelta
-                self.voting_end = now + timedelta(hours=12)
+                # final_selection_end를 입찰 마감 후 12시간으로 설정
+                self.final_selection_end = now + timedelta(hours=12)
+                self.save()
+            else:
+                # 선택된 입찰이 없으면 취소
+                self.status = 'cancelled'
                 self.save()
 
-    def handle_voting_timeout(self):
-        if timezone.now() > self.voting_end:
-            confirmed = self.vote_set.filter(choice='confirm').count()
-            if confirmed >= 1:
-                self.status = 'seller_confirmation'
-            else:
-                self.status = 'cancelled'
-            self.save()
 
     def handle_final_selection_timeout(self):
         """최종선택 시간 초과 처리"""
-        if self.status == 'final_selection' and self.voting_end and timezone.now() > self.voting_end:
-            # 최종선택을 완료한 참여자들만 completed 상태로 진행
+        if self.status == 'final_selection' and self.final_selection_end and timezone.now() > self.final_selection_end:
+            # 구매자와 판매자의 최종선택 상태 확인
             confirmed_participations = self.participation_set.filter(final_decision='confirmed')
             selected_bid = self.bid_set.filter(is_selected=True, final_decision='confirmed').first()
             
             if confirmed_participations.exists() and selected_bid:
+                # 양쪽 모두 확정한 경우
                 self.status = 'completed'
             else:
+                # 하나라도 미선택 또는 포기한 경우
                 self.status = 'cancelled'
             self.save()
 
     def check_auto_transitions(self):
         now = timezone.now()
-        if self.status == 'voting' and now > self.voting_end:
-            self.handle_voting_timeout()
-        elif self.status == 'final_selection' and self.voting_end and now > self.voting_end:
+        if self.status == 'final_selection' and self.final_selection_end and now > self.final_selection_end:
             self.handle_final_selection_timeout()
-        elif self.status == 'seller_confirmation' and now > self.voting_end + timezone.timedelta(hours=24):
-            self.status = 'completed'
+        elif self.status == 'seller_confirmation' and self.final_selection_end and now > self.final_selection_end + timezone.timedelta(hours=24):
+            # 판매자 확정 대기 시간 초과
+            self.status = 'cancelled'
             self.save()
 
     def notify_status_change(self):
@@ -1057,7 +1051,7 @@ def handle_status_change(sender, instance, **kwargs):
 
 # Import PhoneVerification model
 from .models_verification import PhoneVerification
-# Import BidVote model
-from .models_voting import BidVote
+# Import BidVote model - voting 상태 제거로 인해 삭제됨
+# from .models_voting import BidVote
 # Import Banner and Event models
 from .models_banner import Banner, Event

@@ -41,7 +41,7 @@ from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_us
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback
 from api.views_verification import send_verification_code, verify_code, check_verification_status
-from api.views_voting import vote_for_bid, get_my_vote, get_voting_results, get_winning_bid
+# voting 관련 import는 voting 상태 제거로 인해 삭제됨
 from api.views_final_selection import (
     buyer_final_decision, seller_final_decision, 
     get_final_decision_status, get_contact_info
@@ -108,11 +108,7 @@ urlpatterns = [
     path('api/users/me/participations/', ParticipationViewSet.as_view({'get': 'me'}), name='user_participations'),
     # 동의 프로세스 시작 API
     path('api/groupbuys/<int:pk>/start-consent/', start_consent_process, name='start_consent_process'),
-    # 투표 관련 API
-    path('api/groupbuys/<int:groupbuy_id>/vote/', vote_for_bid, name='vote_for_bid'),
-    path('api/groupbuys/<int:groupbuy_id>/my-vote/', get_my_vote, name='get_my_vote'),
-    path('api/groupbuys/<int:groupbuy_id>/voting-results/', get_voting_results, name='get_voting_results'),
-    path('api/groupbuys/<int:groupbuy_id>/winning-bid/', get_winning_bid, name='get_winning_bid'),
+    # 투표 관련 API는 voting 상태 제거로 인해 삭제됨
     # 최종선택 관련 API
     path('api/groupbuys/<int:groupbuy_id>/buyer-decision/', buyer_final_decision, name='buyer_final_decision'),
     path('api/groupbuys/<int:groupbuy_id>/seller-decision/', seller_final_decision, name='seller_final_decision'),
