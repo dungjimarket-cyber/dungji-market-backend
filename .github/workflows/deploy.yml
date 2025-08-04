@@ -65,12 +65,17 @@ jobs:
           echo "🚀 Starting deployment process..."
           cd ~/dungji-market-backend
           
+          # 포트 8000을 사용하는 프로세스 종료
+          echo "🔍 Checking for processes using port 8000..."
           if lsof -i :8000; then
-            echo "🛑 Port 8000 is already in use. Killing..."
-            fuser -k 8000/tcp || true
+            echo "🛑 Port 8000 is already in use. Killing processes..."
+            sudo fuser -k 8000/tcp || true
+            sleep 5  # 프로세스 종료 대기
+          else
+            echo "✅ Port 8000 is available"
           fi
 
-          # .env 파일 확인
+          # 필수 파일 확인
           if [ ! -f .env ]; then
             echo "❌ ERROR: .env file not found!"
             echo "Please create .env file on the server first."
@@ -79,9 +84,20 @@ jobs:
           fi
           echo "✅ Environment file found"
           
-          # 기존 컨테이너 중지
+          if [ ! -f docker-compose.yml ]; then
+            echo "❌ ERROR: docker-compose.yml file not found!"
+            exit 1
+          fi
+          echo "✅ Docker Compose file found"
+          
+          # 기존 컨테이너 중지 및 정리
           echo "🛑 Stopping existing containers..."
           docker-compose down --remove-orphans || true
+          
+          # 모든 관련 컨테이너 강제 정리
+          echo "🧹 Cleaning up any remaining containers..."
+          docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r docker stop || true
+          docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r docker rm || true
           
           # 사용하지 않는 Docker 리소스 정리
           echo "🧹 Cleaning up unused Docker resources..."
@@ -89,7 +105,7 @@ jobs:
           
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
-          docker-compose up --build -d
+          docker-compose up --build -d --force-recreate
           
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
@@ -101,14 +117,26 @@ jobs:
           
           # 웹 서비스가 준비될 때까지 대기
           echo "🔍 Waiting for web service to be ready..."
+          WEB_READY=false
           for i in {1..30}; do
-            if docker-compose exec -T web python manage.py check --deploy; then
-              echo "✅ Web service is ready"
-              break
+            if docker-compose ps | grep -q "web.*Up"; then
+              echo "✅ Web container is running"
+              if docker-compose exec -T web python manage.py check --deploy 2>/dev/null; then
+                echo "✅ Web service is ready"
+                WEB_READY=true
+                break
+              fi
             fi
             echo "Attempt $i/30: Web service not ready yet, waiting..."
             sleep 10
           done
+          
+          if [ "$WEB_READY" = false ]; then
+            echo "❌ Web service failed to start within timeout"
+            echo "Container logs:"
+            docker-compose logs web
+            exit 1
+          fi
           
           # 마이그레이션 실행
           echo "🔄 Running database migrations..."
@@ -128,10 +156,20 @@ jobs:
           
           # 간단한 API 테스트
           echo "🧪 Testing API endpoint..."
-          if curl -f -s http://localhost:8000/api/health/ > /dev/null 2>&1; then
-            echo "✅ API health check passed"
-          else
-            echo "⚠️  API health check failed (this might be normal if endpoint doesn't exist)"
+          API_HEALTHY=false
+          for i in {1..10}; do
+            if curl -f -s http://localhost:8000/api/health/ > /dev/null 2>&1; then
+              echo "✅ API health check passed"
+              API_HEALTHY=true
+              break
+            fi
+            echo "API check attempt $i/10: waiting..."
+            sleep 3
+          done
+          
+          if [ "$API_HEALTHY" = false ]; then
+            echo "⚠️  API health check failed after multiple attempts"
+            echo "This might indicate the application is not fully ready"
           fi
           
           echo "🎉 Deployment completed successfully!"
