@@ -276,10 +276,10 @@ class BidViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # final_selection 상태이고 선택된 입찰만 조회
+        # final_selection_seller 상태이고 선택된 입찰만 조회
         bids = Bid.objects.filter(
             seller=request.user,
-            groupbuy__status='final_selection',
+            groupbuy__status='final_selection_seller',
             status='selected'
         ).select_related('groupbuy', 'groupbuy__product').order_by('-created_at')
         
