@@ -287,7 +287,8 @@ class BidViewSet(viewsets.ModelViewSet):
         data = []
         for bid in bids:
             bid_data = self.get_serializer(bid).data
-            bid_data['final_selection_end'] = bid.groupbuy.final_selection_end
+            # 판매자 최종선택 종료 시간 사용
+            bid_data['final_selection_end'] = bid.groupbuy.seller_selection_end
             bid_data['groupbuy_status'] = bid.groupbuy.status
             bid_data['groupbuy_product_name'] = bid.groupbuy.product.name
             bid_data['participants_count'] = bid.groupbuy.participation_set.count()
