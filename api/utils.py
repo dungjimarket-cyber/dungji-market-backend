@@ -32,11 +32,18 @@ def update_groupbuy_status(groupbuy):
             groupbuy.save(update_fields=['status'])
             return True
         
-        # 낙찰된 입찰이 있는지 확인
+        # 입찰이 있는지 확인하고 최고 입찰자 선정
         from .models import Bid
-        winning_bid = groupbuy.bid_set.filter(status='selected').first()
+        bids = groupbuy.bid_set.filter(status='pending').order_by('-amount', 'created_at')
         
-        if winning_bid:
+        if bids.exists():
+            # 가장 높은 지원금을 제시한 입찰자를 낙찰자로 선정
+            winning_bid = bids.first()
+            winning_bid.status = 'selected'
+            winning_bid.save(update_fields=['status'])
+            
+            # 다른 입찰자들의 상태를 'not_selected'로 변경
+            bids.exclude(id=winning_bid.id).update(status='not_selected')
             # 구매자 최종선택 상태로 변경하고 12시간 타이머 설정
             groupbuy.status = 'final_selection_buyers'
             groupbuy.final_selection_end = now + timedelta(hours=12)
@@ -52,10 +59,27 @@ def update_groupbuy_status(groupbuy):
                         notification_type='buyer_selection_start',
                         message=f"{groupbuy.title} 공구의 구매자 최종 선택이 시작되었습니다. 12시간 내에 구매 확정/포기를 선택해주세요."
                     )
+                
+                # 낙찰자에게 알림
+                Notification.objects.create(
+                    user=winning_bid.seller,
+                    groupbuy=groupbuy,
+                    notification_type='bid_winner',
+                    message=f"축하합니다! {groupbuy.title} 공구에 낙찰되셨습니다. 구매자들의 최종 선택 후 판매 확정을 진행해주세요."
+                )
+                
+                # 낙찰되지 않은 입찰자들에게 알림
+                for bid in bids.exclude(id=winning_bid.id):
+                    Notification.objects.create(
+                        user=bid.seller,
+                        groupbuy=groupbuy,
+                        notification_type='bid_not_selected',
+                        message=f"{groupbuy.title} 공구에 낙찰되지 않으셨습니다. (낙찰 지원금: {winning_bid.amount:,}원)"
+                    )
             except Exception as e:
                 print(f"알림 생성 중 오류: {e}")
         else:
-            # 낙찰된 입찰이 없으면 취소
+            # 입찰이 없으면 취소
             groupbuy.status = 'cancelled'
             groupbuy.save(update_fields=['status'])
         
