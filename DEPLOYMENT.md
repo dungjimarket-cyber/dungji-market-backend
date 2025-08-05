@@ -6,9 +6,9 @@
 
 GitHub 리포지토리의 Settings > Secrets and variables > Actions에서 다음 시크릿을 추가해야 합니다:
 
-- `EC2_HOST`: EC2 인스턴스의 퍼블릭 IP 주소 (예: 13.125.xxx.xxx)
+- `EC2_HOST`: EC2 인스턴스의 퍼블릭 IP 주소 (예: 54.180.82.238)
 - `EC2_SSH_KEY`: EC2 접속용 SSH 프라이빗 키 (전체 내용 복사)
-- `DJANGO_SECRET_KEY`: Django SECRET_KEY (선택사항, 테스트용)
+- `ENV_FILE`: 전체 .env 파일 내용 (아래 예시 참조)
 
 ### 2. EC2 서버 초기 설정
 
@@ -36,10 +36,10 @@ nano .env
 ### 3. .env 파일 내용
 
 ```env
-# Django Settings
+# Django 기본 설정
 SECRET_KEY=your-secret-key-here
 DEBUG=False
-ALLOWED_HOSTS=your-domain.com,your-ec2-ip
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,54.180.82.238,api.dungjimarket.com,dungjimarket.com
 
 # Database
 DB_NAME=dungji_market
@@ -88,7 +88,28 @@ docker-compose exec web python manage.py migrate
 docker-compose exec web python manage.py collectstatic --noinput
 ```
 
-### 6. 로그 확인
+### 6. 문제 해결
+
+#### ALLOWED_HOSTS 오류 해결
+
+만약 "Invalid HTTP_HOST header" 오류가 발생하면:
+
+```bash
+# EC2에 SSH 접속
+ssh -i your-key.pem ubuntu@54.180.82.238
+
+# .env 파일 수정
+cd ~/dungji-market-backend
+nano .env
+
+# DJANGO_ALLOWED_HOSTS에 IP 또는 도메인 추가
+# 예: DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,54.180.82.238,api.dungjimarket.com
+
+# 컨테이너 재시작
+docker-compose restart web
+```
+
+### 7. 로그 확인
 
 ```bash
 # 전체 로그

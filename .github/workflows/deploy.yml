@@ -48,7 +48,12 @@ jobs:
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          echo "${{ secrets.ENV_FILE }}" > ~/dungji-market-backend/.env
+          # ENV_FILE이 설정되어 있으면 업데이트, 아니면 기존 파일 유지
+          if [ ! -z "${{ secrets.ENV_FILE }}" ]; then
+            echo "${{ secrets.ENV_FILE }}" > ~/dungji-market-backend/.env
+          else
+            echo "Using existing .env file on server"
+          fi
 
     - name: Deploy application
       uses: appleboy/ssh-action@v1.0.3
