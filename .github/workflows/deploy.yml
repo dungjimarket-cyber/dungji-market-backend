@@ -147,6 +147,16 @@ jobs:
           echo "🧹 Cleaning up unused Docker resources..."
           sudo docker system prune -f || true
           
+          # 디스크 공간 확보를 위한 추가 정리
+          echo "🧹 Deep cleaning Docker resources to free up disk space..."
+          sudo docker image prune -a -f || true
+          sudo docker volume prune -f || true
+          sudo docker builder prune -a -f || true
+          
+          # 디스크 사용량 확인
+          echo "💾 Checking disk usage..."
+          df -h /
+          
           # 포트 8000이 여전히 사용 중인지 최종 확인
           if sudo lsof -i :8000 2>/dev/null; then
             echo "⚠️  Port 8000 is still in use. Using alternative approach..."
