@@ -408,3 +408,34 @@ class NotificationScheduler:
             logger.info("알림 스케줄러 작업 완료")
         except Exception as e:
             logger.error(f"알림 스케줄러 작업 실패: {str(e)}")
+
+
+def send_reminder_notifications():
+    """
+    모든 리마인더 알림을 발송합니다.
+    Vercel cron job에서 호출되는 함수입니다.
+    """
+    sent_count = 0
+    try:
+        # NotificationScheduler의 리마인더 작업 실행
+        scheduler = NotificationScheduler()
+        
+        # 각 알림 발송 메서드 실행
+        scheduler.send_bid_reminders()
+        scheduler.send_bid_confirmation_reminders()
+        scheduler.send_seller_confirmation_reminders()
+        
+        # 발송된 알림 수 집계 (최근 5분간 생성된 reminder 타입 알림)
+        from datetime import timedelta
+        recent_time = timezone.now() - timedelta(minutes=5)
+        sent_count = Notification.objects.filter(
+            notification_type='reminder',
+            created_at__gte=recent_time
+        ).count()
+        
+        logger.info(f"리마인더 알림 발송 완료: {sent_count}개")
+        
+    except Exception as e:
+        logger.error(f"리마인더 알림 발송 실패: {str(e)}")
+    
+    return sent_count

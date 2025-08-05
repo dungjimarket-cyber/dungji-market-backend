@@ -49,6 +49,7 @@ from api.views_final_selection import (
 from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
+from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -124,6 +125,10 @@ urlpatterns = [
     path('api/events/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
     # Health check API
     path('api/health/', health_check, name='health_check'),
+    # Cron job APIs
+    path('api/cron/update-status/', update_groupbuy_status_cron, name='cron_update_status'),
+    path('api/cron/send-reminders/', send_reminder_notifications_cron, name='cron_send_reminders'),
+    path('api/cron/health/', cron_health_check, name='cron_health_check'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
