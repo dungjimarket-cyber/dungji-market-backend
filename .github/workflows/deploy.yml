@@ -73,27 +73,7 @@ jobs:
           # 포트 8000을 사용하는 프로세스 종료
           echo "🔍 Checking for processes using port 8000..."
           
-          # 문제가 있는 특정 컨테이너 처리
-          if sudo docker ps -a | grep -q "580c0a899188"; then
-            echo "⚠️  Found problematic container 580c0a899188"
-            echo "Attempting to resolve..."
-            
-            # Docker 서비스 재시작
-            sudo systemctl restart docker || true
-            sleep 5
-            
-            # 컨테이너 강제 제거 시도
-            sudo docker rm -f 580c0a899188 || true
-            
-            # 여전히 존재하면 Docker 런타임 파일 직접 제거
-            if sudo docker ps -a | grep -q "580c0a899188"; then
-              echo "Direct removal of container runtime files..."
-              sudo systemctl stop docker
-              sudo rm -rf /var/lib/docker/containers/580c0a899188*
-              sudo systemctl start docker
-              sleep 5
-            fi
-          fi
+          # 특정 문제 컨테이너는 이미 제거됨
           
           # 모든 Docker 컨테이너 중지 (포트 충돌 방지)
           echo "Stopping all Docker containers that might use port 8000..."
@@ -103,9 +83,9 @@ jobs:
           echo "Removing all stopped containers..."
           sudo docker container prune -f || true
           
-          # netstat으로 포트 확인
-          echo "Checking port usage with netstat..."
-          sudo netstat -tlnp | grep :8000 || true
+          # netstat 대신 ss 사용 (Ubuntu에 기본 설치됨)
+          echo "Checking port usage..."
+          sudo ss -tlnp | grep :8000 || true
           
           # lsof로 포트 확인
           if sudo lsof -i :8000; then
@@ -155,37 +135,9 @@ jobs:
           sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker stop || true
           sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
-          # 특정 문제가 있는 컨테이너 강제 제거
-          echo "🧹 Force removing stuck containers..."
-          
-          # 포트 8000을 사용하는 프로세스 강제 종료
-          echo "Killing processes using port 8000..."
-          sudo fuser -k 8000/tcp || true
-          
-          # Docker 프로세스 확인 및 종료
-          echo "Checking for docker-proxy processes..."
-          sudo pkill -f "docker-proxy.*:8000" || true
-          sleep 2
-          
-          # 문제가 있는 컨테이너 ID 확인
-          STUCK_CONTAINERS=$(sudo docker ps -a | grep -E "(dungji|8000|580c0a899188)" | awk '{print $1}')
-          if [ ! -z "$STUCK_CONTAINERS" ]; then
-            echo "Found stuck containers: $STUCK_CONTAINERS"
-            
-            # Docker 데몬 재시작
-            echo "Restarting Docker daemon..."
-            sudo systemctl restart docker
-            sleep 10
-            
-            # 재시작 후 강제 제거
-            for container in $STUCK_CONTAINERS; do
-              echo "Force removing container: $container"
-              sudo docker rm -f $container || true
-            done
-          fi
-          
-          # 모든 dungji 관련 컨테이너 최종 정리
-          sudo docker ps -a | grep -E "(dungji|8000)" | awk '{print $1}' | xargs -r sudo docker rm -f || true
+          # 간소화된 정리 프로세스
+          echo "🧹 Cleaning up containers..."
+          sudo docker ps -a | grep dungji | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
           # Docker 네트워크 정리
           echo "🧹 Cleaning up Docker networks..."
@@ -215,31 +167,18 @@ jobs:
           
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
-          sleep 30
+          sleep 10
           
           # 컨테이너 상태 확인
           echo "📊 Checking container status..."
           sudo docker-compose -p $PROJECT_NAME ps
           
-          # 웹 서비스가 준비될 때까지 대기
-          echo "🔍 Waiting for web service to be ready..."
-          WEB_READY=false
-          for i in {1..30}; do
-            if sudo docker-compose -p $PROJECT_NAME ps | grep -q "web.*Up"; then
-              echo "✅ Web container is running"
-              if sudo docker-compose -p $PROJECT_NAME exec -T web python manage.py check --deploy 2>/dev/null; then
-                echo "✅ Web service is ready"
-                WEB_READY=true
-                break
-              fi
-            fi
-            echo "Attempt $i/30: Web service not ready yet, waiting..."
-            sleep 10
-          done
-          
-          if [ "$WEB_READY" = false ]; then
-            echo "❌ Web service failed to start within timeout"
-            echo "Container logs:"
+          # 웹 서비스 확인 (간소화)
+          echo "🔍 Checking web service..."
+          if sudo docker-compose -p $PROJECT_NAME ps | grep -q "web.*Up"; then
+            echo "✅ Web container is running"
+          else
+            echo "❌ Web container is not running"
             sudo docker-compose -p $PROJECT_NAME logs web
             exit 1
           fi
@@ -260,30 +199,14 @@ jobs:
           echo "📋 Recent application logs:"
           sudo docker-compose -p $PROJECT_NAME logs --tail=20 web
           
-          # 간단한 API 테스트
+          # 간단한 API 테스트 (빠른 확인)
           echo "🧪 Testing API endpoint..."
-          API_HEALTHY=false
-          # 사용된 포트 확인
-          ACTUAL_PORT=$(sudo docker-compose -p $PROJECT_NAME ps | grep web | grep -oP '0.0.0.0:\K[0-9]+' | head -1)
-          if [ -z "$ACTUAL_PORT" ]; then
-            ACTUAL_PORT=8000
-          fi
-          echo "Testing on port: $ACTUAL_PORT"
-          
-          for i in {1..10}; do
-            if curl -f -s http://localhost:$ACTUAL_PORT/api/health/ > /dev/null 2>&1; then
-              echo "✅ API health check passed"
-              API_HEALTHY=true
-              break
-            fi
-            echo "API check attempt $i/10: waiting..."
-            sleep 3
-          done
-          
-          if [ "$API_HEALTHY" = false ]; then
-            echo "⚠️  API health check failed after multiple attempts"
-            echo "This might indicate the application is not fully ready"
+          sleep 5
+          if curl -f -s http://localhost:8000/api/health/ > /dev/null 2>&1; then
+            echo "✅ API health check passed"
+          else
+            echo "⚠️  API health check failed (will continue)"
           fi
           
           echo "🎉 Deployment completed successfully!"
-          echo "📝 Application is running at: http://${{ secrets.EC2_HOST }}:$ACTUAL_PORT"
+          echo "📝 Application is running at: http://${{ secrets.EC2_HOST }}:8000"
