@@ -461,15 +461,14 @@ def group_buy_bids(request, groupbuy_id):
         if should_mask:
             # 최종선택 전에는 구매자도 입찰 금액을 마스킹된 상태로 봄
             for item in serializer.data:
-                if item['bid_type'] == 'price':
-                    # 금액을 범위로 표시 (예: 95000원 -> 90,000~99,999원)
-                    amount = item['amount']
-                    if amount:
-                        lower = (amount // 10000) * 10000
-                        upper = lower + 9999
-                        item['amount'] = f"{lower:,}~{upper:,}원"
-                    else:
-                        item['amount'] = "미입력"
+                # 금액을 범위로 표시 (예: 95000원 -> 90,000~99,999원)
+                amount = item['amount']
+                if amount:
+                    lower = (amount // 10000) * 10000
+                    upper = lower + 9999
+                    item['amount'] = f"{lower:,}~{upper:,}원"
+                else:
+                    item['amount'] = "미입력"
                 # 메시지는 유지
     # 판매자인 경우
     elif request.user.role == 'seller':
@@ -478,14 +477,13 @@ def group_buy_bids(request, groupbuy_id):
             if item['seller'] != request.user.id:
                 if should_mask:
                     # 최종선택 전에는 다른 판매자의 입찰 금액을 마스킹
-                    if item['bid_type'] == 'price':
-                        amount = item['amount']
-                        if amount:
-                            lower = (amount // 10000) * 10000
-                            upper = lower + 9999
-                            item['amount'] = f"{lower:,}~{upper:,}원"
-                        else:
-                            item['amount'] = "미입력"
+                    amount = item['amount']
+                    if amount:
+                        lower = (amount // 10000) * 10000
+                        upper = lower + 9999
+                        item['amount'] = f"{lower:,}~{upper:,}원"
+                    else:
+                        item['amount'] = "미입력"
                     item['message'] = ""  # 메시지 정보 숨김
     
     return Response(serializer.data)
