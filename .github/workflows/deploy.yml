@@ -63,7 +63,7 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
         timeout: 60s
-        command_timeout: 15m
+        command_timeout: 30m
         script: |
           set -e  # Exit on any error
           
