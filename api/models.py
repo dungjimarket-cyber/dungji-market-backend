@@ -321,7 +321,8 @@ class GroupBuy(models.Model):
         ('bidding', '입찰진행중'),
         ('final_selection_buyers', '구매자 최종선택중'),
         ('final_selection_seller', '판매자 최종선택중'),
-        ('completed', '완료'),
+        ('in_progress', '거래중'),  # 구매/판매 확정 후 실제 거래 진행중
+        ('completed', '완료'),  # 거래 완료
         ('cancelled', '취소됨'),
     )
     
@@ -676,6 +677,10 @@ class Participation(models.Model):
     )
     final_decision_at = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 일시')
     
+    # 거래 완료 관련 필드
+    is_purchase_completed = models.BooleanField(default=False, verbose_name='구매완료 여부')
+    purchase_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='구매완료 일시')
+    
     def __str__(self):
         leader_mark = "[리더]" if self.is_leader else ""
         return f"{self.user.username} - {self.groupbuy.title} {leader_mark}"
@@ -747,6 +752,10 @@ class Bid(models.Model):
         verbose_name='최종선택'
     )
     final_decision_at = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 일시')
+    
+    # 거래 완료 관련 필드
+    is_sale_completed = models.BooleanField(default=False, verbose_name='판매완료 여부')
+    sale_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='판매완료 일시')
     
     # 사용자가 취소된 공구를 리스트에서 삭제했는지 여부
     is_deleted_by_user = models.BooleanField(default=False, verbose_name='사용자 삭제 여부')

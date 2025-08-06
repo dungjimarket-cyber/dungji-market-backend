@@ -1424,16 +1424,13 @@ class GroupBuyViewSet(ModelViewSet):
         user = request.user
         
         if user.role == 'buyer':
-            # 구매자가 구매확정한 공구 중 completed 상태이면서 
-            # 낙찰된 판매자가 판매확정한 공구
-            from .models import Bid
+            # 거래중 상태의 공구 중 사용자가 참여하고 구매확정한 공구
             confirmed = self.get_queryset().filter(
                 participants=user,
                 participation__user=user,
                 participation__final_decision='confirmed',
-                status='completed',
-                bid__status='accepted',
-                bid__seller_final_decision='confirmed'
+                participation__is_purchase_completed=False,  # 아직 구매완료하지 않은
+                status='in_progress'  # 거래중 상태
             ).distinct()
         else:
             confirmed = self.get_queryset().none()
@@ -1467,14 +1464,16 @@ class GroupBuyViewSet(ModelViewSet):
     def purchase_completed(self, request):
         """구매 완료된 공구 목록 조회
         
-        사용자가 참여한 공구 중 completed 상태인 공구 목록 반환
+        사용자가 구매완료 버튼을 눌러 거래를 완료한 공구
         """
         user = request.user
         
         if user.role == 'buyer':
             completed = self.get_queryset().filter(
                 participants=user,
-                status='completed'
+                participation__user=user,
+                participation__is_purchase_completed=True,  # 구매완료 처리된
+                status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
             ).distinct()
         else:
             completed = self.get_queryset().none()
@@ -1835,16 +1834,17 @@ class GroupBuyViewSet(ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def seller_confirmed(self, request):
-        """판매자가 판매확정한 공구 조회"""
+        """판매자가 판매확정한 공구 조회 (거래중)"""
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매자가 판매확정한 공구
+        # 판매자가 판매확정한 거래중 공구
         confirmed = self.get_queryset().filter(
             bid__seller=request.user,
-            bid__status='selected',  # is_selected 대신 status='selected' 사용
+            bid__status='selected',
             bid__final_decision='confirmed',
-            status__in=['final_selection_seller', 'completed']  # 새로운 상태에 맞게 수정
+            bid__is_sale_completed=False,  # 아직 판매완료하지 않은
+            status='in_progress'  # 거래중 상태
         ).distinct()
         
         serializer = self.get_serializer(confirmed, many=True)
@@ -1856,11 +1856,12 @@ class GroupBuyViewSet(ModelViewSet):
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매자가 참여한 completed 상태의 공구
+        # 판매자가 판매완료 처리한 공구
         completed = self.get_queryset().filter(
             bid__seller=request.user,
-            bid__is_selected=True,
-            status='completed'
+            bid__status='selected',
+            bid__is_sale_completed=True,  # 판매완료 처리된
+            status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
         ).distinct()
         
         serializer = self.get_serializer(completed, many=True)
@@ -1964,16 +1965,122 @@ class GroupBuyViewSet(ModelViewSet):
     # vote 메서드는 voting 상태를 제거하면서 삭제됨
     # 최종선택은 final_selection 상태에서 처리됨
     
+    @action(detail=True, methods=['post'])
+    def complete_purchase(self, request, pk=None):
+        """구매 완료 처리"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 거래중 상태 확인
+        if groupbuy.status != 'in_progress':
+            return Response(
+                {'error': '거래중 상태에서만 구매완료 처리가 가능합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 참여자 확인
+        participation = groupbuy.participation_set.filter(
+            user=user,
+            final_decision='confirmed'
+        ).first()
+        
+        if not participation:
+            return Response(
+                {'error': '이 공구의 구매확정자가 아닙니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 이미 구매완료한 경우
+        if participation.is_purchase_completed:
+            return Response(
+                {'error': '이미 구매완료 처리되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 구매완료 처리
+        from django.utils import timezone
+        participation.is_purchase_completed = True
+        participation.purchase_completed_at = timezone.now()
+        participation.save()
+        
+        # 모든 구매자와 판매자가 완료했는지 확인
+        all_buyers_completed = not groupbuy.participation_set.filter(
+            final_decision='confirmed',
+            is_purchase_completed=False
+        ).exists()
+        
+        winning_bid = groupbuy.bid_set.filter(status='selected').first()
+        seller_completed = winning_bid and winning_bid.is_sale_completed
+        
+        # 모두 완료한 경우 공구 상태를 completed로 변경
+        if all_buyers_completed and seller_completed:
+            groupbuy.status = 'completed'
+            groupbuy.save()
+        
+        return Response({'message': '구매완료 처리되었습니다.'})
+    
+    @action(detail=True, methods=['post'])
+    def complete_sale(self, request, pk=None):
+        """판매 완료 처리"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 거래중 상태 확인
+        if groupbuy.status != 'in_progress':
+            return Response(
+                {'error': '거래중 상태에서만 판매완료 처리가 가능합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 낙찰된 판매자 확인
+        winning_bid = groupbuy.bid_set.filter(
+            seller=user,
+            status='selected',
+            final_decision='confirmed'
+        ).first()
+        
+        if not winning_bid:
+            return Response(
+                {'error': '이 공구의 낙찰 판매자가 아닙니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 이미 판매완료한 경우
+        if winning_bid.is_sale_completed:
+            return Response(
+                {'error': '이미 판매완료 처리되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 판매완료 처리
+        from django.utils import timezone
+        winning_bid.is_sale_completed = True
+        winning_bid.sale_completed_at = timezone.now()
+        winning_bid.save()
+        
+        # 모든 구매자와 판매자가 완료했는지 확인
+        all_buyers_completed = not groupbuy.participation_set.filter(
+            final_decision='confirmed',
+            is_purchase_completed=False
+        ).exists()
+        
+        # 모두 완료한 경우 공구 상태를 completed로 변경
+        if all_buyers_completed and winning_bid.is_sale_completed:
+            groupbuy.status = 'completed'
+            groupbuy.save()
+        
+        return Response({'message': '판매완료 처리되었습니다.'})
+    
     @action(detail=True, methods=['get'])
     def contact_info(self, request, pk=None):
         """구매/판매 확정 후 상대방 연락처 정보 조회"""
         groupbuy = self.get_object()
         user = request.user
         
-        # 공구 상태 확인
-        if groupbuy.status not in ['final_selection', 'completed']:
+        # 공구 상태 확인 - 거래중 또는 완료 상태에서만 조회 가능
+        if groupbuy.status not in ['in_progress', 'completed']:
             return Response(
-                {'error': '연락처 정보는 최종선택 또는 완료 상태에서만 조회 가능합니다.'},
+                {'error': '연락처 정보는 거래중 또는 완료 상태에서만 조회 가능합니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2475,7 +2582,7 @@ class ParticipationViewSet(ModelViewSet):
             seller_confirmed = winning_bid and winning_bid.final_decision == 'confirmed'
             
             if confirmed_participants and seller_confirmed:
-                groupbuy.status = 'completed'
+                groupbuy.status = 'in_progress'  # 거래중 상태로 변경
             else:
                 groupbuy.status = 'cancelled'
             
