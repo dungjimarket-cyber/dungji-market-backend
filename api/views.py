@@ -1467,11 +1467,12 @@ class GroupBuyViewSet(ModelViewSet):
         user = request.user
         
         if user.role == 'buyer':
-            # 구매자가 참여했던 공구 중 취소된 공구
+            # 구매자가 참여했던 공구 중 취소된 공구 (삭제 처리된 것 제외)
             # 1. 최종선택에서 포기를 선택한 경우
             cancelled_by_choice = self.get_queryset().filter(
                 participation__user=user,
                 participation__final_decision='cancelled',
+                participation__is_deleted_by_user=False,  # 삭제된 것 제외
                 status__in=['cancelled', 'final_selection']
             )
             
@@ -1482,6 +1483,7 @@ class GroupBuyViewSet(ModelViewSet):
             expired_final_selection = self.get_queryset().filter(
                 participation__user=user,
                 participation__final_decision='pending',
+                participation__is_deleted_by_user=False,  # 삭제된 것 제외
                 status='cancelled',
                 final_selection_end__lt=now
             )
@@ -1489,6 +1491,7 @@ class GroupBuyViewSet(ModelViewSet):
             # 3. 전반적으로 취소된 공구
             general_cancelled = self.get_queryset().filter(
                 participation__user=user,
+                participation__is_deleted_by_user=False,  # 삭제된 것 제외
                 status='cancelled'
             )
             
@@ -1516,7 +1519,7 @@ class GroupBuyViewSet(ModelViewSet):
                 result.append(data)
                 
         elif user.role == 'seller':
-            # 판매자가 입찰했던 공구 중 취소된 공구
+            # 판매자가 입찰했던 공구 중 취소된 공구 (삭제 처리된 것 제외)
             from .models import Bid
             from django.utils import timezone
             now = timezone.now()
@@ -1525,6 +1528,7 @@ class GroupBuyViewSet(ModelViewSet):
             cancelled_by_choice = self.get_queryset().filter(
                 bid__seller=user,
                 bid__final_decision='cancelled',
+                bid__is_deleted_by_user=False,  # 삭제된 것 제외
                 status__in=['cancelled', 'final_selection']
             )
             
@@ -1533,6 +1537,7 @@ class GroupBuyViewSet(ModelViewSet):
                 bid__seller=user,
                 bid__is_selected=True,
                 bid__final_decision='pending',
+                bid__is_deleted_by_user=False,  # 삭제된 것 제외
                 status='cancelled',
                 final_selection_end__lt=now
             )
@@ -1540,6 +1545,7 @@ class GroupBuyViewSet(ModelViewSet):
             # 3. 전반적으로 취소된 공구
             general_cancelled = self.get_queryset().filter(
                 bid__seller=user,
+                bid__is_deleted_by_user=False,  # 삭제된 것 제외
                 status='cancelled'
             )
             

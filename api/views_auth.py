@@ -113,6 +113,7 @@ def register_user_v2(request):
         
         # 선택 필드
         region = data.get('region', '')
+        address_region_id = data.get('address_region_id', '')  # 지역 코드 추가
         profile_image = files.get('profile_image')
         
         # 판매자 전용 필드
@@ -260,8 +261,18 @@ def register_user_v2(request):
             user.set_password(password)
             
             # 지역 설정
-            if region:
+            if address_region_id:
                 try:
+                    # address_region_id로 지역 찾기
+                    region_obj = Region.objects.filter(code=address_region_id).first()
+                    if region_obj:
+                        user.address_region = region_obj
+                        logger.info(f"지역 설정 완료: {region_obj.full_name}")
+                except Exception as e:
+                    logger.error(f"지역 설정 오류: {str(e)}")
+            elif region:
+                try:
+                    # 구버전 호환성을 위한 처리
                     # "서울특별시 강남구" 형태로 전달된 지역 정보 파싱
                     region_parts = region.split()
                     if len(region_parts) >= 2:
