@@ -49,20 +49,21 @@ class SellerProfileView(APIView):
             groupbuy__status='final_selection_seller'  # 판매자 최종선택 단계
         ).count()
         
-        # 판매 확정 대기 중인 건 수 계산 (판매 확정 - 낙찰되었지만 판매자가 확정하지 않은 입찰)
+        # 판매 확정 대기 중인 건 수 계산 (판매 확정했지만 아직 거래 완료하지 않은 것)
+        # Settlement이 없거나 pending인 경우
         pending_sales = Bid.objects.filter(
             seller=user, 
             status='selected',  # 낙찰된 입찰
             final_decision='confirmed',  # 판매자가 판매 확정한 것
-            groupbuy__status__in=['final_selection_seller', 'completed']  # 판매자 선택 단계 또는 완료
+            groupbuy__status='completed'  # 공구가 완료된 상태
+        ).exclude(
+            settlement__payment_status='completed'  # 정산 완료된 것은 제외
         ).count()
         
-        # 판매 완료 건 수 계산 (판매 완료 - 완료된 공구에서 판매 확정한 입찰)
-        completed_sales = Bid.objects.filter(
-            seller=user, 
-            status='selected',  # 낙찰된 입찰
-            final_decision='confirmed',  # 판매자가 판매 확정
-            groupbuy__status='completed'  # 공구가 완료된 상태
+        # 판매 완료 건 수 계산 (거래 완료 - Settlement이 completed인 것)
+        completed_sales = Settlement.objects.filter(
+            seller=user,
+            payment_status='completed'  # 정산 완료
         ).count()
         
         # 판매자 평점 계산 (리뷰가 있는 경우)
@@ -426,6 +427,14 @@ class SellerSalesView(APIView):
             queryset = queryset.filter(status='selected')
         elif status_filter == 'confirmed':
             queryset = queryset.filter(status='confirmed')
+        elif status_filter == 'completed':
+            # 판매 완료 - 정산이 완료된 것
+            queryset = queryset.filter(
+                status='selected',
+                final_decision='confirmed',
+                groupbuy__status='completed',
+                settlement__payment_status='completed'
+            )
         
         # 검색 필터링
         if search_query:

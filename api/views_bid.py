@@ -140,6 +140,111 @@ class BidViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(bids, many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'], url_path='seller/confirmed')
+    def seller_confirmed_bids(self, request):
+        """
+        판매자가 판매 확정한 입찰 목록 조회 API
+        """
+        if request.user.role != 'seller':
+            return Response(
+                {"detail": "판매회원만 접근할 수 있습니다."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 판매자가 판매 확정한 입찰만 조회 (정산이 완료되지 않은 것들)
+        bids = Bid.objects.filter(
+            seller=request.user,
+            status='selected',
+            final_decision='confirmed',
+            groupbuy__status='completed'  # 공구가 완료된 상태
+        ).exclude(
+            settlement__payment_status='completed'  # 정산 완료된 것은 제외
+        ).select_related('groupbuy', 'groupbuy__product', 'settlement').order_by('-updated_at')
+        
+        # 추가 정보 포함하여 반환
+        result = []
+        for bid in bids:
+            groupbuy = bid.groupbuy
+            # 모든 구매자가 확정했는지 확인
+            all_buyers_confirmed = groupbuy.participation_set.filter(
+                final_decision='pending'
+            ).count() == 0
+            
+            result.append({
+                'id': bid.id,
+                'groupbuy': groupbuy.id,
+                'groupbuy_product_name': groupbuy.product.name if groupbuy.product else groupbuy.product_name,
+                'product_category': groupbuy.product.category.name if groupbuy.product and groupbuy.product.category else '',
+                'amount': bid.amount,
+                'participants_count': groupbuy.current_participants,
+                'created_at': bid.created_at,
+                'final_decision': bid.final_decision,
+                'buyer_confirmed': all_buyers_confirmed,
+                'all_buyers_confirmed': all_buyers_confirmed
+            })
+        
+        return Response(result)
+    
+    @action(detail=False, methods=['post'], url_path='seller/complete-transaction')
+    def complete_transaction(self, request):
+        """
+        판매자의 거래 완료 처리 API
+        """
+        if request.user.role != 'seller':
+            return Response(
+                {"detail": "판매회원만 접근할 수 있습니다."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        groupbuy_id = request.data.get('groupbuy_id')
+        if not groupbuy_id:
+            return Response(
+                {"detail": "공구 ID가 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # 해당 공구의 판매자 입찰 찾기
+            bid = Bid.objects.get(
+                seller=request.user,
+                groupbuy_id=groupbuy_id,
+                status='selected',
+                final_decision='confirmed'
+            )
+            
+            # Settlement 생성 또는 업데이트
+            settlement, created = Settlement.objects.get_or_create(
+                seller=request.user,
+                groupbuy_id=groupbuy_id,
+                bid=bid,
+                defaults={
+                    'total_amount': bid.amount * bid.groupbuy.current_participants,
+                    'fee_amount': 0,  # 수수료 계산 로직 필요시 추가
+                    'net_amount': bid.amount * bid.groupbuy.current_participants,
+                    'settlement_date': timezone.now()
+                }
+            )
+            
+            # 정산 상태를 완료로 변경
+            settlement.payment_status = 'completed'
+            settlement.save()
+            
+            return Response({
+                "detail": "거래가 완료되었습니다.",
+                "settlement_id": settlement.id
+            }, status=status.HTTP_200_OK)
+            
+        except Bid.DoesNotExist:
+            return Response(
+                {"detail": "해당 공구의 입찰을 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"거래 완료 처리 중 오류가 발생했습니다: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     @action(detail=True, methods=['post'], url_path='final-decision')
     def final_decision(self, request, pk=None):
         """
