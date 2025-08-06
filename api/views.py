@@ -1570,6 +1570,60 @@ class GroupBuyViewSet(ModelViewSet):
             result = []
         
         return Response(result)
+    
+    @action(detail=True, methods=['delete'])
+    def delete_cancelled(self, request, pk=None):
+        """취소된 공구 삭제 (사용자의 리스트에서만 제거)"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 공구가 취소 상태인지 확인
+        if groupbuy.status != 'cancelled':
+            return Response(
+                {'error': '취소된 공구만 삭제할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 구매자인 경우: 참여 기록에서 is_deleted 플래그 설정
+        if user.role == 'buyer':
+            participation = Participation.objects.filter(
+                user=user,
+                groupbuy=groupbuy
+            ).first()
+            
+            if participation:
+                # 실제 삭제가 아닌 플래그 설정 (나중에 기록 추적 가능)
+                participation.is_deleted_by_user = True
+                participation.save()
+                return Response({'message': '취소된 공구가 목록에서 제거되었습니다.'})
+            else:
+                return Response(
+                    {'error': '해당 공구에 참여한 기록이 없습니다.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # 판매자인 경우: 입찰 기록에서 is_deleted 플래그 설정
+        elif user.role == 'seller':
+            bid = Bid.objects.filter(
+                seller=user,
+                groupbuy=groupbuy
+            ).first()
+            
+            if bid:
+                # 실제 삭제가 아닌 플래그 설정
+                bid.is_deleted_by_user = True
+                bid.save()
+                return Response({'message': '취소된 공구가 목록에서 제거되었습니다.'})
+            else:
+                return Response(
+                    {'error': '해당 공구에 입찰한 기록이 없습니다.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        return Response(
+            {'error': '권한이 없습니다.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
         
     # 판매자용 API 엔드포인트들
     @action(detail=False, methods=['get'])

@@ -660,6 +660,9 @@ class Participation(models.Model):
     # 참여 당시의 닉네임 저장 (사용자가 닉네임을 변경해도 참여 당시 닉네임 보존)
     nickname = models.CharField(max_length=150, blank=True, null=True, verbose_name='참여 닉네임')
     
+    # 사용자가 취소된 공구를 리스트에서 삭제했는지 여부
+    is_deleted_by_user = models.BooleanField(default=False, verbose_name='사용자 삭제 여부')
+    
     # 최종선택 관련 필드
     final_decision = models.CharField(
         max_length=20,
@@ -744,6 +747,9 @@ class Bid(models.Model):
         verbose_name='최종선택'
     )
     final_decision_at = models.DateTimeField(null=True, blank=True, verbose_name='최종선택 일시')
+    
+    # 사용자가 취소된 공구를 리스트에서 삭제했는지 여부
+    is_deleted_by_user = models.BooleanField(default=False, verbose_name='사용자 삭제 여부')
     
     @property
     def masked_amount(self):

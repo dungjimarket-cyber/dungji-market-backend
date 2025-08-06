@@ -201,7 +201,14 @@ def register_user_v2(request):
             if not social_provider and username_field:
                 username_for_db = username_field  # 일반 회원가입은 아이디 사용
             else:
-                username_for_db = nickname  # 소셜 회원가입은 닉네임을 username으로 사용
+                # 소셜 회원가입은 닉네임을 username으로 사용
+                # 만약 username이 이미 존재하면 숫자를 붙여서 유니크하게 만듦
+                base_username = nickname
+                username_for_db = base_username
+                counter = 1
+                while User.objects.filter(username=username_for_db).exists():
+                    username_for_db = f"{base_username}_{counter}"
+                    counter += 1
             
             # 휴대폰 인증 시 저장된 추가 정보 가져오기
             verified_name = request.session.get('verified_phone_signup_name', '')
