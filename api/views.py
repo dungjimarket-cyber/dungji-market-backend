@@ -1663,14 +1663,171 @@ class GroupBuyViewSet(ModelViewSet):
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매자가 입찰한 모든 공구 조회
+        # 판매자가 입찰한 모든 공구 조회 (취소된 공구 제외)
         from .models import Bid
-        bids = Bid.objects.filter(seller=request.user).select_related('groupbuy')
-        groupbuy_ids = bids.values_list('groupbuy_id', flat=True).distinct()
+        bids = Bid.objects.filter(
+            seller=request.user,
+            is_deleted_by_user=False
+        ).select_related('groupbuy')
         
-        groupbuys = self.get_queryset().filter(id__in=groupbuy_ids)
-        serializer = self.get_serializer(groupbuys, many=True)
-        return Response(serializer.data)
+        groupbuy_data = []
+        for bid in bids:
+            gb_data = self.get_serializer(bid.groupbuy).data
+            gb_data['my_bid_amount'] = bid.amount
+            gb_data['bid_status'] = bid.status
+            gb_data['is_selected'] = bid.is_selected
+            groupbuy_data.append(gb_data)
+        
+        return Response(groupbuy_data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_waiting_buyer(self, request):
+        """판매자의 구매자 최종선택 대기중인 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 낙찰되었지만 구매자들이 아직 선택중인 공구
+        waiting = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            status='final_selection_buyers'
+        ).distinct()
+        
+        data = []
+        for gb in waiting:
+            gb_data = self.get_serializer(gb).data
+            # 구매자 선택 마감 시간 추가
+            if gb.final_selection_end:
+                gb_data['buyer_selection_end_time'] = gb.final_selection_end
+            data.append(gb_data)
+        
+        return Response(data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_pending_decision(self, request):
+        """판매자의 판매확정/포기 선택 대기중인 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 구매자 선택이 끝나고 판매자가 결정해야 하는 공구
+        from .models import Bid, Participation
+        pending = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            bid__seller_final_decision='pending',
+            status='final_selection_seller'
+        ).distinct()
+        
+        data = []
+        for gb in pending:
+            gb_data = self.get_serializer(gb).data
+            # 구매확정 인원 수 계산
+            confirmed_count = Participation.objects.filter(
+                groupbuy=gb,
+                final_decision='confirmed'
+            ).count()
+            gb_data['confirmed_buyers'] = confirmed_count
+            # 판매자 선택 마감 시간 추가
+            if gb.seller_selection_end:
+                gb_data['seller_selection_end_time'] = gb.seller_selection_end
+            data.append(gb_data)
+        
+        return Response(data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_trading(self, request):
+        """판매자의 거래중인 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 구매확정 + 판매확정 완료되어 거래중인 공구
+        from .models import Participation
+        trading = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            bid__seller_final_decision='confirmed',
+            status='completed'
+        ).distinct()
+        
+        data = []
+        for gb in trading:
+            gb_data = self.get_serializer(gb).data
+            # 구매확정 인원 수
+            confirmed_count = Participation.objects.filter(
+                groupbuy=gb,
+                final_decision='confirmed'
+            ).count()
+            gb_data['confirmed_buyers'] = confirmed_count
+            data.append(gb_data)
+        
+        return Response(data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_completed(self, request):
+        """판매자의 판매완료된 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 판매완료 처리된 공구
+        from .models import Bid, Participation
+        completed = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            bid__is_sale_completed=True,
+            status='completed'
+        ).distinct()
+        
+        data = []
+        for gb in completed:
+            gb_data = self.get_serializer(gb).data
+            # 구매확정 인원 수
+            confirmed_count = Participation.objects.filter(
+                groupbuy=gb,
+                final_decision='confirmed'
+            ).count()
+            gb_data['confirmed_buyers'] = confirmed_count
+            # 판매완료 시간
+            bid = Bid.objects.filter(
+                groupbuy=gb,
+                seller=request.user,
+                is_selected=True
+            ).first()
+            if bid and bid.sale_completed_at:
+                gb_data['completed_at'] = bid.sale_completed_at
+            data.append(gb_data)
+        
+        return Response(data)
+    
+    @action(detail=False, methods=['get'])
+    def seller_cancelled(self, request):
+        """판매자의 취소된 공구 조회"""
+        if request.user.role != 'seller':
+            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # 취소된 공구 (삭제 처리된 것 제외)
+        from .models import Bid
+        cancelled_bids = Bid.objects.filter(
+            seller=request.user,
+            is_deleted_by_user=False,
+            groupbuy__status='cancelled'
+        ).select_related('groupbuy')
+        
+        data = []
+        for bid in cancelled_bids:
+            gb_data = self.get_serializer(bid.groupbuy).data
+            gb_data['my_bid_amount'] = bid.amount
+            
+            # 취소 사유 추가
+            if bid.seller_final_decision == 'cancelled':
+                gb_data['cancel_reason'] = '판매 포기'
+            elif bid.is_selected and bid.seller_final_decision == 'pending':
+                gb_data['cancel_reason'] = '최종선택 기간 만료'
+            else:
+                gb_data['cancel_reason'] = '공구 취소'
+            
+            data.append(gb_data)
+        
+        return Response(data)
     
     @action(detail=False, methods=['get'])
     def seller_final_selection(self, request):
