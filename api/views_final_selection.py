@@ -67,12 +67,33 @@ def buyer_final_decision(request, groupbuy_id):
         # 참여 정보 조회
         participation = Participation.objects.get(user=user, groupbuy=groupbuy)
         
-        # 이미 최종선택을 한 경우
+        # 이미 최종선택을 한 경우 - 재선택 허용 로직
         if participation.final_decision != 'pending':
-            return Response(
-                {'error': '이미 최종선택을 완료했습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # 구매확정 → 구매포기 변경 허용 (12시간 내, 모든 참여자 미완료 시)
+            if (participation.final_decision == 'confirmed' and 
+                decision == 'cancelled' and 
+                timezone.now() <= groupbuy.final_selection_end):
+                
+                # 다른 참여자들의 결정 상태 확인
+                other_participants = Participation.objects.filter(
+                    groupbuy=groupbuy
+                ).exclude(id=participation.id)
+                
+                all_others_decided = all(
+                    p.final_decision != 'pending' for p in other_participants
+                )
+                
+                if all_others_decided:
+                    return Response(
+                        {'error': '모든 참여자가 결정을 완료한 상태에서는 변경할 수 없습니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # 변경 허용 - 아래 로직으로 계속 진행
+            else:
+                return Response(
+                    {'error': '이미 최종선택을 완료했습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # 최종선택 처리
         with transaction.atomic():
@@ -434,6 +455,57 @@ def check_buyer_decisions_completed(groupbuy):
             # 구매 확정자가 없으면 공구 취소
             groupbuy.status = 'cancelled'
             groupbuy.save()
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_buyer_confirmation_stats(request, groupbuy_id):
+    """
+    판매자를 위한 구매확정 인원 통계 조회
+    """
+    try:
+        groupbuy = GroupBuy.objects.get(id=groupbuy_id)
+        
+        # 현재 사용자가 이 공구의 낙찰 판매자인지 확인
+        winning_bid = Bid.objects.filter(
+            groupbuy=groupbuy,
+            status='selected',
+            seller=request.user
+        ).first()
+        
+        if not winning_bid:
+            return Response(
+                {'error': '이 공구의 판매자가 아닙니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 구매확정 통계 계산
+        total_count = groupbuy.participation_set.count()
+        confirmed_count = groupbuy.participation_set.filter(final_decision='confirmed').count()
+        cancelled_count = groupbuy.participation_set.filter(final_decision='cancelled').count()
+        pending_count = groupbuy.participation_set.filter(final_decision='pending').count()
+        
+        confirmation_rate = (confirmed_count / total_count * 100) if total_count > 0 else 0
+        
+        return Response({
+            'total_participants': total_count,
+            'confirmed_count': confirmed_count,
+            'cancelled_count': cancelled_count,
+            'pending_count': pending_count,
+            'confirmation_rate': round(confirmation_rate, 1),
+            'has_penalty_exemption': confirmation_rate <= 50  # 50% 이하일 때 패널티 면제
+        })
+        
+    except GroupBuy.DoesNotExist:
+        return Response(
+            {'error': '공구를 찾을 수 없습니다.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 def check_seller_decision_completed(groupbuy):

@@ -44,7 +44,8 @@ from api.views_verification import send_verification_code, verify_code, check_ve
 # voting 관련 import는 voting 상태 제거로 인해 삭제됨
 from api.views_final_selection import (
     buyer_final_decision, seller_final_decision, 
-    get_final_decision_status, get_contact_info
+    get_final_decision_status, get_contact_info,
+    get_buyer_confirmation_stats
 )
 from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
@@ -116,6 +117,7 @@ urlpatterns = [
     path('api/groupbuys/<int:groupbuy_id>/seller-decision/', seller_final_decision, name='seller_final_decision'),
     path('api/groupbuys/<int:groupbuy_id>/decision-status/', get_final_decision_status, name='get_final_decision_status'),
     path('api/groupbuys/<int:groupbuy_id>/contact-info/', get_contact_info, name='get_contact_info'),
+    path('api/groupbuys/<int:groupbuy_id>/buyer-confirmation-stats/', get_buyer_confirmation_stats, name='get_buyer_confirmation_stats'),
     # 노쇼 신고 관련 API
     path('api/noshow-reports/check-eligibility/', check_noshow_report_eligibility, name='check_noshow_report_eligibility'),
     # 배너 및 이벤트 API
