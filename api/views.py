@@ -1389,18 +1389,17 @@ class GroupBuyViewSet(ModelViewSet):
     def pending_selection(self, request):
         """최종 선택 대기중인 공구 목록 조회
         
-        구매자: 참여한 공구 중 final_selection_buyers 상태이면서 최종선택하지 않은 공구
+        구매자: 참여한 공구 중 final_selection_buyers 상태인 공구 (선택 여부 무관)
         판매자: 낙찰된 공구 중 final_selection_seller 상태이면서 최종선택하지 않은 공구
         """
         user = request.user
         
         if user.role == 'buyer':
-            # 구매자가 참여한 공구 중 final_selection_buyers 상태인 공구
+            # 구매자가 참여한 공구 중 final_selection_buyers 상태인 모든 공구
+            # 선택 여부와 관계없이 12시간 동안 이 카테고리에 유지
             pending = self.get_queryset().filter(
                 participants=user,
-                status='final_selection_buyers',
-                participation__user=user,
-                participation__final_decision='pending'
+                status='final_selection_buyers'
             ).distinct()
         elif user.role == 'seller':
             # 판매자가 낙찰된 공구 중 final_selection_seller 상태인 공구
@@ -1418,24 +1417,50 @@ class GroupBuyViewSet(ModelViewSet):
         
     @action(detail=False, methods=['get'])
     def purchase_confirmed(self, request):
-        """구매 확정된 공구 목록 조회
+        """거래중인 공구 목록 조회
         
-        구매자가 구매확정한 공구 중 아직 거래가 완료되지 않은 공구
+        구매자가 구매확정하고 판매자도 판매확정한 공구 (거래중 상태)
         """
         user = request.user
         
         if user.role == 'buyer':
-            # 구매자가 구매확정한 공구
+            # 구매자가 구매확정한 공구 중 completed 상태이면서 
+            # 낙찰된 판매자가 판매확정한 공구
+            from .models import Bid
             confirmed = self.get_queryset().filter(
                 participants=user,
                 participation__user=user,
                 participation__final_decision='confirmed',
-                status__in=['final_selection_buyers', 'final_selection_seller', 'completed']  # 구매 확정 후 가능한 상태들
+                status='completed',
+                bid__status='accepted',
+                bid__seller_final_decision='confirmed'
             ).distinct()
         else:
             confirmed = self.get_queryset().none()
         
         serializer = self.get_serializer(confirmed, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def waiting_seller_decision(self, request):
+        """판매자 최종선택 대기중인 공구 목록 조회
+        
+        구매자가 구매확정한 공구 중 판매자가 아직 결정하지 않은 공구
+        """
+        user = request.user
+        
+        if user.role == 'buyer':
+            # 구매자가 구매확정한 공구 중 final_selection_seller 상태인 공구
+            waiting = self.get_queryset().filter(
+                participants=user,
+                participation__user=user,
+                participation__final_decision='confirmed',
+                status='final_selection_seller'
+            ).distinct()
+        else:
+            waiting = self.get_queryset().none()
+        
+        serializer = self.get_serializer(waiting, many=True)
         return Response(serializer.data)
         
     @action(detail=False, methods=['get'])
