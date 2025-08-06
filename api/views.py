@@ -1707,7 +1707,7 @@ class GroupBuyViewSet(ModelViewSet):
         pending = self.get_queryset().filter(
             bid__seller=request.user,
             bid__is_selected=True,
-            bid__seller_final_decision='pending',
+            bid__final_decision='pending',
             status='final_selection_seller'
         ).distinct()
         
@@ -1730,14 +1730,11 @@ class GroupBuyViewSet(ModelViewSet):
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 구매확정 + 판매확정 완료되어 거래중인 공구
+        # 판매확정했지만 아직 거래가 진행중인 공구
+        # (completed 상태이지만 실제 거래는 진행중)
         from .models import Participation
-        trading = self.get_queryset().filter(
-            bid__seller=request.user,
-            bid__is_selected=True,
-            bid__seller_final_decision='confirmed',
-            status='completed'
-        ).distinct()
+        # 일단 빈 결과 반환 (실제 거래 완료 플래그가 없어서)
+        trading = self.get_queryset().none()
         
         data = []
         for gb in trading:
@@ -1758,12 +1755,12 @@ class GroupBuyViewSet(ModelViewSet):
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매완료 처리된 공구
+        # 판매완료 처리된 공구 (판매확정 + completed 상태)
         from .models import Bid, Participation
         completed = self.get_queryset().filter(
             bid__seller=request.user,
             bid__is_selected=True,
-            bid__is_sale_completed=True,
+            bid__final_decision='confirmed',
             status='completed'
         ).distinct()
         
@@ -1776,14 +1773,14 @@ class GroupBuyViewSet(ModelViewSet):
                 final_decision='confirmed'
             ).count()
             gb_data['confirmed_buyers'] = confirmed_count
-            # 판매완료 시간
+            # 판매확정 시간을 완료시간으로 사용
             bid = Bid.objects.filter(
                 groupbuy=gb,
                 seller=request.user,
                 is_selected=True
             ).first()
-            if bid and bid.sale_completed_at:
-                gb_data['completed_at'] = bid.sale_completed_at
+            if bid and bid.final_decision_at:
+                gb_data['completed_at'] = bid.final_decision_at
             data.append(gb_data)
         
         return Response(data)
@@ -1808,9 +1805,9 @@ class GroupBuyViewSet(ModelViewSet):
             gb_data['my_bid_amount'] = bid.amount
             
             # 취소 사유 추가
-            if bid.seller_final_decision == 'cancelled':
+            if bid.final_decision == 'cancelled':
                 gb_data['cancel_reason'] = '판매 포기'
-            elif bid.is_selected and bid.seller_final_decision == 'pending':
+            elif bid.is_selected and bid.final_decision == 'pending':
                 gb_data['cancel_reason'] = '최종선택 기간 만료'
             else:
                 gb_data['cancel_reason'] = '공구 취소'
