@@ -2084,6 +2084,66 @@ class GroupBuyViewSet(ModelViewSet):
             'total_participants': groupbuy.current_participants
         })
     
+    @action(detail=True, methods=['post'])
+    def select_winner(self, request, pk=None):
+        """관리자가 낙찰자를 수동으로 선정"""
+        from django.db import transaction
+        
+        # 관리자 권한 확인
+        if not request.user.is_staff and not request.user.is_superuser:
+            return Response(
+                {'error': '관리자만 낙찰자를 선정할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        groupbuy = self.get_object()
+        bid_id = request.data.get('bid_id')
+        
+        if not bid_id:
+            return Response(
+                {'error': '입찰 ID를 제공해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            with transaction.atomic():
+                # 기존 낙찰 취소
+                Bid.objects.filter(groupbuy=groupbuy, is_selected=True).update(
+                    is_selected=False,
+                    status='pending'
+                )
+                
+                # 새로운 낙찰자 선정
+                bid = Bid.objects.get(id=bid_id, groupbuy=groupbuy)
+                bid.is_selected = True
+                bid.status = 'selected'
+                bid.save()
+                
+                # 공구 상태를 final_selection_buyers로 변경
+                if groupbuy.status == 'bidding':
+                    groupbuy.status = 'final_selection_buyers'
+                    groupbuy.save()
+                
+                return Response({
+                    'message': f'{bid.seller.username}님을 낙찰자로 선정했습니다.',
+                    'bid': {
+                        'id': bid.id,
+                        'seller': bid.seller.username,
+                        'amount': bid.amount
+                    }
+                })
+                
+        except Bid.DoesNotExist:
+            return Response(
+                {'error': '유효하지 않은 입찰입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'낙찰자 선정 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     # voting_results 메서드는 voting 상태를 제거하면서 삭제됨
     
     @action(detail=True, methods=['post'])
