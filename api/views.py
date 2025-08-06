@@ -1693,15 +1693,8 @@ class GroupBuyViewSet(ModelViewSet):
             status='final_selection_buyers'
         ).distinct()
         
-        data = []
-        for gb in waiting:
-            gb_data = self.get_serializer(gb).data
-            # 구매자 선택 마감 시간 추가
-            if gb.final_selection_end:
-                gb_data['buyer_selection_end_time'] = gb.final_selection_end
-            data.append(gb_data)
-        
-        return Response(data)
+        serializer = self.get_serializer(waiting, many=True)
+        return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def seller_pending_decision(self, request):
@@ -1727,9 +1720,6 @@ class GroupBuyViewSet(ModelViewSet):
                 final_decision='confirmed'
             ).count()
             gb_data['confirmed_buyers'] = confirmed_count
-            # 판매자 선택 마감 시간 추가
-            if gb.seller_selection_end:
-                gb_data['seller_selection_end_time'] = gb.seller_selection_end
             data.append(gb_data)
         
         return Response(data)
