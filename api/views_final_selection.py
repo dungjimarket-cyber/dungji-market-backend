@@ -378,6 +378,7 @@ def get_contact_info(request, groupbuy_id):
                     'role': 'seller',
                     'name': seller.username,
                     'phone': seller.phone_number,
+                    'email': seller.email,
                     'business_name': seller.business_name if hasattr(seller, 'business_name') else None,
                     'business_number': seller.business_number if hasattr(seller, 'business_number') else None,
                     'address': seller.address_detail if hasattr(seller, 'address_detail') else None
