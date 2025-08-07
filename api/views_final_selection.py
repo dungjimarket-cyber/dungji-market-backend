@@ -427,7 +427,7 @@ def get_contact_info(request, groupbuy_id):
 def check_buyer_decisions_completed(groupbuy):
     """
     모든 구매자의 최종선택이 완료되었는지 확인하고
-    완료된 경우 판매자 최종선택 단계로 전환
+    완료된 경우 자동으로 최고 입찰자를 낙찰자로 선택 후 판매자 최종선택 단계로 전환
     """
     # 구매자들의 최종선택 확인
     participations = Participation.objects.filter(groupbuy=groupbuy)
@@ -438,12 +438,52 @@ def check_buyer_decisions_completed(groupbuy):
         total_count = participations.count()
         
         if confirmed_count > 0:
+            # 자동으로 최고 입찰자를 낙찰자로 선택
+            highest_bid = Bid.objects.filter(
+                groupbuy=groupbuy,
+                status='pending'
+            ).order_by('-amount', 'created_at').first()
+            
+            if highest_bid:
+                # 기존에 선택된 입찰이 있다면 해제
+                Bid.objects.filter(groupbuy=groupbuy, is_selected=True).update(
+                    is_selected=False,
+                    status='pending'
+                )
+                
+                # 최고 입찰자를 낙찰자로 선택
+                highest_bid.is_selected = True
+                highest_bid.status = 'selected'
+                highest_bid.save()
+                
+                logger.info(f"GroupBuy {groupbuy.id}: 자동으로 최고 입찰자 선택 - Bid {highest_bid.id} (금액: {highest_bid.amount}원)")
+                
+                # 낙찰 알림 발송
+                Notification.objects.create(
+                    user=highest_bid.seller,
+                    groupbuy=groupbuy,
+                    message=f"축하합니다! {groupbuy.title} 공구에 낙찰되었습니다. 판매 확정/포기를 선택해주세요."
+                )
+                
+                # 낙찰되지 않은 다른 입찰자들에게 알림
+                other_bids = Bid.objects.filter(
+                    groupbuy=groupbuy,
+                    status='pending'
+                ).exclude(id=highest_bid.id)
+                
+                for bid in other_bids:
+                    Notification.objects.create(
+                        user=bid.seller,
+                        groupbuy=groupbuy,
+                        message=f"{groupbuy.title} 공구의 낙찰에 실패했습니다. 다음 기회에 도전해주세요."
+                    )
+            
             # 판매자 최종선택 단계로 전환
             groupbuy.status = 'final_selection_seller'
             groupbuy.seller_selection_end = timezone.now() + timezone.timedelta(hours=6)
             groupbuy.save()
             
-            # 판매자에게 알림
+            # 낙찰된 판매자에게 최종선택 알림
             winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
             if winning_bid:
                 Notification.objects.create(
@@ -455,6 +495,15 @@ def check_buyer_decisions_completed(groupbuy):
             # 구매 확정자가 없으면 공구 취소
             groupbuy.status = 'cancelled'
             groupbuy.save()
+            
+            # 모든 입찰자에게 취소 알림
+            all_bids = Bid.objects.filter(groupbuy=groupbuy)
+            for bid in all_bids:
+                Notification.objects.create(
+                    user=bid.seller,
+                    groupbuy=groupbuy,
+                    message=f"{groupbuy.title} 공구가 구매자 전원 포기로 취소되었습니다."
+                )
 
 
 @api_view(['GET'])
