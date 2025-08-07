@@ -511,7 +511,7 @@ def get_buyer_confirmation_stats(request, groupbuy_id):
 def check_seller_decision_completed(groupbuy):
     """
     판매자의 최종선택이 완료되었는지 확인하고
-    공구를 완료 또는 취소 처리
+    공구를 거래중 또는 취소 처리
     """
     winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
     
@@ -519,12 +519,12 @@ def check_seller_decision_completed(groupbuy):
         confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').exists()
         
         if confirmed_participants and winning_bid.final_decision == 'confirmed':
-            # 공구 성공
-            groupbuy.status = 'completed'
+            # 구매자 확정 + 판매자 확정 = 거래중 상태
+            groupbuy.status = 'in_progress'
             groupbuy.save()
             
-            # 성공 알림
-            message = f"{groupbuy.title} 공구가 성공적으로 완료되었습니다!"
+            # 거래 시작 알림
+            message = f"{groupbuy.title} 공구가 거래중 상태로 전환되었습니다. 판매자 연락처를 확인하세요!"
             
             # 구매 확정한 참여자들에게 알림
             confirmed_participations = groupbuy.participation_set.filter(final_decision='confirmed')

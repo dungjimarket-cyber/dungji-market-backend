@@ -1729,11 +1729,15 @@ class GroupBuyViewSet(ModelViewSet):
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매확정했지만 아직 거래가 진행중인 공구
-        # (completed 상태이지만 실제 거래는 진행중)
-        from .models import Participation
-        # 일단 빈 결과 반환 (실제 거래 완료 플래그가 없어서)
-        trading = self.get_queryset().none()
+        # 판매자가 낙찰되고 판매확정한 거래중 공구
+        from .models import Participation, Bid
+        trading = self.get_queryset().filter(
+            bid__seller=request.user,
+            bid__is_selected=True,
+            bid__final_decision='confirmed',
+            bid__is_sale_completed=False,  # 아직 판매완료하지 않은
+            status='in_progress'  # 거래중 상태
+        ).distinct()
         
         data = []
         for gb in trading:
@@ -1744,6 +1748,16 @@ class GroupBuyViewSet(ModelViewSet):
                 final_decision='confirmed'
             ).count()
             gb_data['confirmed_buyers'] = confirmed_count
+            
+            # 낙찰 금액 추가
+            winning_bid = Bid.objects.filter(
+                groupbuy=gb,
+                seller=request.user,
+                is_selected=True
+            ).first()
+            if winning_bid:
+                gb_data['winning_bid_amount'] = winning_bid.amount
+            
             data.append(gb_data)
         
         return Response(data)
