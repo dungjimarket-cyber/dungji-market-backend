@@ -1435,8 +1435,37 @@ class GroupBuyViewSet(ModelViewSet):
         else:
             confirmed = self.get_queryset().none()
         
-        serializer = self.get_serializer(confirmed, many=True)
-        return Response(serializer.data)
+        # 추가 정보를 포함한 응답 생성
+        from .models import Bid, Participation
+        result = []
+        for groupbuy in confirmed:
+            data = self.get_serializer(groupbuy).data
+            
+            # 낙찰된 입찰 정보 가져오기
+            winning_bid = Bid.objects.filter(
+                groupbuy=groupbuy,
+                is_selected=True,
+                status='selected'
+            ).first()
+            
+            # 판매자 확정 여부
+            if winning_bid:
+                data['seller_confirmed'] = winning_bid.final_decision == 'confirmed'
+                data['seller_name'] = winning_bid.seller.nickname if hasattr(winning_bid.seller, 'nickname') else winning_bid.seller.username
+                data['final_price'] = winning_bid.amount
+            else:
+                data['seller_confirmed'] = False
+                data['seller_name'] = None
+                data['final_price'] = None
+            
+            # 모든 구매자 확정 여부
+            all_participants = Participation.objects.filter(groupbuy=groupbuy)
+            confirmed_participants = all_participants.filter(final_decision='confirmed')
+            data['all_buyers_confirmed'] = all_participants.count() == confirmed_participants.count()
+            
+            result.append(data)
+        
+        return Response(result)
     
     @action(detail=False, methods=['get'])
     def waiting_seller_decision(self, request):
