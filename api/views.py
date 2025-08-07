@@ -1979,6 +1979,69 @@ class GroupBuyViewSet(ModelViewSet):
     # vote 메서드는 voting 상태를 제거하면서 삭제됨
     # 최종선택은 final_selection 상태에서 처리됨
     
+    @action(detail=True, methods=['get'])
+    def buyers(self, request, pk=None):
+        """구매자 정보 조회 (낙찰된 판매자만 접근 가능)"""
+        groupbuy = self.get_object()
+        user = request.user
+        
+        # 판매자만 접근 가능
+        if user.role != 'seller':
+            return Response(
+                {'error': '판매자만 접근 가능합니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 낙찰된 판매자인지 확인
+        from .models import Bid
+        winning_bid = Bid.objects.filter(
+            groupbuy=groupbuy,
+            seller=user,
+            is_selected=True,
+            status='selected'
+        ).first()
+        
+        if not winning_bid:
+            return Response(
+                {'error': '이 공구의 낙찰 판매자만 구매자 정보를 조회할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 구매자 정보 조회
+        participations = groupbuy.participation_set.select_related('user').all()
+        
+        buyers_data = []
+        for participation in participations:
+            buyer_info = {
+                'id': participation.id,
+                'user': {
+                    'id': participation.user.id,
+                    'email': participation.user.email,
+                    'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else participation.user.username,
+                    'phone': participation.user.phone if participation.final_decision == 'confirmed' else None
+                },
+                'final_decision': participation.final_decision,
+                'final_decision_at': participation.final_decision_at,
+                'is_purchase_completed': participation.is_purchase_completed,
+                'purchase_completed_at': participation.purchase_completed_at
+            }
+            buyers_data.append(buyer_info)
+        
+        # 공구 정보
+        groupbuy_data = {
+            'id': groupbuy.id,
+            'title': groupbuy.title,
+            'status': groupbuy.status,
+            'product_name': groupbuy.product_name or (groupbuy.product.name if groupbuy.product else ''),
+            'confirmed_buyers_count': participations.filter(final_decision='confirmed').count(),
+            'total_participants': participations.count()
+        }
+        
+        return Response({
+            'groupbuy': groupbuy_data,
+            'buyers': buyers_data
+        })
+    
     @action(detail=True, methods=['post'])
     def complete_purchase(self, request, pk=None):
         """구매 완료 처리"""
