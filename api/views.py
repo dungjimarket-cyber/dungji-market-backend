@@ -2018,7 +2018,7 @@ class GroupBuyViewSet(ModelViewSet):
                     'id': participation.user.id,
                     'email': participation.user.email,
                     'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else participation.user.username,
-                    'phone': participation.user.phone if participation.final_decision == 'confirmed' else None
+                    'phone': participation.user.phone_number if participation.final_decision == 'confirmed' else None
                 },
                 'final_decision': participation.final_decision,
                 'final_decision_at': participation.final_decision_at,
