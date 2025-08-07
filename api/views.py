@@ -1315,18 +1315,21 @@ class GroupBuyViewSet(ModelViewSet):
                     winning_bid = highest_bid
             
             if winning_bid:
-                # 사용자가 참여자이거나 낙찰된 판매자인 경우에만 실제 금액 표시
+                # 사용자가 참여자이거나 판매자인 경우에만 실제 금액 표시
                 user = request.user
                 is_participant = False
                 is_winning_seller = False
+                is_any_seller = False
                 
                 # 인증된 사용자인 경우에만 참여자/판매자 확인
                 if user.is_authenticated:
                     is_participant = instance.participation_set.filter(user=user).exists()
                     is_winning_seller = winning_bid.seller == user
+                    # 판매자 역할 확인 (최종선택 단계 이후에는 모든 판매자가 금액 확인 가능)
+                    is_any_seller = user.role == 'seller'
                 
-                # 최종선택 단계 이후부터는 참여자에게 정상 금액 표시
-                if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and is_participant) or is_winning_seller:
+                # 최종선택 단계 이후부터는 참여자와 모든 판매자에게 정상 금액 표시
+                if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and (is_participant or is_any_seller)) or is_winning_seller:
                     data['winning_bid_amount'] = winning_bid.amount
                 else:
                     # 미참여자는 마스킹 처리
@@ -1346,8 +1349,8 @@ class GroupBuyViewSet(ModelViewSet):
                 top_bids = instance.bid_set.order_by('-amount')[:10]
                 bid_list = []
                 for idx, bid in enumerate(top_bids, 1):
-                    # 최종선택 단계 이후부터는 참여자에게 정상 금액 표시
-                    if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and is_participant) or is_winning_seller:
+                    # 최종선택 단계 이후부터는 참여자와 모든 판매자에게 정상 금액 표시
+                    if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and (is_participant or is_any_seller)) or is_winning_seller:
                         bid_list.append({
                             'rank': idx,
                             'amount': bid.amount,
