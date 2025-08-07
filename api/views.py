@@ -1298,8 +1298,22 @@ class GroupBuyViewSet(ModelViewSet):
         # 입찰 정보 추가 (최종선택중인 경우)
         if instance.status in ['final_selection', 'seller_confirmation', 'completed', 'final_selection_buyers', 'final_selection_seller', 'in_progress']:
             from api.models import Bid
-            # 낙찰된 입찰 정보
+            # 낙찰된 입찰 정보 (is_selected=True 또는 status='selected')
             winning_bid = instance.bid_set.filter(is_selected=True).first()
+            if not winning_bid:
+                winning_bid = instance.bid_set.filter(status='selected').first()
+            
+            # 디버깅을 위한 로깅
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"GroupBuy {instance.id} - Status: {instance.status}, Winning bid: {winning_bid}")
+            if not winning_bid:
+                # 입찰이 없어도 가장 높은 입찰 금액 표시
+                highest_bid = instance.bid_set.order_by('-amount').first()
+                if highest_bid:
+                    logger.info(f"GroupBuy {instance.id} - Using highest bid instead: {highest_bid.amount}")
+                    winning_bid = highest_bid
+            
             if winning_bid:
                 # 사용자가 참여자이거나 낙찰된 판매자인 경우에만 실제 금액 표시
                 user = request.user
