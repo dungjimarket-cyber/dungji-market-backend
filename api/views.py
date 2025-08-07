@@ -1296,7 +1296,7 @@ class GroupBuyViewSet(ModelViewSet):
             data['remaining_seconds'] = 0
         
         # 입찰 정보 추가 (최종선택중인 경우)
-        if instance.status in ['final_selection', 'seller_confirmation', 'completed']:
+        if instance.status in ['final_selection', 'seller_confirmation', 'completed', 'final_selection_buyers', 'final_selection_seller', 'in_progress']:
             from api.models import Bid
             # 낙찰된 입찰 정보
             winning_bid = instance.bid_set.filter(is_selected=True).first()
@@ -1311,7 +1311,8 @@ class GroupBuyViewSet(ModelViewSet):
                     is_participant = instance.participation_set.filter(user=user).exists()
                     is_winning_seller = winning_bid.seller == user
                 
-                if is_participant or is_winning_seller:
+                # 최종선택 단계 이후부터는 참여자에게 정상 금액 표시
+                if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and is_participant) or is_winning_seller:
                     data['winning_bid_amount'] = winning_bid.amount
                 else:
                     # 미참여자는 마스킹 처리
@@ -1331,7 +1332,8 @@ class GroupBuyViewSet(ModelViewSet):
                 top_bids = instance.bid_set.order_by('-amount')[:10]
                 bid_list = []
                 for idx, bid in enumerate(top_bids, 1):
-                    if is_participant or is_winning_seller:
+                    # 최종선택 단계 이후부터는 참여자에게 정상 금액 표시
+                    if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and is_participant) or is_winning_seller:
                         bid_list.append({
                             'rank': idx,
                             'amount': bid.amount,
