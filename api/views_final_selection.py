@@ -371,17 +371,20 @@ def get_contact_info(request, groupbuy_id):
                     status=status.HTTP_403_FORBIDDEN
                 )
             
-            winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
+            winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').select_related('seller__address_region').first()
             if winning_bid and winning_bid.seller:
                 seller = winning_bid.seller
+                # 주소 정보 가져오기
+                address_display = None
+                if seller.address_region:
+                    address_display = seller.address_region.full_name or seller.address_region.name
+                
                 return Response({
                     'role': 'seller',
-                    'name': seller.username,
+                    'nickname': seller.nickname or seller.username,  # 닉네임 우선, 없으면 username
                     'phone': seller.phone_number,
-                    'email': seller.email,
-                    'business_name': seller.business_name if hasattr(seller, 'business_name') else None,
                     'business_number': seller.business_number if hasattr(seller, 'business_number') else None,
-                    'address': seller.address_detail if hasattr(seller, 'address_detail') else None
+                    'address': address_display  # 사업자 주요활동지역
                 })
         
         # 판매자인 경우 - 구매자들 정보 조회
@@ -396,14 +399,19 @@ def get_contact_info(request, groupbuy_id):
             participations = Participation.objects.filter(
                 groupbuy=groupbuy,
                 final_decision='confirmed'
-            ).select_related('user')
+            ).select_related('user__address_region')
             
             buyers_info = []
             for p in participations:
+                # 구매자 주소 정보
+                address_display = None
+                if p.user.address_region:
+                    address_display = p.user.address_region.full_name or p.user.address_region.name
+                
                 buyers_info.append({
-                    'name': p.user.username,
+                    'nickname': p.user.nickname or p.user.username,  # 닉네임 우선
                     'phone': p.user.phone_number,
-                    'address': p.user.address_detail if hasattr(p.user, 'address_detail') else None
+                    'address': address_display
                 })
             
             return Response({
