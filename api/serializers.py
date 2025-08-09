@@ -358,7 +358,15 @@ class GroupBuySerializer(serializers.ModelSerializer):
             now = timezone.now()
             end_time = data['end_time']
             
+            # 디버깅 로그
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[시간 검증] now: {now}, end_time: {end_time}")
+            logger.info(f"[시간 검증] now type: {type(now)}, end_time type: {type(end_time)}")
+            logger.info(f"[시간 검증] 차이: {end_time - now}")
+            
             if end_time - now < timedelta(hours=6):
+                logger.error(f"[시간 검증 실패] {end_time} - {now} = {end_time - now} < 6시간")
                 raise serializers.ValidationError({
                     'end_time': '공구 기간은 최소 6시간 이상이어야 합니다.'
                 })
