@@ -384,7 +384,7 @@ def get_contact_info(request, groupbuy_id):
                     'nickname': seller.nickname or seller.username,  # 닉네임 우선, 없으면 username
                     'phone': seller.phone_number,
                     'business_number': seller.business_number if hasattr(seller, 'business_number') else None,
-                    'address': address_display  # 사업자 주요활동지역
+                    'address_region': address_display  # 사업자 주요활동지역
                 })
         
         # 판매자인 경우 - 구매자들 정보 조회
