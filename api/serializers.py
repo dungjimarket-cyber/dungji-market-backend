@@ -358,11 +358,15 @@ class GroupBuySerializer(serializers.ModelSerializer):
             now = timezone.now()
             end_time = data['end_time']
             
-            if end_time - now < timedelta(hours=6):
+            # 분 단위까지만 비교하기 위해 초를 0으로 설정
+            now_minutes_only = now.replace(second=0, microsecond=0)
+            end_time_minutes_only = end_time.replace(second=0, microsecond=0)
+            
+            if end_time_minutes_only - now_minutes_only < timedelta(hours=6):
                 raise serializers.ValidationError({
                     'end_time': '공구 기간은 최소 6시간 이상이어야 합니다.'
                 })
-            if end_time - now > timedelta(hours=48):
+            if end_time_minutes_only - now_minutes_only > timedelta(hours=48):
                 raise serializers.ValidationError({
                     'end_time': '공구 기간은 최대 48시간까지 설정 가능합니다.'
                 })
