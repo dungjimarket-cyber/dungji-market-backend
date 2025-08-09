@@ -96,7 +96,7 @@ class SellerProfileView(APIView):
             "username": user.username,
             "email": user.email,
             "phone": user.phone_number if hasattr(user, 'phone_number') else '',
-            "businessNumber": user.business_reg_number if hasattr(user, 'business_reg_number') else '',
+            "businessNumber": user.business_number if hasattr(user, 'business_number') else '',
             "isRemoteSales": user.is_remote_sales_enabled if hasattr(user, 'is_remote_sales_enabled') else False,
             "address": user.address_detail if hasattr(user, 'address_detail') else '',
             "addressRegion": {
@@ -146,14 +146,14 @@ class SellerProfileView(APIView):
                 if field == 'phone':
                     update_data['phone_number'] = request.data[field].replace('-', '')
                 elif field == 'business_number':
-                    update_data['business_reg_number'] = request.data[field].replace('-', '')
+                    update_data['business_number'] = request.data[field].replace('-', '')
                 elif field == 'is_remote_sales':
                     update_data['is_remote_sales_enabled'] = request.data[field]
                 elif field == 'address':
                     update_data['address_detail'] = request.data[field]
                 elif field == 'address_region_id':
                     # 지역 코드로 Region 객체 찾기
-                    from .models import Region
+                    from .models_region import Region
                     try:
                         region = Region.objects.get(code=request.data[field])
                         update_data['address_region'] = region
