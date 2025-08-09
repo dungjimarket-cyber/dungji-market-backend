@@ -148,7 +148,12 @@ class SellerProfileView(APIView):
                 elif field == 'business_number':
                     update_data['business_number'] = request.data[field].replace('-', '')
                 elif field == 'is_remote_sales':
-                    update_data['is_remote_sales_enabled'] = request.data[field]
+                    # 문자열 'true'/'false'를 Boolean으로 변환
+                    value = request.data[field]
+                    if isinstance(value, str):
+                        update_data['is_remote_sales_enabled'] = value.lower() == 'true'
+                    else:
+                        update_data['is_remote_sales_enabled'] = bool(value)
                 elif field == 'address':
                     update_data['address_detail'] = request.data[field]
                 elif field == 'address_region_id':
