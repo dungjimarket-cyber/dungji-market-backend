@@ -8,7 +8,7 @@ class Command(BaseCommand):
         # Create electronics category
         electronics, created = Category.objects.get_or_create(
             name="전자기기",
-            defaults={"description": "전자기기 카테고리입니다."}
+            defaults={"detail_type": "electronics"}
         )
         
         if created:

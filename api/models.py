@@ -346,6 +346,7 @@ class GroupBuy(models.Model):
     final_selection_end = models.DateTimeField(null=True, blank=True, verbose_name='구매자 최종선택 종료 시간')  # 공구 마감 후 12시간
     seller_selection_end = models.DateTimeField(null=True, blank=True, verbose_name='판매자 최종선택 종료 시간')  # 구매자 선택 완료 후 6시간
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='recruiting', verbose_name='상태')
+    cancellation_reason = models.CharField(max_length=200, blank=True, null=True, verbose_name='취소 사유')
     current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 참여자 수')
     target_price = models.PositiveIntegerField(null=True, blank=True, verbose_name='목표 가격')  # 목표 가격
     region_type = models.CharField(max_length=20, choices=REGION_TYPE_CHOICES, default='local', verbose_name='지역 유형')

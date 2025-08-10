@@ -211,7 +211,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'product_info', 'creator', 'creator_name',
-                'host_username', 'status', 'min_participants', 'max_participants', 'start_time', 'end_time', 'final_selection_end',
+                'host_username', 'status', 'cancellation_reason', 'min_participants', 'max_participants', 'start_time', 'end_time', 'final_selection_end',
                 'seller_selection_end', 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'product_details', 'regions']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지

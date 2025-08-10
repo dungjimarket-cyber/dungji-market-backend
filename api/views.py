@@ -1576,7 +1576,10 @@ class GroupBuyViewSet(ModelViewSet):
                 data = self.get_serializer(gb).data
                 participation = gb.participation_set.filter(user=user).first()
                 
-                if participation and participation.final_decision == 'cancelled':
+                # 먼저 cancellation_reason 필드 확인
+                if gb.cancellation_reason:
+                    data['cancel_reason'] = gb.cancellation_reason
+                elif participation and participation.final_decision == 'cancelled':
                     data['cancel_reason'] = '구매 포기'
                 elif gb.status == 'cancelled' and gb.final_selection_end and gb.final_selection_end < now:
                     data['cancel_reason'] = '최종선택 기간 만료'
@@ -1630,7 +1633,10 @@ class GroupBuyViewSet(ModelViewSet):
                 data = self.get_serializer(gb).data
                 bid = gb.bid_set.filter(seller=user).first()
                 
-                if bid and bid.final_decision == 'cancelled':
+                # 먼저 cancellation_reason 필드 확인
+                if gb.cancellation_reason:
+                    data['cancel_reason'] = gb.cancellation_reason
+                elif bid and bid.final_decision == 'cancelled':
                     data['cancel_reason'] = '판매 포기'
                 elif gb.status == 'cancelled' and gb.final_selection_end and gb.final_selection_end < now:
                     data['cancel_reason'] = '최종선택 기간 만료'

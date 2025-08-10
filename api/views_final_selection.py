@@ -503,6 +503,7 @@ def check_buyer_decisions_completed(groupbuy):
         else:
             # 구매 확정자가 없으면 공구 취소
             groupbuy.status = 'cancelled'
+            groupbuy.cancellation_reason = '참여자 전원 구매포기로 인한 공구 취소'
             groupbuy.save()
             
             # 모든 입찰자에게 취소 알림
@@ -595,6 +596,10 @@ def check_seller_decision_completed(groupbuy):
         else:
             # 공구 취소
             groupbuy.status = 'cancelled'
+            if winning_bid.final_decision == 'cancelled':
+                groupbuy.cancellation_reason = '낙찰자의 판매포기로 인한 공구 진행 취소'
+            else:
+                groupbuy.cancellation_reason = '거래 조건 미충족으로 인한 공구 취소'
             groupbuy.save()
 
 
