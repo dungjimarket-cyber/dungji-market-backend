@@ -29,30 +29,22 @@ def update_groupbuy_status(groupbuy):
     original_status = groupbuy.status
     changed = False
     
-    # 1. 입찰이 있으면 recruiting -> bidding으로 변경
-    if groupbuy.status == 'recruiting':
-        from api.models import Bid
-        if Bid.objects.filter(groupbuy=groupbuy).exists():
-            groupbuy.status = 'bidding'
-            groupbuy.save()
-            logger.info(f"공구 '{groupbuy.title}' 상태 변경: recruiting -> bidding (입찰 발생)")
-            changed = True
-    
-    # 2. 공구 마감 시간이 지났으면 final_selection으로 변경
-    if groupbuy.status in ['recruiting', 'bidding'] and now > groupbuy.end_time:
+    # v3.0: bidding 상태 제거 - recruiting에서 바로 final_selection으로
+    # 공구 마감 시간이 지났으면 final_selection으로 변경
+    if groupbuy.status == 'recruiting' and now > groupbuy.end_time:
         from api.models import Bid
         # 입찰이 있는 경우만 final_selection으로, 없으면 cancelled
         if Bid.objects.filter(groupbuy=groupbuy).exists():
             groupbuy.status = 'final_selection'
             groupbuy.final_selection_end = groupbuy.end_time + timedelta(hours=12)
             groupbuy.save()
-            logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> final_selection")
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: recruiting -> final_selection")
             groupbuy.notify_status_change()
             changed = True
         else:
             groupbuy.status = 'cancelled'
             groupbuy.save()
-            logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> cancelled (입찰 없음)")
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: recruiting -> cancelled (입찰 없음)")
             changed = True
     
     # 최종선택 단계 -> 판매자 확정 대기 또는 취소
@@ -140,7 +132,7 @@ def update_groupbuys_status():
     """
     from ..models import GroupBuy  # 순환 참조 방지를 위해 함수 내에서 import
     
-    active_statuses = ['recruiting', 'bidding', 'final_selection', 'seller_confirmation']
+    active_statuses = ['recruiting', 'final_selection', 'seller_confirmation']  # v3.0: bidding 제거
     active_groupbuys = GroupBuy.objects.filter(status__in=active_statuses)
     
     changed_count = 0

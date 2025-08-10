@@ -317,8 +317,8 @@ class GroupBuyRegion(models.Model):
 
 class GroupBuy(models.Model):
     STATUS_CHOICES = (
-        ('recruiting', '모집중'),
-        ('bidding', '입찰진행중'),
+        ('recruiting', '모집중'),  # 참여자 모집 및 입찰 동시 진행 (v3.0)
+        # ('bidding', '입찰진행중'),  # v3.0에서 제거 - 모집중에 통합
         ('final_selection_buyers', '구매자 최종선택중'),
         ('final_selection_seller', '판매자 최종선택중'),
         ('in_progress', '거래중'),  # 구매/판매 확정 후 실제 거래 진행중
@@ -386,16 +386,14 @@ class GroupBuy(models.Model):
 
     def advance_status(self):
         now = timezone.now()
-        if self.status == 'recruiting' and now >= self.start_time:
-            self.status = 'bidding'
-            self.save()
-        elif self.status == 'bidding' and now >= self.end_time:
-            # 입찰 마감 후 구매자 최종선택 상태로 전환
+        # v3.0: bidding 상태 제거, recruiting에서 바로 final_selection_buyers로 전환
+        if self.status == 'recruiting' and now >= self.end_time:
+            # 공구 마감 후 구매자 최종선택 상태로 전환
             selected_bid = self.bid_set.filter(status='selected').first()
             if selected_bid:
                 self.status = 'final_selection_buyers'
                 from datetime import timedelta
-                # final_selection_end를 입찰 마감 후 12시간으로 설정
+                # final_selection_end를 공구 마감 후 12시간으로 설정
                 self.final_selection_end = now + timedelta(hours=12)
                 self.save()
             else:

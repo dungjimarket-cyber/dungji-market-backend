@@ -42,9 +42,9 @@ def update_groupbuy_status_cron(request):
     try:
         logger.info("Starting cron job for groupbuy status update")
         
-        # 업데이트가 필요한 공구들 조회
+        # 업데이트가 필요한 공구들 조회 (v3.0: bidding 제거)
         groupbuys_to_update = GroupBuy.objects.filter(
-            status__in=['recruiting', 'bidding', 'final_selection_buyers', 'final_selection_seller']
+            status__in=['recruiting', 'final_selection_buyers', 'final_selection_seller']
         ).exclude(
             status='completed'
         ).exclude(
