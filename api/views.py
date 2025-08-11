@@ -1784,14 +1784,27 @@ class GroupBuyViewSet(ModelViewSet):
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
         # 낙찰되었지만 구매자들이 아직 선택중인 공구
+        from .models import Bid
         waiting = self.get_queryset().filter(
             bid__seller=request.user,
             bid__is_selected=True,
             status='final_selection_buyers'
         ).distinct()
         
-        serializer = self.get_serializer(waiting, many=True)
-        return Response(serializer.data)
+        data = []
+        for gb in waiting:
+            gb_data = self.get_serializer(gb).data
+            # 낙찰 금액 추가
+            winning_bid = Bid.objects.filter(
+                groupbuy=gb,
+                seller=request.user,
+                is_selected=True
+            ).first()
+            if winning_bid:
+                gb_data['winning_bid_amount'] = winning_bid.amount
+            data.append(gb_data)
+        
+        return Response(data)
     
     @action(detail=False, methods=['get'])
     def seller_pending_decision(self, request):
@@ -1817,6 +1830,16 @@ class GroupBuyViewSet(ModelViewSet):
                 final_decision='confirmed'
             ).count()
             gb_data['confirmed_buyers'] = confirmed_count
+            
+            # 낙찰 금액 추가
+            winning_bid = Bid.objects.filter(
+                groupbuy=gb,
+                seller=request.user,
+                is_selected=True
+            ).first()
+            if winning_bid:
+                gb_data['winning_bid_amount'] = winning_bid.amount
+            
             data.append(gb_data)
         
         return Response(data)
@@ -1890,8 +1913,11 @@ class GroupBuyViewSet(ModelViewSet):
                 seller=request.user,
                 is_selected=True
             ).first()
-            if bid and bid.final_decision_at:
-                gb_data['completed_at'] = bid.final_decision_at
+            if bid:
+                if bid.final_decision_at:
+                    gb_data['completed_at'] = bid.final_decision_at
+                # 낙찰 금액 추가
+                gb_data['winning_bid_amount'] = bid.amount
             data.append(gb_data)
         
         return Response(data)
@@ -1962,22 +1988,6 @@ class GroupBuyViewSet(ModelViewSet):
         serializer = self.get_serializer(confirmed, many=True)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['get'])
-    def seller_completed(self, request):
-        """판매자의 판매완료된 공구 조회"""
-        if request.user.role != 'seller':
-            return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # 판매자가 판매완료 처리한 공구
-        completed = self.get_queryset().filter(
-            bid__seller=request.user,
-            bid__status='selected',
-            bid__is_sale_completed=True,  # 판매완료 처리된
-            status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
-        ).distinct()
-        
-        serializer = self.get_serializer(completed, many=True)
-        return Response(serializer.data)
         
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
