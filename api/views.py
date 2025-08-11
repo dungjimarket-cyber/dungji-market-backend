@@ -640,6 +640,10 @@ class GroupBuyViewSet(ModelViewSet):
         
         # 지역 검색 필터
         region_search = self.request.query_params.get('region_search', None)
+        region = self.request.query_params.get('region', None)  # 내지역 필터용
+        
+        # 통합 검색 필터
+        search = self.request.query_params.get('search', None)
         
         # 거래 완료 필터
         buyer_completed = self.request.query_params.get('buyer_completed', None)
@@ -732,6 +736,20 @@ class GroupBuyViewSet(ModelViewSet):
             elif seller_completed.lower() == 'false':
                 queryset = queryset.filter(seller_completed=False)
         
+        # 통합 검색 처리
+        if search:
+            # 제목, 상품명, 지역명, 통신사 등 여러 필드에서 검색
+            queryset = queryset.filter(
+                Q(title__icontains=search) |  # 공구 제목
+                Q(product__name__icontains=search) |  # 상품명
+                Q(product_name__icontains=search) |  # 백업된 상품명
+                Q(regions__region__name__icontains=search) |  # 지역명
+                Q(region__name__icontains=search) |  # 단일 지역명
+                Q(region_name__icontains=search) |  # 백업 지역명
+                Q(telecom_detail__telecom_carrier__icontains=search) |  # 통신사
+                Q(description__icontains=search)  # 설명
+            ).distinct()
+        
         # 지역 검색 처리
         if region_search:
             # 지역명으로 검색 (시/도 또는 시/군/구 이름 포함)
@@ -742,6 +760,17 @@ class GroupBuyViewSet(ModelViewSet):
                 Q(region__name__icontains=region_search) |  # 직접 연결된 region의 name 검색
                 Q(region_name__icontains=region_search)  # 구 region_name 필드 (호환성)
             ).exclude(region_type='nationwide').distinct()  # 전국 비대면 제외 및 중복 제거
+        
+        # 내지역 필터 처리 (정확한 지역 매칭)
+        if region:
+            # 정확한 지역명 매칭
+            queryset = queryset.filter(
+                Q(regions__region__name=region) |  # GroupBuyRegion을 통한 정확한 매칭
+                Q(regions__region__full_name=region) |  # full_name으로도 매칭
+                Q(region__name=region) |  # 직접 연결된 region의 정확한 매칭
+                Q(region_name=region) |  # 백업 지역명 정확한 매칭
+                Q(region_type='nationwide')  # 전국 비대면 공구도 포함
+            ).distinct()
             
         # 정렬 처리 - ordering 파라미터 우선 사용
         if ordering_param:
