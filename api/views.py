@@ -641,6 +641,10 @@ class GroupBuyViewSet(ModelViewSet):
         # 지역 검색 필터
         region_search = self.request.query_params.get('region_search', None)
         
+        # 거래 완료 필터
+        buyer_completed = self.request.query_params.get('buyer_completed', None)
+        seller_completed = self.request.query_params.get('seller_completed', None)
+        
         # 현재 시간 가져오기
         now = timezone.now()
 
@@ -665,10 +669,8 @@ class GroupBuyViewSet(ModelViewSet):
                         Q(status__in=['final_selection', 'seller_confirmation', 'completed', 'cancelled'])
                     )
                 elif status_param == 'completed':
-                    # 완료: completed 상태이거나 마감시간이 지난 공구
-                    queryset = queryset.filter(
-                        Q(status='completed') | Q(end_time__lte=now)
-                    )
+                    # 완료: completed 상태의 공구
+                    queryset = queryset.filter(status='completed')
                 elif status_param == 'in_progress':
                     # 최종선택 이전 상태(recruiting, bidding)만 필터링
                     queryset = queryset.filter(status__in=['recruiting', 'bidding'])
@@ -716,6 +718,19 @@ class GroupBuyViewSet(ModelViewSet):
             else:
                 # 직접 제조사명으로 검색
                 queryset = queryset.filter(product__name__icontains=manufacturer)
+        
+        # 거래 완료 필터 처리
+        if buyer_completed is not None:
+            if buyer_completed.lower() == 'true':
+                queryset = queryset.filter(buyer_completed=True)
+            elif buyer_completed.lower() == 'false':
+                queryset = queryset.filter(buyer_completed=False)
+                
+        if seller_completed is not None:
+            if seller_completed.lower() == 'true':
+                queryset = queryset.filter(seller_completed=True)
+            elif seller_completed.lower() == 'false':
+                queryset = queryset.filter(seller_completed=False)
         
         # 지역 검색 처리
         if region_search:

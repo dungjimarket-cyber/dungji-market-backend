@@ -359,6 +359,11 @@ class GroupBuy(models.Model):
     # 기타 카테고리별 세부 정보는 여전히 JSON으로 저장
     product_details = models.JSONField(null=True, blank=True, verbose_name='기타 세부 정보')
     
+    # 거래 완료 추적 필드 추가
+    buyer_completed = models.BooleanField(default=False, verbose_name='구매자 거래완료')
+    seller_completed = models.BooleanField(default=False, verbose_name='판매자 거래완료')
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='거래 완료 시간')
+    
     def save(self, *args, **kwargs):
         # 상품 이름 백업
         if self.product and not self.product_name:
