@@ -2178,18 +2178,26 @@ class GroupBuyViewSet(ModelViewSet):
         participation.purchase_completed_at = timezone.now()
         participation.save()
         
-        # 모든 구매자와 판매자가 완료했는지 확인
+        # 모든 구매자가 완료했는지 확인
         all_buyers_completed = not groupbuy.participation_set.filter(
             final_decision='confirmed',
             is_purchase_completed=False
         ).exists()
         
+        # 모든 구매자가 완료한 경우 buyer_completed 플래그 업데이트
+        if all_buyers_completed:
+            groupbuy.buyer_completed = True
+            groupbuy.save()
+        
+        # 판매자도 완료했는지 확인
         winning_bid = groupbuy.bid_set.filter(status='selected').first()
         seller_completed = winning_bid and winning_bid.is_sale_completed
         
         # 모두 완료한 경우 공구 상태를 completed로 변경
         if all_buyers_completed and seller_completed:
             groupbuy.status = 'completed'
+            groupbuy.seller_completed = True
+            groupbuy.completed_at = timezone.now()
             groupbuy.save()
         
         return Response({'message': '구매완료 처리되었습니다.'})
@@ -2233,15 +2241,25 @@ class GroupBuyViewSet(ModelViewSet):
         winning_bid.sale_completed_at = timezone.now()
         winning_bid.save()
         
-        # 모든 구매자와 판매자가 완료했는지 확인
+        # 판매자 완료 플래그 업데이트
+        groupbuy.seller_completed = True
+        groupbuy.save()
+        
+        # 모든 구매자도 완료했는지 확인
         all_buyers_completed = not groupbuy.participation_set.filter(
             final_decision='confirmed',
             is_purchase_completed=False
         ).exists()
         
+        # 모든 구매자가 완료한 경우 buyer_completed 플래그도 업데이트
+        if all_buyers_completed:
+            groupbuy.buyer_completed = True
+            groupbuy.save()
+        
         # 모두 완료한 경우 공구 상태를 completed로 변경
         if all_buyers_completed and winning_bid.is_sale_completed:
             groupbuy.status = 'completed'
+            groupbuy.completed_at = timezone.now()
             groupbuy.save()
         
         return Response({'message': '판매완료 처리되었습니다.'})
