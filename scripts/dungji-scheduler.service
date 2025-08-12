@@ -1,0 +1,18 @@
+[Unit]
+Description=Dungji Market GroupBuy Status Scheduler
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/home/ubuntu/dungji-market/backend
+Environment="DJANGO_SETTINGS_MODULE=config.settings"
+ExecStart=/usr/bin/python3 /home/ubuntu/dungji-market/backend/manage.py run_scheduler --interval 300
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/dungji/scheduler.log
+StandardError=append:/var/log/dungji/scheduler_error.log
+
+[Install]
+WantedBy=multi-user.target

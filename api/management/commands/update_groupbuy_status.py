@@ -76,16 +76,29 @@ class Command(BaseCommand):
             if groupbuy.seller_selection_end and now > groupbuy.seller_selection_end:
                 winning_bid = groupbuy.bid_set.filter(status='selected').first()
                 
-                if winning_bid and winning_bid.final_decision == 'confirmed':
-                    # 판매자가 확정했으면 완료
-                    groupbuy.status = 'completed'
-                    groupbuy.save()
-                    logger.info(f"공구 {groupbuy.id}를 완료 처리했습니다.")
+                if winning_bid:
+                    # 판매자가 시간 내에 선택하지 않은 경우 자동으로 판매포기 처리
+                    if winning_bid.final_decision == 'pending':
+                        winning_bid.final_decision = 'rejected'
+                        winning_bid.final_decision_at = now
+                        winning_bid.save()
+                        logger.info(f"공구 {groupbuy.id}의 판매자가 시간 내 미선택으로 자동 판매포기 처리되었습니다.")
+                    
+                    if winning_bid.final_decision == 'confirmed':
+                        # 판매자가 확정했으면 진행중 상태로
+                        groupbuy.status = 'in_progress'
+                        groupbuy.save()
+                        logger.info(f"공구 {groupbuy.id}를 거래 진행중 상태로 변경했습니다.")
+                    else:
+                        # 판매자가 포기했으면 취소
+                        groupbuy.status = 'cancelled'
+                        groupbuy.save()
+                        logger.info(f"판매자가 판매포기한 공구 {groupbuy.id}를 취소 처리했습니다.")
                 else:
-                    # 판매자가 확정하지 않았으면 취소
+                    # 낙찰자가 없으면 취소
                     groupbuy.status = 'cancelled'
                     groupbuy.save()
-                    logger.info(f"판매자가 확정하지 않은 공구 {groupbuy.id}를 취소 처리했습니다.")
+                    logger.info(f"낙찰자가 없는 공구 {groupbuy.id}를 취소 처리했습니다.")
                 updated_count += 1
         
         self.stdout.write(self.style.SUCCESS(f'총 {updated_count}개의 공구 상태가 업데이트되었습니다.'))
