@@ -1549,8 +1549,21 @@ class GroupBuyViewSet(ModelViewSet):
         else:
             waiting = self.get_queryset().none()
         
-        serializer = self.get_serializer(waiting, many=True)
-        return Response(serializer.data)
+        # 낙찰 금액 정보를 포함하여 반환
+        from .models import Bid
+        data = []
+        for gb in waiting:
+            gb_data = self.get_serializer(gb).data
+            # 낙찰된 입찰 정보 가져오기
+            winning_bid = Bid.objects.filter(
+                groupbuy=gb,
+                is_selected=True
+            ).first()
+            if winning_bid:
+                gb_data['winning_bid_amount'] = winning_bid.amount
+            data.append(gb_data)
+        
+        return Response(data)
         
     @action(detail=False, methods=['get'])
     def purchase_completed(self, request):
