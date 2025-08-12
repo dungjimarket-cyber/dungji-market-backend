@@ -124,9 +124,14 @@ def create_sns_user(request):
             # 기존 사용자 정보 업데이트
             user.last_login = timezone.now()
             
-            # 이메일이 변경되었거나 비어있었던 경우 업데이트
-            # (카카오는 PC/모바일에서 다른 이메일을 제공할 수 있음)
-            if email and email != user.email:
+            # 이메일 업데이트 로직 수정
+            # 사용자가 직접 수정한 이메일은 보존하고, 카카오 디폴트 이메일만 업데이트
+            # 카카오 디폴트 이메일 패턴: {kakao_id}@kakao.user
+            if user.email and '@kakao.user' not in user.email:
+                # 사용자가 이미 이메일을 수정한 경우 - 변경하지 않음
+                logger.info(f"사용자({user.id})가 수정한 이메일 유지: {user.email}")
+            elif email and email != user.email:
+                # 카카오 디폴트 이메일이거나 비어있는 경우만 업데이트
                 logger.info(f"사용자({user.id})의 이메일 업데이트: {user.email} -> {email}")
                 user.email = email
             
