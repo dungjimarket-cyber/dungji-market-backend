@@ -896,6 +896,16 @@ def user_profile(request):
             files = request.FILES
             
             # 업데이트 가능한 필드들
+            if 'email' in data:
+                # 이메일 중복 확인
+                email = data['email']
+                if User.objects.filter(email=email).exclude(id=user.id).exists():
+                    return Response(
+                        {'error': '이미 사용 중인 이메일입니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                user.email = email
+            
             if 'username' in data:
                 # 닉네임(username) 중복 확인
                 username = data['username']
@@ -985,6 +995,7 @@ def user_profile(request):
                 'message': '프로필이 업데이트되었습니다.',
                 'profile': {
                     'username': user.username,
+                    'email': user.email,
                     'phone_number': user.phone_number,
                     'first_name': user.first_name,
                     'profile_image': user.profile_image,
