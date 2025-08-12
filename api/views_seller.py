@@ -11,7 +11,10 @@ from .models import Bid, GroupBuy, BidToken, BidTokenPurchase, Settlement
 from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth import get_user_model
+from .utils.s3_utils import upload_file_to_s3
+import logging
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 class SellerProfileView(APIView):
@@ -98,6 +101,8 @@ class SellerProfileView(APIView):
             "phone": user.phone_number if hasattr(user, 'phone_number') else '',
             "businessNumber": user.business_number if hasattr(user, 'business_number') else '',
             "isRemoteSales": user.is_remote_sales_enabled if hasattr(user, 'is_remote_sales_enabled') else False,
+            "remoteSalesCertification": user.remote_sales_certification if hasattr(user, 'remote_sales_certification') else None,
+            "remoteSalesVerified": user.remote_sales_verified if hasattr(user, 'remote_sales_verified') else False,
             "address": user.address_detail if hasattr(user, 'address_detail') else '',
             "addressRegion": {
                 "code": user.address_region.code,
@@ -130,6 +135,33 @@ class SellerProfileView(APIView):
                 {"detail": "판매자 권한이 없습니다."},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        # 파일 업로드 처리 (비대면 판매 인증서)
+        if 'remote_sales_certification' in request.FILES:
+            try:
+                cert_file = request.FILES['remote_sales_certification']
+                # S3에 파일 업로드
+                file_url = upload_file_to_s3(
+                    cert_file,
+                    f'remote_sales_cert/{user.id}_{cert_file.name}'
+                )
+                user.remote_sales_certification = file_url
+                user.remote_sales_verified = True  # 파일 업로드 시 인증 완료 처리
+                user.remote_sales_verification_date = timezone.now()
+                logger.info(f"비대면 판매 인증서 업로드 완료: {file_url}")
+            except Exception as e:
+                logger.error(f"비대면 판매 인증서 업로드 실패: {str(e)}")
+                return Response(
+                    {"detail": "파일 업로드 중 오류가 발생했습니다."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        # 비대면 판매 인증서 삭제 요청 처리
+        if request.data.get('delete_remote_sales_certification') == 'true':
+            user.remote_sales_certification = None
+            user.remote_sales_verified = False
+            user.remote_sales_verification_date = None
+            logger.info(f"사용자 {user.id}의 비대면 판매 인증서 삭제")
         
         # 업데이트 가능한 필드들
         allowed_fields = [

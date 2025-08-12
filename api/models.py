@@ -54,6 +54,7 @@ class User(AbstractUser):
     remote_sales_verified = models.BooleanField(default=False, verbose_name='비대면 판매 인증 완료')
     remote_sales_verification_date = models.DateTimeField(null=True, blank=True, verbose_name='비대면 인증일')
     remote_sales_expiry_date = models.DateTimeField(null=True, blank=True, verbose_name='비대면 인증 만료일')
+    remote_sales_certification = models.URLField(blank=True, null=True, verbose_name='비대면 판매 인증서 URL')
     business_license_image = models.URLField(blank=True, null=True, verbose_name='사업자등록증 이미지')
     delivery_history_image = models.URLField(blank=True, null=True, verbose_name='택배 송장 이미지')
     
