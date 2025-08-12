@@ -35,8 +35,12 @@ cat > /tmp/dungji-cron << EOF
 0 * * * * echo "[\$(date '+\%Y-\%m-\%d \%H:\%M:\%S')] Cron is running" >> /home/ubuntu/logs/cron.log
 EOF
 
-# 로그 디렉토리 생성
+# 로그 디렉토리 및 파일 생성
 mkdir -p /home/ubuntu/logs
+touch /home/ubuntu/logs/cron.log
+touch /home/ubuntu/logs/notification.log
+touch /home/ubuntu/logs/cleanup.log
+chmod 666 /home/ubuntu/logs/*.log
 
 # 현재 크론탭 백업
 crontab -l > /tmp/cron-backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
