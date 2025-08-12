@@ -405,35 +405,7 @@ def check_email(request):
         )
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def check_nickname(request):
-    """
-    닉네임 중복 확인 API
-    """
-    try:
-        nickname = request.data.get('nickname')
-        
-        if not nickname:
-            return Response(
-                {'error': '닉네임을 입력해주세요.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 닉네임 중복 확인
-        is_available = not User.objects.filter(username=nickname).exists()
-        
-        return Response({
-            'available': is_available,
-            'nickname': nickname
-        })
-    
-    except Exception as e:
-        logger.error(f"닉네임 중복 확인 오류: {str(e)}")
-        return Response(
-            {'error': '닉네임 확인 중 오류가 발생했습니다.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+# Removed duplicate check_nickname function (kept the one at line 707)
 
 
 @api_view(['POST'])
@@ -709,6 +681,7 @@ def update_user_profile(request):
 def check_nickname(request):
     """닉네임 중복 확인"""
     nickname = request.data.get('nickname')
+    current_user_id = request.data.get('current_user_id')  # 현재 사용자 ID (선택적)
     
     if not nickname:
         return Response(
@@ -716,7 +689,18 @@ def check_nickname(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    exists = User.objects.filter(username=nickname).exists()
+    # 닉네임 중복 확인 쿼리
+    query = User.objects.filter(username=nickname)
+    
+    # 현재 사용자가 있는 경우 (프로필 수정 시) 자기 자신은 제외
+    if current_user_id:
+        query = query.exclude(id=current_user_id)
+    
+    # 인증된 사용자의 경우 자동으로 자기 자신 제외
+    if request.user and request.user.is_authenticated:
+        query = query.exclude(id=request.user.id)
+    
+    exists = query.exists()
     
     return Response({
         'available': not exists,
