@@ -4,7 +4,8 @@ from .models import (
     Category, Product, GroupBuy, Bid, Penalty, User, Badge,
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
-    ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event
+    ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
+    Review, NoShowReport
 )
 from django.utils.html import mark_safe
 from django.conf import settings
