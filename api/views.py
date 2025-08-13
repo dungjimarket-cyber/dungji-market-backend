@@ -1369,6 +1369,7 @@ class GroupBuyViewSet(ModelViewSet):
                 is_participant = False
                 is_winning_seller = False
                 is_any_seller = False
+                my_bid = None
                 
                 # 인증된 사용자인 경우에만 참여자/판매자 확인
                 if user.is_authenticated:
@@ -1376,6 +1377,10 @@ class GroupBuyViewSet(ModelViewSet):
                     is_winning_seller = winning_bid.seller == user
                     # 판매자 역할 확인 (최종선택 단계 이후에는 모든 판매자가 금액 확인 가능)
                     is_any_seller = user.role == 'seller'
+                    
+                    # 판매자인 경우 내 입찰 정보 찾기
+                    if is_any_seller:
+                        my_bid = instance.bid_set.filter(seller=user).first()
                 
                 # 최종선택 단계 이후부터는 참여자와 모든 판매자에게 정상 금액 표시
                 if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and (is_participant or is_any_seller)) or is_winning_seller:
@@ -1419,6 +1424,23 @@ class GroupBuyViewSet(ModelViewSet):
                                 'is_winner': bid.status == 'selected'
                             })
                 data['bid_ranking'] = bid_list
+                
+                # 판매자인 경우 내 입찰 순위 정보 추가
+                if my_bid and instance.status in ['bidding', 'final_selection_buyers', 'final_selection_seller', 'completed']:
+                    all_bids = instance.bid_set.order_by('-amount', 'created_at')
+                    my_rank = 1
+                    for idx, bid in enumerate(all_bids, 1):
+                        if bid.id == my_bid.id:
+                            my_rank = idx
+                            break
+                    
+                    data['my_bid_info'] = {
+                        'rank': my_rank,
+                        'amount': my_bid.amount,
+                        'total_bidders': all_bids.count(),
+                        'status': 'won' if my_rank == 1 else 'lost',
+                        'message': '축하합니다! 낙찰되셨습니다! 🎉' if my_rank == 1 else f'아쉽지만 낙찰되지 못했습니다 😢 (내 순위: {my_rank}위)'
+                    }
         
         return Response(data)
 
@@ -1794,6 +1816,41 @@ class GroupBuyViewSet(ModelViewSet):
             gb_data['bid_status'] = bid.status
             gb_data['is_selected'] = bid.is_selected
             gb_data['bid_created_at'] = bid.created_at
+            
+            # 입찰 순위 계산 (모집기간 종료 후에만)
+            groupbuy = bid.groupbuy
+            if groupbuy.status in ['bidding', 'final_selection_buyers', 'final_selection_seller', 'completed']:
+                # 모집기간이 종료된 경우 순위 계산
+                all_bids = Bid.objects.filter(
+                    groupbuy=groupbuy
+                ).order_by('-amount', 'created_at')  # 금액 높은 순, 동일 금액은 먼저 입찰한 순
+                
+                # 내 입찰 순위 찾기
+                my_rank = 1
+                for index, b in enumerate(all_bids, 1):
+                    if b.id == bid.id:
+                        my_rank = index
+                        break
+                
+                gb_data['my_bid_rank'] = my_rank
+                gb_data['total_bidders'] = all_bids.count()
+                
+                # 상태 표시 조정
+                if groupbuy.status == 'recruiting':
+                    # 모집기간 중에는 모두 "입찰중"
+                    gb_data['display_status'] = '입찰중'
+                elif my_rank == 1:
+                    # 1등은 "낙찰"
+                    gb_data['display_status'] = '낙찰'
+                else:
+                    # 2등 이하는 "낙찰실패"
+                    gb_data['display_status'] = '낙찰실패'
+            else:
+                # 모집기간 중에는 순위 없음, 상태는 "입찰중"
+                gb_data['my_bid_rank'] = None
+                gb_data['total_bidders'] = None
+                gb_data['display_status'] = '입찰중'
+            
             groupbuy_data.append(gb_data)
         
         return Response(groupbuy_data)

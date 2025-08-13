@@ -323,6 +323,17 @@ def register_user_v2(request):
             
             user.save()
             
+            # 판매회원 가입시 입찰권 10매 자동 추가
+            if role == 'seller':
+                from .models import BidToken
+                for i in range(10):
+                    BidToken.objects.create(
+                        seller=user,
+                        token_type='single',
+                        status='active'
+                    )
+                logger.info(f"판매회원 {user.username}에게 입찰권 10매 지급 완료")
+            
             logger.info(f"회원가입 완료: nickname={nickname}, username={user.username}, email={user.email} (ID: {user.id}, Role: {role})")
             
             return Response(
