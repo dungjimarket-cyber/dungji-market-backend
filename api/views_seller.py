@@ -622,3 +622,71 @@ def get_seller_sale_detail(request, bid_id):
     
     view = SellerSalesView()
     return view.get_detail(request, bid_id)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_remote_sales_status(request):
+    """
+    비대면 판매인증 상태 조회 API
+    """
+    user = request.user
+    
+    # 판매자가 아닌 경우
+    if user.role != 'seller':
+        return Response(
+            {"detail": "판매자만 접근 가능합니다."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        from .models_remote_sales import RemoteSalesCertification
+        
+        # 최신 인증 신청 조회
+        latest_cert = RemoteSalesCertification.objects.filter(
+            seller=user
+        ).order_by('-submitted_at').first()
+        
+        if not latest_cert:
+            return Response({
+                'status': 'none',
+                'message': '비대면 판매인증 신청 내역이 없습니다.',
+                'is_verified': False,
+                'can_upload': True
+            })
+        
+        # 상태별 응답
+        response_data = {
+            'status': latest_cert.status,
+            'submitted_at': latest_cert.submitted_at,
+            'reviewed_at': latest_cert.reviewed_at,
+            'expires_at': latest_cert.expires_at,
+            'rejection_reason': latest_cert.rejection_reason,
+            'certification_file': latest_cert.certification_file,
+            'is_verified': user.remote_sales_verified,
+            'can_upload': latest_cert.status in ['rejected', 'expired']
+        }
+        
+        # 상태별 메시지 설정
+        if latest_cert.status == 'pending':
+            response_data['message'] = '비대면 판매인증이 심사 중입니다. 관리자 승인을 기다려주세요.'
+        elif latest_cert.status == 'approved':
+            if latest_cert.expires_at and latest_cert.expires_at < timezone.now():
+                response_data['message'] = '비대면 판매인증이 만료되었습니다. 재인증이 필요합니다.'
+                response_data['status'] = 'expired'
+                response_data['can_upload'] = True
+            else:
+                response_data['message'] = '비대면 판매인증이 승인되었습니다.'
+        elif latest_cert.status == 'rejected':
+            response_data['message'] = f'비대면 판매인증이 거절되었습니다. 사유: {latest_cert.rejection_reason or "관리자 문의"}'
+        elif latest_cert.status == 'expired':
+            response_data['message'] = '비대면 판매인증이 만료되었습니다. 재인증이 필요합니다.'
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"비대면 판매인증 상태 조회 오류: {str(e)}")
+        return Response(
+            {"detail": "상태 조회 중 오류가 발생했습니다."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

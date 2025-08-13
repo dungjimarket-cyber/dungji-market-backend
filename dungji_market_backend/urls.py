@@ -28,7 +28,7 @@ from api.views import (
 from api.views_bid import BidViewSet, SettlementViewSet, group_buy_bids
 from api.views_seller import (
     SellerProfileView, get_bid_summary, SellerSalesView, get_seller_sale_detail,
-    purchase_bid_tokens, get_bid_tokens
+    purchase_bid_tokens, get_bid_tokens, get_remote_sales_status
 )
 from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
@@ -107,6 +107,8 @@ urlpatterns = [
     # 입찰권 관련 API
     path('api/bid-tokens/purchase/', purchase_bid_tokens, name='purchase_bid_tokens'),
     path('api/bid-tokens/', get_bid_tokens, name='get_bid_tokens'),
+    # 비대면 판매인증 상태 조회 API
+    path('api/users/me/remote-sales-status/', get_remote_sales_status, name='get_remote_sales_status'),
     # 사용자 참여 정보 API
     path('api/users/me/participations/', ParticipationViewSet.as_view({'get': 'me'}), name='user_participations'),
     # 동의 프로세스 시작 API
