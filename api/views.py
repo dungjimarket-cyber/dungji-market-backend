@@ -2453,8 +2453,12 @@ class GroupBuyViewSet(ModelViewSet):
         """낙찰된 입찰 정보 조회"""
         groupbuy = self.get_object()
         
-        # 낙찰된 입찰 찾기
-        winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
+        # 낙찰된 입찰 찾기 (is_selected=True 또는 status='selected')
+        winning_bid = Bid.objects.filter(
+            groupbuy=groupbuy
+        ).filter(
+            models.Q(is_selected=True) | models.Q(status='selected')
+        ).first()
         
         if not winning_bid:
             return Response(
@@ -2463,19 +2467,20 @@ class GroupBuyViewSet(ModelViewSet):
             )
         
         return Response({
-            'bid': {
-                'id': winning_bid.id,
-                'seller': {
-                    'id': winning_bid.seller.id,
-                    'username': winning_bid.seller.username,
-                    'business_name': getattr(winning_bid.seller, 'business_name', ''),
-                    'profile_image': getattr(winning_bid.seller, 'profile_image', '')
-                },
-                'bid_type': winning_bid.bid_type,
-                'amount': winning_bid.amount,
-                'message': winning_bid.message or '',
-                'created_at': winning_bid.created_at
+            'id': winning_bid.id,
+            'seller': {
+                'id': winning_bid.seller.id,
+                'username': winning_bid.seller.username,
+                'nickname': winning_bid.seller.nickname if hasattr(winning_bid.seller, 'nickname') else winning_bid.seller.username,
+                'business_name': getattr(winning_bid.seller, 'business_name', ''),
+                'profile_image': getattr(winning_bid.seller, 'profile_image', '')
             },
+            'bid_type': winning_bid.bid_type,
+            'amount': winning_bid.amount,
+            'message': winning_bid.message or '',
+            'created_at': winning_bid.created_at,
+            'status': winning_bid.status,
+            'is_selected': winning_bid.is_selected,
             'total_participants': groupbuy.current_participants
         })
     
