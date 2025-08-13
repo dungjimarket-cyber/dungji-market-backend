@@ -5,7 +5,7 @@ from .models import (
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
-    Review, NoShowReport
+    Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog
 )
 from django.utils.html import mark_safe
 from django.conf import settings
@@ -53,16 +53,47 @@ class PenaltyAdmin(admin.ModelAdmin):
         super().__init__(model, admin_site)
 
 from .forms import UserCreationForm, UserChangeForm
+from django.utils import timezone
+from django.db.models import Count, Q
+from django import forms
+
+# BidToken 관련 인라인 Admin
+class BidTokenInline(admin.TabularInline):
+    model = BidToken
+    extra = 0
+    fields = ['token_type', 'status', 'expires_at', 'created_at']
+    readonly_fields = ['created_at']
+    can_delete = False
+    max_num = 10  # 최대 10개만 표시
+    
+    def get_queryset(self, request):
+        # 최근 10개만 표시
+        qs = super().get_queryset(request)
+        return qs.order_by('-created_at')[:10]
+
+class BidTokenAdjustmentLogInline(admin.TabularInline):
+    model = BidTokenAdjustmentLog
+    fk_name = 'seller'  # seller 필드를 기준으로 인라인 표시
+    extra = 0
+    fields = ['adjustment_type', 'quantity', 'reason', 'admin', 'created_at']
+    readonly_fields = ['adjustment_type', 'quantity', 'reason', 'admin', 'created_at']
+    can_delete = False
+    max_num = 10  # 최대 10개만 표시
+    
+    def get_queryset(self, request):
+        # 최근 10개만 표시
+        qs = super().get_queryset(request)
+        return qs.order_by('-created_at')[:10]
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['username', 'email', 'role', 'get_sns_type', 'is_business_verified', 'display_business_reg_file']
+    list_display = ['username', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'display_business_reg_file']
     list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified']
-    search_fields = ['username', 'email', 'business_number']
+    search_fields = ['username', 'email', 'business_number', 'nickname']
     ordering = ['username']
-    readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id')
+    readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id', 'get_bid_tokens_summary', 'get_adjustment_history')
     
     def get_sns_type(self, obj):
         """가입 유형 표시"""
@@ -75,6 +106,93 @@ class UserAdmin(admin.ModelAdmin):
         return obj.sns_type or '직접가입'
     get_sns_type.short_description = '가입유형'
     get_sns_type.admin_order_field = 'sns_type'
+    
+    def get_bid_tokens_count(self, obj):
+        """활성 입찰권 수 표시"""
+        if obj.role != 'seller':
+            return '-'
+        count = BidToken.objects.filter(
+            seller=obj,
+            status='active',
+            token_type='single'
+        ).count()
+        if count > 0:
+            return mark_safe(f'<span style="color: green; font-weight: bold;">{count}개</span>')
+        return mark_safe('<span style="color: gray;">0개</span>')
+    get_bid_tokens_count.short_description = '입찰권'
+    
+    def get_subscription_status(self, obj):
+        """구독권 상태 표시"""
+        if obj.role != 'seller':
+            return '-'
+        active_subscription = BidToken.objects.filter(
+            seller=obj,
+            token_type='unlimited',
+            status='active',
+            expires_at__gt=timezone.now()
+        ).first()
+        if active_subscription:
+            days_left = (active_subscription.expires_at - timezone.now()).days
+            return mark_safe(f'<span style="color: blue; font-weight: bold;">활성 ({days_left}일 남음)</span>')
+        return mark_safe('<span style="color: gray;">없음</span>')
+    get_subscription_status.short_description = '구독권'
+    
+    def get_bid_tokens_summary(self, obj):
+        """입찰권 상세 요약"""
+        if obj.role != 'seller':
+            return '판매회원이 아닙니다'
+        
+        active_single = BidToken.objects.filter(
+            seller=obj, status='active', token_type='single'
+        ).count()
+        
+        used_tokens = BidToken.objects.filter(
+            seller=obj, status='used'
+        ).count()
+        
+        active_subscription = BidToken.objects.filter(
+            seller=obj,
+            token_type='unlimited',
+            status='active',
+            expires_at__gt=timezone.now()
+        ).first()
+        
+        summary = f"""
+        <div style="line-height: 1.8;">
+            <strong>입찰권 현황:</strong><br>
+            • 활성 입찰권: {active_single}개<br>
+            • 사용된 입찰권: {used_tokens}개<br>
+            • 구독권: {'활성' if active_subscription else '없음'}
+        """
+        
+        if active_subscription:
+            summary += f"<br>• 구독권 만료일: {active_subscription.expires_at.strftime('%Y-%m-%d %H:%M')}"
+        
+        summary += "</div>"
+        return mark_safe(summary)
+    get_bid_tokens_summary.short_description = '입찰권 요약'
+    
+    def get_adjustment_history(self, obj):
+        """최근 조정 이력"""
+        if obj.role != 'seller':
+            return '판매회원이 아닙니다'
+        
+        recent_logs = BidTokenAdjustmentLog.objects.filter(
+            seller=obj
+        ).order_by('-created_at')[:5]
+        
+        if not recent_logs:
+            return '조정 이력 없음'
+        
+        history = '<div style="line-height: 1.6;">'
+        history += '<strong>최근 조정 이력:</strong><br>'
+        for log in recent_logs:
+            adjustment_type = {'add': '추가', 'subtract': '차감', 'grant_subscription': '구독권'}.get(log.adjustment_type, log.adjustment_type)
+            history += f"• {log.created_at.strftime('%Y-%m-%d')} - {adjustment_type} {log.quantity}{'일' if log.adjustment_type == 'grant_subscription' else '개'} (사유: {log.reason[:20]}...)<br>"
+        history += '</div>'
+        
+        return mark_safe(history)
+    get_adjustment_history.short_description = '최근 조정 이력'
     
     def display_business_reg_file(self, obj):
         """어드민 목록에서 사업자등록증 표시"""
@@ -96,6 +214,7 @@ class UserAdmin(admin.ModelAdmin):
         ('가입정보', {'fields': ('sns_type', 'sns_id')}),
         ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
         ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
+        ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_adjustment_history'), 'classes': ('collapse',)}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
     )
@@ -106,11 +225,143 @@ class UserAdmin(admin.ModelAdmin):
         }),
     )
     filter_horizontal = ('groups', 'user_permissions')
+    inlines = [BidTokenInline, BidTokenAdjustmentLogInline]
+    actions = ['add_5_bid_tokens', 'add_10_bid_tokens', 'grant_7day_subscription', 'grant_30day_subscription', 'approve_business_verification']
 
     # 한글화
     def __init__(self, model, admin_site):
         self.list_display_links = ('username',)
         super().__init__(model, admin_site)
+    
+    def get_inlines(self, request, obj):
+        """판매회원인 경우에만 BidToken 관련 인라인 표시"""
+        if obj and obj.role == 'seller':
+            return self.inlines
+        return []
+    
+    # 대량 액션들
+    def add_5_bid_tokens(self, request, queryset):
+        """선택한 판매회원들에게 입찰권 5개 추가"""
+        sellers = queryset.filter(role='seller')
+        count = 0
+        for seller in sellers:
+            # 입찰권 5개 생성
+            for _ in range(5):
+                BidToken.objects.create(
+                    seller=seller,
+                    token_type='single',
+                    status='active'
+                )
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type='add',
+                quantity=5,
+                reason='관리자 대량 추가 (5개)'
+            )
+            count += 1
+        self.message_user(request, f'{count}명의 판매회원에게 입찰권 5개씩 추가했습니다.')
+    add_5_bid_tokens.short_description = '선택한 판매회원에게 입찰권 5개 추가'
+    
+    def add_10_bid_tokens(self, request, queryset):
+        """선택한 판매회원들에게 입찰권 10개 추가"""
+        sellers = queryset.filter(role='seller')
+        count = 0
+        for seller in sellers:
+            # 입찰권 10개 생성
+            for _ in range(10):
+                BidToken.objects.create(
+                    seller=seller,
+                    token_type='single',
+                    status='active'
+                )
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type='add',
+                quantity=10,
+                reason='관리자 대량 추가 (10개)'
+            )
+            count += 1
+        self.message_user(request, f'{count}명의 판매회원에게 입찰권 10개씩 추가했습니다.')
+    add_10_bid_tokens.short_description = '선택한 판매회원에게 입찰권 10개 추가'
+    
+    def grant_7day_subscription(self, request, queryset):
+        """선택한 판매회원들에게 7일 구독권 부여"""
+        from datetime import timedelta
+        sellers = queryset.filter(role='seller')
+        count = 0
+        for seller in sellers:
+            # 기존 구독권 만료
+            BidToken.objects.filter(
+                seller=seller,
+                token_type='unlimited',
+                status='active'
+            ).update(status='expired')
+            
+            # 새 구독권 생성
+            expires_at = timezone.now() + timedelta(days=7)
+            BidToken.objects.create(
+                seller=seller,
+                token_type='unlimited',
+                status='active',
+                expires_at=expires_at
+            )
+            
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type='grant_subscription',
+                quantity=7,
+                reason='관리자 대량 부여 (7일)'
+            )
+            count += 1
+        self.message_user(request, f'{count}명의 판매회원에게 7일 구독권을 부여했습니다.')
+    grant_7day_subscription.short_description = '선택한 판매회원에게 7일 구독권 부여'
+    
+    def grant_30day_subscription(self, request, queryset):
+        """선택한 판매회원들에게 30일 구독권 부여"""
+        from datetime import timedelta
+        sellers = queryset.filter(role='seller')
+        count = 0
+        for seller in sellers:
+            # 기존 구독권 만료
+            BidToken.objects.filter(
+                seller=seller,
+                token_type='unlimited',
+                status='active'
+            ).update(status='expired')
+            
+            # 새 구독권 생성
+            expires_at = timezone.now() + timedelta(days=30)
+            BidToken.objects.create(
+                seller=seller,
+                token_type='unlimited',
+                status='active',
+                expires_at=expires_at
+            )
+            
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type='grant_subscription',
+                quantity=30,
+                reason='관리자 대량 부여 (30일)'
+            )
+            count += 1
+        self.message_user(request, f'{count}명의 판매회원에게 30일 구독권을 부여했습니다.')
+    grant_30day_subscription.short_description = '선택한 판매회원에게 30일 구독권 부여'
+    
+    def approve_business_verification(self, request, queryset):
+        """선택한 판매회원들의 사업자 인증 승인"""
+        sellers = queryset.filter(role='seller', is_business_verified=False)
+        count = sellers.update(is_business_verified=True)
+        self.message_user(request, f'{count}명의 판매회원 사업자 인증을 승인했습니다.')
+    approve_business_verification.short_description = '선택한 판매회원 사업자 인증 승인'
     
     def delete_model(self, request, obj):
         """개별 사용자 삭제 시 카카오 연결 해제"""
@@ -532,3 +783,32 @@ class EventAdmin(admin.ModelAdmin):
         updated = queryset.update(view_count=0)
         self.message_user(request, f'{updated}개의 이벤트 조회수가 초기화되었습니다.')
     reset_view_count.short_description = '조회수 초기화'
+
+
+# BidTokenAdjustmentLog만 추가 등록 (BidToken, BidTokenPurchase는 admin_extra.py에서 관리)
+@admin.register(BidTokenAdjustmentLog)
+class BidTokenAdjustmentLogAdmin(admin.ModelAdmin):
+    list_display = ['seller', 'admin', 'adjustment_type', 'quantity', 'reason_summary', 'created_at']
+    list_filter = ['adjustment_type', 'created_at']
+    search_fields = ['seller__username', 'seller__email', 'admin__username', 'reason']
+    readonly_fields = ['created_at']
+    date_hierarchy = 'created_at'
+    
+    def reason_summary(self, obj):
+        """사유 요약"""
+        if len(obj.reason) > 30:
+            return f"{obj.reason[:30]}..."
+        return obj.reason
+    reason_summary.short_description = '사유'
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('seller', 'admin')
+    
+    def has_add_permission(self, request):
+        """직접 생성 불가"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """수정 불가"""
+        return False
