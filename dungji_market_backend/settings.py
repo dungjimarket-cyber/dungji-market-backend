@@ -292,3 +292,10 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 
 # 파일 업로드시 임시 디렉토리 사용 기준 크기 (2.5MB 이상은 임시 파일로)
 FILE_UPLOAD_TEMP_DIR = None
+
+# TossPayments Configuration
+TOSS_CLIENT_KEY = os.getenv('TOSS_CLIENT_KEY', 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm')
+TOSS_SECRET_KEY = os.getenv('TOSS_SECRET_KEY', 'test_sk_zXLkKEypNArWmo50nX3lmeaxYG5R')
+
+# Frontend URL for payment redirects
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')

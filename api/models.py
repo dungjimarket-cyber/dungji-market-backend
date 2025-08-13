@@ -648,6 +648,8 @@ class BidTokenPurchase(models.Model):
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending', verbose_name='결제 상태')
     purchase_date = models.DateTimeField(auto_now_add=True, verbose_name='구매일')
     payment_date = models.DateTimeField(null=True, blank=True, verbose_name='결제일')
+    order_id = models.CharField(max_length=100, unique=True, null=True, blank=True, verbose_name='주문 ID')
+    payment_key = models.CharField(max_length=200, null=True, blank=True, verbose_name='결제 키')
     
     class Meta:
         verbose_name = '입찰권 구매 내역'
