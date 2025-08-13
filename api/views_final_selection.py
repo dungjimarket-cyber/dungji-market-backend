@@ -300,8 +300,11 @@ def get_final_decision_status(request, groupbuy_id):
     """
     user = request.user
     
+    logger.info(f"get_final_decision_status called: groupbuy_id={groupbuy_id}, user={user.id}")
+    
     try:
         groupbuy = GroupBuy.objects.get(id=groupbuy_id)
+        logger.info(f"GroupBuy found: {groupbuy.id}, status={groupbuy.status}")
         
         # 구매자인 경우
         if user.role == 'buyer':
