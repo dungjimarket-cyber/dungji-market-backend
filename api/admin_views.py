@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 import logging
 
-from .models import GroupBuy, Bid, BidToken, Product
+from .models import GroupBuy, Bid, BidToken, Product, BidTokenAdjustmentLog, BidTokenPurchase
 from .serializers import GroupBuySerializer
 from .utils.s3_utils import upload_file_to_s3, delete_file_from_s3
 from .utils.email_sender import EmailSender
@@ -571,5 +571,303 @@ class AdminViewSet(viewsets.ViewSet):
             logger.error(f"관리자 통계 조회 오류: {str(e)}")
             return Response(
                 {'error': '통계 조회 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def sellers_with_details(self, request):
+        """
+        판매회원 목록 조회 (입찰권, 구독권 상태 포함)
+        """
+        try:
+            from django.db.models import Count, Q, F
+            from datetime import datetime
+            
+            sellers = User.objects.filter(role='seller').annotate(
+                total_bid_tokens=Count('bid_tokens', filter=Q(bid_tokens__status='active')),
+                single_tokens=Count('bid_tokens', filter=Q(bid_tokens__status='active', bid_tokens__token_type='single')),
+                has_subscription=Count('bid_tokens', filter=Q(
+                    bid_tokens__status='active',
+                    bid_tokens__token_type='unlimited',
+                    bid_tokens__expires_at__gt=timezone.now()
+                ))
+            ).order_by('-date_joined')
+            
+            sellers_data = []
+            for seller in sellers:
+                # 구독권 상태 확인
+                active_subscription = BidToken.objects.filter(
+                    seller=seller,
+                    token_type='unlimited',
+                    status='active',
+                    expires_at__gt=timezone.now()
+                ).first()
+                
+                sellers_data.append({
+                    'id': seller.id,
+                    'username': seller.username,
+                    'nickname': seller.nickname,
+                    'email': seller.email,
+                    'bid_tokens_count': seller.single_tokens,
+                    'has_subscription': bool(active_subscription),
+                    'subscription_expires_at': active_subscription.expires_at if active_subscription else None,
+                    'is_business_verified': seller.is_business_verified,
+                    'date_joined': seller.date_joined
+                })
+            
+            return Response(sellers_data)
+            
+        except Exception as e:
+            logger.error(f"판매회원 목록 조회 오류: {str(e)}")
+            return Response(
+                {'error': '판매회원 목록 조회 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def seller_detail(self, request, pk=None):
+        """
+        특정 판매회원 상세 정보 조회
+        """
+        try:
+            seller = get_object_or_404(User, id=pk, role='seller')
+            
+            # 입찰권 정보
+            active_tokens = BidToken.objects.filter(
+                seller=seller,
+                status='active'
+            )
+            single_tokens_count = active_tokens.filter(token_type='single').count()
+            
+            # 구독권 정보
+            active_subscription = active_tokens.filter(
+                token_type='unlimited',
+                expires_at__gt=timezone.now()
+            ).first()
+            
+            # 입찰권 사용 이력
+            used_tokens = BidToken.objects.filter(
+                seller=seller,
+                status='used'
+            ).order_by('-updated_at')[:20]  # 최근 20개
+            
+            # 구매 내역
+            purchases = BidTokenPurchase.objects.filter(
+                seller=seller,
+                payment_status='completed'
+            ).order_by('-payment_date')[:20]  # 최근 20개
+            
+            # 조정 이력
+            adjustment_logs = BidTokenAdjustmentLog.objects.filter(
+                seller=seller
+            ).order_by('-created_at')[:20]  # 최근 20개
+            
+            return Response({
+                'seller': {
+                    'id': seller.id,
+                    'username': seller.username,
+                    'nickname': seller.nickname,
+                    'email': seller.email,
+                    'phone_number': seller.phone_number,
+                    'is_business_verified': seller.is_business_verified,
+                    'business_reg_number': seller.business_reg_number,
+                    'date_joined': seller.date_joined
+                },
+                'tokens': {
+                    'single_tokens_count': single_tokens_count,
+                    'has_subscription': bool(active_subscription),
+                    'subscription_expires_at': active_subscription.expires_at if active_subscription else None
+                },
+                'usage_history': [
+                    {
+                        'id': token.id,
+                        'used_at': token.updated_at,
+                        'bid_id': token.bid.id if hasattr(token, 'bid') else None
+                    } for token in used_tokens
+                ],
+                'purchase_history': [
+                    {
+                        'id': purchase.id,
+                        'token_type': purchase.token_type,
+                        'quantity': purchase.quantity,
+                        'total_price': purchase.total_price,
+                        'payment_date': purchase.payment_date
+                    } for purchase in purchases
+                ],
+                'adjustment_logs': [
+                    {
+                        'id': log.id,
+                        'adjustment_type': log.adjustment_type,
+                        'quantity': log.quantity,
+                        'reason': log.reason,
+                        'admin_username': log.admin.username if log.admin else 'System',
+                        'created_at': log.created_at
+                    } for log in adjustment_logs
+                ]
+            })
+            
+        except Exception as e:
+            logger.error(f"판매회원 상세 조회 오류: {str(e)}")
+            return Response(
+                {'error': '판매회원 정보 조회 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def adjust_bid_tokens(self, request, pk=None):
+        """
+        판매회원 입찰권 추가/차감
+        """
+        try:
+            seller = get_object_or_404(User, id=pk, role='seller')
+            
+            adjustment_type = request.data.get('adjustment_type')  # 'add' or 'subtract'
+            quantity = request.data.get('quantity', 0)
+            reason = request.data.get('reason', '')
+            
+            # 유효성 검증
+            if adjustment_type not in ['add', 'subtract']:
+                return Response(
+                    {'error': '유효하지 않은 조정 유형입니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not isinstance(quantity, int) or quantity <= 0:
+                return Response(
+                    {'error': '유효한 수량을 입력해주세요.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not reason:
+                return Response(
+                    {'error': '조정 사유를 입력해주세요.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 차감 시 보유 수량 확인
+            if adjustment_type == 'subtract':
+                active_tokens_count = BidToken.objects.filter(
+                    seller=seller,
+                    status='active',
+                    token_type='single'
+                ).count()
+                
+                if active_tokens_count < quantity:
+                    return Response(
+                        {'error': f'보유 입찰권이 부족합니다. (보유: {active_tokens_count}개)'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # 입찰권 차감
+                tokens_to_deactivate = BidToken.objects.filter(
+                    seller=seller,
+                    status='active',
+                    token_type='single'
+                )[:quantity]
+                
+                for token in tokens_to_deactivate:
+                    token.status = 'expired'
+                    token.save()
+            else:
+                # 입찰권 추가
+                for _ in range(quantity):
+                    BidToken.objects.create(
+                        seller=seller,
+                        token_type='single',
+                        status='active'
+                    )
+            
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type=adjustment_type,
+                quantity=quantity,
+                reason=reason
+            )
+            
+            # 현재 활성 입찰권 수 계산
+            active_tokens_count = BidToken.objects.filter(
+                seller=seller,
+                status='active',
+                token_type='single'
+            ).count()
+            
+            return Response({
+                'message': f'입찰권이 성공적으로 {"추가" if adjustment_type == "add" else "차감"}되었습니다.',
+                'seller_id': seller.id,
+                'adjustment_type': adjustment_type,
+                'quantity': quantity,
+                'current_tokens_count': active_tokens_count
+            })
+            
+        except Exception as e:
+            logger.error(f"입찰권 조정 오류: {str(e)}")
+            return Response(
+                {'error': '입찰권 조정 중 오류가 발생했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def grant_subscription(self, request, pk=None):
+        """
+        판매회원에게 구독권 부여
+        """
+        try:
+            from datetime import timedelta
+            
+            seller = get_object_or_404(User, id=pk, role='seller')
+            
+            duration_days = request.data.get('duration_days', 30)
+            reason = request.data.get('reason', '')
+            
+            if not isinstance(duration_days, int) or duration_days <= 0:
+                return Response(
+                    {'error': '유효한 기간을 입력해주세요.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not reason:
+                return Response(
+                    {'error': '부여 사유를 입력해주세요.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 기존 구독권 만료 처리
+            BidToken.objects.filter(
+                seller=seller,
+                token_type='unlimited',
+                status='active'
+            ).update(status='expired')
+            
+            # 새 구독권 생성
+            expires_at = timezone.now() + timedelta(days=duration_days)
+            subscription = BidToken.objects.create(
+                seller=seller,
+                token_type='unlimited',
+                status='active',
+                expires_at=expires_at
+            )
+            
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type='grant_subscription',
+                quantity=duration_days,
+                reason=reason
+            )
+            
+            return Response({
+                'message': f'{duration_days}일 구독권이 성공적으로 부여되었습니다.',
+                'seller_id': seller.id,
+                'subscription_id': subscription.id,
+                'expires_at': expires_at
+            })
+            
+        except Exception as e:
+            logger.error(f"구독권 부여 오류: {str(e)}")
+            return Response(
+                {'error': '구독권 부여 중 오류가 발생했습니다.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

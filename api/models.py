@@ -587,6 +587,44 @@ class GroupBuyTelecomDetail(models.Model):
         verbose_name_plural = '공구 통신 세부정보 관리'
 
 
+class BidTokenAdjustmentLog(models.Model):
+    """입찰권 조정 이력을 관리하는 모델"""
+    ADJUSTMENT_TYPE_CHOICES = (
+        ('add', '추가'),
+        ('subtract', '차감'),
+        ('grant_subscription', '구독권 부여'),
+    )
+    
+    seller = models.ForeignKey(
+        'User', 
+        on_delete=models.CASCADE, 
+        related_name='token_adjustment_logs',
+        verbose_name='판매회원'
+    )
+    admin = models.ForeignKey(
+        'User', 
+        on_delete=models.SET_NULL, 
+        null=True,
+        related_name='admin_token_adjustments',
+        verbose_name='관리자'
+    )
+    adjustment_type = models.CharField(
+        max_length=20, 
+        choices=ADJUSTMENT_TYPE_CHOICES,
+        verbose_name='조정 유형'
+    )
+    quantity = models.IntegerField(verbose_name='수량')
+    reason = models.TextField(verbose_name='사유')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='조정일시')
+    
+    class Meta:
+        verbose_name = '입찰권 조정 이력'
+        verbose_name_plural = '입찰권 조정 이력'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.seller.username} - {self.get_adjustment_type_display()} {self.quantity}개 - {self.created_at}"
+
 class BidToken(models.Model):
     """판매자의 입찰권 관리를 위한 모델"""
     TOKEN_TYPE_CHOICES = (
