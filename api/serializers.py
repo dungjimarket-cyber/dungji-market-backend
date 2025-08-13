@@ -436,7 +436,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         # 중복 리뷰 확인 (수정이 아닌 경우)
         if not self.instance and Review.objects.filter(user=user, groupbuy=groupbuy).exists():
             raise serializers.ValidationError({
-                "error": "이미 리뷰를 작성하셨습니다."
+                "error": "이미 후기를 작성하셨습니다."
             })
             
         return data

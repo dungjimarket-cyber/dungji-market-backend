@@ -3041,7 +3041,7 @@ class ReviewViewSet(ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def create(self, request, *args, **kwargs):
-        """리뷰 생성 API with detailed error logging"""
+        """후기 생성 API with detailed error logging"""
         logger.info(f"리뷰 생성 요청 - 사용자: {request.user.username}")
         logger.info(f"요청 데이터: {request.data}")
         
@@ -3053,20 +3053,20 @@ class ReviewViewSet(ModelViewSet):
             headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         except serializers.ValidationError as e:
-            logger.error(f"리뷰 생성 검증 오류: {e.detail}")
+            logger.error(f"후기 생성 검증 오류: {e.detail}")
             raise
         except Exception as e:
-            logger.error(f"리뷰 생성 중 예상치 못한 오류: {str(e)}")
+            logger.error(f"후기 생성 중 예상치 못한 오류: {str(e)}")
             raise
     
     def perform_create(self, serializer):
         """리뷰 작성 시 현재 사용자 정보 자동 설정 및 자신의 공구에는 리뷰 작성 불가"""
         groupbuy = serializer.validated_data.get('groupbuy')
         
-        # 자신이 만든 공구에는 리뷰를 작성할 수 없음
+        # 자신이 만든 공구에는 후기를 작성할 수 없음
         if groupbuy.creator == self.request.user:
             raise serializers.ValidationError({
-                'non_field_errors': ['자신이 만든 공구에는 리뷰를 작성할 수 없습니다.']
+                'non_field_errors': ['자신이 만든 공구에는 훈기를 작성할 수 없습니다.']
             })
             
         # 리뷰 저장 - 현재 사용자를 작성자로 설정
@@ -3109,5 +3109,5 @@ class ReviewViewSet(ModelViewSet):
         
         return Response({
             "status": "success",
-            "message": "리뷰 신고가 접수되었습니다."
+            "message": "후기 신고가 접수되었습니다."
         }, status=status.HTTP_200_OK)

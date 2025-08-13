@@ -294,7 +294,7 @@ class ReviewAdmin(admin.ModelAdmin):
                 review.is_visible = False
                 review.save()
                 count += 1
-        self.message_user(request, f'{count}개의 리뷰가 숨겨졌습니다.')
+        self.message_user(request, f'{count}개의 후기가 숨겨졌습니다.')
     hide_reviews.short_description = '선택한 리뷰 숨기기'
     
     def show_reviews(self, request, queryset):
@@ -305,7 +305,7 @@ class ReviewAdmin(admin.ModelAdmin):
                 review.is_visible = True
                 review.save()
                 count += 1
-        self.message_user(request, f'{count}개의 리뷰가 표시되었습니다.')
+        self.message_user(request, f'{count}개의 후기가 표시되었습니다.')
     show_reviews.short_description = '선택한 리뷰 표시'
 
 
