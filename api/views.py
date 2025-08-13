@@ -3060,14 +3060,13 @@ class ReviewViewSet(ModelViewSet):
             raise
     
     def perform_create(self, serializer):
-        """리뷰 작성 시 현재 사용자 정보 자동 설정 및 자신의 공구에는 리뷰 작성 불가"""
-        groupbuy = serializer.validated_data.get('groupbuy')
-        
-        # 자신이 만든 공구에는 후기를 작성할 수 없음
-        if groupbuy.creator == self.request.user:
-            raise serializers.ValidationError({
-                'non_field_errors': ['자신이 만든 공구에는 훈기를 작성할 수 없습니다.']
-            })
+        """리뷰 작성 시 현재 사용자 정보 자동 설정"""
+        # 본인이 만든 공구에도 후기 작성 가능하도록 제한 제거
+        # groupbuy = serializer.validated_data.get('groupbuy')
+        # if groupbuy.creator == self.request.user:
+        #     raise serializers.ValidationError({
+        #         'non_field_errors': ['자신이 만든 공구에는 훈기를 작성할 수 없습니다.']
+        #     })
             
         # 리뷰 저장 - 현재 사용자를 작성자로 설정
         serializer.save(user=self.request.user)
