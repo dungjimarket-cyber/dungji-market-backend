@@ -35,8 +35,8 @@ class Banner(models.Model):
         return f"{self.title} ({self.get_banner_type_display()})"
     
     def save(self, *args, **kwargs):
-        # S3에 이미지 업로드
-        if self.image and not self.image_url:
+        # S3에 이미지 업로드 - 새 이미지가 있으면 무조건 업로드
+        if self.image:
             image_url = upload_to_s3(self.image, 'banners')
             if image_url:
                 self.image_url = image_url
@@ -106,13 +106,15 @@ class Event(models.Model):
     
     def save(self, *args, **kwargs):
         # S3에 이미지 업로드
-        if self.thumbnail and not self.thumbnail_url:
+        # 썸네일 이미지 처리 - 새 이미지가 있으면 무조건 업로드
+        if self.thumbnail:
             thumbnail_url = upload_to_s3(self.thumbnail, 'events/thumbnails')
             if thumbnail_url:
                 self.thumbnail_url = thumbnail_url
                 self.thumbnail = None
                 
-        if self.content_image and not self.content_image_url:
+        # 본문 이미지 처리 - 새 이미지가 있으면 무조건 업로드        
+        if self.content_image:
             content_image_url = upload_to_s3(self.content_image, 'events/content')
             if content_image_url:
                 self.content_image_url = content_image_url

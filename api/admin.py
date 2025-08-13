@@ -396,7 +396,7 @@ class BannerAdmin(admin.ModelAdmin):
             'fields': ('title', 'banner_type', 'order', 'is_active')
         }),
         ('이미지', {
-            'fields': ('image', 'image_url'),
+            'fields': ('image', 'image_url', 'image_preview'),
             'description': '이미지를 업로드하거나 URL을 직접 입력하세요. 이미지 업로드 시 자동으로 S3에 업로드됩니다.'
         }),
         ('링크', {
@@ -413,7 +413,16 @@ class BannerAdmin(admin.ModelAdmin):
         }),
     )
     
-    readonly_fields = ['created_at', 'updated_at', 'image_url']
+    readonly_fields = ['created_at', 'updated_at', 'image_url', 'image_preview']
+    
+    def image_preview(self, obj):
+        """이미지 미리보기"""
+        if obj.image_url:
+            return mark_safe(f'<img src="{obj.image_url}" width="300" style="border-radius: 8px;" />')
+        elif obj.image:
+            return mark_safe(f'<img src="{obj.image.url}" width="300" style="border-radius: 8px;" />')
+        return "이미지 없음"
+    image_preview.short_description = '이미지 미리보기'
     
     def save_model(self, request, obj, form, change):
         if not change:  # 새로 생성하는 경우
@@ -455,7 +464,7 @@ class EventAdmin(admin.ModelAdmin):
             'description': 'HTML 태그를 사용할 수 있습니다.'
         }),
         ('이미지', {
-            'fields': ('thumbnail', 'thumbnail_url', 'content_image', 'content_image_url'),
+            'fields': ('thumbnail', 'thumbnail_url', 'thumbnail_preview', 'content_image', 'content_image_url', 'content_image_preview'),
             'description': '썸네일은 목록에서 표시되고, 본문 이미지는 상세 페이지에서 표시됩니다.'
         }),
         ('기간 설정', {
@@ -471,7 +480,25 @@ class EventAdmin(admin.ModelAdmin):
         }),
     )
     
-    readonly_fields = ['created_at', 'updated_at', 'thumbnail_url', 'content_image_url', 'view_count', 'status']
+    readonly_fields = ['created_at', 'updated_at', 'thumbnail_url', 'content_image_url', 'view_count', 'status', 'thumbnail_preview', 'content_image_preview']
+    
+    def thumbnail_preview(self, obj):
+        """썸네일 미리보기"""
+        if obj.thumbnail_url:
+            return mark_safe(f'<img src="{obj.thumbnail_url}" width="200" style="border-radius: 8px;" />')
+        elif obj.thumbnail:
+            return mark_safe(f'<img src="{obj.thumbnail.url}" width="200" style="border-radius: 8px;" />')
+        return "썸네일 없음"
+    thumbnail_preview.short_description = '썸네일 미리보기'
+    
+    def content_image_preview(self, obj):
+        """본문 이미지 미리보기"""
+        if obj.content_image_url:
+            return mark_safe(f'<img src="{obj.content_image_url}" width="300" style="border-radius: 8px;" />')
+        elif obj.content_image:
+            return mark_safe(f'<img src="{obj.content_image.url}" width="300" style="border-radius: 8px;" />')
+        return "본문 이미지 없음"
+    content_image_preview.short_description = '본문 이미지 미리보기'
     
     def save_model(self, request, obj, form, change):
         if not change:  # 새로 생성하는 경우
