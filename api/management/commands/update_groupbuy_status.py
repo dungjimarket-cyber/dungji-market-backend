@@ -22,7 +22,17 @@ class Command(BaseCommand):
         
         for groupbuy in time_expired_groupbuys:
             # 입찰이 있는 경우에만 final_selection_buyers로 변경
-            if groupbuy.bid_set.exists():
+            bids = groupbuy.bid_set.filter(status='pending').order_by('-amount', 'created_at')
+            if bids.exists():
+                # 최고 입찰자를 낙찰자로 선정
+                winning_bid = bids.first()
+                winning_bid.status = 'selected'
+                winning_bid.is_selected = True
+                winning_bid.save()
+                
+                # 다른 입찰자들의 상태 변경
+                bids.exclude(id=winning_bid.id).update(status='not_selected', is_selected=False)
+                
                 groupbuy.status = 'final_selection_buyers'
                 # 최종선택 종료 시간 설정 (공구 마감 후 12시간)
                 groupbuy.final_selection_end = groupbuy.end_time + timedelta(hours=12)
@@ -51,7 +61,8 @@ class Command(BaseCommand):
                 winning_bid = groupbuy.bid_set.order_by('-amount', 'created_at').first()
                 
                 if winning_bid:
-                    winning_bid.status = 'selected'  # is_selected 대신 status='selected' 사용
+                    winning_bid.status = 'selected'
+                    winning_bid.is_selected = True  # is_selected 플래그도 설정
                     winning_bid.save()
                     
                     groupbuy.status = 'final_selection_seller'

@@ -1774,18 +1774,18 @@ class GroupBuyViewSet(ModelViewSet):
     # 판매자용 API 엔드포인트들
     @action(detail=False, methods=['get'])
     def seller_bids(self, request):
-        """판매자의 입찰 내역 조회 (모집중/입찰중인 공구만)"""
+        """판매자의 입찰 내역 조회 (모든 입찰 내역)"""
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매자가 입찰한 공구 중 아직 모집중인 공구만 표시
-        # 구매자 최종선택 대기중이나 판매자 최종선택 대기중인 공구는 제외
+        # 판매자가 입찰한 모든 공구 조회
         from .models import Bid
         bids = Bid.objects.filter(
             seller=request.user,
-            is_deleted_by_user=False,
-            groupbuy__status='recruiting'  # 모집중인 공구만
-        ).select_related('groupbuy')
+            is_deleted_by_user=False
+        ).exclude(
+            groupbuy__status__in=['cancelled']  # 취소된 공구만 제외
+        ).select_related('groupbuy', 'groupbuy__product').order_by('-created_at')
         
         groupbuy_data = []
         for bid in bids:
@@ -1793,6 +1793,7 @@ class GroupBuyViewSet(ModelViewSet):
             gb_data['my_bid_amount'] = bid.amount
             gb_data['bid_status'] = bid.status
             gb_data['is_selected'] = bid.is_selected
+            gb_data['bid_created_at'] = bid.created_at
             groupbuy_data.append(gb_data)
         
         return Response(groupbuy_data)
@@ -1803,11 +1804,18 @@ class GroupBuyViewSet(ModelViewSet):
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 낙찰되었지만 구매자들이 아직 선택중인 공구
+        # 구매자 최종선택 중인 공구 중 내가 낙찰된 공구
         from .models import Bid
+        
+        # 먼저 내가 낙찰된 입찰 찾기
+        my_winning_bids = Bid.objects.filter(
+            seller=request.user,
+            is_selected=True
+        ).values_list('groupbuy_id', flat=True)
+        
+        # 해당 공구 중 final_selection_buyers 상태인 것
         waiting = self.get_queryset().filter(
-            bid__seller=request.user,
-            bid__is_selected=True,
+            id__in=my_winning_bids,
             status='final_selection_buyers'
         ).distinct()
         

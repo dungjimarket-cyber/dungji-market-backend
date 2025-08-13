@@ -40,10 +40,11 @@ def update_groupbuy_status(groupbuy):
             # 가장 높은 지원금을 제시한 입찰자를 낙찰자로 선정
             winning_bid = bids.first()
             winning_bid.status = 'selected'
-            winning_bid.save(update_fields=['status'])
+            winning_bid.is_selected = True  # is_selected 플래그도 설정
+            winning_bid.save(update_fields=['status', 'is_selected'])
             
-            # 다른 입찰자들의 상태를 'not_selected'로 변경
-            bids.exclude(id=winning_bid.id).update(status='not_selected')
+            # 다른 입찰자들의 상태를 'not_selected'로 변경  
+            bids.exclude(id=winning_bid.id).update(status='not_selected', is_selected=False)
             # 구매자 최종선택 상태로 변경하고 12시간 타이머 설정
             groupbuy.status = 'final_selection_buyers'
             groupbuy.final_selection_end = now + timedelta(hours=12)
