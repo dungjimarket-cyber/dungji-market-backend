@@ -1,10 +1,12 @@
 services:
   web:
     build: .
+    container_name: dungji-market-backend
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/mediafiles
+      - logs_volume:/app/logs
     ports:
       - "8000:8000"
     env_file:
@@ -14,10 +16,6 @@ services:
       - PYTHONUNBUFFERED=1
       - DEBUG=${DEBUG:-False}
       - USE_S3=${USE_S3:-True}
-    command: sh -c '
-      python manage.py migrate &&
-      python manage.py collectstatic --noinput &&
-      gunicorn dungji_market_backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120'
     restart: always
 
   # Nginx 서비스 추가 (정적 파일 서빙)
@@ -36,3 +34,4 @@ services:
 volumes:
   static_volume:
   media_volume:
+  logs_volume:

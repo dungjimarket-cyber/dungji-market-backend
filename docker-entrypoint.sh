@@ -1,0 +1,47 @@
+#!/bin/bash
+
+echo "Starting Dungji Market Backend Container..."
+
+# 로그 디렉토리 생성 및 권한 설정
+mkdir -p /app/logs
+touch /app/logs/cron.log /app/logs/notification.log /app/logs/cleanup.log /app/logs/sync.log
+chmod 666 /app/logs/*.log
+
+# 시작 시간 로그
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Container started" >> /app/logs/cron.log
+
+# crontab 설정
+echo "Setting up cron jobs..."
+crontab /app/crontab
+
+# cron 서비스 시작
+echo "Starting cron daemon..."
+service cron start
+
+# cron 상태 확인
+service cron status
+
+# 현재 설정된 cron jobs 확인
+echo "Current cron jobs:"
+crontab -l
+
+# Django migrations 실행
+echo "Running Django migrations..."
+python manage.py migrate
+
+# Static files 수집 (이미 Dockerfile에서 했지만 안전을 위해)
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
+# 환경 정보 로그
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Environment: DEBUG=$DEBUG, USE_S3=$USE_S3" >> /app/logs/cron.log
+
+# Django 서버 시작
+echo "Starting Django server with gunicorn..."
+exec gunicorn dungji_market_backend.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers 3 \
+    --timeout 120 \
+    --access-logfile /app/logs/access.log \
+    --error-logfile /app/logs/error.log \
+    --log-level info

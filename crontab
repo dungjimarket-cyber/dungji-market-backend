@@ -1,0 +1,17 @@
+# Dungji Market Backend Cron Jobs (Docker Container)
+# 로그는 /app/logs/ 디렉토리에 저장됩니다
+
+# 5분마다 공구 상태 업데이트
+*/5 * * * * cd /app && /usr/local/bin/python manage.py update_groupbuy_status >> /app/logs/cron.log 2>&1
+
+# 10분마다 알림 스케줄러 실행
+*/10 * * * * cd /app && /usr/local/bin/python manage.py run_notification_scheduler >> /app/logs/notification.log 2>&1
+
+# 매일 새벽 3시 만료된 인증 데이터 정리
+0 3 * * * cd /app && /usr/local/bin/python manage.py shell -c "from api.models import PhoneVerification; from django.utils import timezone; from datetime import timedelta; deleted = PhoneVerification.objects.filter(created_at__lt=timezone.now()-timedelta(days=7)).delete()[0]; print(f'Deleted {deleted} old verifications')" >> /app/logs/cleanup.log 2>&1
+
+# 1시간마다 상태 체크 로그 (cron이 정상 작동하는지 확인용)
+0 * * * * echo "[$(date '+\%Y-\%m-\%d \%H:\%M:\%S')] Cron heartbeat - system running" >> /app/logs/cron.log 2>&1
+
+# 매 30분마다 동기화 체크 (필요시)
+*/30 * * * * cd /app && /usr/local/bin/python manage.py sync_participant_counts >> /app/logs/sync.log 2>&1
