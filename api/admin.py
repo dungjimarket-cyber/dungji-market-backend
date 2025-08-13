@@ -12,6 +12,9 @@ from django.conf import settings
 import logging
 from .views_auth import kakao_unlink
 
+# 추가 어드민 클래스들 import (RemoteSalesCertification 포함)
+from .admin_extra import *
+
 logger = logging.getLogger(__name__)
 
 # 설정 확인 로깅

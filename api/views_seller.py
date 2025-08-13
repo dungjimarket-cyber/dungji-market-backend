@@ -139,15 +139,38 @@ class SellerProfileView(APIView):
         # 파일 업로드 처리 (비대면 판매 인증서)
         if 'remote_sales_certification' in request.FILES:
             try:
+                from .models_remote_sales import RemoteSalesCertification
+                
                 cert_file = request.FILES['remote_sales_certification']
                 # S3에 파일 업로드
                 file_url = upload_file_to_s3(
                     cert_file,
                     f'remote_sales_cert/{user.id}_{cert_file.name}'
                 )
+                
+                # 기존 심사중인 인증이 있는지 확인
+                existing_pending = RemoteSalesCertification.objects.filter(
+                    seller=user,
+                    status='pending'
+                ).first()
+                
+                if existing_pending:
+                    # 기존 심사중인 인증 업데이트
+                    existing_pending.certification_file = file_url
+                    existing_pending.submitted_at = timezone.now()
+                    existing_pending.save()
+                else:
+                    # 새로운 인증 신청 생성
+                    RemoteSalesCertification.objects.create(
+                        seller=user,
+                        certification_file=file_url,
+                        status='pending'  # 심사중 상태로 생성
+                    )
+                
+                # 사용자 상태는 심사중으로 설정 (자동 인증 방지)
                 user.remote_sales_certification = file_url
-                user.remote_sales_verified = True  # 파일 업로드 시 인증 완료 처리
-                user.remote_sales_verification_date = timezone.now()
+                user.remote_sales_verified = False  # 승인 전까지는 미인증 상태
+                user.remote_sales_verification_date = None
                 logger.info(f"비대면 판매 인증서 업로드 완료: {file_url}")
             except Exception as e:
                 logger.error(f"비대면 판매 인증서 업로드 실패: {str(e)}")
