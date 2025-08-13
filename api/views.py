@@ -1774,15 +1774,17 @@ class GroupBuyViewSet(ModelViewSet):
     # 판매자용 API 엔드포인트들
     @action(detail=False, methods=['get'])
     def seller_bids(self, request):
-        """판매자의 입찰 내역 조회"""
+        """판매자의 입찰 내역 조회 (모집중/입찰중인 공구만)"""
         if request.user.role != 'seller':
             return Response({'error': '판매자만 접근 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 판매자가 입찰한 모든 공구 조회 (취소된 공구 제외)
+        # 판매자가 입찰한 공구 중 아직 모집중인 공구만 표시
+        # 구매자 최종선택 대기중이나 판매자 최종선택 대기중인 공구는 제외
         from .models import Bid
         bids = Bid.objects.filter(
             seller=request.user,
-            is_deleted_by_user=False
+            is_deleted_by_user=False,
+            groupbuy__status='recruiting'  # 모집중인 공구만
         ).select_related('groupbuy')
         
         groupbuy_data = []
