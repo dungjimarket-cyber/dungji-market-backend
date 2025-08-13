@@ -1,7 +1,10 @@
 # 추가 어드민 클래스들을 별도 파일로 관리
 from django.contrib import admin
 from django.utils.html import mark_safe
-from .models import Review, NoShowReport
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Q, Count, Sum
+from .models import Review, NoShowReport, BidToken, BidTokenPurchase
 from .models_remote_sales import RemoteSalesCertification
 
 
@@ -304,3 +307,347 @@ class ReviewAdmin(admin.ModelAdmin):
                 count += 1
         self.message_user(request, f'{count}개의 리뷰가 표시되었습니다.')
     show_reviews.short_description = '선택한 리뷰 표시'
+
+
+@admin.register(BidToken)
+class BidTokenAdmin(admin.ModelAdmin):
+    """입찰권 관리"""
+    list_display = ['id', 'seller_info', 'token_type_badge', 'status_badge', 'created_at', 'expires_at', 'used_info', 'action_buttons']
+    list_filter = ['token_type', 'status', 'created_at', 'expires_at']
+    search_fields = ['seller__username', 'seller__email', 'seller__nickname', 'seller__business_number']
+    readonly_fields = ['created_at', 'used_at', 'used_for_detail']
+    date_hierarchy = 'created_at'
+    list_per_page = 30
+    
+    fieldsets = (
+        ('🎫 입찰권 정보', {
+            'fields': ('seller', 'token_type', 'status'),
+            'description': '입찰권의 기본 정보입니다.'
+        }),
+        ('📅 유효 기간', {
+            'fields': ('created_at', 'expires_at'),
+            'description': '입찰권의 생성일과 만료일입니다. 무제한 구독권은 생성 후 30일간 유효합니다.'
+        }),
+        ('🔍 사용 정보', {
+            'fields': ('used_at', 'used_for', 'used_for_detail'),
+            'description': '입찰권이 사용된 경우의 상세 정보입니다.',
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def seller_info(self, obj):
+        """판매자 정보 표시"""
+        seller = obj.seller
+        info = f"<strong>{seller.nickname or seller.username}</strong><br>"
+        info += f"<small>{seller.email}</small><br>"
+        
+        # 보유 입찰권 수 계산
+        active_tokens = BidToken.objects.filter(seller=seller, status='active').count()
+        used_tokens = BidToken.objects.filter(seller=seller, status='used').count()
+        info += f"<small>보유: {active_tokens}개 | 사용: {used_tokens}개</small>"
+        
+        return mark_safe(info)
+    seller_info.short_description = '판매자'
+    
+    def token_type_badge(self, obj):
+        """입찰권 유형을 배지로 표시"""
+        colors = {
+            'single': '#007BFF',  # 파란색
+            'unlimited': '#6F42C1',  # 보라색
+        }
+        icons = {
+            'single': '🎫',
+            'unlimited': '♾️',
+        }
+        color = colors.get(obj.token_type, '#6C757D')
+        icon = icons.get(obj.token_type, '📋')
+        return mark_safe(
+            f'<span style="background-color: {color}; color: white; padding: 3px 8px; '
+            f'border-radius: 4px; font-size: 11px; font-weight: bold;">'
+            f'{icon} {obj.get_token_type_display()}</span>'
+        )
+    token_type_badge.short_description = '유형'
+    
+    def status_badge(self, obj):
+        """상태를 배지로 표시"""
+        colors = {
+            'active': '#28A745',  # 녹색
+            'used': '#6C757D',  # 회색
+            'expired': '#DC3545',  # 빨간색
+        }
+        color = colors.get(obj.status, '#6C757D')
+        return mark_safe(
+            f'<span style="background-color: {color}; color: white; padding: 3px 8px; '
+            f'border-radius: 4px; font-size: 11px;">{obj.get_status_display()}</span>'
+        )
+    status_badge.short_description = '상태'
+    
+    def used_info(self, obj):
+        """사용 정보 표시"""
+        if obj.status == 'used' and obj.used_for:
+            return mark_safe(
+                f'<small>사용일: {obj.used_at.strftime("%Y-%m-%d %H:%M") if obj.used_at else "-"}<br>'
+                f'공구: {obj.used_for.groupbuy.title[:20]}...</small>'
+            )
+        elif obj.status == 'expired':
+            return mark_safe('<span style="color: #DC3545;">만료됨</span>')
+        else:
+            return '-'
+    used_info.short_description = '사용 정보'
+    
+    def used_for_detail(self, obj):
+        """사용된 입찰 상세 정보"""
+        if obj.used_for:
+            bid = obj.used_for
+            return mark_safe(
+                f'<div style="background: #f8f9fa; padding: 10px; border-radius: 5px;">'
+                f'<strong>공구명:</strong> {bid.groupbuy.title}<br>'
+                f'<strong>입찰금액:</strong> {bid.amount:,}원<br>'
+                f'<strong>입찰일시:</strong> {bid.created_at.strftime("%Y-%m-%d %H:%M")}<br>'
+                f'<strong>입찰상태:</strong> {bid.get_status_display() if hasattr(bid, "get_status_display") else bid.status}'
+                f'</div>'
+            )
+        return '미사용'
+    used_for_detail.short_description = '사용된 입찰 상세'
+    
+    def action_buttons(self, obj):
+        """액션 버튼"""
+        buttons = []
+        
+        if obj.status == 'active':
+            # 만료 처리 버튼
+            buttons.append(
+                f'<a href="#" onclick="return confirm(\'입찰권을 만료 처리하시겠습니까?\');" '
+                f'class="button" style="background: #DC3545; color: white; padding: 3px 8px; '
+                f'text-decoration: none; border-radius: 3px; margin-right: 5px;">만료</a>'
+            )
+            
+            # 연장 버튼 (무제한 구독권인 경우)
+            if obj.token_type == 'unlimited':
+                buttons.append(
+                    f'<a href="#" onclick="return confirm(\'30일 연장하시겠습니까?\');" '
+                    f'class="button" style="background: #28A745; color: white; padding: 3px 8px; '
+                    f'text-decoration: none; border-radius: 3px;">+30일</a>'
+                )
+        
+        return mark_safe(' '.join(buttons)) if buttons else '-'
+    action_buttons.short_description = '작업'
+    
+    actions = ['grant_tokens', 'expire_tokens', 'extend_unlimited_tokens']
+    
+    def grant_tokens(self, request, queryset):
+        """선택한 판매자에게 입찰권 부여"""
+        # 선택된 항목에서 판매자 추출
+        sellers = set([token.seller for token in queryset])
+        
+        for seller in sellers:
+            # 단일 입찰권 1개 부여
+            BidToken.objects.create(
+                seller=seller,
+                token_type='single',
+                status='active'
+            )
+        
+        self.message_user(request, f'{len(sellers)}명의 판매자에게 입찰권이 부여되었습니다.')
+    grant_tokens.short_description = '선택한 판매자에게 입찰권 부여'
+    
+    def expire_tokens(self, request, queryset):
+        """선택한 입찰권 만료 처리"""
+        count = queryset.filter(status='active').update(
+            status='expired',
+            expires_at=timezone.now()
+        )
+        self.message_user(request, f'{count}개의 입찰권이 만료 처리되었습니다.')
+    expire_tokens.short_description = '선택한 입찰권 만료 처리'
+    
+    def extend_unlimited_tokens(self, request, queryset):
+        """무제한 구독권 30일 연장"""
+        count = 0
+        for token in queryset.filter(token_type='unlimited', status='active'):
+            if token.expires_at:
+                token.expires_at = token.expires_at + timedelta(days=30)
+            else:
+                token.expires_at = timezone.now() + timedelta(days=30)
+            token.save()
+            count += 1
+        
+        self.message_user(request, f'{count}개의 무제한 구독권이 30일 연장되었습니다.')
+    extend_unlimited_tokens.short_description = '무제한 구독권 30일 연장'
+
+
+@admin.register(BidTokenPurchase)
+class BidTokenPurchaseAdmin(admin.ModelAdmin):
+    """입찰권 구매 내역 관리"""
+    list_display = ['id', 'seller_info', 'token_type_display', 'quantity', 'total_price_display', 'payment_status_badge', 'purchase_date', 'action_buttons']
+    list_filter = ['token_type', 'payment_status', 'purchase_date', 'payment_date']
+    search_fields = ['seller__username', 'seller__email', 'seller__nickname', 'seller__business_number']
+    readonly_fields = ['purchase_date', 'payment_info']
+    date_hierarchy = 'purchase_date'
+    list_per_page = 30
+    
+    fieldsets = (
+        ('💳 구매 정보', {
+            'fields': ('seller', 'token_type', 'quantity', 'total_price'),
+            'description': '입찰권 구매 정보입니다.'
+        }),
+        ('💰 결제 상태', {
+            'fields': ('payment_status', 'purchase_date', 'payment_date', 'payment_info'),
+            'description': '결제 처리 상태와 시간 정보입니다.'
+        }),
+    )
+    
+    def seller_info(self, obj):
+        """구매자 정보 표시"""
+        seller = obj.seller
+        info = f"<strong>{seller.nickname or seller.username}</strong><br>"
+        info += f"<small>{seller.email}</small><br>"
+        
+        # 총 구매 금액 계산
+        total_spent = BidTokenPurchase.objects.filter(
+            seller=seller, 
+            payment_status='completed'
+        ).aggregate(total=Sum('total_price'))['total'] or 0
+        
+        info += f"<small>총 구매액: {total_spent:,}원</small>"
+        
+        return mark_safe(info)
+    seller_info.short_description = '구매자'
+    
+    def token_type_display(self, obj):
+        """입찰권 유형 표시"""
+        icons = {
+            'single': '🎫',
+            'unlimited': '♾️',
+        }
+        icon = icons.get(obj.token_type, '📋')
+        return f'{icon} {obj.get_token_type_display()}'
+    token_type_display.short_description = '유형'
+    
+    def total_price_display(self, obj):
+        """금액 표시"""
+        return f'{obj.total_price:,}원'
+    total_price_display.short_description = '결제 금액'
+    
+    def payment_status_badge(self, obj):
+        """결제 상태를 배지로 표시"""
+        colors = {
+            'pending': '#FFA500',  # 주황색
+            'completed': '#28A745',  # 녹색
+            'cancelled': '#6C757D',  # 회색
+            'refunded': '#DC3545',  # 빨간색
+        }
+        color = colors.get(obj.payment_status, '#6C757D')
+        return mark_safe(
+            f'<span style="background-color: {color}; color: white; padding: 3px 8px; '
+            f'border-radius: 4px; font-size: 11px;">{obj.get_payment_status_display()}</span>'
+        )
+    payment_status_badge.short_description = '결제 상태'
+    
+    def payment_info(self, obj):
+        """결제 정보 상세"""
+        info = f'<div style="background: #f8f9fa; padding: 10px; border-radius: 5px;">'
+        info += f'<strong>구매일:</strong> {obj.purchase_date.strftime("%Y-%m-%d %H:%M")}<br>'
+        
+        if obj.payment_date:
+            info += f'<strong>결제일:</strong> {obj.payment_date.strftime("%Y-%m-%d %H:%M")}<br>'
+        
+        if obj.payment_status == 'completed':
+            # 이 구매로 생성된 입찰권 수 계산
+            tokens_created = BidToken.objects.filter(
+                seller=obj.seller,
+                created_at__gte=obj.purchase_date,
+                created_at__lt=obj.purchase_date + timedelta(minutes=1)
+            ).count()
+            info += f'<strong>발급된 입찰권:</strong> {tokens_created}개<br>'
+        
+        info += '</div>'
+        return mark_safe(info)
+    payment_info.short_description = '결제 정보 상세'
+    
+    def action_buttons(self, obj):
+        """액션 버튼"""
+        buttons = []
+        
+        if obj.payment_status == 'pending':
+            # 결제 완료 처리 버튼
+            buttons.append(
+                f'<a href="#" onclick="return confirm(\'결제 완료 처리하시겠습니까?\');" '
+                f'class="button" style="background: #28A745; color: white; padding: 3px 8px; '
+                f'text-decoration: none; border-radius: 3px; margin-right: 5px;">결제완료</a>'
+            )
+            # 취소 버튼
+            buttons.append(
+                f'<a href="#" onclick="return confirm(\'구매를 취소하시겠습니까?\');" '
+                f'class="button" style="background: #DC3545; color: white; padding: 3px 8px; '
+                f'text-decoration: none; border-radius: 3px;">취소</a>'
+            )
+        elif obj.payment_status == 'completed':
+            # 환불 버튼
+            buttons.append(
+                f'<a href="#" onclick="return confirm(\'환불 처리하시겠습니까?\');" '
+                f'class="button" style="background: #FFA500; color: white; padding: 3px 8px; '
+                f'text-decoration: none; border-radius: 3px;">환불</a>'
+            )
+        
+        return mark_safe(' '.join(buttons)) if buttons else '-'
+    action_buttons.short_description = '작업'
+    
+    actions = ['complete_payment', 'cancel_purchase', 'refund_purchase']
+    
+    def complete_payment(self, request, queryset):
+        """선택한 구매 건 결제 완료 처리"""
+        count = 0
+        for purchase in queryset.filter(payment_status='pending'):
+            purchase.payment_status = 'completed'
+            purchase.payment_date = timezone.now()
+            purchase.save()
+            
+            # 입찰권 생성
+            if purchase.token_type == 'single':
+                for _ in range(purchase.quantity):
+                    BidToken.objects.create(
+                        seller=purchase.seller,
+                        token_type='single',
+                        status='active'
+                    )
+            elif purchase.token_type == 'unlimited':
+                BidToken.objects.create(
+                    seller=purchase.seller,
+                    token_type='unlimited',
+                    status='active',
+                    expires_at=timezone.now() + timedelta(days=30)
+                )
+            
+            count += 1
+        
+        self.message_user(request, f'{count}건의 결제가 완료 처리되었습니다.')
+    complete_payment.short_description = '선택한 구매 건 결제 완료 처리'
+    
+    def cancel_purchase(self, request, queryset):
+        """선택한 구매 건 취소"""
+        count = queryset.filter(payment_status='pending').update(
+            payment_status='cancelled'
+        )
+        self.message_user(request, f'{count}건의 구매가 취소되었습니다.')
+    cancel_purchase.short_description = '선택한 구매 건 취소'
+    
+    def refund_purchase(self, request, queryset):
+        """선택한 구매 건 환불 처리"""
+        count = 0
+        for purchase in queryset.filter(payment_status='completed'):
+            purchase.payment_status = 'refunded'
+            purchase.save()
+            
+            # 해당 구매로 생성된 미사용 입찰권 비활성화
+            tokens_to_expire = BidToken.objects.filter(
+                seller=purchase.seller,
+                status='active',
+                created_at__gte=purchase.purchase_date,
+                created_at__lt=purchase.purchase_date + timedelta(minutes=1)
+            )
+            tokens_to_expire.update(status='expired')
+            
+            count += 1
+        
+        self.message_user(request, f'{count}건의 구매가 환불 처리되었습니다.')
+    refund_purchase.short_description = '선택한 구매 건 환불 처리'
