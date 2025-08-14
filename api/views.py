@@ -1894,7 +1894,7 @@ class GroupBuyViewSet(ModelViewSet):
                 groupbuy=gb,
                 seller=request.user
             ).filter(
-                models.Q(is_selected=True) | models.Q(status='selected')
+                Q(is_selected=True) | Q(status='selected')
             ).first()
             if winning_bid:
                 gb_data['winning_bid_amount'] = winning_bid.amount
@@ -1915,7 +1915,7 @@ class GroupBuyViewSet(ModelViewSet):
             bid__final_decision='pending',
             status='final_selection_seller'
         ).filter(
-            models.Q(bid__is_selected=True) | models.Q(bid__status='selected')
+            Q(bid__is_selected=True) | Q(bid__status='selected')
         ).distinct()
         
         data = []
@@ -1933,7 +1933,7 @@ class GroupBuyViewSet(ModelViewSet):
                 groupbuy=gb,
                 seller=request.user
             ).filter(
-                models.Q(is_selected=True) | models.Q(status='selected')
+                Q(is_selected=True) | Q(status='selected')
             ).first()
             if winning_bid:
                 gb_data['winning_bid_amount'] = winning_bid.amount
@@ -2470,7 +2470,7 @@ class GroupBuyViewSet(ModelViewSet):
         winning_bid = Bid.objects.filter(
             groupbuy=groupbuy
         ).filter(
-            models.Q(is_selected=True) | models.Q(status='selected')
+            Q(is_selected=True) | Q(status='selected')
         ).first()
         
         if not winning_bid:
