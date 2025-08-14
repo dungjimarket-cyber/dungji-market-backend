@@ -1864,12 +1864,21 @@ class GroupBuyViewSet(ModelViewSet):
         # 구매자 최종선택 중인 공구 중 내가 낙찰된 공구
         from .models import Bid
         
-        # 먼저 내가 낙찰된 입찰 찾기 (is_selected=True 또는 status='selected' 모두 체크)
-        my_winning_bids = Bid.objects.filter(
-            seller=request.user
-        ).filter(
-            models.Q(is_selected=True) | models.Q(status='selected')
+        # 먼저 내가 낙찰된 입찰 찾기 (is_selected=True 우선, 없으면 status='selected')
+        # is_selected=True인 입찰 먼저 조회
+        my_winning_bids_selected = Bid.objects.filter(
+            seller=request.user,
+            is_selected=True
         ).values_list('groupbuy_id', flat=True)
+        
+        # status='selected'인 입찰 조회
+        my_winning_bids_status = Bid.objects.filter(
+            seller=request.user,
+            status='selected'
+        ).values_list('groupbuy_id', flat=True)
+        
+        # 두 결과를 합치기
+        my_winning_bids = list(set(my_winning_bids_selected) | set(my_winning_bids_status))
         
         # 해당 공구 중 final_selection_buyers 상태인 것
         waiting = self.get_queryset().filter(
