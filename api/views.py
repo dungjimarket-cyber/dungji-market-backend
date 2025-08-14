@@ -1864,10 +1864,11 @@ class GroupBuyViewSet(ModelViewSet):
         # 구매자 최종선택 중인 공구 중 내가 낙찰된 공구
         from .models import Bid
         
-        # 먼저 내가 낙찰된 입찰 찾기
+        # 먼저 내가 낙찰된 입찰 찾기 (is_selected=True 또는 status='selected' 모두 체크)
         my_winning_bids = Bid.objects.filter(
-            seller=request.user,
-            is_selected=True
+            seller=request.user
+        ).filter(
+            models.Q(is_selected=True) | models.Q(status='selected')
         ).values_list('groupbuy_id', flat=True)
         
         # 해당 공구 중 final_selection_buyers 상태인 것
@@ -1882,8 +1883,9 @@ class GroupBuyViewSet(ModelViewSet):
             # 낙찰 금액 추가
             winning_bid = Bid.objects.filter(
                 groupbuy=gb,
-                seller=request.user,
-                is_selected=True
+                seller=request.user
+            ).filter(
+                models.Q(is_selected=True) | models.Q(status='selected')
             ).first()
             if winning_bid:
                 gb_data['winning_bid_amount'] = winning_bid.amount
@@ -1901,9 +1903,10 @@ class GroupBuyViewSet(ModelViewSet):
         from .models import Bid, Participation
         pending = self.get_queryset().filter(
             bid__seller=request.user,
-            bid__is_selected=True,
             bid__final_decision='pending',
             status='final_selection_seller'
+        ).filter(
+            models.Q(bid__is_selected=True) | models.Q(bid__status='selected')
         ).distinct()
         
         data = []
@@ -1919,8 +1922,9 @@ class GroupBuyViewSet(ModelViewSet):
             # 낙찰 금액 추가
             winning_bid = Bid.objects.filter(
                 groupbuy=gb,
-                seller=request.user,
-                is_selected=True
+                seller=request.user
+            ).filter(
+                models.Q(is_selected=True) | models.Q(status='selected')
             ).first()
             if winning_bid:
                 gb_data['winning_bid_amount'] = winning_bid.amount
