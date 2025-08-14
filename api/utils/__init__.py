@@ -32,9 +32,35 @@ def update_groupbuy_status(groupbuy):
     # v3.0: bidding 상태 제거 - recruiting에서 바로 final_selection_buyers로
     # 공구 마감 시간이 지났으면 final_selection_buyers로 변경
     if groupbuy.status == 'recruiting' and now > groupbuy.end_time:
-        from api.models import Bid
+        from api.models import Bid, Notification
         # 입찰이 있는 경우만 final_selection_buyers로, 없으면 cancelled
-        if Bid.objects.filter(groupbuy=groupbuy).exists():
+        bids = Bid.objects.filter(groupbuy=groupbuy).order_by('-amount', 'created_at')
+        
+        if bids.exists():
+            # 최고 입찰자를 낙찰자로 선정
+            winning_bid = bids.first()
+            winning_bid.is_selected = True
+            winning_bid.status = 'selected'
+            winning_bid.save()
+            logger.info(f"공구 '{groupbuy.title}' 낙찰자 선정: {winning_bid.seller.username} (지원금: {winning_bid.amount}원)")
+            
+            # 낙찰자에게 알림 발송
+            Notification.objects.create(
+                user=winning_bid.seller,
+                groupbuy=groupbuy,
+                message=f"축하합니다! '{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구에 낙찰되셨습니다. 구매자 최종선택을 기다려주세요.",
+                notification_type='bid_winner'
+            )
+            
+            # 낙찰되지 않은 입찰자들에게 알림
+            for bid in bids[1:]:  # 첫 번째(낙찰자) 제외
+                Notification.objects.create(
+                    user=bid.seller,
+                    groupbuy=groupbuy,
+                    message=f"'{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구의 입찰 결과, 아쉽게도 낙찰되지 않으셨습니다.",
+                    notification_type='bid_not_selected'
+                )
+            
             groupbuy.status = 'final_selection_buyers'
             groupbuy.final_selection_end = groupbuy.end_time + timedelta(hours=12)
             groupbuy.save()
@@ -49,8 +75,8 @@ def update_groupbuy_status(groupbuy):
     
     # 구매자 최종선택 단계 -> 판매자 최종선택 또는 취소
     elif groupbuy.status == 'final_selection_buyers' and groupbuy.final_selection_end and now > groupbuy.final_selection_end:
-        # 최종선택 결과 확인 및 낙찰자 선정
-        from ..models import Bid, Participation
+        # 최종선택 결과 확인
+        from ..models import Bid, Participation, Notification
         from django.db.models import Count
         
         # 확정한 참여자 수 집계
@@ -60,33 +86,20 @@ def update_groupbuy_status(groupbuy):
         ).count()
         
         if confirmed_participants > 0:
-            # 최다 지원금을 제시한 입찰 선택
-            bids = Bid.objects.filter(groupbuy=groupbuy).order_by('-amount', 'created_at')
+            # 이미 낙찰자가 선정되어 있는지 확인
+            winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
+            if not winning_bid:
+                winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
             
-            if bids:
-                winning_bid = bids.first()
-                winning_bid.is_selected = True
-                winning_bid.save()
-                logger.info(f"공구 '{groupbuy.title}' 낙찰자 선정: {winning_bid.seller.username} (지원금: {winning_bid.amount}원)")
-                
-                # 낙찰자에게 알림 발송
-                from ..models import Notification
+            if winning_bid:
+                # 낙찰자가 이미 있는 경우 - 판매자 최종선택 단계로 진행
+                # 낙찰자에게 판매 확정 요청 알림
                 Notification.objects.create(
                     user=winning_bid.seller,
                     groupbuy=groupbuy,
-                    message=f"축하합니다! '{groupbuy.product.name}' 공구에 낙찰되셨습니다. 24시간 내에 판매 확정을 진행해주세요.",
-                    notification_type='bid_winner'
+                    message=f"'{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구의 구매자 최종선택이 완료되었습니다. 6시간 내에 판매 확정을 진행해주세요.",
+                    notification_type='seller_decision_required'
                 )
-                
-                # 낙찰되지 않은 입찰자들에게 알림
-                for bid in bids:
-                    if not bid.is_selected:
-                        Notification.objects.create(
-                            user=bid.seller,
-                            groupbuy=groupbuy,
-                            message=f"'{groupbuy.product.name}' 공구의 최종 선정 결과, 아쉽게도 낙찰되지 않으셨습니다.",
-                            notification_type='bid_not_selected'
-                        )
             
             groupbuy.status = 'final_selection_seller'
             groupbuy.seller_selection_end = now + timedelta(hours=6)  # 판매자 최종선택 6시간
