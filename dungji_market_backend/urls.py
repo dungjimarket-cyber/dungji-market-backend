@@ -54,6 +54,12 @@ from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibilit
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
 from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check
+from api.views_partner import (
+    partner_login, dashboard_summary, ReferralRecordListView, referral_link,
+    account_info, update_account, PartnerSettlementListView, request_settlement,
+    export_data, PartnerNotificationListView, mark_notification_read,
+    mark_all_notifications_read, statistics, generate_qr_code
+)
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -140,6 +146,22 @@ urlpatterns = [
     path('api/cron/update-status/', update_groupbuy_status_cron, name='cron_update_status'),
     path('api/cron/send-reminders/', send_reminder_notifications_cron, name='cron_send_reminders'),
     path('api/cron/health/', cron_health_check, name='cron_health_check'),
+    
+    # Partner APIs
+    path('api/partners/auth/login/', partner_login, name='partner_login'),
+    path('api/partners/dashboard/summary/', dashboard_summary, name='partner_dashboard_summary'),
+    path('api/partners/members/', ReferralRecordListView.as_view(), name='partner_members'),
+    path('api/partners/referral-link/', referral_link, name='partner_referral_link'),
+    path('api/partners/account/', account_info, name='partner_account_info'),
+    path('api/partners/account/update/', update_account, name='partner_update_account'),
+    path('api/partners/settlements/', PartnerSettlementListView.as_view(), name='partner_settlements'),
+    path('api/partners/settlements/request/', request_settlement, name='partner_request_settlement'),
+    path('api/partners/export/', export_data, name='partner_export_data'),
+    path('api/partners/notifications/', PartnerNotificationListView.as_view(), name='partner_notifications'),
+    path('api/partners/notifications/<int:notification_id>/read/', mark_notification_read, name='partner_mark_notification_read'),
+    path('api/partners/notifications/read-all/', mark_all_notifications_read, name='partner_mark_all_notifications_read'),
+    path('api/partners/statistics/', statistics, name='partner_statistics'),
+    path('api/partners/qr-code/<str:partner_code>/', generate_qr_code, name='partner_qr_code'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

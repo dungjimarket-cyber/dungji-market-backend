@@ -7,6 +7,7 @@ from .models import (
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
     Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog
 )
+from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
 from django.utils.html import mark_safe
 from django.conf import settings
 import logging
@@ -625,6 +626,189 @@ class PhoneVerificationAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         """수정 불가"""
         return False
+
+
+# Partner 관련 Admin 클래스들
+@admin.register(Partner)
+class PartnerAdmin(admin.ModelAdmin):
+    list_display = ['partner_name', 'partner_code', 'commission_rate', 'is_active', 'get_total_referrals', 'get_available_settlement', 'created_at']
+    list_filter = ['is_active', 'commission_rate', 'created_at']
+    search_fields = ['partner_name', 'partner_code', 'user__username', 'user__email']
+    readonly_fields = ['partner_code', 'created_at', 'updated_at', 'get_total_referrals', 'get_active_subscribers', 'get_available_settlement']
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('user', 'partner_name', 'partner_code', 'is_active')
+        }),
+        ('수수료 설정', {
+            'fields': ('commission_rate', 'minimum_settlement_amount')
+        }),
+        ('계좌 정보', {
+            'fields': ('bank_name', 'account_number', 'account_holder')
+        }),
+        ('통계', {
+            'fields': ('get_total_referrals', 'get_active_subscribers', 'get_available_settlement'),
+            'classes': ('collapse',)
+        }),
+        ('관리 정보', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_total_referrals(self, obj):
+        return obj.get_total_referrals()
+    get_total_referrals.short_description = '총 추천 수'
+    
+    def get_active_subscribers(self, obj):
+        return obj.get_active_subscribers()
+    get_active_subscribers.short_description = '활성 구독자'
+    
+    def get_available_settlement(self, obj):
+        amount = obj.get_available_settlement_amount()
+        return f"{amount:,}원"
+    get_available_settlement.short_description = '정산 가능 금액'
+
+
+@admin.register(ReferralRecord)
+class ReferralRecordAdmin(admin.ModelAdmin):
+    list_display = ['partner', 'get_member_name', 'total_amount', 'commission_amount', 'subscription_status', 'settlement_status', 'created_at']
+    list_filter = ['subscription_status', 'settlement_status', 'partner', 'created_at']
+    search_fields = ['partner__partner_name', 'referred_user__username', 'referred_user__email']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('partner', 'referred_user', 'joined_date')
+        }),
+        ('구독 정보', {
+            'fields': ('subscription_status', 'subscription_amount', 'subscription_start_date', 'subscription_end_date')
+        }),
+        ('티켓 정보', {
+            'fields': ('ticket_count', 'ticket_amount')
+        }),
+        ('결제 정보', {
+            'fields': ('total_amount', 'commission_amount')
+        }),
+        ('정산 정보', {
+            'fields': ('settlement_status', 'settlement_date')
+        }),
+        ('관리 정보', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_member_name(self, obj):
+        name = obj.referred_user.nickname or obj.referred_user.username
+        if len(name) > 2:
+            return f"{name[0]}○{name[-1]}"
+        elif len(name) == 2:
+            return f"{name[0]}○"
+        return name
+    get_member_name.short_description = '회원명'
+    
+    actions = ['mark_as_settled']
+    
+    def mark_as_settled(self, request, queryset):
+        """선택한 기록들을 정산 완료로 처리"""
+        from django.utils import timezone
+        updated = queryset.filter(settlement_status='requested').update(
+            settlement_status='completed',
+            settlement_date=timezone.now()
+        )
+        self.message_user(request, f'{updated}개의 기록이 정산 완료 처리되었습니다.')
+    mark_as_settled.short_description = '정산 완료 처리'
+
+
+@admin.register(PartnerSettlement)
+class PartnerSettlementAdmin(admin.ModelAdmin):
+    list_display = ['partner', 'settlement_amount', 'status', 'tax_invoice_requested', 'requested_at', 'processed_at']
+    list_filter = ['status', 'tax_invoice_requested', 'requested_at']
+    search_fields = ['partner__partner_name', 'partner__partner_code']
+    readonly_fields = ['requested_at', 'updated_at']
+    date_hierarchy = 'requested_at'
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('partner', 'settlement_amount', 'status')
+        }),
+        ('계좌 정보', {
+            'fields': ('bank_name', 'account_number', 'account_holder')
+        }),
+        ('세금계산서', {
+            'fields': ('tax_invoice_requested',)
+        }),
+        ('처리 정보', {
+            'fields': ('processed_at', 'processed_by', 'receipt_url')
+        }),
+        ('메모', {
+            'fields': ('memo',)
+        }),
+        ('관리 정보', {
+            'fields': ('requested_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['approve_settlements', 'reject_settlements']
+    
+    def approve_settlements(self, request, queryset):
+        """선택한 정산을 승인 처리"""
+        count = 0
+        for settlement in queryset.filter(status='pending'):
+            if settlement.complete_settlement(processed_by=request.user):
+                count += 1
+        self.message_user(request, f'{count}건의 정산이 승인 처리되었습니다.')
+    approve_settlements.short_description = '정산 승인'
+    
+    def reject_settlements(self, request, queryset):
+        """선택한 정산을 거절 처리"""
+        from django.utils import timezone
+        updated = queryset.filter(status='pending').update(
+            status='failed',
+            processed_at=timezone.now(),
+            processed_by=request.user
+        )
+        self.message_user(request, f'{updated}건의 정산이 거절 처리되었습니다.')
+    reject_settlements.short_description = '정산 거절'
+
+
+@admin.register(PartnerLink)
+class PartnerLinkAdmin(admin.ModelAdmin):
+    list_display = ['partner', 'short_code', 'click_count', 'conversion_count', 'get_conversion_rate', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['partner__partner_name', 'short_code', 'original_url']
+    readonly_fields = ['short_code', 'short_url', 'click_count', 'conversion_count', 'created_at', 'updated_at']
+    
+    def get_conversion_rate(self, obj):
+        if obj.click_count == 0:
+            return "0%"
+        rate = (obj.conversion_count / obj.click_count) * 100
+        return f"{rate:.2f}%"
+    get_conversion_rate.short_description = '전환율'
+
+
+@admin.register(PartnerNotification)
+class PartnerNotificationAdmin(admin.ModelAdmin):
+    list_display = ['partner', 'notification_type', 'title', 'is_read', 'created_at']
+    list_filter = ['notification_type', 'is_read', 'created_at']
+    search_fields = ['partner__partner_name', 'title', 'message']
+    readonly_fields = ['created_at', 'read_at']
+    date_hierarchy = 'created_at'
+    
+    actions = ['mark_as_read']
+    
+    def mark_as_read(self, request, queryset):
+        """선택한 알림을 읽음 처리"""
+        from django.utils import timezone
+        updated = queryset.filter(is_read=False).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+        self.message_user(request, f'{updated}개의 알림이 읽음 처리되었습니다.')
+    mark_as_read.short_description = '읽음 처리'
     
     actions = ['cleanup_expired']
     
@@ -812,3 +996,5 @@ class BidTokenAdjustmentLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         """수정 불가"""
         return False
+
+

@@ -19,3 +19,5 @@ django-filter==24.1
 boto3==1.28.38
 django-storages==1.14.2
 whitenoise==6.9.0
+xlsxwriter==3.1.9
+qrcode==7.4.2

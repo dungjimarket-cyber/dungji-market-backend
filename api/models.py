@@ -58,6 +58,9 @@ class User(AbstractUser):
     business_license_image = models.URLField(blank=True, null=True, verbose_name='사업자등록증 이미지')
     delivery_history_image = models.URLField(blank=True, null=True, verbose_name='택배 송장 이미지')
     
+    # 추천 관련 필드 (파트너 시스템)
+    referred_by = models.CharField(max_length=20, blank=True, null=True, verbose_name='추천 코드')
+    
     # 휴대폰 인증 시 수집한 개인정보
     birth_date = models.DateField(null=True, blank=True, verbose_name='생년월일')
     gender = models.CharField(max_length=1, choices=[('M', '남성'), ('F', '여성')], null=True, blank=True, verbose_name='성별')
@@ -1145,3 +1148,5 @@ from .models_verification import PhoneVerification
 # from .models_voting import BidVote
 # Import Banner and Event models
 from .models_banner import Banner, Event
+# Import Partner models
+from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
