@@ -1,7 +1,8 @@
 from rest_framework import generics, permissions, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -114,6 +115,7 @@ def partner_login(request):
 
 
 @api_view(['GET'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def dashboard_summary(request):
     """대시보드 요약 정보"""
@@ -149,6 +151,7 @@ def dashboard_summary(request):
 class ReferralRecordListView(generics.ListAPIView):
     """추천 회원 목록"""
     serializer_class = ReferralRecordSerializer
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsPartner]
     pagination_class = StandardResultsSetPagination
     
@@ -188,6 +191,7 @@ class ReferralRecordListView(generics.ListAPIView):
 
 
 @api_view(['GET'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def referral_link(request):
     """추천 링크 정보"""
@@ -202,6 +206,7 @@ def referral_link(request):
 
 
 @api_view(['GET'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def account_info(request):
     """계좌 정보 조회"""
@@ -211,6 +216,7 @@ def account_info(request):
 
 
 @api_view(['PUT'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def update_account(request):
     """계좌 정보 수정"""
@@ -227,6 +233,7 @@ def update_account(request):
 class PartnerSettlementListView(generics.ListAPIView):
     """정산 내역 목록"""
     serializer_class = PartnerSettlementSerializer
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsPartner]
     pagination_class = StandardResultsSetPagination
     
@@ -236,6 +243,7 @@ class PartnerSettlementListView(generics.ListAPIView):
 
 
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def request_settlement(request):
     """정산 요청"""
@@ -271,6 +279,7 @@ def request_settlement(request):
 
 
 @api_view(['GET'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def export_data(request):
     """데이터 내보내기"""
@@ -404,6 +413,7 @@ def _generate_excel_response(records, partner_name):
 class PartnerNotificationListView(generics.ListAPIView):
     """파트너 알림 목록"""
     serializer_class = PartnerNotificationSerializer
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsPartner]
     pagination_class = StandardResultsSetPagination
     
@@ -413,6 +423,7 @@ class PartnerNotificationListView(generics.ListAPIView):
 
 
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def mark_notification_read(request, notification_id):
     """알림 읽음 처리"""
@@ -429,6 +440,7 @@ def mark_notification_read(request, notification_id):
 
 
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def mark_all_notifications_read(request):
     """모든 알림 읽음 처리"""
@@ -443,6 +455,7 @@ def mark_all_notifications_read(request):
 
 
 @api_view(['GET'])
+@authentication_classes([JWTAuthentication])
 @permission_classes([IsPartner])
 def statistics(request):
     """통계 데이터"""
