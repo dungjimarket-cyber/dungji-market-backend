@@ -48,8 +48,8 @@ class StandardResultsSetPagination(PageNumberPagination):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def partner_login(request):
-    """파트너 로그인"""
-    partner_id = request.data.get('partner_id')
+    """파트너 로그인 - User 계정으로 로그인"""
+    partner_id = request.data.get('partner_id')  # username 또는 partner_code
     password = request.data.get('password')
     
     if not partner_id or not password:
@@ -58,15 +58,36 @@ def partner_login(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # 파트너 코드로 파트너 찾기
-        partner = Partner.objects.get(partner_code=partner_id)
-        user = partner.user
+        # 먼저 username으로 User를 찾고, 그 User에 연결된 Partner를 찾기
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # username으로 사용자 찾기
+        try:
+            user = User.objects.get(username=partner_id)
+        except User.DoesNotExist:
+            # username이 없으면 partner_code로도 시도
+            try:
+                partner = Partner.objects.get(partner_code=partner_id)
+                user = partner.user
+            except Partner.DoesNotExist:
+                return Response({
+                    'error': '잘못된 로그인 정보입니다.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
         
         # 사용자 인증
         if not user.check_password(password):
             return Response({
                 'error': '잘못된 로그인 정보입니다.'
             }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # 파트너 프로필 확인
+        try:
+            partner = user.partner_profile
+        except Partner.DoesNotExist:
+            return Response({
+                'error': '파트너 계정이 아닙니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         if not partner.is_active:
             return Response({
