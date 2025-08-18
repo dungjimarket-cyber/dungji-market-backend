@@ -1031,24 +1031,38 @@ class GroupBuyViewSet(ModelViewSet):
                     
                     # 4. province/city 형식으로 검색 시도
                     if not region and province and city:
-                        print(f"[province/city 검색 시도] {province} {city}")
+                        # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
+                        province_mapping = {
+                            '전북특별자치도': '전라북도',
+                        }
+                        
+                        city_mapping = {
+                            '미추홀구': '남동구',  # 인천 미추홀구 -> 남동구로 대체
+                        }
+                        
+                        # 매핑 적용
+                        mapped_province = province_mapping.get(province, province)
+                        mapped_city = city_mapping.get(city, city)
+                        
+                        print(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
+                        
                         # 시/도와 시/군/구로 지역 검색
                         region = Region.objects.filter(
-                            name=city,
-                            parent__name=province,
+                            name=mapped_city,
+                            parent__name=mapped_province,
                             level__in=[1, 2]
                         ).first()
                         
                         if region:
                             print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
                         else:
-                            # full_name 필드를 사용한 검색 시도
-                            full_name_search = f"{province} {city}"
+                            # full_name 필드를 사용한 검색 시도 (매핑된 값 사용)
+                            full_name_search = f"{mapped_province} {mapped_city}"
                             region = Region.objects.filter(full_name=full_name_search).first()
                             if region:
                                 print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
                             else:
-                                print(f"[지역 검색 실패] {province} {city}에 해당하는 지역을 찾을 수 없습니다.")
+                                print(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
                     
                     if region:
                         # GroupBuyRegion 생성
@@ -1322,24 +1336,38 @@ class GroupBuyViewSet(ModelViewSet):
                 
                 # 4. province/city 형식으로 검색 시도
                 if not region and province and city:
-                    print(f"[province/city 검색 시도] {province} {city}")
+                    # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
+                    province_mapping = {
+                        '전북특별자치도': '전라북도',
+                    }
+                    
+                    city_mapping = {
+                        '미추홀구': '남동구',  # 인천 미추홀구 -> 남동구로 대체
+                    }
+                    
+                    # 매핑 적용
+                    mapped_province = province_mapping.get(province, province)
+                    mapped_city = city_mapping.get(city, city)
+                    
+                    print(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
+                    
                     # 시/도와 시/군/구로 지역 검색
                     region = Region.objects.filter(
-                        name=city,
-                        parent__name=province,
+                        name=mapped_city,
+                        parent__name=mapped_province,
                         level__in=[1, 2]
                     ).first()
                     
                     if region:
                         print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
                     else:
-                        # full_name 필드를 사용한 검색 시도
-                        full_name_search = f"{province} {city}"
+                        # full_name 필드를 사용한 검색 시도 (매핑된 값 사용)
+                        full_name_search = f"{mapped_province} {mapped_city}"
                         region = Region.objects.filter(full_name=full_name_search).first()
                         if region:
                             print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
                         else:
-                            print(f"[지역 검색 실패] {province} {city}에 해당하는 지역을 찾을 수 없습니다.")
+                            print(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
                 
                 if region:
                     # GroupBuyRegion 생성
