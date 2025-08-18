@@ -7,6 +7,7 @@ from .models import (
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
     Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog
 )
+from .models_inquiry import Inquiry
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
 from django.utils.html import mark_safe
 from django.conf import settings
@@ -1007,4 +1008,68 @@ class BidTokenAdjustmentLogAdmin(admin.ModelAdmin):
         """수정 불가"""
         return False
 
+
+
+
+@admin.register(Inquiry)
+class InquiryAdmin(admin.ModelAdmin):
+    """문의사항 관리"""
+    list_display = ["id", "user", "title", "status", "created_at", "answered_at"]
+    list_filter = ["status", "created_at", "answered_at"]
+    search_fields = ["title", "content", "user__username", "user__email"]
+    readonly_fields = ["user", "created_at", "updated_at"]
+    date_hierarchy = "created_at"
+    ordering = ["-created_at"]
+    
+    fieldsets = (
+        ("문의 정보", {
+            "fields": ("user", "title", "content", "status")
+        }),
+        ("답변 정보", {
+            "fields": ("answer", "answered_at"),
+            "classes": ("collapse",)
+        }),
+        ("관리 정보", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """답변 작성 시 자동으로 상태 변경 및 답변 시간 설정"""
+        from django.utils import timezone
+        if "answer" in form.changed_data and obj.answer:
+            if obj.status != "answered":
+                obj.status = "answered"
+                obj.answered_at = timezone.now()
+        super().save_model(request, obj, form, change)
+    
+    def get_queryset(self, request):
+        """관련 객체를 미리 가져와 성능 최적화"""
+        qs = super().get_queryset(request)
+        return qs.select_related("user")
+    
+    actions = ["mark_as_answered", "mark_as_pending"]
+    
+    def mark_as_answered(self, request, queryset):
+        """선택한 문의를 답변완료로 처리"""
+        from django.utils import timezone
+        updated = 0
+        for inquiry in queryset.filter(status="pending"):
+            if inquiry.answer:  # 답변이 있는 경우에만
+                inquiry.status = "answered"
+                inquiry.answered_at = timezone.now()
+                inquiry.save()
+                updated += 1
+        self.message_user(request, f"{updated}개의 문의가 답변완료 처리되었습니다.")
+    mark_as_answered.short_description = "답변완료 처리 (답변이 있는 경우만)"
+    
+    def mark_as_pending(self, request, queryset):
+        """선택한 문의를 답변대기로 처리"""
+        updated = queryset.filter(status="answered").update(
+            status="pending",
+            answered_at=None
+        )
+        self.message_user(request, f"{updated}개의 문의가 답변대기로 처리되었습니다.")
+    mark_as_pending.short_description = "답변대기 처리"
 

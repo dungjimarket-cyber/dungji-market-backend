@@ -12,6 +12,8 @@ import logging
 
 # 지역 정보 모델 import
 from .models_region import Region
+# 문의사항 모델 import
+from .models_inquiry import Inquiry
 
 logger = logging.getLogger(__name__)
 

@@ -60,6 +60,7 @@ from api.views_partner import (
     export_data, PartnerNotificationListView, mark_notification_read,
     mark_all_notifications_read, statistics, generate_qr_code
 )
+from api.views_inquiry import InquiryViewSet
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -76,6 +77,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'admin', AdminViewSet, basename='admin')
 router.register(r'consents', ParticipantConsentViewSet, basename='consent')
 router.register(r'noshow-reports', NoShowReportViewSet, basename='noshow-report')
+router.register(r'inquiries', InquiryViewSet, basename='inquiry')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

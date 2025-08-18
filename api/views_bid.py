@@ -104,6 +104,9 @@ class BidViewSet(viewsets.ModelViewSet):
         if unlimited_token:
             # 무제한 입찰권이 있으면 입찰권을 소비하지 않고 무제한 입찰권 정보만 추가
             bid = serializer.save(seller=user, bid_token=unlimited_token)
+            # 무제한 입찰권은 소비하지 않지만 추적을 위해 used_for 필드는 설정
+            unlimited_token.used_for = bid
+            unlimited_token.save()
             return
         
         # 단품 입찰권 확인
@@ -122,8 +125,13 @@ class BidViewSet(viewsets.ModelViewSet):
             raise ValidationError("사용 가능한 입찰권이 없습니다. 입찰권을 구매하신 후 다시 시도해주세요.")
         
         # 입찰권 사용 처리 및 연결
+        # 먼저 입찰을 저장하고, 그 다음에 입찰권을 사용 처리
         bid = serializer.save(seller=user, bid_token=single_token)
-        single_token.use(bid)
+        
+        # 입찰권 사용 처리 - 실패 시 입찰을 롤백해야 함
+        if not single_token.use(bid):
+            bid.delete()
+            raise ValidationError("입찰권 사용 처리에 실패했습니다.")
 
     @action(detail=False, methods=['get'], url_path='seller')
     def seller_bids(self, request):
