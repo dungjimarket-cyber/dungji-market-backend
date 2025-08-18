@@ -24,10 +24,11 @@ class UserSerializer(serializers.ModelSerializer):
     business_reg_number = serializers.CharField(read_only=True)
     business_license_image = serializers.URLField(read_only=True, allow_null=True)
     is_business_verified = serializers.BooleanField(read_only=True)
+    actual_username = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'nickname', 'email', 'role', 'active_tokens_count', 'date_joined', 'is_active',
+        fields = ['id', 'username', 'actual_username', 'nickname', 'email', 'role', 'active_tokens_count', 'date_joined', 'is_active',
                   'business_reg_number', 'business_license_image', 'is_business_verified']
         read_only_fields = ['date_joined', 'active_tokens_count']
     
@@ -38,6 +39,13 @@ class UserSerializer(serializers.ModelSerializer):
             status='active',
             expires_at__gt=timezone.now()
         ).count()
+    
+    def get_actual_username(self, obj):
+        # 카카오 사용자의 경우 실제 username을 반환, 아니면 기존 username
+        if hasattr(obj, 'sns_type') and obj.sns_type == 'kakao':
+            # 카카오 사용자의 경우 kakao_ prefix가 있는 실제 ID 표시
+            return obj.username if obj.username and obj.username.startswith('kakao_') else f'kakao_{obj.id}'
+        return obj.username or obj.email.split('@')[0] if obj.email else '알 수 없음'
 
 class AdminViewSet(viewsets.ViewSet):
     """
@@ -603,9 +611,17 @@ class AdminViewSet(viewsets.ViewSet):
                     expires_at__gt=timezone.now()
                 ).first()
                 
+                # 실제 사용자 이름 결정 (카카오 사용자 처리)
+                actual_username = seller.username
+                if hasattr(seller, 'sns_type') and seller.sns_type == 'kakao':
+                    actual_username = seller.username if seller.username and seller.username.startswith('kakao_') else f'kakao_{seller.id}'
+                elif not seller.username:
+                    actual_username = seller.email.split('@')[0] if seller.email else '알 수 없음'
+                
                 sellers_data.append({
                     'id': seller.id,
                     'username': seller.username,
+                    'actual_username': actual_username,
                     'nickname': seller.nickname,
                     'email': seller.email,
                     'bid_tokens_count': seller.single_tokens,

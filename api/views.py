@@ -1034,6 +1034,7 @@ class GroupBuyViewSet(ModelViewSet):
                         # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
                         province_mapping = {
                             '전북특별자치도': '전라북도',
+                            '강원특별자치도': '강원도',
                         }
                         
                         city_mapping = {
@@ -1339,6 +1340,7 @@ class GroupBuyViewSet(ModelViewSet):
                     # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
                     province_mapping = {
                         '전북특별자치도': '전라북도',
+                        '강원특별자치도': '강원도',
                     }
                     
                     city_mapping = {
