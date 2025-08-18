@@ -1047,23 +1047,33 @@ class GroupBuyViewSet(ModelViewSet):
                         
                         print(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
                         
-                        # 시/도와 시/군/구로 지역 검색
-                        region = Region.objects.filter(
-                            name=mapped_city,
-                            parent__name=mapped_province,
-                            level__in=[1, 2]
-                        ).first()
-                        
-                        if region:
-                            print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
-                        else:
-                            # full_name 필드를 사용한 검색 시도 (매핑된 값 사용)
-                            full_name_search = f"{mapped_province} {mapped_city}"
-                            region = Region.objects.filter(full_name=full_name_search).first()
+                        # 세종특별자치시와 같은 특별자치시 처리 (province와 city가 같은 경우)
+                        if mapped_province == '세종특별자치시' and mapped_city == '세종시':
+                            region = Region.objects.filter(
+                                name='세종특별자치시',
+                                level=1
+                            ).first()
                             if region:
-                                print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                                print(f"[지역 검색 성공 - 특별자치시] {region.name} (코드: {region.code})")
+                        
+                        # 일반적인 시/도와 시/군/구로 지역 검색
+                        if not region:
+                            region = Region.objects.filter(
+                                name=mapped_city,
+                                parent__name=mapped_province,
+                                level__in=[1, 2]
+                            ).first()
+                            
+                            if region:
+                                print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
                             else:
-                                print(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
+                                # full_name 필드를 사용한 검색 시도 (매핑된 값 사용)
+                                full_name_search = f"{mapped_province} {mapped_city}"
+                                region = Region.objects.filter(full_name=full_name_search).first()
+                                if region:
+                                    print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                                else:
+                                    print(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
                     
                     if region:
                         # GroupBuyRegion 생성
@@ -1353,23 +1363,33 @@ class GroupBuyViewSet(ModelViewSet):
                     
                     print(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
                     
-                    # 시/도와 시/군/구로 지역 검색
-                    region = Region.objects.filter(
-                        name=mapped_city,
-                        parent__name=mapped_province,
-                        level__in=[1, 2]
-                    ).first()
-                    
-                    if region:
-                        print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
-                    else:
-                        # full_name 필드를 사용한 검색 시도 (매핑된 값 사용)
-                        full_name_search = f"{mapped_province} {mapped_city}"
-                        region = Region.objects.filter(full_name=full_name_search).first()
+                    # 세종특별자치시와 같은 특별자치시 처리 (province와 city가 같은 경우)
+                    if mapped_province == '세종특별자치시' and mapped_city == '세종시':
+                        region = Region.objects.filter(
+                            name='세종특별자치시',
+                            level=1
+                        ).first()
                         if region:
-                            print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                            print(f"[지역 검색 성공 - 특별자치시] {region.name} (코드: {region.code})")
+                    
+                    # 일반적인 시/도와 시/군/구로 지역 검색
+                    if not region:
+                        region = Region.objects.filter(
+                            name=mapped_city,
+                            parent__name=mapped_province,
+                            level__in=[1, 2]
+                        ).first()
+                        
+                        if region:
+                            print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
                         else:
-                            print(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
+                            # full_name 필드를 사용한 검색 시도 (매핑된 값 사용)
+                            full_name_search = f"{mapped_province} {mapped_city}"
+                            region = Region.objects.filter(full_name=full_name_search).first()
+                            if region:
+                                print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                            else:
+                                print(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
                 
                 if region:
                     # GroupBuyRegion 생성
