@@ -96,6 +96,18 @@ class GroupBuyTelecomDetailSerializer(serializers.ModelSerializer):
     
     def get_subscription_type_korean(self, obj):
         """가입유형을 한글로 변환하여 반환"""
+        # GroupBuy 객체를 통해 상품 카테고리 확인
+        try:
+            if obj.groupbuy and obj.groupbuy.product and obj.groupbuy.product.category:
+                category_name = obj.groupbuy.product.category.name
+                is_internet_category = category_name in ['인터넷', '인터넷+TV']
+                
+                if obj.subscription_type == 'transfer':
+                    return '통신사이동' if is_internet_category else '번호이동'
+        except:
+            pass  # 오류 시 기본 로직 사용
+        
+        # 기본 매핑
         subscription_type_map = {
             'new': '신규가입',
             'transfer': '번호이동',
@@ -251,13 +263,20 @@ class GroupBuySerializer(serializers.ModelSerializer):
                     # 가입유형 정보 업데이트
                     telecom_detail['registration_type'] = gb_telecom.subscription_type
                     
-                    # 가입유형 한글명 추가
-                    subscription_type_map = {
-                        'new': '신규가입',
-                        'transfer': '번호이동',
-                        'change': '기기변경',
-                    }
-                    telecom_detail['registration_type_korean'] = subscription_type_map.get(gb_telecom.subscription_type, gb_telecom.subscription_type)
+                    # 가입유형 한글명 추가 (카테고리에 따라 다르게 처리)
+                    category_name = obj.product.category.name if obj.product and obj.product.category else ''
+                    is_internet_category = category_name in ['인터넷', '인터넷+TV']
+                    
+                    if gb_telecom.subscription_type == 'transfer':
+                        registration_type_korean = '통신사이동' if is_internet_category else '번호이동'
+                    else:
+                        subscription_type_map = {
+                            'new': '신규가입',
+                            'change': '기기변경',
+                        }
+                        registration_type_korean = subscription_type_map.get(gb_telecom.subscription_type, gb_telecom.subscription_type)
+                    
+                    telecom_detail['registration_type_korean'] = registration_type_korean
                     
                     # 요금제 정보 업데이트
                     telecom_detail['plan_info'] = gb_telecom.plan_info
