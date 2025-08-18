@@ -917,21 +917,28 @@ def user_profile(request):
                     )
                 user.email = email
             
+            # username은 아이디이므로 변경 불가
             if 'username' in data:
-                # 닉네임(username) 중복 확인
-                username = data['username']
-                if User.objects.filter(username=username).exclude(id=user.id).exists():
+                return Response(
+                    {'error': '아이디(username)는 변경할 수 없습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # nickname 변경 (표시 이름)
+            if 'nickname' in data:
+                nickname = data['nickname']
+                if not nickname:
                     return Response(
-                        {'error': '이미 사용 중인 닉네임입니다.'},
+                        {'error': '닉네임을 입력해주세요.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                user.username = username
-                user.nickname = username  # nickname 필드도 동기화
+                # 닉네임 중복 확인 (선택사항 - 닉네임은 중복 허용할 수도 있음)
+                user.nickname = nickname
                 
                 # 닉네임 변경시 생성한 모든 공구의 creator_nickname 업데이트
                 from .models import GroupBuy
-                GroupBuy.objects.filter(creator=user).update(creator_nickname=username)
-                logger.info(f"User {user.id} changed nickname, updated {GroupBuy.objects.filter(creator=user).count()} GroupBuy records")
+                GroupBuy.objects.filter(creator=user).update(creator_nickname=nickname)
+                logger.info(f"User {user.id} changed nickname to {nickname}, updated {GroupBuy.objects.filter(creator=user).count()} GroupBuy records")
             
             if 'phone_number' in data:
                 # 휴대폰 번호 중복 확인

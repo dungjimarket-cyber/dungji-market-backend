@@ -97,6 +97,8 @@ class Category(models.Model):
         ('electronics', '가전'),
         ('rental', '렌탈'),
         ('subscription', '구독'),
+        ('internet', '인터넷'),
+        ('internet_tv', '인터넷+TV'),
     )
     
     name = models.CharField(max_length=255, verbose_name='카테고리명')
@@ -151,6 +153,7 @@ class Product(models.Model):
     is_available = models.BooleanField(default=True, verbose_name='판매 가능 여부')
     release_date = models.DateField(blank=True, null=True, verbose_name='출시일')
     attributes = models.JSONField(default=dict, blank=True, verbose_name='상품 특성')
+    extra_data = models.JSONField(default=dict, blank=True, verbose_name='추가 데이터')
     
     class Meta:
         verbose_name = '상품'
