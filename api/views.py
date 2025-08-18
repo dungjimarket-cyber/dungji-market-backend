@@ -971,6 +971,11 @@ class GroupBuyViewSet(ModelViewSet):
                     # 지역 코드로 Region 객체 찾기
                     region_code = region_data.get('code')
                     region_name = region_data.get('name')
+                    
+                    # province/city 형식도 지원
+                    province = region_data.get('province')
+                    city = region_data.get('city')
+                    
                     region = None
                     
                     if region_code:
@@ -1024,6 +1029,27 @@ class GroupBuyViewSet(ModelViewSet):
                         else:
                             print(f"[지역 검색 실패] 이름 {region_name}에 해당하는 지역을 찾을 수 없습니다.")
                     
+                    # 4. province/city 형식으로 검색 시도
+                    if not region and province and city:
+                        print(f"[province/city 검색 시도] {province} {city}")
+                        # 시/도와 시/군/구로 지역 검색
+                        region = Region.objects.filter(
+                            name=city,
+                            parent__name=province,
+                            level__in=[1, 2]
+                        ).first()
+                        
+                        if region:
+                            print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
+                        else:
+                            # full_name 필드를 사용한 검색 시도
+                            full_name_search = f"{province} {city}"
+                            region = Region.objects.filter(full_name=full_name_search).first()
+                            if region:
+                                print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                            else:
+                                print(f"[지역 검색 실패] {province} {city}에 해당하는 지역을 찾을 수 없습니다.")
+                    
                     if region:
                         # GroupBuyRegion 생성
                         GroupBuyRegion.objects.create(
@@ -1036,14 +1062,33 @@ class GroupBuyViewSet(ModelViewSet):
                 
                 # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
                 if regions_data and len(regions_data) > 0:
-                    first_region_code = regions_data[0].get('code')
+                    first_region_data = regions_data[0]
+                    first_region_code = first_region_data.get('code')
+                    first_province = first_region_data.get('province')
+                    first_city = first_region_data.get('city')
+                    
+                    first_region = None
+                    
                     if first_region_code:
                         first_region = Region.objects.filter(code=first_region_code).first()
-                        if first_region:
-                            groupbuy.region = first_region
-                            groupbuy.region_name = first_region.name
-                            groupbuy.save()
-                            print(f"[기본 지역 설정] {first_region.name}")
+                    elif first_province and first_city:
+                        # province/city로 첫 번째 지역 검색
+                        first_region = Region.objects.filter(
+                            name=first_city,
+                            parent__name=first_province,
+                            level__in=[1, 2]
+                        ).first()
+                        
+                        if not first_region:
+                            # full_name으로 재시도
+                            full_name_search = f"{first_province} {first_city}"
+                            first_region = Region.objects.filter(full_name=full_name_search).first()
+                    
+                    if first_region:
+                        groupbuy.region = first_region
+                        groupbuy.region_name = first_region.name
+                        groupbuy.save()
+                        print(f"[기본 지역 설정] {first_region.name}")
                 
                 print(f"\n[다중 지역 처리 완료] 총 {GroupBuyRegion.objects.filter(groupbuy=groupbuy).count()}개 지역 저장됨")
             
@@ -1235,6 +1280,11 @@ class GroupBuyViewSet(ModelViewSet):
                 # 지역 코드로 Region 객체 찾기
                 region_code = region_data.get('code')
                 region_name = region_data.get('name')
+                
+                # province/city 형식도 지원
+                province = region_data.get('province')
+                city = region_data.get('city')
+                
                 region = None
                 
                 if region_code:
@@ -1270,6 +1320,27 @@ class GroupBuyViewSet(ModelViewSet):
                     else:
                         print(f"[지역 검색 실패] 이름 {region_name}에 해당하는 지역을 찾을 수 없습니다.")
                 
+                # 4. province/city 형식으로 검색 시도
+                if not region and province and city:
+                    print(f"[province/city 검색 시도] {province} {city}")
+                    # 시/도와 시/군/구로 지역 검색
+                    region = Region.objects.filter(
+                        name=city,
+                        parent__name=province,
+                        level__in=[1, 2]
+                    ).first()
+                    
+                    if region:
+                        print(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
+                    else:
+                        # full_name 필드를 사용한 검색 시도
+                        full_name_search = f"{province} {city}"
+                        region = Region.objects.filter(full_name=full_name_search).first()
+                        if region:
+                            print(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                        else:
+                            print(f"[지역 검색 실패] {province} {city}에 해당하는 지역을 찾을 수 없습니다.")
+                
                 if region:
                     # GroupBuyRegion 생성
                     GroupBuyRegion.objects.create(
@@ -1282,14 +1353,33 @@ class GroupBuyViewSet(ModelViewSet):
             
             # 첫 번째 지역을 기존 region 필드에 저장 (하위 호환성)
             if regions_data and len(regions_data) > 0:
-                first_region_code = regions_data[0].get('code')
+                first_region_data = regions_data[0]
+                first_region_code = first_region_data.get('code')
+                first_province = first_region_data.get('province')
+                first_city = first_region_data.get('city')
+                
+                first_region = None
+                
                 if first_region_code:
                     first_region = Region.objects.filter(code=first_region_code).first()
-                    if first_region:
-                        groupbuy.region = first_region
-                        groupbuy.region_name = first_region.name
-                        groupbuy.save()
-                        print(f"[기본 지역 설정] {first_region.name}")
+                elif first_province and first_city:
+                    # province/city로 첫 번째 지역 검색
+                    first_region = Region.objects.filter(
+                        name=first_city,
+                        parent__name=first_province,
+                        level__in=[1, 2]
+                    ).first()
+                    
+                    if not first_region:
+                        # full_name으로 재시도
+                        full_name_search = f"{first_province} {first_city}"
+                        first_region = Region.objects.filter(full_name=full_name_search).first()
+                
+                if first_region:
+                    groupbuy.region = first_region
+                    groupbuy.region_name = first_region.name
+                    groupbuy.save()
+                    print(f"[기본 지역 설정] {first_region.name}")
             
             print(f"\n[업데이트 - 다중 지역 처리 완료] 총 {GroupBuyRegion.objects.filter(groupbuy=groupbuy).count()}개 지역 저장됨")
         
