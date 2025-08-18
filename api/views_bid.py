@@ -103,7 +103,7 @@ class BidViewSet(viewsets.ModelViewSet):
         
         if unlimited_token:
             # 무제한 입찰권이 있으면 입찰권을 소비하지 않고 무제한 입찰권 정보만 추가
-            bid = serializer.save(seller=user)
+            bid = serializer.save(seller=user, bid_token=unlimited_token)
             return
         
         # 단품 입찰권 확인

@@ -317,15 +317,25 @@ class GroupBuySerializer(serializers.ModelSerializer):
         for region_link in regions:
             region = region_link.region
             if region:
-                # full_name이나 시/도 + 시/군/구 조합으로 표시
-                # full_name이 '서울특별시 강남구' 형태로 저장되어 있음
+                # 프론트엔드가 기대하는 형식으로 반환
+                # full_name을 우선 사용하고, 없으면 name을 사용
                 display_name = region.full_name or region.name
                 
+                # 시/군/구 이름만 추출 (예: "서울특별시 강남구" -> "강남구")
+                region_name = region.name
+                if region.parent:
+                    # 부모 지역이 있으면 시/도 + 시/군/구 형태로 조합
+                    parent_name = region.parent.name
+                    display_name = f"{parent_name} {region_name}"
+                else:
+                    # 부모가 없으면 그대로 사용
+                    display_name = region_name
+                
                 result.append({
-                    'id': region.code,
+                    'id': region.code,  # code를 id로 사용
                     'code': region.code,
-                    'name': display_name,  # 전체 이름으로 변경
-                    'full_name': region.full_name or region.name,
+                    'name': region_name,  # 시/군/구 이름
+                    'full_name': display_name,  # 전체 이름 (시/도 + 시/군/구)
                     'level': region.level or 2,
                     'parent': region.parent.name if region.parent else None
                 })
