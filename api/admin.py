@@ -90,11 +90,21 @@ class BidTokenAdjustmentLogInline(admin.TabularInline):
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['username', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'display_business_reg_file']
+    list_display = ['get_user_id', 'nickname', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'display_business_reg_file']
     list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified']
     search_fields = ['username', 'email', 'business_number', 'nickname']
     ordering = ['username']
     readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id', 'get_bid_tokens_summary', 'get_adjustment_history')
+    
+    def get_user_id(self, obj):
+        """사용자 아이디 표시 - SNS 사용자는 실제 SNS ID, 일반 사용자는 username"""
+        if obj.sns_type and obj.sns_id:
+            # 카카오나 구글 사용자의 경우 sns_type + sns_id 형태로 표시
+            return f"{obj.sns_type}_{obj.sns_id}"
+        # 일반 이메일 가입자나 sns_id가 없는 경우 username 사용
+        return obj.username
+    get_user_id.short_description = '아이디'
+    get_user_id.admin_order_field = 'username'
     
     def get_sns_type(self, obj):
         """가입 유형 표시"""
@@ -231,7 +241,7 @@ class UserAdmin(admin.ModelAdmin):
 
     # 한글화
     def __init__(self, model, admin_site):
-        self.list_display_links = ('username',)
+        self.list_display_links = ('get_user_id',)
         super().__init__(model, admin_site)
     
     def get_inlines(self, request, obj):
