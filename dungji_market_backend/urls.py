@@ -43,7 +43,7 @@ from rest_framework_simplejwt.views import (
 from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback
-from api.views_verification import send_verification_code, verify_code, check_verification_status
+from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format
 # voting 관련 import는 voting 상태 제거로 인해 삭제됨
 from api.views_final_selection import (
     buyer_final_decision, seller_final_decision, 
@@ -102,6 +102,10 @@ urlpatterns = [
         path('phone/send-code/', send_verification_code, name='send_verification_code'),
         path('phone/verify/', verify_code, name='verify_code'),
         path('phone/status/', check_verification_status, name='check_verification_status'),
+        # 사업자번호 검증 API
+        path('business/verify/', verify_business_number, name='verify_business_number'),
+        path('business/history/', get_business_verification_history, name='business_verification_history'),
+        path('business/check-format/', check_business_number_format, name='check_business_number_format'),
         # 토큰 갱신 및 검증 API
         path('token/refresh-force/', refresh_user_token, name='refresh_user_token'),
         path('token/verify-role/', verify_token_role, name='verify_token_role'),

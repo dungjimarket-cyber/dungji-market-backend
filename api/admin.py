@@ -7,6 +7,7 @@ from .models import (
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
     Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog
 )
+from .models_verification import BusinessNumberVerification
 from .models_inquiry import Inquiry
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
 from django.utils.html import mark_safe
@@ -1072,4 +1073,108 @@ class InquiryAdmin(admin.ModelAdmin):
         )
         self.message_user(request, f"{updated}개의 문의가 답변대기로 처리되었습니다.")
     mark_as_pending.short_description = "답변대기 처리"
+
+
+@admin.register(BusinessNumberVerification)
+class BusinessNumberVerificationAdmin(admin.ModelAdmin):
+    """사업자번호 검증 관리"""
+    list_display = ['user', 'business_number', 'status', 'business_name', 'business_status', 'created_at', 'verified_at']
+    list_filter = ['status', 'business_status', 'created_at', 'verified_at']
+    search_fields = ['user__username', 'user__email', 'business_number', 'business_name']
+    readonly_fields = ['user', 'business_number', 'status', 'business_name', 'representative_name', 
+                      'business_status', 'business_type', 'establishment_date', 'address',
+                      'created_at', 'verified_at', 'error_message', 'api_response_summary']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('user', 'business_number', 'status', 'created_at', 'verified_at')
+        }),
+        ('사업자 정보', {
+            'fields': ('business_name', 'representative_name', 'business_status', 'business_type', 
+                      'establishment_date', 'address'),
+            'classes': ('collapse',)
+        }),
+        ('오류 정보', {
+            'fields': ('error_message', 'api_response_summary'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def api_response_summary(self, obj):
+        """API 응답 요약"""
+        if not obj.api_response:
+            return "응답 없음"
+        
+        try:
+            import json
+            response = obj.api_response
+            if isinstance(response, str):
+                response = json.loads(response)
+            
+            # 요약 정보 추출
+            summary = []
+            if 'data' in response and response['data']:
+                data = response['data'][0] if response['data'] else {}
+                if 'b_stt' in data:
+                    summary.append(f"상태: {data['b_stt']}")
+                if 'tax_type' in data:
+                    summary.append(f"과세유형: {data['tax_type'][:50]}...")
+            
+            if 'message' in response:
+                summary.append(f"메시지: {response['message']}")
+                
+            return ' | '.join(summary) if summary else "데이터 없음"
+        except:
+            return "응답 파싱 오류"
+    api_response_summary.short_description = 'API 응답 요약'
+    
+    def get_queryset(self, request):
+        """관련 객체를 미리 가져와 성능 최적화"""
+        qs = super().get_queryset(request)
+        return qs.select_related('user')
+    
+    def has_add_permission(self, request):
+        """직접 생성 불가 - API를 통해서만 생성"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """수정 불가 - 검증 기록은 읽기 전용"""
+        return False
+    
+    actions = ['retry_verification']
+    
+    def retry_verification(self, request, queryset):
+        """선택한 사업자번호 재검증"""
+        from .utils.business_verification_service import BusinessVerificationService
+        from django.utils import timezone
+        
+        verification_service = BusinessVerificationService()
+        success_count = 0
+        error_count = 0
+        
+        for verification in queryset.filter(status__in=['invalid', 'error']):
+            try:
+                result = verification_service.verify_business_number(verification.business_number)
+                
+                # 새로운 검증 기록 생성
+                BusinessNumberVerification.objects.create(
+                    user=verification.user,
+                    business_number=verification.business_number,
+                    status=result['status'],
+                    business_name=result['data'].get('business_name', '') if result['success'] else '',
+                    business_status=result['data'].get('business_status', '') if result['success'] else '',
+                    verified_at=timezone.now() if result['success'] and result['status'] == 'valid' else None,
+                    error_message=result.get('error_message', '') if not result['success'] else '',
+                    api_response=result.get('api_response', {})
+                )
+                
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                
+        message = f"재검증 완료: 성공 {success_count}건, 실패 {error_count}건"
+        self.message_user(request, message)
+    retry_verification.short_description = "선택한 사업자번호 재검증"
 

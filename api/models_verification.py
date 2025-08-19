@@ -177,3 +177,98 @@ class PhoneVerification(models.Model):
             return False, '1분 후에 다시 시도해주세요.'
         
         return True, None
+
+
+class BusinessNumberVerification(models.Model):
+    """사업자번호 검증 모델"""
+    
+    STATUS_CHOICES = (
+        ('pending', '검증 대기'),
+        ('valid', '유효'),
+        ('invalid', '무효'),
+        ('error', '검증 오류'),
+    )
+    
+    business_number = models.CharField(max_length=12, verbose_name='사업자등록번호')
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='pending',
+        verbose_name='검증 상태'
+    )
+    
+    # 검증 결과 정보
+    business_name = models.CharField(max_length=255, blank=True, null=True, verbose_name='상호명')
+    representative_name = models.CharField(max_length=100, blank=True, null=True, verbose_name='대표자명')
+    business_status = models.CharField(max_length=50, blank=True, null=True, verbose_name='사업상태')
+    business_type = models.CharField(max_length=100, blank=True, null=True, verbose_name='업종')
+    establishment_date = models.DateField(null=True, blank=True, verbose_name='개업일')
+    address = models.TextField(blank=True, null=True, verbose_name='사업장 주소')
+    
+    # 검증 관련 필드
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='검증 요청일')
+    verified_at = models.DateTimeField(null=True, blank=True, verbose_name='검증 완료일')
+    error_message = models.TextField(blank=True, null=True, verbose_name='오류 메시지')
+    
+    # 사용자 연결
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE,
+        related_name='business_verifications',
+        verbose_name='사용자'
+    )
+    
+    # API 응답 저장 (디버깅용)
+    api_response = models.JSONField(
+        default=dict, 
+        blank=True, 
+        verbose_name='API 응답',
+        help_text='국세청 API 응답 데이터'
+    )
+    
+    class Meta:
+        verbose_name = '사업자번호 검증'
+        verbose_name_plural = '사업자번호 검증'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['business_number']),
+            models.Index(fields=['user', 'status']),
+        ]
+    
+    def __str__(self):
+        return f'{self.business_number} - {self.get_status_display()} ({self.user.username})'
+    
+    @staticmethod
+    def validate_business_number_format(business_number):
+        """사업자번호 형식 검증"""
+        # 하이픈 제거
+        clean_number = business_number.replace('-', '')
+        
+        # 길이 체크
+        if len(clean_number) != 10:
+            return False, '사업자번호는 10자리여야 합니다.'
+        
+        # 숫자 체크
+        if not clean_number.isdigit():
+            return False, '사업자번호는 숫자만 입력 가능합니다.'
+        
+        # 체크섬 검증
+        check_array = [1, 3, 7, 1, 3, 7, 1, 3, 5]
+        sum_val = 0
+        
+        for i in range(9):
+            sum_val += int(clean_number[i]) * check_array[i]
+        
+        sum_val += (int(clean_number[8]) * 5) // 10
+        check_digit = (10 - (sum_val % 10)) % 10
+        
+        if check_digit != int(clean_number[9]):
+            return False, '올바르지 않은 사업자번호입니다.'
+        
+        return True, clean_number
+    
+    def format_business_number(self):
+        """사업자번호 형식화 (123-45-67890)"""
+        if len(self.business_number) == 10:
+            return f'{self.business_number[:3]}-{self.business_number[3:5]}-{self.business_number[5:]}'
+        return self.business_number

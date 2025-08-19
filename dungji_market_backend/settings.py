@@ -299,3 +299,6 @@ TOSS_SECRET_KEY = os.getenv('TOSS_SECRET_KEY', 'test_sk_zXLkKEypNArWmo50nX3lmeax
 
 # Frontend URL for payment redirects
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+# Business Number Verification API Key (공공데이터포털 국세청 API)
+BUSINESS_VERIFICATION_API_KEY = os.getenv('BUSINESS_VERIFICATION_API_KEY', '')
