@@ -446,3 +446,91 @@ def check_business_number_format(request):
             'error': result,
             'message': result
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_business_number_registration(request):
+    """회원가입용 사업자번호 검증 API (인증 불필요)
+    
+    Request:
+        {
+            "business_number": "123-45-67890"
+        }
+    """
+    business_number = request.data.get('business_number', '').strip()
+    
+    if not business_number:
+        return Response(
+            {'error': '사업자등록번호를 입력해주세요.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 먼저 형식 검증
+    is_valid_format, clean_number_or_message = BusinessNumberVerification.validate_business_number_format(business_number)
+    
+    if not is_valid_format:
+        return Response({
+            'valid': False,
+            'verified': False,
+            'error': clean_number_or_message,
+            'message': clean_number_or_message
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    clean_number = clean_number_or_message
+    
+    # seller1~seller10은 테스트 계정으로 자동 통과
+    test_accounts = [f'seller{i}' for i in range(1, 11)]
+    if any(test_account in request.data.get('username', '') for test_account in test_accounts):
+        formatted_number = f'{clean_number[:3]}-{clean_number[3:5]}-{clean_number[5:]}'
+        return Response({
+            'valid': True,
+            'verified': True,
+            'business_number': clean_number,
+            'formatted_number': formatted_number,
+            'message': '테스트 계정용 사업자번호가 확인되었습니다.',
+            'business_info': {
+                'business_name': '테스트 사업체',
+                'representative_name': '테스트 대표자',
+                'business_status': '계속사업자',
+                'is_test_account': True
+            }
+        }, status=status.HTTP_200_OK)
+    
+    try:
+        # 실제 사업자번호 검증
+        verification_service = BusinessVerificationService()
+        result = verification_service.verify_business_number(clean_number)
+        
+        response_data = {
+            'business_number': clean_number,
+            'formatted_number': f'{clean_number[:3]}-{clean_number[3:5]}-{clean_number[5:]}',
+            'status': result['status'],
+            'verified': result['success'] and result['status'] == 'valid'
+        }
+        
+        if result['success'] and result['status'] == 'valid':
+            response_data.update({
+                'valid': True,
+                'message': '유효한 사업자등록번호입니다.',
+                'business_info': result['data']
+            })
+            http_status = status.HTTP_200_OK
+        else:
+            response_data.update({
+                'valid': False,
+                'error': result['message'],
+                'message': result['message']
+            })
+            http_status = status.HTTP_400_BAD_REQUEST
+        
+        return Response(response_data, status=http_status)
+        
+    except Exception as e:
+        logger.error(f"회원가입용 사업자번호 검증 오류: {e}", exc_info=True)
+        return Response({
+            'valid': False,
+            'verified': False,
+            'error': '사업자번호 검증 중 오류가 발생했습니다.',
+            'message': '사업자번호 검증 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -33,6 +33,12 @@ class EmailSender:
             # 텍스트 버전 생성
             plain_message = strip_tags(html_message)
             
+            # 개발 환경에서는 실제 이메일 발송 대신 로그만 출력
+            if settings.DEBUG:
+                logger.info(f"[DEBUG] 이메일 발송 시뮬레이션: {recipient_email}, 제목: {subject}")
+                logger.info(f"[DEBUG] 이메일 내용 (첫 100자): {plain_message[:100]}...")
+                return True
+            
             # 이메일 발송
             send_mail(
                 subject=subject,

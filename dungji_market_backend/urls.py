@@ -40,10 +40,10 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback
-from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format
+from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
 # voting 관련 import는 voting 상태 제거로 인해 삭제됨
 from api.views_final_selection import (
     buyer_final_decision, seller_final_decision, 
@@ -93,6 +93,10 @@ urlpatterns = [
         path('find-username-by-phone/', find_username, name='find_username_by_phone'),
         path('reset-password/', reset_password, name='reset_password'),
         path('reset-password-by-phone/', reset_password, name='reset_password_by_phone'),
+        # 이메일 기반 비밀번호 재설정 API
+        path('password-reset/send-email/', send_password_reset_email, name='send_password_reset_email'),
+        path('password-reset/verify-email/', verify_password_reset_email, name='verify_password_reset_email'),
+        path('password-reset/reset/', reset_password_with_email, name='reset_password_with_email'),
         path('withdraw/', withdraw_user, name='withdraw_user'),
         path('sns-login/', create_sns_user, name='sns_login'),
         path('profile/', user_profile, name='profile'),
@@ -104,6 +108,7 @@ urlpatterns = [
         path('phone/status/', check_verification_status, name='check_verification_status'),
         # 사업자번호 검증 API
         path('business/verify/', verify_business_number, name='verify_business_number'),
+        path('business/verify-registration/', verify_business_number_registration, name='verify_business_number_registration'),
         path('business/history/', get_business_verification_history, name='business_verification_history'),
         path('business/check-format/', check_business_number_format, name='check_business_number_format'),
         # 토큰 갱신 및 검증 API

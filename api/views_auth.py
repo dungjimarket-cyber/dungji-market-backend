@@ -5,6 +5,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q, Max, IntegerField
 from django.db.models.functions import Cast, Substr
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,7 +14,9 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Region, GroupBuy, Participation
+from .models_verification import EmailVerification
 from .utils.s3_utils import upload_file_to_s3
+from .utils.email_sender import EmailSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
 import json
 import re
@@ -119,6 +123,7 @@ def register_user_v2(request):
         # 판매자 전용 필드
         business_name = data.get('business_name', '')
         business_reg_number = data.get('business_reg_number', '')
+        representative_name = data.get('representative_name', '')
         business_address = data.get('business_address', '')
         is_remote_sales_enabled = data.get('is_remote_sales_enabled', 'false').lower() == 'true'
         business_reg_image = files.get('business_reg_image')
@@ -185,9 +190,9 @@ def register_user_v2(request):
         
         # 판매자인 경우 추가 검증
         if role == 'seller':
-            if not business_reg_number or not business_address:
+            if not business_reg_number or not business_address or not representative_name:
                 return Response(
-                    {'error': '판매자는 사업자등록번호와 사업장 주소를 입력해야 합니다.'},
+                    {'error': '판매자는 사업자등록번호, 대표자명, 사업장 주소를 입력해야 합니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
@@ -294,8 +299,15 @@ def register_user_v2(request):
             # 판매자 전용 필드 설정
             if role == 'seller':
                 # 사업자등록번호 하이픈 제거 후 저장
-                user.business_reg_number = business_reg_number.replace('-', '')
+                user.business_number = business_reg_number.replace('-', '')
+                user.representative_name = representative_name
                 user.address_detail = business_address
+                
+                # seller1~seller10은 테스트 계정으로 자동으로 사업자 인증 완료 처리
+                test_accounts = [f'seller{i}' for i in range(1, 11)]
+                if username_for_db in test_accounts:
+                    user.is_business_verified = True
+                    logger.info(f"테스트 계정 {username_for_db} 자동 사업자 인증 완료")
                 
                 # 사업자등록증 이미지 업로드
                 if business_reg_image:
@@ -1032,4 +1044,253 @@ def user_profile(request):
         return Response(
             {'error': '지원하지 않는 메서드입니다.'},
             status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_password_reset_email(request):
+    """
+    이메일 기반 비밀번호 재설정 인증번호 발송
+    """
+    try:
+        username = request.data.get('username')
+        email = request.data.get('email')
+        
+        if not username or not email:
+            return Response(
+                {'error': '아이디와 이메일을 모두 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 사용자 확인
+        user = User.objects.filter(username=username, email=email).first()
+        if not user:
+            return Response(
+                {'error': '입력한 정보와 일치하는 사용자를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # IP 주소 가져오기
+        ip_address = request.META.get('HTTP_X_FORWARDED_FOR')
+        if ip_address:
+            ip_address = ip_address.split(',')[0]
+        else:
+            ip_address = request.META.get('REMOTE_ADDR')
+        
+        # 발송 제한 확인
+        can_send, error_message = EmailVerification.check_rate_limit(email, ip_address)
+        if not can_send:
+            return Response(
+                {'error': error_message},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        
+        # 기존 대기 중인 인증 코드가 있다면 만료시키기
+        EmailVerification.objects.filter(
+            email=email,
+            purpose='password_reset',
+            status='pending'
+        ).update(status='expired')
+        
+        # 새 인증 코드 생성
+        verification = EmailVerification.objects.create(
+            email=email,
+            purpose='password_reset',
+            user=user,
+            ip_address=ip_address,
+            additional_info={'username': username}
+        )
+        
+        # 이메일 발송
+        success = EmailSender.send_notification_email(
+            recipient_email=email,
+            subject='[둥지마켓] 비밀번호 재설정 인증번호',
+            template_name='emails/password_reset_verification.html',
+            context={
+                'verification_code': verification.verification_code,
+                'expires_minutes': 5,
+                'user': user,
+                'site_url': 'https://dungjimarket.com'
+            }
+        )
+        
+        if success:
+            logger.info(f"비밀번호 재설정 인증번호 발송 성공: {email} (User: {user.username})")
+            return Response({
+                'message': '인증번호가 이메일로 발송되었습니다.',
+                'expires_in_minutes': 5
+            })
+        else:
+            verification.status = 'failed'
+            verification.save()
+            return Response(
+                {'error': '이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    except Exception as e:
+        logger.error(f"비밀번호 재설정 이메일 발송 오류: {str(e)}")
+        return Response(
+            {'error': '처리 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_password_reset_email(request):
+    """
+    이메일 인증번호 확인
+    """
+    try:
+        username = request.data.get('username')
+        email = request.data.get('email')
+        verification_code = request.data.get('verification_code')
+        
+        if not username or not email or not verification_code:
+            return Response(
+                {'error': '모든 필드를 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 사용자 확인
+        user = User.objects.filter(username=username, email=email).first()
+        if not user:
+            return Response(
+                {'error': '입력한 정보와 일치하는 사용자를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 인증 코드 확인
+        verification = EmailVerification.objects.filter(
+            email=email,
+            purpose='password_reset',
+            status='pending'
+        ).order_by('-created_at').first()
+        
+        if not verification:
+            return Response(
+                {'error': '유효한 인증 요청을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 인증 코드 검증
+        is_valid, message = verification.verify(verification_code)
+        
+        if is_valid:
+            # 세션에 인증 정보 저장 (비밀번호 재설정용)
+            request.session['password_reset_verified'] = True
+            request.session['password_reset_user_id'] = user.id
+            request.session['password_reset_verified_at'] = timezone.now().isoformat()
+            
+            logger.info(f"비밀번호 재설정 이메일 인증 성공: {email} (User: {user.username})")
+            return Response({
+                'message': '인증이 완료되었습니다.',
+                'verified': True
+            })
+        else:
+            return Response(
+                {'error': message},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    except Exception as e:
+        logger.error(f"비밀번호 재설정 이메일 인증 오류: {str(e)}")
+        return Response(
+            {'error': '처리 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_with_email(request):
+    """
+    이메일 인증 후 비밀번호 재설정
+    """
+    try:
+        new_password = request.data.get('new_password')
+        
+        if not new_password:
+            return Response(
+                {'error': '새 비밀번호를 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 세션에서 인증 정보 확인
+        if not request.session.get('password_reset_verified'):
+            return Response(
+                {'error': '인증이 완료되지 않았습니다.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        user_id = request.session.get('password_reset_user_id')
+        if not user_id:
+            return Response(
+                {'error': '사용자 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 인증 시간 확인 (10분 제한)
+        verified_at_str = request.session.get('password_reset_verified_at')
+        if verified_at_str:
+            from django.utils.dateparse import parse_datetime
+            verified_at = parse_datetime(verified_at_str)
+            if timezone.now() - verified_at > timedelta(minutes=10):
+                # 세션 정보 삭제
+                for key in ['password_reset_verified', 'password_reset_user_id', 'password_reset_verified_at']:
+                    request.session.pop(key, None)
+                return Response(
+                    {'error': '인증 시간이 만료되었습니다. 다시 인증해주세요.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+        
+        # 사용자 가져오기
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response(
+                {'error': '사용자를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 비밀번호 재설정
+        user.set_password(new_password)
+        user.save()
+        
+        # 세션 정보 삭제
+        for key in ['password_reset_verified', 'password_reset_user_id', 'password_reset_verified_at']:
+            request.session.pop(key, None)
+        
+        # IP 주소 가져오기
+        ip_address = request.META.get('HTTP_X_FORWARDED_FOR')
+        if ip_address:
+            ip_address = ip_address.split(',')[0]
+        else:
+            ip_address = request.META.get('REMOTE_ADDR')
+        
+        # 비밀번호 변경 확인 이메일 발송
+        EmailSender.send_notification_email(
+            recipient_email=user.email,
+            subject='[둥지마켓] 비밀번호가 변경되었습니다',
+            template_name='emails/password_changed_confirmation.html',
+            context={
+                'user': user,
+                'changed_at': timezone.now(),
+                'ip_address': ip_address,
+                'site_url': 'https://dungjimarket.com'
+            }
+        )
+        
+        logger.info(f"비밀번호 재설정 완료: {user.username} (ID: {user.id})")
+        
+        return Response({
+            'message': '비밀번호가 성공적으로 변경되었습니다.'
+        })
+    
+    except Exception as e:
+        logger.error(f"비밀번호 재설정 오류: {str(e)}")
+        return Response(
+            {'error': '비밀번호 변경 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

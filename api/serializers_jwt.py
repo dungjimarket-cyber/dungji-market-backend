@@ -18,14 +18,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         try:
             data = super().validate(attrs)
             
-            # 로그인 성공 후 판매자인 경우 사업자번호 검증
-            user = authenticate(
-                username=attrs.get('username'),
-                password=attrs.get('password')
-            )
-            
-            if user and user.role == 'seller':
-                self._validate_seller_business_number(user)
+            # 로그인 성공 후 판매자인 경우 사업자번호 검증 (로그인시 과부화 및 타이트한 인증 우려로 제거)
+            # user = authenticate(
+            #     username=attrs.get('username'),
+            #     password=attrs.get('password')
+            # )
+            # 
+            # if user and user.role == 'seller':
+            #     self._validate_seller_business_number(user)
                 
         except serializers.ValidationError as e:
             # 기본 에러 메시지를 커스텀 메시지로 변경

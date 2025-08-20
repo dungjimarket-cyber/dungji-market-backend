@@ -49,6 +49,7 @@ class User(AbstractUser):
     
     # 판매자 추가 정보
     business_number = models.CharField(max_length=20, blank=True, null=True, verbose_name='사업자등록번호')
+    representative_name = models.CharField(max_length=100, blank=True, null=True, verbose_name='대표자명')
     is_remote_sales = models.BooleanField(default=False, verbose_name='비대면 판매 가능')
     
     # 비대면 판매 관련 필드
@@ -1147,8 +1148,8 @@ def handle_status_change(sender, instance, **kwargs):
     if update_fields is None or 'status' in update_fields:
         instance.notify_status_change()
 
-# Import PhoneVerification model
-from .models_verification import PhoneVerification
+# Import verification models
+from .models_verification import PhoneVerification, BusinessNumberVerification, EmailVerification
 # Import BidVote model - voting 상태 제거로 인해 삭제됨
 # from .models_voting import BidVote
 # Import Banner and Event models
