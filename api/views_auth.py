@@ -132,6 +132,24 @@ def register_user_v2(request):
         social_provider = data.get('social_provider', '')
         social_id = data.get('social_id', '')
         
+        # 추천인 코드
+        referral_code = data.get('referral_code', '')
+        
+        # 추천인 코드 검증 (입력된 경우만)
+        referrer_user = None
+        if referral_code:
+            # TODO: 실제 둥지파트너스 시스템 구축 시 추천인 코드 검증 로직 구현
+            # 현재는 테스트용으로 'PARTNER' 코드만 유효하다고 가정
+            if referral_code.upper() == 'PARTNER':
+                # 임시로 admin 사용자를 추천인으로 설정 (실제로는 파트너 시스템에서 조회)
+                try:
+                    referrer_user = User.objects.filter(role='admin').first()
+                    logger.info(f"유효한 추천인 코드 사용: {referral_code}")
+                except User.DoesNotExist:
+                    logger.warning(f"추천인을 찾을 수 없음: {referral_code}")
+            else:
+                logger.info(f"무효한 추천인 코드: {referral_code}")
+        
         # 카카오톡 가입 시 판매회원 차단
         if social_provider == 'kakao' and role == 'seller':
             return Response(
@@ -230,7 +248,8 @@ def register_user_v2(request):
                 role=role,
                 sns_type=social_provider if social_provider else 'email',
                 sns_id=social_id if social_id else None,
-                is_remote_sales_enabled=is_remote_sales_enabled if role == 'seller' else False
+                is_remote_sales_enabled=is_remote_sales_enabled if role == 'seller' else False,
+                referred_by=referral_code if referral_code else None
             )
             
             # 추가 정보가 있으면 프로필에 저장
@@ -335,16 +354,60 @@ def register_user_v2(request):
             
             user.save()
             
-            # 판매회원 가입시 입찰권 10매 자동 추가
+            # 판매회원 가입시 입찰권 자동 추가
             if role == 'seller':
                 from .models import BidToken
-                for i in range(10):
+                base_tokens = 10  # 기본 지급 토큰
+                bonus_tokens = 0  # 추천인 보너스 토큰
+                
+                # 유효한 추천인 코드 사용 시 추가 10매 지급
+                if referrer_user and referral_code.upper() == 'PARTNER':
+                    bonus_tokens = 10
+                    logger.info(f"추천인 코드 보너스 적용: +{bonus_tokens}매")
+                
+                total_tokens = base_tokens + bonus_tokens
+                
+                for i in range(total_tokens):
                     BidToken.objects.create(
                         seller=user,
                         token_type='single',
                         status='active'
                     )
-                logger.info(f"판매회원 {user.username}에게 입찰권 10매 지급 완료")
+                
+                logger.info(f"판매회원 {user.username}에게 입찰권 {total_tokens}매 지급 완료 (기본: {base_tokens}매, 추천 보너스: {bonus_tokens}매)")
+            
+            # 추천인 기록 생성 (유효한 추천인 코드 사용 시)
+            if referrer_user and referral_code:
+                try:
+                    from .models_partner import ReferralRecord, Partner
+                    
+                    # 파트너 정보 조회 (임시로 첫 번째 파트너 사용)
+                    partner = Partner.objects.first()
+                    
+                    if partner:
+                        referral_record = ReferralRecord.objects.create(
+                            partner=partner,
+                            referred_user=user,
+                            subscription_status='active',
+                            # 추후 실제 결제 시스템 연동 시 금액 업데이트
+                            total_amount=0,
+                            commission_amount=0
+                        )
+                        logger.info(f"추천 기록 생성 완료: {referral_record}")
+                        
+                        # 파트너 알림 생성
+                        from .models_partner import PartnerNotification
+                        PartnerNotification.objects.create(
+                            partner=partner,
+                            notification_type='signup',
+                            title='신규 회원 가입',
+                            message=f'{user.nickname}님이 추천 코드 {referral_code}를 통해 가입했습니다.',
+                            referral_record=referral_record
+                        )
+                        logger.info(f"파트너 알림 생성 완료")
+                        
+                except Exception as e:
+                    logger.error(f"추천 기록 생성 실패: {str(e)}")
             
             logger.info(f"회원가입 완료: nickname={nickname}, username={user.username}, email={user.email} (ID: {user.id}, Role: {role})")
             
