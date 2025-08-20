@@ -70,9 +70,9 @@ class BidTokenInline(admin.TabularInline):
     max_num = 10  # 최대 10개만 표시
     
     def get_queryset(self, request):
-        # 최근 10개만 표시
+        # 최근 생성된 것부터 정렬 (슬라이싱 제거로 Django admin 오류 방지)
         qs = super().get_queryset(request)
-        return qs.order_by('-created_at')[:10]
+        return qs.order_by('-created_at')
 
 class BidTokenAdjustmentLogInline(admin.TabularInline):
     model = BidTokenAdjustmentLog
@@ -84,9 +84,9 @@ class BidTokenAdjustmentLogInline(admin.TabularInline):
     max_num = 10  # 최대 10개만 표시
     
     def get_queryset(self, request):
-        # 최근 10개만 표시
+        # 최근 생성된 것부터 정렬 (슬라이싱 제거로 Django admin 오류 방지)
         qs = super().get_queryset(request)
-        return qs.order_by('-created_at')[:10]
+        return qs.order_by('-created_at')
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):

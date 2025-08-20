@@ -28,15 +28,18 @@ class BusinessVerificationService:
         """
         사업자번호 검증 (국세청 상태조회 API 사용)
         
+        주의: 국세청 API는 개인정보보호법에 따라 상호명, 대표자명, 주소를 제공하지 않습니다.
+        오직 사업자등록번호의 유효성과 사업 상태만 확인 가능합니다.
+        
         Args:
             business_number (str): 사업자등록번호 (10자리)
-            business_name (str): 상호명 (선택사항, 이 API에서는 사용되지 않음)
+            business_name (str): 상호명 (선택사항, 검증에 사용되지 않음)
         
         Returns:
             dict: 검증 결과
                 - success (bool): 검증 성공 여부
                 - status (str): 상태 ('valid', 'invalid', 'error')
-                - data (dict): 사업자 정보
+                - data (dict): 사업자 정보 (상태, 과세유형 등, 상호명/대표자명은 포함되지 않음)
                 - message (str): 결과 메시지
         """
         
@@ -144,19 +147,21 @@ class BusinessVerificationService:
                 message = tax_type or '등록되지 않은 사업자등록번호입니다.'
             
             # 사업자 정보 추출 (API 응답에 따라)
+            # 주의: 국세청 API는 개인정보보호를 위해 상호명, 대표자명, 주소를 제공하지 않음
             data = {
                 'business_number': business_number,
-                'business_name': tax_type,  # 과세유형 메시지에 상호명 정보가 포함됨
-                'representative_name': '',  # 이 API에서는 제공되지 않음
+                'business_name': '',  # 국세청 API에서는 제공되지 않음 (개인정보보호)
+                'representative_name': '',  # 국세청 API에서는 제공되지 않음 (개인정보보호)
                 'business_status': business_status_name,
                 'business_status_code': business_status_code,
                 'business_type': business_info.get('utcc_yn', ''),  # 단위과세전환사업자 여부
-                'establishment_date': None,  # 이 API에서는 제공되지 않음
-                'address': '',  # 이 API에서는 제공되지 않음
+                'establishment_date': None,  # 국세청 API에서는 제공되지 않음
+                'address': '',  # 국세청 API에서는 제공되지 않음 (개인정보보호)
                 'end_date': business_info.get('end_dt', ''),  # 폐업일
                 'tax_type': tax_type,  # 과세유형 메시지
                 'tax_type_code': business_info.get('tax_type_cd', ''),  # 과세유형 코드
                 'invoice_apply_date': business_info.get('invoice_apply_dt', ''),  # 세금계산서 적용일
+                'api_note': '국세청 API는 개인정보보호를 위해 상호명, 대표자명, 주소를 제공하지 않습니다.'
             }
             
             return {
