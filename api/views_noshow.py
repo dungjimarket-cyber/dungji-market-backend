@@ -120,7 +120,7 @@ def check_noshow_report_eligibility(request):
         selected_bid = Bid.objects.filter(
             groupbuy=groupbuy,
             seller=user,
-            status='selected'
+            status='accepted'
         ).exists()
         
         if not selected_bid:
@@ -168,7 +168,7 @@ def check_noshow_report_eligibility(request):
         is_selected_seller = Bid.objects.filter(
             groupbuy=groupbuy,
             seller=reported_user,
-            status='selected'
+            status='accepted'
         ).exists()
         
         if not is_selected_seller:
