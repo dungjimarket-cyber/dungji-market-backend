@@ -479,24 +479,6 @@ def verify_business_number_registration(request):
     
     clean_number = clean_number_or_message
     
-    # seller1~seller10은 테스트 계정으로 자동 통과
-    test_accounts = [f'seller{i}' for i in range(1, 11)]
-    if any(test_account in request.data.get('username', '') for test_account in test_accounts):
-        formatted_number = f'{clean_number[:3]}-{clean_number[3:5]}-{clean_number[5:]}'
-        return Response({
-            'valid': True,
-            'verified': True,
-            'business_number': clean_number,
-            'formatted_number': formatted_number,
-            'message': '테스트 계정용 사업자번호가 확인되었습니다.',
-            'business_info': {
-                'business_name': '테스트 사업체',
-                'representative_name': '테스트 대표자',
-                'business_status': '계속사업자',
-                'is_test_account': True
-            }
-        }, status=status.HTTP_200_OK)
-    
     try:
         # 실제 사업자번호 검증
         verification_service = BusinessVerificationService()
