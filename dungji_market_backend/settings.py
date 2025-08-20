@@ -62,6 +62,10 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
+# 이메일 설정 (Resend 사용)
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dungjimarket.com')
+SITE_URL = os.getenv('SITE_URL', 'https://dungjimarket.com')
+
 # CSRF 설정
 CSRF_TRUSTED_ORIGINS = [
     "https://dungjimarket.com",

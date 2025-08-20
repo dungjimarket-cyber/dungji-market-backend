@@ -16,7 +16,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Region, GroupBuy, Participation
 from .models_verification import EmailVerification
 from .utils.s3_utils import upload_file_to_s3
-from .utils.email_sender import EmailSender
+from .utils.resend_sender import ResendSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
 import json
 import re
@@ -1165,17 +1165,11 @@ def send_password_reset_email(request):
             additional_info={'username': username}
         )
         
-        # 이메일 발송
-        success = EmailSender.send_notification_email(
+        # Resend를 통해 이메일 발송
+        success = ResendSender.send_password_reset_verification(
             recipient_email=email,
-            subject='[둥지마켓] 비밀번호 재설정 인증번호',
-            template_name='emails/password_reset_verification.html',
-            context={
-                'verification_code': verification.verification_code,
-                'expires_minutes': 5,
-                'user': user,
-                'site_url': 'https://dungjimarket.com'
-            }
+            username=user.username,
+            verification_code=verification.verification_code
         )
         
         if success:
@@ -1333,16 +1327,11 @@ def reset_password_with_email(request):
             ip_address = request.META.get('REMOTE_ADDR')
         
         # 비밀번호 변경 확인 이메일 발송
-        EmailSender.send_notification_email(
+        ResendSender.send_password_changed_confirmation(
             recipient_email=user.email,
-            subject='[둥지마켓] 비밀번호가 변경되었습니다',
-            template_name='emails/password_changed_confirmation.html',
-            context={
-                'user': user,
-                'changed_at': timezone.now(),
-                'ip_address': ip_address,
-                'site_url': 'https://dungjimarket.com'
-            }
+            username=user.username,
+            changed_at=timezone.now(),
+            ip_address=ip_address
         )
         
         logger.info(f"비밀번호 재설정 완료: {user.username} (ID: {user.id})")
