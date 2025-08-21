@@ -100,6 +100,8 @@ class SellerProfileView(APIView):
             "email": user.email,
             "phone": user.phone_number if hasattr(user, 'phone_number') else '',
             "businessNumber": user.business_number if hasattr(user, 'business_number') else '',
+            "businessVerified": user.is_business_verified if hasattr(user, 'is_business_verified') else False,  # 사업자번호 인증 상태
+            "representativeName": user.representative_name if hasattr(user, 'representative_name') else '',  # 대표자명
             "isRemoteSales": user.is_remote_sales_enabled if hasattr(user, 'is_remote_sales_enabled') else False,
             "remoteSalesCertification": user.remote_sales_certification if hasattr(user, 'remote_sales_certification') else None,
             "remoteSalesVerified": user.remote_sales_verified if hasattr(user, 'remote_sales_verified') else False,
@@ -190,18 +192,38 @@ class SellerProfileView(APIView):
         allowed_fields = [
             'nickname', 'description', 'phone', 'address', 
             'business_number', 'is_remote_sales', 'address_region_id',
-            'profile_image'
+            'profile_image', 'email', 'representative_name'
         ]
         
         # 요청 데이터 필터링
         update_data = {}
+        business_number_to_verify = None  # 유효성 검사할 사업자등록번호
+        
         for field in allowed_fields:
             if field in request.data:
                 # 필드명 변환 (프론트엔드 -> 백엔드)
                 if field == 'phone':
                     update_data['phone_number'] = request.data[field].replace('-', '')
                 elif field == 'business_number':
-                    update_data['business_number'] = request.data[field].replace('-', '')
+                    # 사업자등록번호 처리
+                    new_business_number = request.data[field].replace('-', '')
+                    
+                    # 기존 사업자등록번호가 없거나 다른 경우에만 유효성 검사
+                    if not user.business_number or user.business_number != new_business_number:
+                        # 사업자번호가 이미 인증된 경우 수정 불가
+                        if user.is_business_verified:
+                            return Response(
+                                {"detail": "인증된 사업자등록번호는 수정할 수 없습니다."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        business_number_to_verify = new_business_number
+                    update_data['business_number'] = new_business_number
+                elif field == 'representative_name':
+                    # 대표자명 저장
+                    update_data['representative_name'] = request.data[field]
+                elif field == 'email':
+                    # 이메일 저장
+                    update_data['email'] = request.data[field]
                 elif field == 'is_remote_sales':
                     # 문자열 'true'/'false'를 Boolean으로 변환
                     value = request.data[field]
@@ -224,6 +246,26 @@ class SellerProfileView(APIView):
                         )
                 else:
                     update_data[field] = request.data[field]
+        
+        # 사업자등록번호 유효성 검사 (필요한 경우)
+        if business_number_to_verify:
+            from .utils.business_verification_service import BusinessVerificationService
+            
+            verification_service = BusinessVerificationService()
+            result = verification_service.verify_business_number(
+                business_number_to_verify
+            )
+            
+            if result['success'] and result['status'] == 'valid':
+                # 유효성 검사 통과
+                update_data['is_business_verified'] = True
+                logger.info(f"사업자등록번호 {business_number_to_verify} 인증 성공")
+            else:
+                # 유효성 검사 실패
+                return Response(
+                    {"detail": result.get('message', '유효하지 않은 사업자등록번호입니다.')},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # 닉네임 중복 확인
         if 'nickname' in update_data:
