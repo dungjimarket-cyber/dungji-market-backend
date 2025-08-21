@@ -12,6 +12,9 @@ class UserCreationForm(forms.ModelForm):
   class Meta:
     model = User;
     fields = ('username', 'email', 'role');
+    labels = {
+      'username': '아이디',  # 사용자 이름 → 아이디로 변경
+    }
     widgets = {
       'username': forms.TextInput(attrs={'required': True}),
       'email': forms.EmailInput(attrs={'required': True}),
@@ -46,3 +49,6 @@ class UserChangeForm(forms.ModelForm):
   class Meta:
     model = User;
     fields = ('username', 'email', 'role', 'password', 'is_active', 'is_staff');
+    labels = {
+      'username': '아이디',  # 사용자 이름 → 아이디로 변경
+    }

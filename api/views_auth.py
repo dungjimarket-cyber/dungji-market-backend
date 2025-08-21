@@ -150,12 +150,7 @@ def register_user_v2(request):
             else:
                 logger.info(f"무효한 추천인 코드: {referral_code}")
         
-        # 카카오톡 가입 시 판매회원 차단
-        if social_provider == 'kakao' and role == 'seller':
-            return Response(
-                {'error': '카카오톡으로는 판매회원 가입이 불가능합니다. 일반 회원가입을 이용해주세요.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # 카카오톡 판매회원 가입 허용 (109번 요구사항 반영)
         
         # 카카오톡 가입 시 닉네임 자동 생성
         if social_provider == 'kakao' and not nickname:
@@ -206,8 +201,9 @@ def register_user_v2(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # 판매자인 경우 추가 검증
-        if role == 'seller':
+        # 판매자인 경우 추가 검증 (카카오톡 가입 시에는 나중에 입력 가능)
+        if role == 'seller' and not social_provider:
+            # 일반 가입인 경우에만 필수 필드 검증
             if not business_reg_number or not business_address or not representative_name:
                 return Response(
                     {'error': '판매자는 사업자등록번호, 대표자명, 사업장 주소를 입력해야 합니다.'},
@@ -317,10 +313,13 @@ def register_user_v2(request):
             
             # 판매자 전용 필드 설정
             if role == 'seller':
-                # 사업자등록번호 하이픈 제거 후 저장
-                user.business_number = business_reg_number.replace('-', '')
-                user.representative_name = representative_name
-                user.address_detail = business_address
+                # 사업자등록번호 하이픈 제거 후 저장 (값이 있는 경우만)
+                if business_reg_number:
+                    user.business_number = business_reg_number.replace('-', '')
+                if representative_name:
+                    user.representative_name = representative_name
+                if business_address:
+                    user.address_detail = business_address
                 
                 # seller1~seller10은 테스트 계정으로 자동으로 사업자 인증 완료 처리
                 test_accounts = [f'seller{i}' for i in range(1, 11)]
@@ -611,6 +610,7 @@ def get_user_profile(request):
             'sns_type': user.sns_type,  # SNS 로그인 타입 추가
             'profile_image': user.profile_image,
             'business_reg_number': user.business_reg_number,
+            'representative_name': user.representative_name, # 대표자명 필드 추가
             'is_business_verified': user.is_business_verified,
             'is_remote_sales_enabled': user.is_remote_sales_enabled,
             'remote_sales_verified': user.remote_sales_verified,
@@ -704,6 +704,9 @@ def update_user_profile(request):
         # 사업자 정보 업데이트
         if 'business_number' in data:
             user.business_number = data['business_number']
+        
+        if 'representative_name' in data:
+            user.representative_name = data['representative_name']
         
         if 'is_remote_sales' in data:
             # boolean 또는 문자열 처리
