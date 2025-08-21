@@ -84,14 +84,12 @@ class BidViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer, is_update=False):
         """
         입찰 생성 또는 업데이트 시 현재 사용자를 판매자로 설정하고 입찰권 사용 처리
+        견적 수정 시에도 견적티켓을 소모함 (기획 요구사항)
         """
         user = self.request.user
         now = timezone.now()
         
-        # 업데이트인 경우 입찰권을 소비하지 않음
-        if is_update:
-            serializer.save(seller=user)
-            return
+        # 견적 수정 시에도 견적티켓 소모 (기획 요구사항에 따라 변경)
         
         # 무제한 입찰권 확인
         unlimited_token = BidToken.objects.filter(
