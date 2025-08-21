@@ -1102,3 +1102,232 @@ def add_bid_permission_endpoint(request, user_id):
     except Exception as e:
         logger.error(f"입찰권 부여 오류: {str(e)}")
         return Response({"error": "서버 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminRole])
+def get_seller_detail_with_full_info(request, seller_id):
+    """
+    판매자 상세 정보를 토큰, 이력 정보와 함께 조회
+    URL: /api/admin/sellers/{seller_id}/
+    """
+    try:
+        from api.models import BidToken, BidTokenPurchase, BidTokenUsage, BidTokenAdjustmentLog
+        
+        seller = User.objects.get(pk=seller_id, role='seller')
+        
+        # 기본 정보
+        data = {
+            'id': seller.id,
+            'username': seller.username,
+            'actual_username': seller.username,
+            'nickname': seller.nickname or seller.username,
+            'email': seller.email,
+            'phone_number': seller.phone_number,
+            'seller_category': seller.seller_category,
+            'is_business_verified': seller.is_business_verified,
+            'business_reg_number': seller.business_reg_number or '--',
+            'business_license_image': seller.business_license_image.url if seller.business_license_image else None,
+            'date_joined': seller.date_joined.isoformat(),
+            'role': seller.role,
+            'is_active': seller.is_active,
+            'active_tokens_count': BidToken.objects.filter(seller=seller, status='active', token_type='single').count(),
+        }
+        
+        # 토큰 정보
+        active_subscription = BidToken.objects.filter(
+            seller=seller,
+            status='active',
+            token_type='unlimited'
+        ).order_by('-expires_at').first()
+        
+        data['tokens'] = {
+            'single_tokens_count': BidToken.objects.filter(seller=seller, status='active', token_type='single').count(),
+            'has_subscription': bool(active_subscription),
+            'subscription_expires_at': active_subscription.expires_at.isoformat() if active_subscription else None
+        }
+        
+        # 사용 이력 (최근 20건)
+        usage_history = BidTokenUsage.objects.filter(
+            token__seller=seller
+        ).select_related('bid').order_by('-used_at')[:20]
+        
+        data['usage_history'] = [
+            {
+                'id': usage.id,
+                'used_at': usage.used_at.isoformat(),
+                'bid_id': usage.bid.id if usage.bid else None
+            }
+            for usage in usage_history
+        ]
+        
+        # 구매 내역 (최근 20건)
+        purchase_history = BidTokenPurchase.objects.filter(
+            seller=seller
+        ).order_by('-payment_date')[:20]
+        
+        data['purchase_history'] = [
+            {
+                'id': purchase.id,
+                'token_type': purchase.token_type,
+                'quantity': purchase.quantity,
+                'total_price': float(purchase.total_price),
+                'payment_date': purchase.payment_date.isoformat()
+            }
+            for purchase in purchase_history
+        ]
+        
+        # 조정 이력 (최근 20건)
+        adjustment_logs = BidTokenAdjustmentLog.objects.filter(
+            seller=seller
+        ).select_related('admin').order_by('-created_at')[:20]
+        
+        data['adjustment_logs'] = [
+            {
+                'id': log.id,
+                'adjustment_type': log.adjustment_type,
+                'quantity': log.quantity,
+                'reason': log.reason,
+                'admin_username': log.admin.username if log.admin else 'System',
+                'created_at': log.created_at.isoformat()
+            }
+            for log in adjustment_logs
+        ]
+        
+        return Response(data)
+        
+    except User.DoesNotExist:
+        return Response({"error": "판매자를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"판매자 상세 조회 오류: {str(e)}")
+        return Response({"error": "서버 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminRole])
+def adjust_bid_tokens(request):
+    """
+    견적티켓 조정 API
+    URL: /api/admin/bid-tokens/adjust/
+    """
+    try:
+        from api.models import BidToken, BidTokenAdjustmentLog
+        
+        seller_id = request.data.get('seller_id')
+        action = request.data.get('action')  # 'add' or 'subtract'
+        amount = request.data.get('amount')
+        reason = request.data.get('reason')
+        
+        if not all([seller_id, action, amount, reason]):
+            return Response({'error': '필수 정보가 누락되었습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        seller = User.objects.get(pk=seller_id, role='seller')
+        
+        if action == 'add':
+            # 토큰 추가
+            for _ in range(amount):
+                BidToken.objects.create(
+                    seller=seller,
+                    token_type='single',
+                    status='active'
+                )
+            adjustment_type = 'add'
+            message = f'견적티켓 {amount}개가 추가되었습니다.'
+            
+        elif action == 'subtract':
+            # 토큰 차감
+            active_tokens = BidToken.objects.filter(
+                seller=seller,
+                status='active',
+                token_type='single'
+            ).order_by('created_at')[:amount]
+            
+            if active_tokens.count() < amount:
+                return Response({'error': '차감할 견적티켓이 부족합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            for token in active_tokens:
+                token.status = 'expired'
+                token.save()
+            
+            adjustment_type = 'subtract'
+            message = f'견적티켓 {amount}개가 차감되었습니다.'
+        else:
+            return Response({'error': '유효하지 않은 작업입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 조정 이력 기록
+        BidTokenAdjustmentLog.objects.create(
+            seller=seller,
+            admin=request.user,
+            adjustment_type=adjustment_type,
+            quantity=amount,
+            reason=reason
+        )
+        
+        return Response({'message': message})
+        
+    except User.DoesNotExist:
+        return Response({'error': '판매자를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"견적티켓 조정 오류: {str(e)}")
+        return Response({'error': '서버 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminRole])
+def grant_subscription(request):
+    """
+    구독권 부여 API
+    URL: /api/admin/bid-tokens/grant-subscription/
+    """
+    try:
+        from datetime import timedelta
+        from django.utils import timezone
+        from api.models import BidToken, BidTokenAdjustmentLog
+        
+        seller_id = request.data.get('seller_id')
+        days = request.data.get('days')
+        reason = request.data.get('reason')
+        
+        if not all([seller_id, days, reason]):
+            return Response({'error': '필수 정보가 누락되었습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        seller = User.objects.get(pk=seller_id, role='seller')
+        
+        # 기존 활성 구독권 비활성화
+        BidToken.objects.filter(
+            seller=seller,
+            token_type='unlimited',
+            status='active'
+        ).update(status='expired')
+        
+        # 새 구독권 생성
+        expires_at = timezone.now() + timedelta(days=days)
+        BidToken.objects.create(
+            seller=seller,
+            token_type='unlimited',
+            status='active',
+            expires_at=expires_at
+        )
+        
+        # 조정 이력 기록
+        BidTokenAdjustmentLog.objects.create(
+            seller=seller,
+            admin=request.user,
+            adjustment_type='grant_subscription',
+            quantity=days,
+            reason=reason
+        )
+        
+        return Response({
+            'message': f'{days}일 구독권이 부여되었습니다.',
+            'expires_at': expires_at.isoformat()
+        })
+        
+    except User.DoesNotExist:
+        return Response({'error': '판매자를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"구독권 부여 오류: {str(e)}")
+        return Response({'error': '서버 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
