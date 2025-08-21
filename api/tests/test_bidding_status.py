@@ -37,13 +37,14 @@ class BiddingStatusTestCase(TestCase):
         self.category = Category.objects.create(name='Electronics')
         self.product = Product.objects.create(
             name='Test Product',
+            slug='test-product',
             category=self.category,
             base_price=100000
         )
 
     def test_status_transition_recruiting_to_bidding(self):
         """시작 시간이 되면 recruiting에서 bidding으로 상태 전환"""
-        from api.utils import update_groupbuys_status
+        from api.utils import update_groupbuy_status
         
         # recruiting 상태의 공구 생성 (시작 시간이 과거)
         groupbuy = GroupBuy.objects.create(
@@ -62,7 +63,7 @@ class BiddingStatusTestCase(TestCase):
         self.assertEqual(groupbuy.status, 'recruiting')
         
         # 상태 업데이트 실행
-        update_groupbuys_status([groupbuy])
+        update_groupbuy_status(groupbuy)
         
         # status가 bidding으로 변경되었는지 확인
         groupbuy.refresh_from_db()
@@ -164,11 +165,13 @@ class BiddingStatusTestCase(TestCase):
         # 각 공구마다 다른 제품 생성
         product2 = Product.objects.create(
             name='Test Product 2',
+            slug='test-product-2',
             category=self.category,
             base_price=100000
         )
         product3 = Product.objects.create(
             name='Test Product 3',
+            slug='test-product-3',
             category=self.category,
             base_price=100000
         )
@@ -241,6 +244,7 @@ class BiddingStatusTestCase(TestCase):
         for i in range(5):
             products.append(Product.objects.create(
                 name=f'Product {i}',
+                slug=f'product-{i}',
                 category=self.category,
                 base_price=100000
             ))

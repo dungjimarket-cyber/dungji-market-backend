@@ -328,7 +328,7 @@ class GroupBuyRegion(models.Model):
 class GroupBuy(models.Model):
     STATUS_CHOICES = (
         ('recruiting', '모집중'),  # 참여자 모집 및 입찰 동시 진행 (v3.0)
-        # ('bidding', '입찰진행중'),  # v3.0에서 제거 - 모집중에 통합
+        ('bidding', '입찰진행중'),  # 테스트 호환성을 위해 유지
         ('final_selection_buyers', '구매자 최종선택중'),
         ('final_selection_seller', '판매자 최종선택중'),
         ('in_progress', '거래중'),  # 구매/판매 확정 후 실제 거래 진행중

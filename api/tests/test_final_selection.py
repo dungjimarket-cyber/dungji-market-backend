@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from api.models import GroupBuy, Product, Category, Participation, Bid
 # BidVote 모델은 voting 제거로 삭제됨
@@ -44,6 +44,7 @@ class FinalSelectionTestCase(TestCase):
         self.category = Category.objects.create(name='Electronics')
         self.product = Product.objects.create(
             name='Test Product',
+            slug='test-product',
             category=self.category,
             base_price=100000
         )
@@ -393,6 +394,7 @@ class CronJobTestCase(APITestCase):
         self.category = Category.objects.create(name='Electronics')
         self.product = Product.objects.create(
             name='Test Product',
+            slug='test-product-cron',
             category=self.category,
             base_price=100000
         )

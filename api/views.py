@@ -206,14 +206,27 @@ def create_sns_user(request):
                         'is_new_user': is_new_user  # 신규 사용자 여부 추가
                     })
         
-        # 3차: 새 사용자 생성 (SNS ID로도, 이메일로도 찾지 못한 경우)
-        logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}")
+        # 3차: 새 사용자인 경우 - 자동 생성하지 않고 회원가입 필요 플래그 반환
+        # role이 명시적으로 전달된 경우에만 새 사용자 생성
+        if not role or role not in ['buyer', 'seller', 'partner']:
+            # role이 없거나 유효하지 않은 경우 - 회원가입 페이지로 유도
+            logger.info(f"새 사용자 감지 - 회원가입 필요: email={email}, sns_type={sns_type}, sns_id={sns_id}")
+            return Response({
+                'is_new_user': True,
+                'requires_registration': True,
+                'sns_id': sns_id,
+                'sns_type': sns_type,
+                'email': email,
+                'name': name,
+                'profile_image': profile_image
+            }, status=status.HTTP_200_OK)
+        
+        # role이 명시적으로 전달된 경우에만 새 사용자 생성
+        logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}, role={role}")
         logger.info(f"새 사용자 프로필 이미지: {profile_image}")
         
         # 카카오 간편가입 시 자동 닉네임 생성
         if sns_type == 'kakao' and (not name or name == ''):
-            # role이 전달되지 않은 경우 기본적으로 buyer로 설정 
-            role = data.get('role', 'buyer')
             
             # 역할에 따른 닉네임 프리픽스 설정
             if role == 'seller':
