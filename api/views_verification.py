@@ -479,6 +479,17 @@ def verify_business_number_registration(request):
     
     clean_number = clean_number_or_message
     
+    # 사업자번호 중복 체크 추가
+    from api.models import User
+    if User.objects.filter(business_reg_number=clean_number).exists():
+        return Response({
+            'valid': False,
+            'verified': False,
+            'error': '이미 등록된 사업자등록번호입니다.',
+            'message': '이미 등록된 사업자등록번호입니다. 동일한 사업자번호로는 하나의 계정만 생성할 수 있습니다.',
+            'is_duplicate': True
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         # 실제 사업자번호 검증
         verification_service = BusinessVerificationService()
