@@ -365,7 +365,7 @@ class UserAdmin(admin.ModelAdmin):
         ('가입정보', {'fields': ('sns_type', 'sns_id')}),
         ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
         ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
-        ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history'), 'classes': ('collapse',)}),
+        ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
     )
@@ -383,6 +383,29 @@ class UserAdmin(admin.ModelAdmin):
     def __init__(self, model, admin_site):
         self.list_display_links = ('get_user_id',)
         super().__init__(model, admin_site)
+    
+    def get_fieldsets(self, request, obj=None):
+        """사용자 역할에 따라 다른 fieldsets 표시"""
+        if obj and obj.role == 'seller':
+            # 판매자용 fieldsets (입찰권 관리 포함)
+            return (
+                (None, {'fields': ('username', 'email', 'role', 'password')}),
+                ('가입정보', {'fields': ('sns_type', 'sns_id')}),
+                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+                ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
+                ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history')}),
+                ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+                ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
+            )
+        else:
+            # 일반 사용자용 fieldsets (입찰권 관리 제외)
+            return (
+                (None, {'fields': ('username', 'email', 'role', 'password')}),
+                ('가입정보', {'fields': ('sns_type', 'sns_id')}),
+                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+                ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+                ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
+            )
     
     def get_inlines(self, request, obj):
         """판매회원인 경우에만 BidToken 관련 인라인 표시"""
