@@ -295,11 +295,22 @@ class UserAdmin(admin.ModelAdmin):
             statusDiv.innerHTML = '처리 중...';
             statusDiv.style.background = '#fff3cd';
             
+            // Django admin의 CSRF 토큰 가져오기
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+            
+            console.log('요청 정보:', {{
+                url: '/admin/api/user/' + sellerId + '/adjust-tokens/',
+                sellerId: sellerId,
+                type: type,
+                quantity: quantity,
+                csrfToken: csrfToken
+            }});
+            
             fetch('/admin/api/user/' + sellerId + '/adjust-tokens/', {{
                 method: 'POST',
                 headers: {{
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': csrfToken
                 }},
                 body: JSON.stringify({{
                     adjustment_type: type,
@@ -307,8 +318,15 @@ class UserAdmin(admin.ModelAdmin):
                     reason: reason
                 }})
             }})
-            .then(response => response.json())
+            .then(response => {{
+                console.log('응답 상태:', response.status);
+                if (!response.ok) {{
+                    throw new Error(`HTTP error! status: ${{response.status}}`);
+                }}
+                return response.json();
+            }})
             .then(data => {{
+                console.log('응답 데이터:', data);
                 if (data.success) {{
                     statusDiv.innerHTML = data.message + ' (현재: ' + data.current_tokens + '개)';
                     statusDiv.style.background = '#d4edda';
@@ -320,7 +338,8 @@ class UserAdmin(admin.ModelAdmin):
                 }}
             }})
             .catch(error => {{
-                statusDiv.innerHTML = '처리 중 오류가 발생했습니다.';
+                console.error('에러 발생:', error);
+                statusDiv.innerHTML = '처리 중 오류가 발생했습니다: ' + error.message;
                 statusDiv.style.background = '#f8d7da';
             }});
         }}

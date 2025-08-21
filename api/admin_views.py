@@ -917,13 +917,20 @@ class AdminViewSet(viewsets.ViewSet):
 
 
 @csrf_exempt
-@staff_member_required
 @require_http_methods(["POST"])
 def adjust_user_bid_tokens(request, user_id):
     """개별 사용자의 견적 티켓 조정 API (Django Admin 페이지용)"""
+    
+    # 관리자 권한 체크
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': '권한이 없습니다.'}, status=403)
+    
     try:
         # 사용자 확인
-        user = get_object_or_404(User, id=user_id, role='seller')
+        try:
+            user = User.objects.get(id=user_id, role='seller')
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': '판매자를 찾을 수 없습니다.'})
         
         # 요청 데이터 파싱
         data = json.loads(request.body)
