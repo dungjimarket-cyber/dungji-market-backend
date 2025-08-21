@@ -177,8 +177,8 @@ urlpatterns = [
     path('api/partners/statistics/', statistics, name='partner_statistics'),
     path('api/partners/qr-code/<str:partner_code>/', generate_qr_code, name='partner_qr_code'),
     
-    # Admin APIs for bid token management
-    path('admin/api/user/<int:user_id>/adjust-tokens/', adjust_user_bid_tokens, name='admin_adjust_user_bid_tokens'),
+    # Admin APIs for bid token management (API 경로로 변경)
+    path('api/admin/user/<int:user_id>/adjust-tokens/', adjust_user_bid_tokens, name='admin_adjust_user_bid_tokens'),
     
     # Admin API endpoints that frontend expects
     path('api/admin/sellers/<int:seller_id>/', get_seller_detail_with_full_info, name='admin_get_seller_detail'),

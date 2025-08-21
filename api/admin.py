@@ -299,16 +299,16 @@ class UserAdmin(admin.ModelAdmin):
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
             
             console.log('요청 정보:', {{
-                url: '/admin/api/user/' + sellerId + '/adjust-tokens/',
+                url: '/api/admin/user/' + sellerId + '/adjust-tokens/',
                 sellerId: sellerId,
                 type: type,
                 quantity: quantity,
                 csrfToken: csrfToken
             }});
             
-            // 전체 URL 구성 (프로덕션 환경 고려)
+            // 전체 URL 구성 (프로덕션 환경 고려) - API 경로 사용
             const baseUrl = window.location.origin;
-            const adjustUrl = baseUrl + '/admin/api/user/' + sellerId + '/adjust-tokens/';
+            const adjustUrl = baseUrl + '/api/admin/user/' + sellerId + '/adjust-tokens/';
             
             console.log('전체 요청 URL:', adjustUrl);
             

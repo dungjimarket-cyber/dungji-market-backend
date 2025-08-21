@@ -19,9 +19,10 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 from django.contrib.admin.views.decorators import staff_member_required
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from django.views.decorators.csrf import csrf_exempt, csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
+from django.middleware.csrf import get_token
 import json
 
 # 관리자 페이지용 UserSerializer 정의
@@ -916,19 +917,25 @@ class AdminViewSet(viewsets.ViewSet):
             )
 
 
-@staff_member_required
-@csrf_protect
+@csrf_exempt
 @require_http_methods(["POST"])
 def adjust_user_bid_tokens(request, user_id):
     """개별 사용자의 견적 티켓 조정 API (Django Admin 페이지용)"""
     
     logger.info(f"견적 티켓 조정 요청 - User ID: {user_id}, Request User: {request.user}")
     
-    # AJAX 요청인지 확인
-    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    # 수동으로 인증 체크 (302 리다이렉트 방지)
+    if not request.user.is_authenticated:
         return JsonResponse(
-            {'success': False, 'error': 'AJAX 요청이 필요합니다.'}, 
-            status=400,
+            {'success': False, 'error': '로그인이 필요합니다.'}, 
+            status=401,
+            json_dumps_params={'ensure_ascii': False}
+        )
+    
+    if not request.user.is_staff:
+        return JsonResponse(
+            {'success': False, 'error': '관리자 권한이 필요합니다.'}, 
+            status=403,
             json_dumps_params={'ensure_ascii': False}
         )
     
