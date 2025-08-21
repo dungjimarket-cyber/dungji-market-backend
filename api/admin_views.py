@@ -921,16 +921,37 @@ class AdminViewSet(viewsets.ViewSet):
 def adjust_user_bid_tokens(request, user_id):
     """개별 사용자의 견적 티켓 조정 API (Django Admin 페이지용)"""
     
+    logger.info(f"견적 티켓 조정 요청 - User ID: {user_id}, Request User: {request.user}")
+    
     # 관리자 권한 체크
-    if not request.user.is_authenticated or not request.user.is_staff:
-        return JsonResponse({'success': False, 'error': '권한이 없습니다.'}, status=403)
+    if not request.user.is_authenticated:
+        logger.warning(f"인증되지 않은 사용자의 요청")
+        return JsonResponse(
+            {'success': False, 'error': '로그인이 필요합니다.'}, 
+            status=401,
+            json_dumps_params={'ensure_ascii': False}
+        )
+    
+    if not request.user.is_staff:
+        logger.warning(f"권한 없는 사용자의 요청: {request.user.username}")
+        return JsonResponse(
+            {'success': False, 'error': '관리자 권한이 필요합니다.'}, 
+            status=403,
+            json_dumps_params={'ensure_ascii': False}
+        )
     
     try:
         # 사용자 확인
         try:
             user = User.objects.get(id=user_id, role='seller')
         except User.DoesNotExist:
-            return JsonResponse({'success': False, 'error': '판매자를 찾을 수 없습니다.'})
+            logger.warning(f"판매자를 찾을 수 없음: ID {user_id}")
+            response = JsonResponse(
+                {'success': False, 'error': f'ID {user_id}의 판매자를 찾을 수 없습니다.'}, 
+                json_dumps_params={'ensure_ascii': False}
+            )
+            response['Content-Type'] = 'application/json; charset=utf-8'
+            return response
         
         # 요청 데이터 파싱
         data = json.loads(request.body)
@@ -1023,18 +1044,24 @@ def adjust_user_bid_tokens(request, user_id):
             token_type='single'
         ).count()
         
-        return JsonResponse({
+        response = JsonResponse({
             'success': True,
             'message': message,
             'current_tokens': updated_tokens,
             'previous_tokens': current_tokens
-        })
+        }, json_dumps_params={'ensure_ascii': False})
+        response['Content-Type'] = 'application/json; charset=utf-8'
+        return response
         
     except User.DoesNotExist:
-        return JsonResponse({'success': False, 'error': '사용자를 찾을 수 없습니다.'})
+        response = JsonResponse({'success': False, 'error': '사용자를 찾을 수 없습니다.'}, json_dumps_params={'ensure_ascii': False})
+        response['Content-Type'] = 'application/json; charset=utf-8'
+        return response
     except Exception as e:
         logger.error(f"견적 티켓 조정 오류: {str(e)}")
-        return JsonResponse({'success': False, 'error': f'처리 중 오류가 발생했습니다: {str(e)}'})
+        response = JsonResponse({'success': False, 'error': f'처리 중 오류가 발생했습니다: {str(e)}'}, json_dumps_params={'ensure_ascii': False})
+        response['Content-Type'] = 'application/json; charset=utf-8'
+        return response
 
 
 # 프론트엔드에서 기대하는 개별 API 엔드포인트들

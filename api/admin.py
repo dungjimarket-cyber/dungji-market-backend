@@ -306,7 +306,13 @@ class UserAdmin(admin.ModelAdmin):
                 csrfToken: csrfToken
             }});
             
-            fetch('/admin/api/user/' + sellerId + '/adjust-tokens/', {{
+            // 전체 URL 구성 (프로덕션 환경 고려)
+            const baseUrl = window.location.origin;
+            const adjustUrl = baseUrl + '/admin/api/user/' + sellerId + '/adjust-tokens/';
+            
+            console.log('전체 요청 URL:', adjustUrl);
+            
+            fetch(adjustUrl, {{
                 method: 'POST',
                 headers: {{
                     'Content-Type': 'application/json',
@@ -320,6 +326,14 @@ class UserAdmin(admin.ModelAdmin):
             }})
             .then(response => {{
                 console.log('응답 상태:', response.status);
+                console.log('응답 헤더 Content-Type:', response.headers.get('content-type'));
+                
+                // Content-Type 확인
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {{
+                    throw new Error(`서버가 JSON이 아닌 응답을 반환했습니다. Content-Type: ${{contentType}}`);
+                }}
+                
                 if (!response.ok) {{
                     throw new Error(`HTTP error! status: ${{response.status}}`);
                 }}
