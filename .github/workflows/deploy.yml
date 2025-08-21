@@ -27,6 +27,29 @@ jobs:
         fi
         echo "✅ All required secrets are configured"
 
+    - name: Prepare files for deployment
+      run: |
+        # 배포용 임시 디렉토리 생성
+        mkdir -p deploy-files
+        # 필요한 파일만 복사 (venv, .git 등 제외)
+        rsync -av --exclude='venv/' \
+                  --exclude='__pycache__/' \
+                  --exclude='*.pyc' \
+                  --exclude='.git/' \
+                  --exclude='.github/' \
+                  --exclude='media/' \
+                  --exclude='staticfiles/' \
+                  --exclude='*.log' \
+                  --exclude='.DS_Store' \
+                  --exclude='node_modules/' \
+                  --exclude='.env' \
+                  --exclude='*.sqlite3' \
+                  --exclude='db.sqlite3' \
+                  --exclude='server_new.log' \
+                  ./ deploy-files/
+        echo "✅ Files prepared for deployment"
+        du -sh deploy-files/
+        
     - name: Copy files to EC2
       uses: appleboy/scp-action@v0.1.7
       with:
@@ -34,12 +57,12 @@ jobs:
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
-        source: "."
+        source: "deploy-files/*"
         target: "~/dungji-market-backend"
         rm: true
-        strip_components: 0
-        timeout: 60s
-        command_timeout: 15m
+        strip_components: 1
+        timeout: 120s
+        command_timeout: 5m
 
     - name: Upload .env to EC2
       uses: appleboy/ssh-action@v1.0.3
