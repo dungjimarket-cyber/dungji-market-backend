@@ -98,6 +98,7 @@ def create_sns_user(request):
         email = data.get('email')
         name = data.get('name', '')
         profile_image = data.get('profile_image', '')
+        role = data.get('role', 'buyer')  # role 파라미터 추가
         
         # 이메일이 없거나 빈 값인 경우 기본 이메일 생성
         if not email or email == '':
@@ -105,7 +106,7 @@ def create_sns_user(request):
             logger.info(f"이메일 정보 없음, 기본 이메일 생성: {email}")
         
         # 디버깅 로그 추가
-        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}")
+        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, role={role}")
         logger.info(f"프로필 이미지 URL: {profile_image}")
 
         if not sns_id or not sns_type or not email:
@@ -266,7 +267,7 @@ def create_sns_user(request):
             nickname=name,  # nickname 필드에도 동일하게 설정
             sns_type=sns_type,
             sns_id=sns_id,
-            role=role if 'role' in locals() and role else 'buyer'  # role 설정
+            role=role  # role 설정 (이미 위에서 추출됨)
         )
         is_new_user = True  # 신규 사용자로 플래그 설정
         
@@ -275,6 +276,20 @@ def create_sns_user(request):
             user.profile_image = profile_image
             user.save()
             logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
+
+        # 판매회원인 경우 입찰권 자동 지급
+        if role == 'seller':
+            from .models import BidToken
+            base_tokens = 10  # 기본 지급 토큰
+            
+            for i in range(base_tokens):
+                BidToken.objects.create(
+                    seller=user,
+                    token_type='single',
+                    status='active'
+                )
+            
+            logger.info(f"카카오 판매회원 {user.username}에게 입찰권 {base_tokens}매 지급 완료")
 
         # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
         from api.serializers_jwt import CustomTokenObtainPairSerializer
