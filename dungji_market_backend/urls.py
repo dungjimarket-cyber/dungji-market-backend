@@ -35,7 +35,7 @@ from api.views_payment import (
 )
 from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
-from api.admin_views import AdminViewSet
+from api.admin_views import AdminViewSet, adjust_user_bid_tokens
 from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -173,6 +173,9 @@ urlpatterns = [
     path('api/partners/notifications/read-all/', mark_all_notifications_read, name='partner_mark_all_notifications_read'),
     path('api/partners/statistics/', statistics, name='partner_statistics'),
     path('api/partners/qr-code/<str:partner_code>/', generate_qr_code, name='partner_qr_code'),
+    
+    # Admin APIs for bid token management
+    path('admin/api/user/<int:user_id>/adjust-tokens/', adjust_user_bid_tokens, name='admin_adjust_user_bid_tokens'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

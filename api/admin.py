@@ -96,7 +96,7 @@ class UserAdmin(admin.ModelAdmin):
     list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified']
     search_fields = ['username', 'email', 'business_number', 'nickname']
     ordering = ['username']
-    readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id', 'get_bid_tokens_summary', 'get_adjustment_history')
+    readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id', 'get_bid_tokens_summary', 'get_adjustment_history', 'get_quick_token_adjustment')
     
     def get_user_id(self, obj):
         """사용자 아이디 표시 - SNS 사용자는 실제 SNS ID, 일반 사용자는 username"""
@@ -207,6 +207,140 @@ class UserAdmin(admin.ModelAdmin):
         return mark_safe(history)
     get_adjustment_history.short_description = '최근 조정 이력'
     
+    def get_quick_token_adjustment(self, obj):
+        """빠른 견적 티켓 조정 인터페이스"""
+        if obj.role != 'seller':
+            return '판매회원이 아닙니다'
+        
+        current_tokens = BidToken.objects.filter(
+            seller=obj,
+            status='active',
+            token_type='single'
+        ).count()
+        
+        quick_actions = f"""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+            <div style="margin-bottom: 15px;">
+                <strong>현재 활성 견적 티켓: {current_tokens}개</strong>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 15px;">
+                <button type="button" onclick="quickAdjustTokens({obj.id}, 'add', 1)" 
+                        style="background: #28A745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    +1개
+                </button>
+                <button type="button" onclick="quickAdjustTokens({obj.id}, 'add', 5)" 
+                        style="background: #28A745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    +5개
+                </button>
+                <button type="button" onclick="quickAdjustTokens({obj.id}, 'add', 10)" 
+                        style="background: #28A745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    +10개
+                </button>
+                <button type="button" onclick="quickAdjustTokens({obj.id}, 'subtract', 1)" 
+                        style="background: #DC3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    -1개
+                </button>
+                <button type="button" onclick="quickAdjustTokens({obj.id}, 'subtract', 5)" 
+                        style="background: #DC3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    -5개
+                </button>
+                <button type="button" onclick="quickAdjustTokens({obj.id}, 'set', 0)" 
+                        style="background: #6C757D; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    모두 제거
+                </button>
+            </div>
+            
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <input type="number" id="custom-tokens-{obj.id}" min="0" max="100" placeholder="개수" 
+                       style="width: 80px; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                <button type="button" onclick="customAdjustTokens({obj.id})" 
+                        style="background: #007BFF; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    개수 설정
+                </button>
+                <input type="text" id="custom-reason-{obj.id}" placeholder="조정 사유" 
+                       style="flex: 1; min-width: 150px; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            </div>
+            
+            <div id="token-status-{obj.id}" style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-radius: 4px; font-size: 12px; display: none;"></div>
+        </div>
+        
+        <script>
+        function quickAdjustTokens(sellerId, type, quantity) {{
+            const reason = prompt('조정 사유를 입력해주세요:', type === 'add' ? '관리자 추가' : type === 'subtract' ? '관리자 차감' : '관리자 설정');
+            if (!reason) return;
+            
+            adjustTokensAjax(sellerId, type, quantity, reason);
+        }}
+        
+        function customAdjustTokens(sellerId) {{
+            const quantity = document.getElementById('custom-tokens-' + sellerId).value;
+            const reason = document.getElementById('custom-reason-' + sellerId).value;
+            
+            if (!quantity || !reason) {{
+                alert('개수와 사유를 모두 입력해주세요.');
+                return;
+            }}
+            
+            adjustTokensAjax(sellerId, 'set', parseInt(quantity), reason);
+        }}
+        
+        function adjustTokensAjax(sellerId, type, quantity, reason) {{
+            const statusDiv = document.getElementById('token-status-' + sellerId);
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '처리 중...';
+            statusDiv.style.background = '#fff3cd';
+            
+            fetch('/admin/api/user/' + sellerId + '/adjust-tokens/', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }},
+                body: JSON.stringify({{
+                    adjustment_type: type,
+                    quantity: quantity,
+                    reason: reason
+                }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success) {{
+                    statusDiv.innerHTML = data.message + ' (현재: ' + data.current_tokens + '개)';
+                    statusDiv.style.background = '#d4edda';
+                    // 페이지 새로고침
+                    setTimeout(() => location.reload(), 1500);
+                }} else {{
+                    statusDiv.innerHTML = '오류: ' + data.error;
+                    statusDiv.style.background = '#f8d7da';
+                }}
+            }})
+            .catch(error => {{
+                statusDiv.innerHTML = '처리 중 오류가 발생했습니다.';
+                statusDiv.style.background = '#f8d7da';
+            }});
+        }}
+        
+        function getCookie(name) {{
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {{
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {{
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {{
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }}
+                }}
+            }}
+            return cookieValue;
+        }}
+        </script>
+        """
+        
+        return mark_safe(quick_actions)
+    get_quick_token_adjustment.short_description = '빠른 견적 티켓 조정'
+    
     def display_business_reg_file(self, obj):
         """어드민 목록에서 사업자등록증 표시"""
         if obj.business_license_image:
@@ -227,7 +361,7 @@ class UserAdmin(admin.ModelAdmin):
         ('가입정보', {'fields': ('sns_type', 'sns_id')}),
         ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
         ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
-        ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_adjustment_history'), 'classes': ('collapse',)}),
+        ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history'), 'classes': ('collapse',)}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
     )
@@ -239,7 +373,7 @@ class UserAdmin(admin.ModelAdmin):
     )
     filter_horizontal = ('groups', 'user_permissions')
     inlines = [BidTokenInline, BidTokenAdjustmentLogInline]
-    actions = ['add_5_bid_tokens', 'add_10_bid_tokens', 'grant_7day_subscription', 'grant_30day_subscription', 'approve_business_verification']
+    actions = ['add_5_bid_tokens', 'add_10_bid_tokens', 'grant_7day_subscription', 'grant_30day_subscription', 'approve_business_verification', 'custom_adjust_bid_tokens', 'remove_bid_tokens', 'reset_bid_tokens']
 
     # 한글화
     def __init__(self, model, admin_site):
@@ -375,6 +509,209 @@ class UserAdmin(admin.ModelAdmin):
         count = sellers.update(is_business_verified=True)
         self.message_user(request, f'{count}명의 판매회원 사업자 인증을 승인했습니다.')
     approve_business_verification.short_description = '선택한 판매회원 사업자 인증 승인'
+    
+    def custom_adjust_bid_tokens(self, request, queryset):
+        """선택한 판매회원들의 견적 티켓 개별 조정"""
+        from django import forms
+        from django.template.response import TemplateResponse
+        
+        class BidTokenAdjustmentForm(forms.Form):
+            adjustment_type = forms.ChoiceField(
+                choices=[
+                    ('add', '티켓 추가'),
+                    ('subtract', '티켓 차감'),
+                    ('set', '티켓 개수 설정'),
+                ],
+                label='조정 유형',
+                initial='add'
+            )
+            quantity = forms.IntegerField(
+                min_value=0,
+                max_value=100,
+                initial=1,
+                label='수량',
+                help_text='추가/차감할 티켓 수량 또는 설정할 총 티켓 수량'
+            )
+            reason = forms.CharField(
+                max_length=200,
+                required=True,
+                label='조정 사유',
+                help_text='티켓 조정 사유를 입력해주세요'
+            )
+        
+        # POST 요청 (폼 제출)
+        if request.method == 'POST':
+            form = BidTokenAdjustmentForm(request.POST)
+            if form.is_valid():
+                adjustment_type = form.cleaned_data['adjustment_type']
+                quantity = form.cleaned_data['quantity']
+                reason = form.cleaned_data['reason']
+                
+                sellers = queryset.filter(role='seller')
+                adjusted_count = 0
+                
+                for seller in sellers:
+                    current_tokens = BidToken.objects.filter(
+                        seller=seller,
+                        status='active',
+                        token_type='single'
+                    ).count()
+                    
+                    if adjustment_type == 'add':
+                        # 티켓 추가
+                        for _ in range(quantity):
+                            BidToken.objects.create(
+                                seller=seller,
+                                token_type='single',
+                                status='active'
+                            )
+                        adjusted_count += 1
+                        
+                    elif adjustment_type == 'subtract':
+                        # 티켓 차감
+                        tokens_to_remove = BidToken.objects.filter(
+                            seller=seller,
+                            status='active',
+                            token_type='single'
+                        ).order_by('created_at')[:quantity]
+                        
+                        for token in tokens_to_remove:
+                            token.status = 'expired'
+                            token.expires_at = timezone.now()
+                            token.save()
+                        adjusted_count += 1
+                        
+                    elif adjustment_type == 'set':
+                        # 티켓 개수 설정
+                        if quantity > current_tokens:
+                            # 부족한 만큼 추가
+                            for _ in range(quantity - current_tokens):
+                                BidToken.objects.create(
+                                    seller=seller,
+                                    token_type='single',
+                                    status='active'
+                                )
+                        elif quantity < current_tokens:
+                            # 초과한 만큼 제거
+                            tokens_to_remove = BidToken.objects.filter(
+                                seller=seller,
+                                status='active',
+                                token_type='single'
+                            ).order_by('created_at')[:current_tokens - quantity]
+                            
+                            for token in tokens_to_remove:
+                                token.status = 'expired'
+                                token.expires_at = timezone.now()
+                                token.save()
+                        adjusted_count += 1
+                    
+                    # 조정 이력 기록
+                    BidTokenAdjustmentLog.objects.create(
+                        seller=seller,
+                        admin=request.user,
+                        adjustment_type=adjustment_type,
+                        quantity=quantity,
+                        reason=reason
+                    )
+                
+                self.message_user(request, f'{adjusted_count}명의 판매회원 견적 티켓이 조정되었습니다.')
+                return None
+        else:
+            # GET 요청 (폼 표시)
+            form = BidTokenAdjustmentForm()
+        
+        # 선택된 판매회원 정보
+        sellers = queryset.filter(role='seller')
+        seller_info = []
+        for seller in sellers:
+            current_tokens = BidToken.objects.filter(
+                seller=seller,
+                status='active',
+                token_type='single'
+            ).count()
+            seller_info.append({
+                'seller': seller,
+                'current_tokens': current_tokens
+            })
+        
+        context = {
+            'form': form,
+            'seller_info': seller_info,
+            'action_name': '견적 티켓 개별 조정',
+            'opts': self.model._meta,
+        }
+        
+        return TemplateResponse(request, 'admin/bid_token_adjustment_form.html', context)
+    custom_adjust_bid_tokens.short_description = '견적 티켓 개별 조정'
+    
+    def remove_bid_tokens(self, request, queryset):
+        """선택한 판매회원들의 모든 활성 견적 티켓 제거"""
+        sellers = queryset.filter(role='seller')
+        total_removed = 0
+        
+        for seller in sellers:
+            # 활성 상태인 단일 티켓들을 만료 처리
+            active_tokens = BidToken.objects.filter(
+                seller=seller,
+                status='active',
+                token_type='single'
+            )
+            count = active_tokens.count()
+            active_tokens.update(
+                status='expired',
+                expires_at=timezone.now()
+            )
+            total_removed += count
+            
+            # 조정 이력 기록
+            if count > 0:
+                BidTokenAdjustmentLog.objects.create(
+                    seller=seller,
+                    admin=request.user,
+                    adjustment_type='subtract',
+                    quantity=count,
+                    reason='관리자에 의한 모든 티켓 제거'
+                )
+        
+        self.message_user(request, f'{sellers.count()}명의 판매회원에서 총 {total_removed}개의 견적 티켓이 제거되었습니다.')
+    remove_bid_tokens.short_description = '모든 견적 티켓 제거'
+    
+    def reset_bid_tokens(self, request, queryset):
+        """선택한 판매회원들의 견적 티켓을 10개로 초기화"""
+        sellers = queryset.filter(role='seller')
+        
+        for seller in sellers:
+            # 기존 활성 티켓 모두 만료 처리
+            active_tokens = BidToken.objects.filter(
+                seller=seller,
+                status='active',
+                token_type='single'
+            )
+            removed_count = active_tokens.count()
+            active_tokens.update(
+                status='expired',
+                expires_at=timezone.now()
+            )
+            
+            # 새로 10개 생성
+            for _ in range(10):
+                BidToken.objects.create(
+                    seller=seller,
+                    token_type='single',
+                    status='active'
+                )
+            
+            # 조정 이력 기록
+            BidTokenAdjustmentLog.objects.create(
+                seller=seller,
+                admin=request.user,
+                adjustment_type='set',
+                quantity=10,
+                reason=f'관리자에 의한 티켓 초기화 (기존 {removed_count}개 → 10개)'
+            )
+        
+        self.message_user(request, f'{sellers.count()}명의 판매회원 견적 티켓이 10개로 초기화되었습니다.')
+    reset_bid_tokens.short_description = '견적 티켓 10개로 초기화'
     
     def delete_model(self, request, obj):
         """개별 사용자 삭제 시 카카오 연결 해제"""

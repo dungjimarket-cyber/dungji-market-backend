@@ -18,6 +18,12 @@ from .utils.email_sender import EmailSender
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+import json
+
 # 관리자 페이지용 UserSerializer 정의
 class UserSerializer(serializers.ModelSerializer):
     active_tokens_count = serializers.SerializerMethodField()
@@ -887,3 +893,117 @@ class AdminViewSet(viewsets.ViewSet):
                 {'error': '구독권 부여 중 오류가 발생했습니다.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+@csrf_exempt
+@staff_member_required
+@require_http_methods(["POST"])
+def adjust_user_bid_tokens(request, user_id):
+    """개별 사용자의 견적 티켓 조정 API (Django Admin 페이지용)"""
+    try:
+        # 사용자 확인
+        user = get_object_or_404(User, id=user_id, role='seller')
+        
+        # 요청 데이터 파싱
+        data = json.loads(request.body)
+        adjustment_type = data.get('adjustment_type')  # 'add', 'subtract', 'set'
+        quantity = int(data.get('quantity', 0))
+        reason = data.get('reason', '관리자 수동 조정')
+        
+        if not all([adjustment_type, quantity >= 0]):
+            return JsonResponse({'success': False, 'error': '필수 정보가 누락되었습니다.'})
+        
+        if adjustment_type not in ['add', 'subtract', 'set']:
+            return JsonResponse({'success': False, 'error': '잘못된 조정 유형입니다.'})
+        
+        # 현재 활성 토큰 수 확인
+        current_tokens = BidToken.objects.filter(
+            seller=user,
+            status='active',
+            token_type='single'
+        ).count()
+        
+        if adjustment_type == 'add':
+            # 티켓 추가
+            for _ in range(quantity):
+                BidToken.objects.create(
+                    seller=user,
+                    token_type='single',
+                    status='active'
+                )
+            message = f'{quantity}개의 견적 티켓이 추가되었습니다.'
+            
+        elif adjustment_type == 'subtract':
+            # 티켓 차감
+            if quantity > current_tokens:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'활성 토큰이 {current_tokens}개만 있습니다. {quantity}개를 차감할 수 없습니다.'
+                })
+            
+            tokens_to_remove = BidToken.objects.filter(
+                seller=user,
+                status='active',
+                token_type='single'
+            ).order_by('created_at')[:quantity]
+            
+            for token in tokens_to_remove:
+                token.status = 'expired'
+                token.expires_at = timezone.now()
+                token.save()
+            
+            message = f'{quantity}개의 견적 티켓이 차감되었습니다.'
+            
+        elif adjustment_type == 'set':
+            # 티켓 개수 설정
+            if quantity > current_tokens:
+                # 부족한 만큼 추가
+                for _ in range(quantity - current_tokens):
+                    BidToken.objects.create(
+                        seller=user,
+                        token_type='single',
+                        status='active'
+                    )
+            elif quantity < current_tokens:
+                # 초과한 만큼 제거
+                tokens_to_remove = BidToken.objects.filter(
+                    seller=user,
+                    status='active',
+                    token_type='single'
+                ).order_by('created_at')[:current_tokens - quantity]
+                
+                for token in tokens_to_remove:
+                    token.status = 'expired'
+                    token.expires_at = timezone.now()
+                    token.save()
+            
+            message = f'견적 티켓이 {quantity}개로 설정되었습니다.'
+        
+        # 조정 이력 기록
+        BidTokenAdjustmentLog.objects.create(
+            seller=user,
+            admin=request.user,
+            adjustment_type=adjustment_type,
+            quantity=quantity,
+            reason=reason
+        )
+        
+        # 현재 토큰 상태 조회
+        updated_tokens = BidToken.objects.filter(
+            seller=user,
+            status='active',
+            token_type='single'
+        ).count()
+        
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'current_tokens': updated_tokens,
+            'previous_tokens': current_tokens
+        })
+        
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '사용자를 찾을 수 없습니다.'})
+    except Exception as e:
+        logger.error(f"견적 티켓 조정 오류: {str(e)}")
+        return JsonResponse({'success': False, 'error': f'처리 중 오류가 발생했습니다: {str(e)}'})
