@@ -101,9 +101,13 @@ def register_user_v2(request):
     일반회원과 판매회원을 구분하여 처리
     """
     try:
-        # multipart/form-data로 전송된 데이터 처리
-        data = request.POST
-        files = request.FILES
+        # JSON 또는 multipart/form-data로 전송된 데이터 처리
+        if request.content_type and 'application/json' in request.content_type:
+            data = request.data
+            files = {}
+        else:
+            data = request.POST
+            files = request.FILES
         
         # 공통 필수 필드
         nickname = data.get('nickname')
@@ -138,17 +142,30 @@ def register_user_v2(request):
         # 추천인 코드 검증 (입력된 경우만)
         referrer_user = None
         if referral_code:
-            # TODO: 실제 둥지파트너스 시스템 구축 시 추천인 코드 검증 로직 구현
-            # 현재는 테스트용으로 'PARTNER' 코드만 유효하다고 가정
-            if referral_code.upper() == 'PARTNER':
-                # 임시로 admin 사용자를 추천인으로 설정 (실제로는 파트너 시스템에서 조회)
-                try:
-                    referrer_user = User.objects.filter(role='admin').first()
-                    logger.info(f"유효한 추천인 코드 사용: {referral_code}")
-                except User.DoesNotExist:
-                    logger.warning(f"추천인을 찾을 수 없음: {referral_code}")
-            else:
-                logger.info(f"무효한 추천인 코드: {referral_code}")
+            # 실제 파트너 시스템과 연동하여 추천인 코드 검증
+            from api.models_partner import Partner
+            try:
+                # 파트너 코드로 파트너 조회 (대소문자 구분 없이)
+                partner = Partner.objects.filter(
+                    partner_code__iexact=referral_code,
+                    is_active=True
+                ).first()
+                
+                if partner:
+                    referrer_user = partner.user
+                    logger.info(f"유효한 추천인 코드 사용: {referral_code} (파트너: {partner.partner_name})")
+                else:
+                    # 파트너가 아닌 일반 사용자의 추천 코드인지 확인 (향후 확장용)
+                    if referral_code.upper() == 'PARTNER':
+                        # 임시 테스트 코드 지원
+                        referrer_user = User.objects.filter(role='admin').first()
+                        logger.info(f"테스트 추천인 코드 사용: {referral_code}")
+                    else:
+                        logger.info(f"무효한 추천인 코드: {referral_code}")
+                        referrer_user = None
+            except Exception as e:
+                logger.error(f"추천인 코드 검증 오류: {e}")
+                referrer_user = None
         
         # 카카오톡 판매회원 가입 허용 (109번 요구사항 반영)
         
@@ -391,8 +408,11 @@ def register_user_v2(request):
                 try:
                     from .models_partner import ReferralRecord, Partner
                     
-                    # 파트너 정보 조회 (임시로 첫 번째 파트너 사용)
-                    partner = Partner.objects.first()
+                    # 추천 코드로 실제 파트너 정보 조회
+                    partner = Partner.objects.filter(
+                        partner_code__iexact=referral_code,
+                        is_active=True
+                    ).first()
                     
                     if partner:
                         referral_record = ReferralRecord.objects.create(
