@@ -159,11 +159,14 @@ jobs:
           sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
           # 간소화된 정리 프로세스
-          echo "🧹 Cleaning up containers..."
+          echo "🧹 Cleaning up ALL dungji containers (including old timestamped ones)..."
+          # 타임스탬프가 포함된 모든 dungji 관련 컨테이너 정리
+          sudo docker ps -a | grep -E "dungji.*backend" | awk '{print $1}' | xargs -r sudo docker rm -f || true
           sudo docker ps -a | grep dungji | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
-          # Docker 네트워크 정리
+          # Docker 네트워크 정리 (타임스탬프 포함된 것들도)
           echo "🧹 Cleaning up Docker networks..."
+          sudo docker network ls | grep -E "dungji.*backend" | awk '{print $2}' | xargs -r sudo docker network rm || true
           sudo docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r sudo docker network rm || true
           
           # 사용하지 않는 Docker 리소스 정리
@@ -192,8 +195,8 @@ jobs:
           
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
-          # 타임스탬프를 사용하여 고유한 프로젝트 이름 생성 (충돌 방지)
-          PROJECT_NAME="dungji-backend-$(date +%s)"
+          # 고정된 프로젝트 이름 사용 (기존 컨테이너를 교체)
+          PROJECT_NAME="dungji-backend"
           echo "Using project name: $PROJECT_NAME"
           export PROJECT_NAME
           sudo docker-compose -p $PROJECT_NAME up --build -d --force-recreate --remove-orphans
