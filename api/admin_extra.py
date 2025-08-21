@@ -4,7 +4,7 @@ from django.utils.html import mark_safe
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q, Count, Sum
-from .models import Review, NoShowReport, BidToken, BidTokenPurchase
+from .models import Review, NoShowReport
 from .models_remote_sales import RemoteSalesCertification
 
 
@@ -309,7 +309,8 @@ class ReviewAdmin(admin.ModelAdmin):
     show_reviews.short_description = '선택한 리뷰 표시'
 
 
-@admin.register(BidToken)
+# BidToken Admin은 admin.py로 이동
+# @admin.register(BidToken)
 class BidTokenAdmin(admin.ModelAdmin):
     """입찰권 관리"""
     list_display = ['id', 'seller_info', 'token_type_badge', 'status_badge', 'created_at', 'expires_at', 'used_info', 'action_buttons']
@@ -475,7 +476,8 @@ class BidTokenAdmin(admin.ModelAdmin):
     extend_unlimited_tokens.short_description = '무제한 구독권 30일 연장'
 
 
-@admin.register(BidTokenPurchase)
+# BidTokenPurchase Admin은 admin.py로 이동
+# @admin.register(BidTokenPurchase)
 class BidTokenPurchaseAdmin(admin.ModelAdmin):
     """입찰권 구매 내역 관리"""
     list_display = ['id', 'seller_info', 'token_type_display', 'quantity', 'total_price_display', 'payment_status_badge', 'purchase_date', 'action_buttons']

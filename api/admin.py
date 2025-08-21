@@ -14,6 +14,10 @@ from django.utils.html import mark_safe
 from django.conf import settings
 import logging
 from .views_auth import kakao_unlink
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.urls import path
+from django.http import HttpResponseRedirect
 
 # 추가 어드민 클래스들 import (RemoteSalesCertification 포함)
 from .admin_extra import *
@@ -1318,9 +1322,9 @@ class EventAdmin(admin.ModelAdmin):
     reset_view_count.short_description = '조회수 초기화'
 
 
-# BidTokenAdjustmentLog만 추가 등록 (BidToken, BidTokenPurchase는 admin_extra.py에서 관리)
-@admin.register(BidTokenAdjustmentLog)
-class BidTokenAdjustmentLogAdmin(admin.ModelAdmin):
+# BidTokenAdjustmentLog는 아래에서 더 완벽한 버전으로 등록됨
+# @admin.register(BidTokenAdjustmentLog)
+class OldBidTokenAdjustmentLogAdmin(admin.ModelAdmin):
     list_display = ['seller', 'admin', 'adjustment_type', 'quantity', 'reason_summary', 'created_at']
     list_filter = ['adjustment_type', 'created_at']
     search_fields = ['seller__username', 'seller__email', 'admin__username', 'reason']
@@ -1514,4 +1518,228 @@ class BusinessNumberVerificationAdmin(admin.ModelAdmin):
         message = f"재검증 완료: 성공 {success_count}건, 실패 {error_count}건"
         self.message_user(request, message)
     retry_verification.short_description = "선택한 사업자번호 재검증"
+
+
+@admin.register(BidToken)
+class BidTokenAdmin(admin.ModelAdmin):
+    """견적티켓 관리"""
+    list_display = ['id', 'seller', 'token_type', 'status', 'expires_at', 'created_at']
+    list_filter = ['token_type', 'status', 'created_at', 'expires_at']
+    search_fields = ['seller__username', 'seller__email', 'seller__nickname']
+    readonly_fields = ['created_at', 'used_at']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('seller', 'token_type', 'status')
+        }),
+        ('시간 정보', {
+            'fields': ('created_at', 'expires_at', 'used_at')
+        }),
+    )
+    
+    actions = ['activate_tokens', 'expire_tokens', 'add_tokens_to_seller', 'grant_subscription_to_seller']
+    
+    def activate_tokens(self, request, queryset):
+        """선택한 토큰 활성화"""
+        updated = queryset.update(status='active')
+        self.message_user(request, f"{updated}개의 토큰이 활성화되었습니다.")
+    activate_tokens.short_description = "선택한 토큰 활성화"
+    
+    def expire_tokens(self, request, queryset):
+        """선택한 토큰 만료 처리"""
+        updated = queryset.update(status='expired')
+        self.message_user(request, f"{updated}개의 토큰이 만료 처리되었습니다.")
+    expire_tokens.short_description = "선택한 토큰 만료 처리"
+    
+    def add_tokens_to_seller(self, request, queryset):
+        """판매자에게 토큰 추가"""
+        from django import forms
+        from django.shortcuts import render
+        from django.http import HttpResponseRedirect
+        
+        class TokenAddForm(forms.Form):
+            seller = forms.ModelChoiceField(
+                queryset=User.objects.filter(role='seller'),
+                label='판매자 선택',
+                required=True
+            )
+            quantity = forms.IntegerField(
+                min_value=1,
+                max_value=100,
+                initial=5,
+                label='추가할 토큰 수'
+            )
+            reason = forms.CharField(
+                widget=forms.Textarea(attrs={'rows': 3}),
+                label='추가 사유',
+                initial='관리자 수동 추가'
+            )
+        
+        if 'apply' in request.POST:
+            form = TokenAddForm(request.POST)
+            if form.is_valid():
+                seller = form.cleaned_data['seller']
+                quantity = form.cleaned_data['quantity']
+                reason = form.cleaned_data['reason']
+                
+                # 토큰 생성
+                for _ in range(quantity):
+                    BidToken.objects.create(
+                        seller=seller,
+                        token_type='single',
+                        status='active'
+                    )
+                
+                # 조정 이력 기록
+                BidTokenAdjustmentLog.objects.create(
+                    seller=seller,
+                    admin=request.user,
+                    adjustment_type='add',
+                    quantity=quantity,
+                    reason=reason
+                )
+                
+                self.message_user(request, f"{seller.nickname or seller.username}님에게 {quantity}개의 토큰을 추가했습니다.")
+                return HttpResponseRedirect(request.get_full_path())
+        else:
+            form = TokenAddForm()
+        
+        return render(request, 'admin/token_add_form.html', {
+            'form': form,
+            'title': '견적티켓 추가',
+            'opts': self.model._meta,
+        })
+    add_tokens_to_seller.short_description = "판매자에게 토큰 추가"
+    
+    def grant_subscription_to_seller(self, request, queryset):
+        """판매자에게 구독권 부여"""
+        from django import forms
+        from django.shortcuts import render
+        from django.http import HttpResponseRedirect
+        from datetime import timedelta
+        from django.utils import timezone
+        
+        class SubscriptionGrantForm(forms.Form):
+            seller = forms.ModelChoiceField(
+                queryset=User.objects.filter(role='seller'),
+                label='판매자 선택',
+                required=True
+            )
+            days = forms.IntegerField(
+                min_value=1,
+                max_value=365,
+                initial=30,
+                label='구독 기간 (일)'
+            )
+            reason = forms.CharField(
+                widget=forms.Textarea(attrs={'rows': 3}),
+                label='부여 사유',
+                initial='관리자 구독권 부여'
+            )
+        
+        if 'apply' in request.POST:
+            form = SubscriptionGrantForm(request.POST)
+            if form.is_valid():
+                seller = form.cleaned_data['seller']
+                days = form.cleaned_data['days']
+                reason = form.cleaned_data['reason']
+                
+                # 기존 구독권 만료 처리
+                BidToken.objects.filter(
+                    seller=seller,
+                    token_type='unlimited',
+                    status='active'
+                ).update(status='expired')
+                
+                # 새 구독권 생성
+                expires_at = timezone.now() + timedelta(days=days)
+                BidToken.objects.create(
+                    seller=seller,
+                    token_type='unlimited',
+                    status='active',
+                    expires_at=expires_at
+                )
+                
+                # 조정 이력 기록
+                BidTokenAdjustmentLog.objects.create(
+                    seller=seller,
+                    admin=request.user,
+                    adjustment_type='grant_subscription',
+                    quantity=days,
+                    reason=reason
+                )
+                
+                self.message_user(request, f"{seller.nickname or seller.username}님에게 {days}일 구독권을 부여했습니다.")
+                return HttpResponseRedirect(request.get_full_path())
+        else:
+            form = SubscriptionGrantForm()
+        
+        return render(request, 'admin/subscription_grant_form.html', {
+            'form': form,
+            'title': '구독권 부여',
+            'opts': self.model._meta,
+        })
+    grant_subscription_to_seller.short_description = "판매자에게 구독권 부여"
+
+
+@admin.register(BidTokenAdjustmentLog)
+class BidTokenAdjustmentLogAdmin(admin.ModelAdmin):
+    """견적티켓 조정 이력 관리"""
+    list_display = ['id', 'seller', 'admin', 'adjustment_type', 'quantity', 'reason', 'created_at']
+    list_filter = ['adjustment_type', 'created_at']
+    search_fields = ['seller__username', 'seller__email', 'seller__nickname', 'admin__username', 'reason']
+    readonly_fields = ['seller', 'admin', 'adjustment_type', 'quantity', 'reason', 'created_at']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('조정 정보', {
+            'fields': ('seller', 'admin', 'adjustment_type', 'quantity')
+        }),
+        ('상세 정보', {
+            'fields': ('reason', 'created_at')
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """직접 생성 불가 - 조정 작업을 통해서만 생성"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """수정 불가 - 이력은 읽기 전용"""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """삭제 불가 - 이력 보존"""
+        return False
+
+
+@admin.register(BidTokenPurchase) 
+class BidTokenPurchaseAdmin(admin.ModelAdmin):
+    """견적티켓 구매 내역 관리"""
+    list_display = ['id', 'seller', 'token_type', 'quantity', 'total_price', 'payment_status', 'payment_date']
+    list_filter = ['token_type', 'payment_status', 'payment_date']
+    search_fields = ['seller__username', 'seller__email', 'seller__nickname']
+    readonly_fields = ['payment_date']
+    date_hierarchy = 'payment_date'
+    ordering = ['-payment_date']
+    
+    fieldsets = (
+        ('구매 정보', {
+            'fields': ('seller', 'token_type', 'quantity', 'total_price')
+        }),
+        ('결제 정보', {
+            'fields': ('payment_status', 'payment_date')
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """직접 생성 불가 - 결제를 통해서만 생성"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """수정 불가 - 구매 내역은 읽기 전용"""
+        return False
 
