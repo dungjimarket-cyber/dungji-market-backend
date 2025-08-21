@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import viewsets, status, serializers
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from .permissions import IsAdminRole
@@ -62,6 +62,14 @@ class AdminViewSet(viewsets.ViewSet):
     permission_classes = [IsAdminRole]
     authentication_classes = [JWTAuthentication]
     parser_classes = [MultiPartParser, FormParser]
+    
+    def list(self, request):
+        """기본 목록 엔드포인트"""
+        return Response({"message": "관리자 API 엔드포인트"})
+    
+    def retrieve(self, request, pk=None):
+        """기본 상세 엔드포인트"""
+        return Response({"message": f"관리자 API 아이템 {pk}"})
     
     @action(detail=True, methods=['post'], url_path='update_product_image')
     def update_product_image(self, request, pk=None):
@@ -137,7 +145,20 @@ class AdminViewSet(viewsets.ViewSet):
         serializer = UserSerializer(sellers, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['get'], url_path='seller-detail')
+    def seller_detail(self, request, pk=None):
+        """
+        특정 셀러 사용자의 상세 정보를 반환하는 API
+        URL: /api/admin/{pk}/seller-detail/
+        """
+        try:
+            seller = User.objects.get(pk=pk, role='seller')
+            serializer = UserSerializer(seller)
+            return Response(serializer.data)
+        except User.DoesNotExist:
+            return Response({"error": "셀러를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=True, methods=['post'], url_path='add-bid-permission')
     def add_bid_permission(self, request, pk=None):
         """
         특정 셀러에게 입찰권을 부여하는 API
@@ -1007,3 +1028,77 @@ def adjust_user_bid_tokens(request, user_id):
     except Exception as e:
         logger.error(f"견적 티켓 조정 오류: {str(e)}")
         return JsonResponse({'success': False, 'error': f'처리 중 오류가 발생했습니다: {str(e)}'})
+
+
+# 프론트엔드에서 기대하는 개별 API 엔드포인트들
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminRole])
+def get_seller_detail(request, seller_id):
+    """
+    특정 셀러 상세 정보 조회 API
+    URL: /api/admin/sellers/{seller_id}/
+    """
+    try:
+        seller = User.objects.get(pk=seller_id, role='seller')
+        serializer = UserSerializer(seller)
+        return Response(serializer.data)
+    except User.DoesNotExist:
+        return Response({"error": "셀러를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"셀러 상세 조회 오류: {str(e)}")
+        return Response({"error": "서버 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminRole])
+def add_bid_permission_endpoint(request, user_id):
+    """
+    특정 사용자에게 입찰권 추가 API
+    URL: /api/admin/add_bid_permission/{user_id}/
+    """
+    try:
+        from datetime import timedelta
+        from django.utils import timezone
+        from api.models import BidToken, BidTokenPurchase
+        
+        user = User.objects.get(pk=user_id)
+        
+        # 셀러 권한 확인
+        if user.role != 'seller':
+            return Response({"error": "셀러 사용자에게만 입찰권을 부여할 수 있습니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 입찰권 수 확인
+        bid_count = request.data.get('bid_count')
+        if not bid_count or not isinstance(bid_count, int) or bid_count <= 0:
+            return Response({"error": "유효한 입찰권 수를 입력해주세요."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 입찰권 유형 확인
+        token_type = request.data.get('token_type', 'single')
+        if token_type not in [choice[0] for choice in BidToken.TOKEN_TYPE_CHOICES]:
+            return Response({"error": "유효한 입찰권 유형을 선택해주세요."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 입찰권 생성
+        created_tokens = []
+        for _ in range(bid_count):
+            token = BidToken.objects.create(
+                seller=user,
+                token_type=token_type,
+                status='active',
+                expires_at=timezone.now() + timedelta(days=365 if token_type == 'unlimited' else 30)
+            )
+            created_tokens.append(token)
+        
+        logger.info(f"관리자 {request.user.username}가 사용자 {user.username}에게 {token_type} 입찰권 {bid_count}개 부여")
+        
+        return Response({
+            "message": f"{user.nickname or user.username}에게 {token_type} 입찰권 {bid_count}개를 성공적으로 부여했습니다.",
+            "created_tokens": len(created_tokens)
+        }, status=status.HTTP_201_CREATED)
+        
+    except User.DoesNotExist:
+        return Response({"error": "사용자를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"입찰권 부여 오류: {str(e)}")
+        return Response({"error": "서버 오류가 발생했습니다."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

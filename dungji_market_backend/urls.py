@@ -35,7 +35,7 @@ from api.views_payment import (
 )
 from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
-from api.admin_views import AdminViewSet, adjust_user_bid_tokens
+from api.admin_views import AdminViewSet, adjust_user_bid_tokens, get_seller_detail, add_bid_permission_endpoint
 from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -176,6 +176,10 @@ urlpatterns = [
     
     # Admin APIs for bid token management
     path('admin/api/user/<int:user_id>/adjust-tokens/', adjust_user_bid_tokens, name='admin_adjust_user_bid_tokens'),
+    
+    # Admin API endpoints that frontend expects
+    path('api/admin/sellers/<int:seller_id>/', get_seller_detail, name='admin_get_seller_detail'),
+    path('api/admin/add_bid_permission/<int:user_id>/', add_bid_permission_endpoint, name='admin_add_bid_permission'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

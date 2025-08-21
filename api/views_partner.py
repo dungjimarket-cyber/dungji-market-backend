@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db.models import Q, Sum, Count
 from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
 import csv
 import io
@@ -46,6 +47,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def partner_login(request):

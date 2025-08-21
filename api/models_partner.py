@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
+from decimal import Decimal
 import secrets
 import string
 
@@ -29,8 +30,8 @@ class Partner(models.Model):
     commission_rate = models.DecimalField(
         max_digits=5, 
         decimal_places=2, 
-        default=30.00,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        default=Decimal('30.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
         verbose_name='수수료율 (%)'
     )
     
