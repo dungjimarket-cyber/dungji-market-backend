@@ -19,7 +19,7 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 from django.contrib.admin.views.decorators import staff_member_required
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 import json
@@ -916,27 +916,19 @@ class AdminViewSet(viewsets.ViewSet):
             )
 
 
-@csrf_exempt
+@staff_member_required
+@csrf_protect
 @require_http_methods(["POST"])
 def adjust_user_bid_tokens(request, user_id):
     """개별 사용자의 견적 티켓 조정 API (Django Admin 페이지용)"""
     
     logger.info(f"견적 티켓 조정 요청 - User ID: {user_id}, Request User: {request.user}")
     
-    # 관리자 권한 체크
-    if not request.user.is_authenticated:
-        logger.warning(f"인증되지 않은 사용자의 요청")
+    # AJAX 요청인지 확인
+    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse(
-            {'success': False, 'error': '로그인이 필요합니다.'}, 
-            status=401,
-            json_dumps_params={'ensure_ascii': False}
-        )
-    
-    if not request.user.is_staff:
-        logger.warning(f"권한 없는 사용자의 요청: {request.user.username}")
-        return JsonResponse(
-            {'success': False, 'error': '관리자 권한이 필요합니다.'}, 
-            status=403,
+            {'success': False, 'error': 'AJAX 요청이 필요합니다.'}, 
+            status=400,
             json_dumps_params={'ensure_ascii': False}
         )
     
@@ -954,16 +946,30 @@ def adjust_user_bid_tokens(request, user_id):
             return response
         
         # 요청 데이터 파싱
-        data = json.loads(request.body)
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {'success': False, 'error': '잘못된 JSON 형식입니다.'}, 
+                status=400,
+                json_dumps_params={'ensure_ascii': False}
+            )
+        
         adjustment_type = data.get('adjustment_type')  # 'add', 'subtract', 'set'
         quantity = int(data.get('quantity', 0))
         reason = data.get('reason', '관리자 수동 조정')
         
         if not all([adjustment_type, quantity >= 0]):
-            return JsonResponse({'success': False, 'error': '필수 정보가 누락되었습니다.'})
+            return JsonResponse(
+                {'success': False, 'error': '필수 정보가 누락되었습니다.'}, 
+                json_dumps_params={'ensure_ascii': False}
+            )
         
         if adjustment_type not in ['add', 'subtract', 'set']:
-            return JsonResponse({'success': False, 'error': '잘못된 조정 유형입니다.'})
+            return JsonResponse(
+                {'success': False, 'error': '잘못된 조정 유형입니다.'}, 
+                json_dumps_params={'ensure_ascii': False}
+            )
         
         # 현재 활성 토큰 수 확인
         current_tokens = BidToken.objects.filter(
@@ -988,7 +994,7 @@ def adjust_user_bid_tokens(request, user_id):
                 return JsonResponse({
                     'success': False, 
                     'error': f'활성 토큰이 {current_tokens}개만 있습니다. {quantity}개를 차감할 수 없습니다.'
-                })
+                }, json_dumps_params={'ensure_ascii': False})
             
             tokens_to_remove = BidToken.objects.filter(
                 seller=user,

@@ -316,8 +316,10 @@ class UserAdmin(admin.ModelAdmin):
                 method: 'POST',
                 headers: {{
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
                 }},
+                credentials: 'same-origin',
                 body: JSON.stringify({{
                     adjustment_type: type,
                     quantity: quantity,
