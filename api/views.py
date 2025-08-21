@@ -290,6 +290,23 @@ def create_sns_user(request):
                 )
             
             logger.info(f"카카오 판매회원 {user.username}에게 입찰권 {base_tokens}매 지급 완료")
+        
+        # 파트너인 경우 파트너 프로필 생성
+        elif role == 'partner':
+            from .models_partner import Partner
+            
+            # 파트너 이름 생성 (기본값)
+            partner_name = name or f"파트너_{user.username}"
+            
+            # 파트너 프로필 생성
+            Partner.objects.create(
+                user=user,
+                partner_name=partner_name,
+                commission_rate=30.00,  # 기본 수수료율 30%
+                is_active=True
+            )
+            
+            logger.info(f"카카오 파트너 {user.username}의 파트너 프로필 생성 완료")
 
         # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
         from api.serializers_jwt import CustomTokenObtainPairSerializer
