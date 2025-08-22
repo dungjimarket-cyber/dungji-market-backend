@@ -231,8 +231,8 @@ def register_user_v2(request):
             if business_reg_number:
                 # 하이픈 제거
                 clean_business_number = business_reg_number.replace('-', '').strip()
-                # 이미 등록된 사업자번호인지 확인
-                if User.objects.filter(business_reg_number=clean_business_number).exists():
+                # 이미 등록된 사업자번호인지 확인 (올바른 필드명 사용)
+                if User.objects.filter(business_number=clean_business_number).exists():
                     return Response(
                         {'error': '이미 등록된 사업자등록번호입니다. 동일한 사업자번호로는 하나의 계정만 생성할 수 있습니다.'},
                         status=status.HTTP_400_BAD_REQUEST
@@ -341,19 +341,46 @@ def register_user_v2(request):
             
             # 판매자 전용 필드 설정
             if role == 'seller':
-                # 사업자등록번호 하이픈 제거 후 저장 (값이 있는 경우만)
+                # 사업자등록번호가 제공된 경우 검증 수행
                 if business_reg_number:
-                    user.business_number = business_reg_number.replace('-', '')
+                    clean_business_number = business_reg_number.replace('-', '').strip()
+                    
+                    # seller1~seller10은 테스트 계정으로 자동으로 사업자 인증 완료 처리
+                    test_accounts = [f'seller{i}' for i in range(1, 11)]
+                    if username_for_db in test_accounts:
+                        user.business_number = clean_business_number
+                        user.is_business_verified = True
+                        logger.info(f"테스트 계정 {username_for_db} 자동 사업자 인증 완료")
+                    else:
+                        # 실제 사업자번호 검증 수행 (일반 가입 시)
+                        if not social_provider:
+                            try:
+                                from .utils.business_verification_service import BusinessVerificationService
+                                verification_service = BusinessVerificationService()
+                                result = verification_service.verify_business_number(clean_business_number, business_name)
+                                
+                                # 검증 결과에 따라 사용자 정보 설정
+                                user.business_number = clean_business_number
+                                if result['success'] and result['status'] == 'valid':
+                                    user.is_business_verified = True
+                                    logger.info(f"회원가입 시 사업자번호 검증 완료: {clean_business_number}")
+                                else:
+                                    user.is_business_verified = False
+                                    logger.info(f"회원가입 시 사업자번호 검증 실패: {clean_business_number}, 사유: {result.get('message', 'Unknown')}")
+                            except Exception as e:
+                                logger.error(f"회원가입 시 사업자번호 검증 오류: {e}")
+                                user.business_number = clean_business_number
+                                user.is_business_verified = False
+                        else:
+                            # 소셜 로그인의 경우 나중에 검증
+                            user.business_number = clean_business_number
+                            user.is_business_verified = False
+                            logger.info(f"소셜 가입 사업자번호 저장 (나중에 검증 필요): {clean_business_number}")
+                
                 if representative_name:
                     user.representative_name = representative_name
                 if business_address:
                     user.address_detail = business_address
-                
-                # seller1~seller10은 테스트 계정으로 자동으로 사업자 인증 완료 처리
-                test_accounts = [f'seller{i}' for i in range(1, 11)]
-                if username_for_db in test_accounts:
-                    user.is_business_verified = True
-                    logger.info(f"테스트 계정 {username_for_db} 자동 사업자 인증 완료")
                 
                 # 사업자등록증 이미지 업로드
                 if business_reg_image:
@@ -741,8 +768,38 @@ def update_user_profile(request):
                 logger.error(f"지역 업데이트 오류: {str(e)}")
         
         # 사업자 정보 업데이트
-        if 'business_number' in data:
-            user.business_number = data['business_number']
+        if 'business_number' in data and user.role == 'seller':
+            new_business_number = data['business_number'].replace('-', '').strip()
+            current_business_number = user.business_number or ''
+            
+            # 사업자번호가 변경된 경우만 검증 수행
+            if new_business_number != current_business_number:
+                try:
+                    # 사업자번호 검증 수행
+                    from .utils.business_verification_service import BusinessVerificationService
+                    verification_service = BusinessVerificationService()
+                    result = verification_service.verify_business_number(new_business_number)
+                    
+                    # 검증 결과에 따라 사용자 정보 업데이트
+                    user.business_number = new_business_number
+                    if result['success'] and result['status'] == 'valid':
+                        user.is_business_verified = True
+                        logger.info(f"마이페이지에서 사업자번호 검증 완료: {new_business_number}")
+                    else:
+                        user.is_business_verified = False
+                        logger.info(f"마이페이지에서 사업자번호 검증 실패: {new_business_number}, 사유: {result.get('message', 'Unknown')}")
+                        
+                        # 검증 실패 시 응답에 오류 메시지 포함 (하지만 저장은 진행)
+                        verification_error = result.get('message', '사업자번호 검증에 실패했습니다.')
+                        
+                except Exception as e:
+                    logger.error(f"마이페이지 사업자번호 검증 오류: {e}")
+                    user.business_number = new_business_number
+                    user.is_business_verified = False
+                    verification_error = '사업자번호 검증 중 오류가 발생했습니다.'
+            else:
+                # 사업자번호가 동일한 경우 그대로 저장
+                user.business_number = new_business_number
         
         if 'representative_name' in data:
             user.representative_name = data['representative_name']
@@ -782,16 +839,25 @@ def update_user_profile(request):
         
         user.save()
         
-        return Response({
+        response_data = {
             'message': '프로필이 업데이트되었습니다.',
             'profile': {
                 'username': user.username,
                 'phone_number': user.phone_number,
                 'first_name': user.first_name,
                 'profile_image': user.profile_image,
-                'role': user.role
+                'role': user.role,
+                'is_business_verified': user.is_business_verified if user.role == 'seller' else None,
+                'business_number': user.business_number if user.role == 'seller' else None
             }
-        })
+        }
+        
+        # 사업자번호 검증 오류가 있는 경우 메시지 추가
+        if 'verification_error' in locals():
+            response_data['business_verification_error'] = verification_error
+            response_data['message'] = '프로필이 업데이트되었지만 사업자번호 검증에 실패했습니다.'
+        
+        return Response(response_data)
     
     except Exception as e:
         import traceback
