@@ -98,15 +98,53 @@ class UserAdmin(admin.ModelAdmin):
     form = UserChangeForm
     list_display = ['get_user_id', 'nickname', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'date_joined']
     list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified', 'date_joined']
-    search_fields = ['username', 'email', 'business_number', 'nickname', 'phone_number']
+    search_fields = ['username', 'email', 'business_number', 'nickname', 'phone_number', 'first_name', 'last_name', 'representative_name']
     ordering = ['-date_joined']  # 최신 가입자 순으로 정렬
-    list_per_page = 100  # 100명 단위 페이지네이션
+    list_per_page = 50  # 50명 단위로 변경 (검색 성능 향상)
     readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id', 'get_bid_tokens_summary', 'get_adjustment_history', 'get_quick_token_adjustment')
+    autocomplete_fields = []  # 자동완성 필드 초기화
+    
+    def get_search_help_text(self):
+        """검색 도움말 텍스트"""
+        return '이름, 이메일, 전화번호, 사업자번호, 닉네임, ID 등으로 검색 가능'
     
     def get_search_results(self, request, queryset, search_term):
         """자동완성을 위한 검색 결과 개선"""
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        
+        # 추가적인 검색 로직 - 부분 매칭 및 대소문자 무시
+        if search_term:
+            from django.db.models import Q
+            
+            # 기본 검색 외에 추가 검색 조건
+            additional_search = Q()
+            
+            # 전화번호에서 하이픈 제거한 검색
+            clean_phone = search_term.replace('-', '').replace(' ', '')
+            if clean_phone.isdigit():
+                additional_search |= Q(phone_number__icontains=clean_phone)
+            
+            # 사업자번호에서 하이픈 제거한 검색
+            clean_business = search_term.replace('-', '').replace(' ', '')
+            if clean_business.isdigit() and len(clean_business) >= 10:
+                additional_search |= Q(business_number__icontains=clean_business)
+            
+            # ID로 직접 검색
+            if search_term.isdigit():
+                additional_search |= Q(id=int(search_term))
+            
+            # SNS 사용자 검색 (카카오, 구글)
+            if search_term.startswith('kakao_') or search_term.startswith('google_'):
+                additional_search |= Q(username__icontains=search_term)
+            
+            if additional_search:
+                queryset = queryset.filter(additional_search).distinct()
+        
         return queryset, use_distinct
+    
+    def autocomplete_view(self, request):
+        """자동완성을 위한 커스텀 뷰"""
+        return super().autocomplete_view(request)
     
     def get_user_id(self, obj):
         """사용자 아이디 표시 - SNS 사용자는 실제 SNS ID, 일반 사용자는 username"""
@@ -1057,7 +1095,7 @@ class PartnerAdmin(admin.ModelAdmin):
     fieldsets = (
         ('기본 정보', {
             'fields': ('user', 'partner_name', 'partner_code', 'is_active'),
-            'description': '사용자 선택 시 돋보기 아이콘을 클릭하여 검색하세요.'
+            'description': '사용자 선택 시 검색창에서 이름, 이메일, 전화번호 등으로 검색할 수 있습니다.'
         }),
         ('수수료 설정', {
             'fields': ('commission_rate', 'minimum_settlement_amount')
@@ -1093,13 +1131,15 @@ class PartnerAdmin(admin.ModelAdmin):
 class ReferralRecordAdmin(admin.ModelAdmin):
     list_display = ['partner', 'get_member_name', 'total_amount', 'commission_amount', 'subscription_status', 'settlement_status', 'created_at']
     list_filter = ['subscription_status', 'settlement_status', 'partner', 'created_at']
-    search_fields = ['partner__partner_name', 'referred_user__username', 'referred_user__email']
+    search_fields = ['partner__partner_name', 'referred_user__username', 'referred_user__email', 'referred_user__nickname', 'referred_user__phone_number']
     readonly_fields = ['created_at', 'updated_at']
     date_hierarchy = 'created_at'
+    raw_id_fields = ('referred_user',)  # 사용자 선택을 검색 방식으로 변경
     
     fieldsets = (
         ('기본 정보', {
-            'fields': ('partner', 'referred_user', 'joined_date')
+            'fields': ('partner', 'referred_user', 'joined_date'),
+            'description': '사용자 선택 시 검색창에서 이름, 이메일, 전화번호 등으로 검색할 수 있습니다.'
         }),
         ('구독 정보', {
             'fields': ('subscription_status', 'subscription_amount', 'subscription_start_date', 'subscription_end_date')

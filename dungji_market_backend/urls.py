@@ -37,7 +37,7 @@ from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
 from api.admin_views import (
     AdminViewSet, adjust_user_bid_tokens, get_seller_detail, add_bid_permission_endpoint,
-    get_seller_detail_with_full_info, adjust_bid_tokens, grant_subscription
+    get_seller_detail_with_full_info, adjust_bid_tokens, grant_subscription, search_users
 )
 from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
@@ -185,6 +185,7 @@ urlpatterns = [
     path('api/admin/add_bid_permission/<int:user_id>/', add_bid_permission_endpoint, name='admin_add_bid_permission'),
     path('api/admin/bid-tokens/adjust/', adjust_bid_tokens, name='admin_adjust_bid_tokens'),
     path('api/admin/bid-tokens/grant-subscription/', grant_subscription, name='admin_grant_subscription'),
+    path('api/admin/users/search/', search_users, name='admin_search_users'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

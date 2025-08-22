@@ -1321,6 +1321,104 @@ def adjust_bid_tokens(request):
         return Response({'error': '서버 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminRole])
+def search_users(request):
+    """
+    사용자 검색 API (관리자용)
+    URL: /api/admin/users/search/
+    """
+    try:
+        from django.db.models import Q
+        
+        search_term = request.GET.get('q', '').strip()
+        limit = min(int(request.GET.get('limit', 20)), 100)  # 최대 100개
+        
+        if not search_term:
+            return Response({
+                'results': [],
+                'count': 0,
+                'message': '검색어를 입력해주세요.'
+            })
+        
+        # 기본 검색 조건
+        search_q = Q()
+        
+        # 이름/닉네임 검색
+        search_q |= Q(username__icontains=search_term)
+        search_q |= Q(nickname__icontains=search_term)
+        search_q |= Q(first_name__icontains=search_term)
+        search_q |= Q(last_name__icontains=search_term)
+        search_q |= Q(representative_name__icontains=search_term)
+        
+        # 이메일 검색
+        search_q |= Q(email__icontains=search_term)
+        
+        # 전화번호 검색 (하이픈 제거)
+        clean_phone = search_term.replace('-', '').replace(' ', '')
+        if clean_phone.isdigit():
+            search_q |= Q(phone_number__icontains=clean_phone)
+        
+        # 사업자번호 검색 (하이픈 제거)
+        clean_business = search_term.replace('-', '').replace(' ', '')
+        if clean_business.isdigit() and len(clean_business) >= 10:
+            search_q |= Q(business_number__icontains=clean_business)
+        
+        # ID로 직접 검색
+        if search_term.isdigit():
+            search_q |= Q(id=int(search_term))
+        
+        # SNS 사용자 검색
+        if 'kakao' in search_term.lower() or 'google' in search_term.lower():
+            search_q |= Q(sns_type__icontains=search_term)
+        
+        # 검색 실행
+        users = User.objects.filter(search_q).distinct().order_by('-date_joined')[:limit]
+        
+        # 결과 준비
+        results = []
+        for user in users:
+            # 사용자 대시 이름 결정
+            display_name = user.nickname or user.get_full_name() or user.username
+            if user.sns_type:
+                display_name += f" ({user.sns_type})"
+            
+            # 사업자 정보 추가
+            business_info = ''
+            if user.role == 'seller':
+                if user.business_number:
+                    business_info += f" | 사업자: {user.business_number}"
+                if user.is_business_verified:
+                    business_info += " ✓"
+            
+            results.append({
+                'id': user.id,
+                'text': f"{display_name} ({user.email}){business_info}",
+                'username': user.username,
+                'email': user.email,
+                'nickname': user.nickname,
+                'role': user.role,
+                'is_business_verified': user.is_business_verified if user.role == 'seller' else None,
+                'phone_number': user.phone_number,
+                'date_joined': user.date_joined.strftime('%Y-%m-%d')
+            })
+        
+        return Response({
+            'results': results,
+            'count': len(results),
+            'total_count': User.objects.filter(search_q).count() if len(results) == limit else len(results),
+            'has_more': len(results) == limit
+        })
+        
+    except Exception as e:
+        logger.error(f"사용자 검색 오류: {str(e)}")
+        return Response(
+            {'error': '검색 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminRole])
