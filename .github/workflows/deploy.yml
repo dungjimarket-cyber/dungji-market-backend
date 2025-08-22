@@ -40,10 +40,6 @@ jobs:
         rsync -av --exclude='venv/' \
                   --exclude='__pycache__/' \
                   --exclude='*.pyc' \
-                  --exclude='.git/' \
-                  --exclude='.github/' \
-                  --exclude='media/' \
-                  --exclude='staticfiles/' \
                   --exclude='*.log' \
                   --exclude='.DS_Store' \
                   --exclude='node_modules/' \
