@@ -388,9 +388,17 @@ def register_user_v2(request):
                 bonus_tokens = 0  # 추천인 보너스 토큰
                 
                 # 유효한 추천인 코드 사용 시 추가 10매 지급
-                if referrer_user and referral_code.upper() == 'PARTNER':
-                    bonus_tokens = 10
-                    logger.info(f"추천인 코드 보너스 적용: +{bonus_tokens}매")
+                if referrer_user and referral_code:
+                    # 파트너 코드 확인
+                    from .models_partner import Partner
+                    partner = Partner.objects.filter(
+                        partner_code__iexact=referral_code,
+                        is_active=True
+                    ).first()
+                    
+                    if partner:
+                        bonus_tokens = 10
+                        logger.info(f"추천인 코드 보너스 적용: +{bonus_tokens}매 (파트너: {partner.company_name})")
                 
                 total_tokens = base_tokens + bonus_tokens
                 
