@@ -45,7 +45,7 @@ from rest_framework_simplejwt.views import (
 )
 from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email
 from api.views_auth_token import refresh_user_token, verify_token_role
-from api.views_social import social_login_dispatch, kakao_callback
+from api.views_social import social_login_dispatch, kakao_callback, check_kakao_user_exists
 from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
 # voting 관련 import는 voting 상태 제거로 인해 삭제됨
 from api.views_final_selection import (
@@ -105,6 +105,7 @@ urlpatterns = [
         path('profile/', user_profile, name='profile'),
         path('social/<str:provider>/', social_login_dispatch, name='social_login'),
         path('callback/kakao/', kakao_callback, name='kakao_callback'),
+        path('check-kakao-user/', check_kakao_user_exists, name='check_kakao_user_exists'),
         # 휴대폰 인증 API
         path('phone/send-code/', send_verification_code, name='send_verification_code'),
         path('phone/verify/', verify_code, name='verify_code'),

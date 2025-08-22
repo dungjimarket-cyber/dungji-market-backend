@@ -35,6 +35,58 @@ logger.info(f"기본 리다이렉트 URI: {DEFAULT_REDIRECT_URI}")
 
 logger.info(f"KAKAO_CLIENT_ID: {KAKAO_CLIENT_ID}")
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_kakao_user_exists(request):
+    """
+    카카오 사용자가 이미 가입되어 있는지 확인하는 API
+    """
+    try:
+        # 카카오 액세스 토큰으로 사용자 정보 가져오기
+        access_token = request.data.get('access_token')
+        if not access_token:
+            return Response({
+                'error': 'access_token이 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 카카오 API로 사용자 정보 요청
+        kakao_response = requests.get(
+            'https://kapi.kakao.com/v2/user/me',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8'
+            }
+        )
+        
+        if kakao_response.status_code != 200:
+            return Response({
+                'error': '카카오 사용자 정보를 가져올 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        kakao_data = kakao_response.json()
+        kakao_id = str(kakao_data.get('id'))
+        
+        # 기존 사용자 확인
+        from .models import User
+        try:
+            existing_user = User.objects.get(social_id=kakao_id, social_provider='kakao')
+            return Response({
+                'exists': True,
+                'user_id': existing_user.id,
+                'role': existing_user.role
+            })
+        except User.DoesNotExist:
+            return Response({
+                'exists': False,
+                'kakao_id': kakao_id
+            })
+            
+    except Exception as e:
+        logger.error(f"카카오 사용자 존재 확인 중 오류: {str(e)}")
+        return Response({
+            'error': '서버 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 def get_kakao_auth_url(next_url, redirect_uri=None, role=None):
     """
     카카오 인증 URL 생성 함수
