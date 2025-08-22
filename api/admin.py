@@ -96,11 +96,17 @@ class BidTokenAdjustmentLogInline(admin.TabularInline):
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['get_user_id', 'nickname', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'display_business_reg_file']
-    list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified']
-    search_fields = ['username', 'email', 'business_number', 'nickname']
-    ordering = ['username']
+    list_display = ['get_user_id', 'nickname', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'date_joined']
+    list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified', 'date_joined']
+    search_fields = ['username', 'email', 'business_number', 'nickname', 'phone_number']
+    ordering = ['-date_joined']  # 최신 가입자 순으로 정렬
+    list_per_page = 100  # 100명 단위 페이지네이션
     readonly_fields = ('display_business_reg_file_preview', 'sns_type', 'sns_id', 'get_bid_tokens_summary', 'get_adjustment_history', 'get_quick_token_adjustment')
+    
+    def get_search_results(self, request, queryset, search_term):
+        """자동완성을 위한 검색 결과 개선"""
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        return queryset, use_distinct
     
     def get_user_id(self, obj):
         """사용자 아이디 표시 - SNS 사용자는 실제 SNS ID, 일반 사용자는 username"""
@@ -1046,10 +1052,12 @@ class PartnerAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'commission_rate', 'created_at']
     search_fields = ['partner_name', 'partner_code', 'user__username', 'user__email']
     readonly_fields = ['partner_code', 'created_at', 'updated_at', 'get_total_referrals', 'get_active_subscribers', 'get_available_settlement']
+    raw_id_fields = ('user',)  # 사용자 선택을 검색 방식으로 변경 (돋보기 아이콘)
     
     fieldsets = (
         ('기본 정보', {
-            'fields': ('user', 'partner_name', 'partner_code', 'is_active')
+            'fields': ('user', 'partner_name', 'partner_code', 'is_active'),
+            'description': '사용자 선택 시 돋보기 아이콘을 클릭하여 검색하세요.'
         }),
         ('수수료 설정', {
             'fields': ('commission_rate', 'minimum_settlement_amount')
