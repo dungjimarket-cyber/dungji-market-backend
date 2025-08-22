@@ -5,10 +5,15 @@ on:
     branches: [ main ]
   workflow_dispatch:  # 수동 실행 허용
 
+# 동시 실행 제한 - 이전 배포가 진행 중이면 취소하고 새로운 배포 시작
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production  # GitHub Environment 사용 (선택사항)
+    # environment: production  # 이 설정이 queued 상태를 유발할 수 있음
 
     steps:
     - name: Checkout source
