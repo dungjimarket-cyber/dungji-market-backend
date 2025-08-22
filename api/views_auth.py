@@ -398,7 +398,7 @@ def register_user_v2(request):
                     
                     if partner:
                         bonus_tokens = 10
-                        logger.info(f"추천인 코드 보너스 적용: +{bonus_tokens}매 (파트너: {partner.company_name})")
+                        logger.info(f"추천인 코드 보너스 적용: +{bonus_tokens}매 (파트너: {partner.partner_name})")
                 
                 total_tokens = base_tokens + bonus_tokens
                 
