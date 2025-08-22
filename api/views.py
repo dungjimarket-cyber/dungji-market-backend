@@ -107,7 +107,7 @@ def create_sns_user(request):
             logger.info(f"이메일 정보 없음, 기본 이메일 생성: {email}")
         
         # 디버깅 로그 추가
-        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, role={role}")
+        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, role={role}, referral_code={referral_code}")
         logger.info(f"프로필 이미지 URL: {profile_image}")
 
         if not sns_id or not sns_type or not email:
@@ -299,6 +299,7 @@ def create_sns_user(request):
             
             # 추천인 코드 처리
             if referral_code:
+                logger.info(f"추천인 코드 처리 시작: {referral_code}")
                 try:
                     # 추천인 찾기
                     referrer = User.objects.filter(referral_code=referral_code).first()
@@ -307,24 +308,17 @@ def create_sns_user(request):
                         user.referred_by = referrer
                         user.save()
                         
-                        # 추천인에게 보너스 입찰권 지급 (5매)
-                        referrer_bonus = 5
-                        for i in range(referrer_bonus):
-                            BidToken.objects.create(
-                                seller=referrer,
-                                token_type='single',
-                                status='active'
-                            )
+                        # 추천인 코드를 입력한 신규 가입자에게 추가 입찰권 10매 지급
+                        bonus_tokens = 10
                         
-                        # 신규 가입자에게도 보너스 입찰권 지급 (5매)
-                        bonus_tokens = 5
-                        
-                        logger.info(f"추천인 {referrer.username}에게 보너스 입찰권 {referrer_bonus}매 지급")
-                        logger.info(f"신규 가입자 {user.username}에게 추천 보너스 입찰권 {bonus_tokens}매 지급")
+                        logger.info(f"추천인 코드 {referral_code} 확인 - 추천인: {referrer.username}")
+                        logger.info(f"신규 가입자 {user.username}에게 추천 보너스 입찰권 {bonus_tokens}매 추가 지급")
                     else:
                         logger.warning(f"유효하지 않은 추천인 코드: {referral_code}")
                 except Exception as e:
                     logger.error(f"추천인 코드 처리 중 오류: {str(e)}")
+            else:
+                logger.info(f"추천인 코드 없음 - 기본 입찰권만 지급")
             
             # 기본 입찰권 + 보너스 입찰권 지급
             total_tokens = base_tokens + bonus_tokens
