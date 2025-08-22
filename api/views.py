@@ -682,6 +682,7 @@ class GroupBuyViewSet(ModelViewSet):
         
         # 통신사 관련 필터
         telecom_carrier = self.request.query_params.get('telecom_carrier', None)
+        internet_carrier = self.request.query_params.get('internet_carrier', None)  # 인터넷/인터넷+TV용
         subscription_type = self.request.query_params.get('subscription_type', None)
         plan_info = self.request.query_params.get('plan_info', None)
         
@@ -740,10 +741,34 @@ class GroupBuyViewSet(ModelViewSet):
                 # 문자열인 경우 카테고리 이름으로 필터링
                 queryset = queryset.filter(product__category__name=category_id)
             
-        # 통신사 필터 처리
+        # 통신사 필터 처리 (합집합 처리)
         if telecom_carrier:
-            # GroupBuyTelecomDetail과 조인하여 통신사로 필터링
-            queryset = queryset.filter(telecom_detail__telecom_carrier=telecom_carrier)
+            # 쉼표로 구분된 값들 처리
+            if ',' in telecom_carrier:
+                carriers = [c.strip() for c in telecom_carrier.split(',')]
+                # OR 조건으로 통신사 필터링
+                queryset = queryset.filter(telecom_detail__telecom_carrier__in=carriers)
+            else:
+                # 단일 값 처리
+                queryset = queryset.filter(telecom_detail__telecom_carrier=telecom_carrier)
+        
+        # 인터넷/인터넷+TV 통신사 필터 처리 (별도 파라미터)
+        if internet_carrier:
+            # 인터넷과 인터넷+TV 카테고리에서만 적용
+            # 쉼표로 구분된 값들 처리
+            if ',' in internet_carrier:
+                carriers = [c.strip() for c in internet_carrier.split(',')]
+                # OR 조건으로 통신사 필터링
+                queryset = queryset.filter(
+                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
+                    telecom_detail__telecom_carrier__in=carriers
+                )
+            else:
+                # 단일 값 처리
+                queryset = queryset.filter(
+                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
+                    telecom_detail__telecom_carrier=internet_carrier
+                )
             
         # 가입유형 필터 처리
         if subscription_type:
@@ -755,9 +780,8 @@ class GroupBuyViewSet(ModelViewSet):
             # GroupBuyTelecomDetail과 조인하여 요금제로 필터링
             queryset = queryset.filter(telecom_detail__plan_info=plan_info)
             
-        # 제조사 필터 처리
+        # 제조사 필터 처리 (합집합 처리)
         if manufacturer:
-            # 제조사 이름으로 상품명 필터링
             # 제조사명이 포함된 상품을 찾기
             manufacturer_keywords = {
                 '삼성': ['Samsung', 'Galaxy', '갤럭시', '삼성'],
@@ -769,16 +793,32 @@ class GroupBuyViewSet(ModelViewSet):
                 '원플러스': ['OnePlus', '원플러스']
             }
             
-            # 제조사에 해당하는 키워드들로 OR 조건 생성
-            if manufacturer in manufacturer_keywords:
-                keywords = manufacturer_keywords[manufacturer]
+            # 쉼표로 구분된 여러 제조사 처리
+            if ',' in manufacturer:
+                manufacturers = [m.strip() for m in manufacturer.split(',')]
                 q_objects = Q()
-                for keyword in keywords:
-                    q_objects |= Q(product__name__icontains=keyword)
+                
+                for mfr in manufacturers:
+                    if mfr in manufacturer_keywords:
+                        keywords = manufacturer_keywords[mfr]
+                        for keyword in keywords:
+                            q_objects |= Q(product__name__icontains=keyword)
+                    else:
+                        # 직접 제조사명으로 검색
+                        q_objects |= Q(product__name__icontains=mfr)
+                
                 queryset = queryset.filter(q_objects)
             else:
-                # 직접 제조사명으로 검색
-                queryset = queryset.filter(product__name__icontains=manufacturer)
+                # 단일 제조사 처리
+                if manufacturer in manufacturer_keywords:
+                    keywords = manufacturer_keywords[manufacturer]
+                    q_objects = Q()
+                    for keyword in keywords:
+                        q_objects |= Q(product__name__icontains=keyword)
+                    queryset = queryset.filter(q_objects)
+                else:
+                    # 직접 제조사명으로 검색
+                    queryset = queryset.filter(product__name__icontains=manufacturer)
         
         # 거래 완료 필터 처리
         if buyer_completed is not None:
