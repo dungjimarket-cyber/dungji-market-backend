@@ -585,11 +585,11 @@ class NoShowReportSerializer(serializers.ModelSerializer):
                 })
             
             # 해당 공구에서 선택된 입찰이 있는지 확인
-            from .models_bid import Bid
+            from .models import Bid
             selected_bid = Bid.objects.filter(
                 groupbuy=groupbuy,
                 seller=user,
-                status='accepted'
+                status='selected'
             ).first()
             
             if not selected_bid:
@@ -634,7 +634,7 @@ class NoShowReportSerializer(serializers.ModelSerializer):
             selected_bid = Bid.objects.filter(
                 groupbuy=groupbuy,
                 seller=reported_user,
-                status='accepted'
+                status='selected'
             ).first()
             
             if not selected_bid:
