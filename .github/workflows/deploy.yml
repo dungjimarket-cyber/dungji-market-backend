@@ -36,7 +36,7 @@ jobs:
       run: |
         # 배포용 임시 디렉토리 생성
         mkdir -p deploy-files
-        # 필요한 파일만 복사 (venv, .git 등 제외)
+        # 필요한 파일만 복사 (venv, .git, .next 등 제외)
         rsync -av --exclude='venv/' \
                   --exclude='__pycache__/' \
                   --exclude='*.pyc' \
@@ -51,9 +51,14 @@ jobs:
                   --exclude='*.sqlite3' \
                   --exclude='db.sqlite3' \
                   --exclude='server_new.log' \
+                  --exclude='.next/' \
+                  --exclude='deploy-files/' \
                   ./ deploy-files/
         echo "✅ Files prepared for deployment"
         du -sh deploy-files/
+        # 디렉토리 내용 확인
+        echo "📁 Deploy files structure:"
+        ls -la deploy-files/ | head -20
         
     - name: Copy files to EC2
       uses: appleboy/scp-action@v0.1.7
