@@ -99,6 +99,7 @@ def create_sns_user(request):
         name = data.get('name', '')
         profile_image = data.get('profile_image', '')
         role = data.get('role', 'buyer')  # role 파라미터 추가
+        referral_code = data.get('referral_code', '')  # 추천인 코드 추가
         
         # 이메일이 없거나 빈 값인 경우 기본 이메일 생성
         if not email or email == '':
@@ -290,19 +291,51 @@ def create_sns_user(request):
             user.save()
             logger.info(f"사용자 프로필 이미지 저장 완료: {user.id}")
 
-        # 판매회원인 경우 입찰권 자동 지급
+        # 판매회원인 경우 입찰권 자동 지급 및 추천인 처리
         if role == 'seller':
             from .models import BidToken
             base_tokens = 10  # 기본 지급 토큰
+            bonus_tokens = 0  # 추천인 보너스 토큰
             
-            for i in range(base_tokens):
+            # 추천인 코드 처리
+            if referral_code:
+                try:
+                    # 추천인 찾기
+                    referrer = User.objects.filter(referral_code=referral_code).first()
+                    if referrer:
+                        # 추천인 설정
+                        user.referred_by = referrer
+                        user.save()
+                        
+                        # 추천인에게 보너스 입찰권 지급 (5매)
+                        referrer_bonus = 5
+                        for i in range(referrer_bonus):
+                            BidToken.objects.create(
+                                seller=referrer,
+                                token_type='single',
+                                status='active'
+                            )
+                        
+                        # 신규 가입자에게도 보너스 입찰권 지급 (5매)
+                        bonus_tokens = 5
+                        
+                        logger.info(f"추천인 {referrer.username}에게 보너스 입찰권 {referrer_bonus}매 지급")
+                        logger.info(f"신규 가입자 {user.username}에게 추천 보너스 입찰권 {bonus_tokens}매 지급")
+                    else:
+                        logger.warning(f"유효하지 않은 추천인 코드: {referral_code}")
+                except Exception as e:
+                    logger.error(f"추천인 코드 처리 중 오류: {str(e)}")
+            
+            # 기본 입찰권 + 보너스 입찰권 지급
+            total_tokens = base_tokens + bonus_tokens
+            for i in range(total_tokens):
                 BidToken.objects.create(
                     seller=user,
                     token_type='single',
                     status='active'
                 )
             
-            logger.info(f"카카오 판매회원 {user.username}에게 입찰권 {base_tokens}매 지급 완료")
+            logger.info(f"카카오 판매회원 {user.username}에게 입찰권 총 {total_tokens}매 지급 완료 (기본: {base_tokens}, 보너스: {bonus_tokens})")
         
         # 파트너인 경우 파트너 프로필 생성
         elif role == 'partner':

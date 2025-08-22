@@ -87,7 +87,7 @@ def check_kakao_user_exists(request):
             'error': '서버 오류가 발생했습니다.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def get_kakao_auth_url(next_url, redirect_uri=None, role=None):
+def get_kakao_auth_url(next_url, redirect_uri=None, role=None, request=None):
     """
     카카오 인증 URL 생성 함수
     
@@ -95,14 +95,19 @@ def get_kakao_auth_url(next_url, redirect_uri=None, role=None):
         next_url: 인증 후 배경 애플리케이션으로 리디렉션할 URL
         redirect_uri: 클라이언트에서 제공한 리디렉트 URI (부영시 기본값 사용)
         role: 가입 유형 ('buyer' 또는 'seller')
+        request: HTTP request 객체 (추천인 코드 추출용)
     """
-    # state에 next_url과 role 정보를 함께 저장 (JSON 형식)
+    # state에 next_url, role, referral_code 정보를 함께 저장 (JSON 형식)
     import json
     from urllib.parse import quote
     
+    # request에서 referral_code 가져오기
+    referral_code = request.GET.get('referral_code', '') if request else ''
+    
     state_data = {
         'next_url': next_url,
-        'role': role or 'buyer'  # 기본값은 buyer
+        'role': role or 'buyer',  # 기본값은 buyer
+        'referral_code': referral_code  # 추천인 코드 추가
     }
     state = quote(json.dumps(state_data))
     
@@ -129,10 +134,13 @@ def kakao_login(request):
     redirect_uri = request.GET.get('redirect_uri', None)
     # 가입 유형 받기 (seller 또는 buyer)
     role = request.GET.get('role', 'buyer')
+    # 추천인 코드 받기
+    referral_code = request.GET.get('referral_code', '')
     
-    logger.info(f"카카오 로그인 시작: next_url={next_url}, redirect_uri={redirect_uri}, role={role}")
+    logger.info(f"카카오 로그인 시작: next_url={next_url}, redirect_uri={redirect_uri}, role={role}, referral_code={referral_code}")
     
-    kakao_auth_url = get_kakao_auth_url(next_url, redirect_uri, role)
+    # get_kakao_auth_url에 request 전달
+    kakao_auth_url = get_kakao_auth_url(next_url, redirect_uri, role, request=request)
     return redirect(kakao_auth_url)
 
 @api_view(['GET'])
@@ -147,7 +155,7 @@ def kakao_callback(request):
     
     logger.info(f"카카오 콜백 도착: code={code}, state={state}")
     
-    # state 파싱하여 next_url과 role 추출
+    # state 파싱하여 next_url, role, referral_code 추출
     import json
     from urllib.parse import unquote
     
@@ -155,12 +163,14 @@ def kakao_callback(request):
         state_data = json.loads(unquote(state))
         next_url = state_data.get('next_url', '')
         role = state_data.get('role', 'buyer')
+        referral_code = state_data.get('referral_code', '')
     except (json.JSONDecodeError, TypeError):
         # 이전 버전 호환성을 위해 state를 그대로 next_url로 사용
         next_url = state
         role = 'buyer'
+        referral_code = ''
     
-    logger.info(f"파싱된 state 정보: next_url={next_url}, role={role}")
+    logger.info(f"파싱된 state 정보: next_url={next_url}, role={role}, referral_code={referral_code}")
     
     if not code:
         logger.error("인증 코드가 없습니다.")
@@ -271,7 +281,8 @@ def kakao_callback(request):
         'email': email,
         'name': nickname,
         'profile_image': profile_image,
-        'role': role  # 가입 유형 전달
+        'role': role,  # 가입 유형 전달
+        'referral_code': referral_code  # 추천인 코드 전달
     }
     
     # 내부 API 호출 - 직접 create_sns_user 함수 호출 또는 여기서 사용자 생성/로그인 로직 구현
@@ -343,13 +354,14 @@ def social_login_dispatch(request, provider):
     next_url = request.GET.get('next', '')
     redirect_uri = request.GET.get('redirect_uri', None)
     role = request.GET.get('role', 'buyer')  # 가입 유형 받기
+    referral_code = request.GET.get('referral_code', '')  # 추천인 코드 받기
     
-    logger.info(f"소셜 로그인 요청: provider={provider}, next={next_url}, role={role}")
+    logger.info(f"소셜 로그인 요청: provider={provider}, next={next_url}, role={role}, referral_code={referral_code}")
     
     if provider == 'kakao':
         # 카카오 로그인 URL로 리다이렉트 (클라이언트에서 제공한 redirect_uri와 role 사용)
-        logger.info(f"카카오 로그인 시작: next_url={next_url}, redirect_uri={redirect_uri}, role={role}")
-        kakao_auth_url = get_kakao_auth_url(next_url, redirect_uri, role)
+        logger.info(f"카카오 로그인 시작: next_url={next_url}, redirect_uri={redirect_uri}, role={role}, referral_code={referral_code}")
+        kakao_auth_url = get_kakao_auth_url(next_url, redirect_uri, role, request)
         return redirect(kakao_auth_url)
     # elif provider == 'google':
     #     return google_login(request)
