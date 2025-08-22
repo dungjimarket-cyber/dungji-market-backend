@@ -712,6 +712,7 @@ class GroupBuyViewSet(ModelViewSet):
         internet_carrier = self.request.query_params.get('internet_carrier', None)  # 인터넷/인터넷+TV용
         subscription_type = self.request.query_params.get('subscription_type', None)
         plan_info = self.request.query_params.get('plan_info', None)
+        internet_speed = self.request.query_params.get('internet_speed', None)  # 인터넷 속도 필터
         
         # 제조사 필터
         manufacturer = self.request.query_params.get('manufacturer', None)
@@ -802,10 +803,32 @@ class GroupBuyViewSet(ModelViewSet):
             # GroupBuyTelecomDetail과 조인하여 가입유형으로 필터링
             queryset = queryset.filter(telecom_detail__subscription_type=subscription_type)
             
-        # 요금제 필터 처리
+        # 요금제 필터 처리 (합집합 처리)
         if plan_info:
-            # GroupBuyTelecomDetail과 조인하여 요금제로 필터링
-            queryset = queryset.filter(telecom_detail__plan_info=plan_info)
+            # 쉼표로 구분된 여러 요금제 처리
+            if ',' in plan_info:
+                plan_infos = [p.strip() for p in plan_info.split(',')]
+                queryset = queryset.filter(telecom_detail__plan_info__in=plan_infos)
+            else:
+                # 단일 요금제 필터링
+                queryset = queryset.filter(telecom_detail__plan_info=plan_info)
+        
+        # 인터넷 속도 필터 처리 (합집합 처리)
+        if internet_speed:
+            # 쉼표로 구분된 여러 속도 처리
+            if ',' in internet_speed:
+                speeds = [s.strip() for s in internet_speed.split(',')]
+                # 인터넷 속도는 product_name이나 title에 포함되어 있을 수 있음
+                q_objects = Q()
+                for speed in speeds:
+                    q_objects |= Q(product_name__icontains=speed) | Q(title__icontains=speed)
+                queryset = queryset.filter(q_objects)
+            else:
+                # 단일 속도 필터링
+                queryset = queryset.filter(
+                    Q(product_name__icontains=internet_speed) | 
+                    Q(title__icontains=internet_speed)
+                )
             
         # 제조사 필터 처리 (합집합 처리)
         if manufacturer:
