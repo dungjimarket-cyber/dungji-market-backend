@@ -227,16 +227,16 @@ def register_user_v2(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 사업자등록번호 중복 체크
-            if business_reg_number:
-                # 하이픈 제거
-                clean_business_number = business_reg_number.replace('-', '').strip()
-                # 이미 등록된 사업자번호인지 확인 (올바른 필드명 사용)
-                if User.objects.filter(business_number=clean_business_number).exists():
-                    return Response(
-                        {'error': '이미 등록된 사업자등록번호입니다. 동일한 사업자번호로는 하나의 계정만 생성할 수 있습니다.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            # 사업자등록번호 중복 체크 비활성화 - 동일 사업자번호로 여러 계정 생성 가능
+            # if business_reg_number:
+            #     # 하이픈 제거
+            #     clean_business_number = business_reg_number.replace('-', '').strip()
+            #     # 이미 등록된 사업자번호인지 확인 (올바른 필드명 사용)
+            #     if User.objects.filter(business_number=clean_business_number).exists():
+            #         return Response(
+            #             {'error': '이미 등록된 사업자등록번호입니다. 동일한 사업자번호로는 하나의 계정만 생성할 수 있습니다.'},
+            #             status=status.HTTP_400_BAD_REQUEST
+            #         )
         
         with transaction.atomic():
             # 사용자 생성
