@@ -13,7 +13,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # environment: production  # 이 설정이 queued 상태를 유발할 수 있음
+    environment: production  # 이 설정이 queued 상태를 유발할 수 있음
 
     steps:
     - name: Checkout source
