@@ -596,6 +596,77 @@ class GroupBuyTelecomDetail(models.Model):
         verbose_name_plural = '공구 통신 세부정보 관리'
 
 
+class GroupBuyInternetDetail(models.Model):
+    """
+    공구의 인터넷/인터넷+TV 관련 세부 정보를 저장하는 모델
+    GroupBuy와 1:1 관계를 가짐
+    """
+    # 통신사 선택 옵션
+    CARRIER_CHOICES = (
+        ('SKT', 'SK브로드밴드'),
+        ('KT', 'KT'),
+        ('LGU', 'LG U+'),
+    )
+    
+    # 가입유형 선택 옵션
+    SUBSCRIPTION_TYPE_CHOICES = (
+        ('new', '신규가입'),
+        ('transfer', '통신사이동'),
+    )
+    
+    # 인터넷 속도 선택 옵션
+    SPEED_CHOICES = (
+        ('100M', '100M'),
+        ('200M', '200M'),
+        ('500M', '500M'),
+        ('1G', '1G'),
+        ('2.5G', '2.5G'),
+        ('5G', '5G'),
+        ('10G', '10G'),
+    )
+    
+    groupbuy = models.OneToOneField(
+        'GroupBuy',
+        on_delete=models.CASCADE,
+        related_name='internet_detail'
+    )
+    carrier = models.CharField(
+        max_length=10,
+        choices=CARRIER_CHOICES,
+        blank=True,
+        verbose_name='통신사'
+    )
+    subscription_type = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_TYPE_CHOICES,
+        verbose_name='가입유형'
+    )
+    speed = models.CharField(
+        max_length=10,
+        choices=SPEED_CHOICES,
+        blank=True,
+        verbose_name='인터넷 속도'
+    )
+    has_tv = models.BooleanField(
+        default=False,
+        verbose_name='TV 포함 여부'
+    )
+    contract_period = models.CharField(
+        max_length=20,
+        default='24개월',
+        verbose_name='약정기간'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = '공구 인터넷 상세정보'
+        verbose_name_plural = '공구 인터넷 상세정보'
+    
+    def __str__(self):
+        return f"{self.groupbuy.title} - {self.carrier} {self.speed}"
+
 class BidTokenAdjustmentLog(models.Model):
     """입찰권 조정 이력을 관리하는 모델"""
     ADJUSTMENT_TYPE_CHOICES = (

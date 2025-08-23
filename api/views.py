@@ -1056,23 +1056,39 @@ class GroupBuyViewSet(ModelViewSet):
             serializer.is_valid(raise_exception=True)
             groupbuy = serializer.save()
             
-            # 통신 정보가 있는 경우 GroupBuyTelecomDetail 모델 생성
-            # 단, 인터넷+TV 카테고리는 제외 (인터넷+TV는 통신 상품이 아님)
+            # 카테고리별로 적절한 detail 모델 생성
             product = groupbuy.product
-            is_telecom_product = product.category.detail_type == 'telecom' if product.category else False
+            category_detail_type = product.category.detail_type if product.category else None
             
-            if has_telecom_info and telecom_info and is_telecom_product:
+            # 통신 상품인 경우 GroupBuyTelecomDetail 생성
+            if has_telecom_info and telecom_info and category_detail_type == 'telecom':
                 from .models import GroupBuyTelecomDetail
                 
                 # 필수 필드 확인 및 기본값 설정
+                # 인터넷/인터넷+TV 상품은 통신사 정보가 상품명에 포함되어 있으므로 별도 처리
                 if 'telecom_carrier' not in telecom_info:
-                    telecom_info['telecom_carrier'] = 'SKT'  # 기본값
+                    if category_detail_type == 'telecom':
+                        telecom_info['telecom_carrier'] = 'SKT'  # 통신 상품만 기본값
+                    else:
+                        # 인터넷/인터넷+TV는 상품명에서 통신사 추출
+                        product_name = product.name.upper()
+                        if 'SKT' in product_name or 'SK' in product_name:
+                            telecom_info['telecom_carrier'] = 'SKT'
+                        elif 'KT' in product_name:
+                            telecom_info['telecom_carrier'] = 'KT'
+                        elif 'LG' in product_name or 'U+' in product_name or 'U플러스' in product_name:
+                            telecom_info['telecom_carrier'] = 'LGU'
+                        else:
+                            telecom_info['telecom_carrier'] = ''  # 통신사 정보 없음
                 
                 if 'subscription_type' not in telecom_info:
                     telecom_info['subscription_type'] = 'new'  # 기본값
                 
                 if 'plan_info' not in telecom_info:
-                    telecom_info['plan_info'] = '5만원대'  # 기본값
+                    if category_detail_type == 'telecom':
+                        telecom_info['plan_info'] = '5만원대'  # 통신 상품만 요금제 기본값
+                    else:
+                        telecom_info['plan_info'] = ''  # 인터넷/인터넷+TV는 요금제 정보 없음
                 
                 # 요금제 정보 변환 (5G_premium -> 7만원대)
                 if 'plan_info' in telecom_info:
@@ -1101,6 +1117,72 @@ class GroupBuyViewSet(ModelViewSet):
                 )
                 
                 print(f"\n[GroupBuyTelecomDetail 생성 완료] groupbuy_id: {groupbuy.id}")
+            
+            # 인터넷/인터넷+TV 상품인 경우 GroupBuyInternetDetail 생성
+            elif has_telecom_info and telecom_info and category_detail_type in ['internet', 'internet_tv']:
+                from .models import GroupBuyInternetDetail
+                
+                print(f"\n[GroupBuyInternetDetail 생성 시작]")
+                print(f"  - groupbuy_id: {groupbuy.id}")
+                print(f"  - category_detail_type: {category_detail_type}")
+                print(f"  - telecom_info: {telecom_info}")
+                print(f"  - product.name: {product.name}")
+                
+                # 통신사 정보 추출 (product 이름이나 telecom_info에서)
+                carrier = telecom_info.get('telecom_carrier', '')
+                if not carrier and product.name:
+                    # 상품명에서 통신사 추출
+                    if 'SK브로드밴드' in product.name or 'SKB' in product.name:
+                        carrier = 'SKT'
+                    elif 'KT' in product.name:
+                        carrier = 'KT'
+                    elif 'LG U+' in product.name or 'LGU+' in product.name or 'U+' in product.name:
+                        carrier = 'LGU'
+                
+                # 가입유형
+                subscription_type = telecom_info.get('subscription_type', 'new')
+                
+                # 속도 정보 추출 (product 이름에서)
+                speed = ''
+                if product.name:
+                    name_upper = product.name.upper()
+                    if '10G' in name_upper or '10기가' in name_upper:
+                        speed = '10G'
+                    elif '5G' in name_upper or '5기가' in name_upper:
+                        speed = '5G'
+                    elif '2.5G' in name_upper or '2.5기가' in name_upper:
+                        speed = '2.5G'
+                    elif '1G' in name_upper or '1기가' in name_upper or '기가' in name_upper:
+                        speed = '1G'
+                    elif '500M' in name_upper or '500메가' in name_upper:
+                        speed = '500M'
+                    elif '200M' in name_upper or '200메가' in name_upper:
+                        speed = '200M'
+                    elif '100M' in name_upper or '100메가' in name_upper:
+                        speed = '100M'
+                
+                # TV 포함 여부 (카테고리가 internet_tv이거나 상품명에 TV가 포함된 경우)
+                has_tv = category_detail_type == 'internet_tv' or 'TV' in product.name.upper()
+                
+                # 약정기간은 항상 24개월로 고정
+                contract_period = '24개월'
+                
+                # GroupBuyInternetDetail 모델 생성
+                GroupBuyInternetDetail.objects.create(
+                    groupbuy=groupbuy,
+                    carrier=carrier,
+                    subscription_type=subscription_type,
+                    speed=speed,
+                    has_tv=has_tv,
+                    contract_period=contract_period
+                )
+                
+                print(f"\n[GroupBuyInternetDetail 생성 완료]")
+                print(f"  - carrier: {carrier}")
+                print(f"  - subscription_type: {subscription_type}")
+                print(f"  - speed: {speed}")
+                print(f"  - has_tv: {has_tv}")
+                print(f"  - contract_period: {contract_period}")
             
             # 다중 지역 처리 - regions 필드가 있는 경우 GroupBuyRegion 모델에 저장
             if 'regions' in request.data and isinstance(request.data['regions'], list) and request.data['regions']:

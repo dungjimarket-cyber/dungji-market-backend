@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, Bid, ParticipantConsent, NoShowReport
+from .models import Product, Category, GroupBuy, Participation, TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail, SubscriptionProductDetail, StandardProductDetail, ProductCustomValue, Wishlist, Review, GroupBuyTelecomDetail, GroupBuyInternetDetail, Bid, ParticipantConsent, NoShowReport
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
@@ -86,6 +86,33 @@ class StandardProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = StandardProductDetail
         fields = ['brand', 'origin', 'shipping_fee', 'shipping_info']
+
+class GroupBuyInternetDetailSerializer(serializers.ModelSerializer):
+    subscription_type_display = serializers.SerializerMethodField()
+    carrier_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = GroupBuyInternetDetail
+        fields = ['carrier', 'carrier_display', 'subscription_type', 'subscription_type_display', 
+                  'speed', 'has_tv', 'contract_period']
+    
+    def get_subscription_type_display(self, obj):
+        """가입유형을 한글로 변환하여 반환"""
+        if obj.subscription_type == 'new':
+            return '신규가입'
+        elif obj.subscription_type == 'transfer':
+            return '통신사이동'
+        return obj.subscription_type
+    
+    def get_carrier_display(self, obj):
+        """통신사를 한글로 변환하여 반환"""
+        if obj.carrier == 'SKT':
+            return 'SK브로드밴드'
+        elif obj.carrier == 'KT':
+            return 'KT'
+        elif obj.carrier == 'LGU':
+            return 'LG U+'
+        return obj.carrier
 
 class GroupBuyTelecomDetailSerializer(serializers.ModelSerializer):
     subscription_type_korean = serializers.SerializerMethodField()
@@ -212,6 +239,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
     product_info = ProductSerializer(source='product', read_only=True)
     
     telecom_detail = GroupBuyTelecomDetailSerializer(read_only=True)
+    internet_detail = GroupBuyInternetDetailSerializer(read_only=True)
     
     # 지역 정보 필드 명시적 추가
     region = serializers.CharField(source='region.code', read_only=True)
@@ -224,7 +252,7 @@ class GroupBuySerializer(serializers.ModelSerializer):
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'product_info', 'creator', 'creator_name',
                 'host_username', 'status', 'cancellation_reason', 'min_participants', 'max_participants', 'start_time', 'end_time', 'final_selection_end',
-                'seller_selection_end', 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'product_details', 'regions']
+                'seller_selection_end', 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'internet_detail', 'product_details', 'regions']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
             'creator': {'required': True},  # creator 필드를 필수로 지정
