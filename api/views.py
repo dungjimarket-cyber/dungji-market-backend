@@ -1057,7 +1057,11 @@ class GroupBuyViewSet(ModelViewSet):
             groupbuy = serializer.save()
             
             # 통신 정보가 있는 경우 GroupBuyTelecomDetail 모델 생성
-            if has_telecom_info and telecom_info:
+            # 단, 인터넷+TV 카테고리는 제외 (인터넷+TV는 통신 상품이 아님)
+            product = groupbuy.product
+            is_telecom_product = product.category.detail_type == 'telecom' if product.category else False
+            
+            if has_telecom_info and telecom_info and is_telecom_product:
                 from .models import GroupBuyTelecomDetail
                 
                 # 필수 필드 확인 및 기본값 설정
