@@ -1121,6 +1121,7 @@ class GroupBuyViewSet(ModelViewSet):
             # 인터넷/인터넷+TV 상품인 경우 GroupBuyInternetDetail 생성
             elif has_telecom_info and telecom_info and category_detail_type in ['internet', 'internet_tv']:
                 from .models import GroupBuyInternetDetail
+                from .utils.internet_parser import parse_internet_product_title
                 
                 print(f"\n[GroupBuyInternetDetail 생성 시작]")
                 print(f"  - groupbuy_id: {groupbuy.id}")
@@ -1128,60 +1129,42 @@ class GroupBuyViewSet(ModelViewSet):
                 print(f"  - telecom_info: {telecom_info}")
                 print(f"  - product.name: {product.name}")
                 
-                # 통신사 정보 추출 (product 이름이나 telecom_info에서)
-                carrier = telecom_info.get('telecom_carrier', '')
-                if not carrier and product.name:
-                    # 상품명에서 통신사 추출
-                    if 'SK브로드밴드' in product.name or 'SKB' in product.name:
-                        carrier = 'SKT'
-                    elif 'KT' in product.name:
-                        carrier = 'KT'
-                    elif 'LG U+' in product.name or 'LGU+' in product.name or 'U+' in product.name:
-                        carrier = 'LGU'
+                # 상품 제목에서 정보 파싱
+                parsed_info = parse_internet_product_title(product.name)
                 
-                # 가입유형
-                subscription_type = telecom_info.get('subscription_type', 'new')
-                
-                # 속도 정보 추출 (product 이름에서)
-                speed = ''
-                if product.name:
-                    name_upper = product.name.upper()
-                    if '10G' in name_upper or '10기가' in name_upper:
-                        speed = '10G'
-                    elif '5G' in name_upper or '5기가' in name_upper:
-                        speed = '5G'
-                    elif '2.5G' in name_upper or '2.5기가' in name_upper:
-                        speed = '2.5G'
-                    elif '1G' in name_upper or '1기가' in name_upper or '기가' in name_upper:
-                        speed = '1G'
-                    elif '500M' in name_upper or '500메가' in name_upper:
-                        speed = '500M'
-                    elif '200M' in name_upper or '200메가' in name_upper:
-                        speed = '200M'
-                    elif '100M' in name_upper or '100메가' in name_upper:
-                        speed = '100M'
-                
-                # TV 포함 여부 (카테고리가 internet_tv이거나 상품명에 TV가 포함된 경우)
-                has_tv = category_detail_type == 'internet_tv' or 'TV' in product.name.upper()
+                # telecom_info에서 온 정보가 있으면 우선 사용
+                if telecom_info.get('telecom_carrier'):
+                    parsed_info['carrier'] = telecom_info['telecom_carrier']
+                if telecom_info.get('subscription_type'):
+                    parsed_info['subscription_type'] = telecom_info['subscription_type']
                 
                 # 약정기간은 항상 24개월로 고정
                 contract_period = '24개월'
                 
                 # GroupBuyInternetDetail 모델 생성
-                GroupBuyInternetDetail.objects.create(
+                internet_detail = GroupBuyInternetDetail.objects.create(
                     groupbuy=groupbuy,
-                    carrier=carrier,
-                    subscription_type=subscription_type,
-                    speed=speed,
-                    has_tv=has_tv,
-                    contract_period=contract_period
+                    carrier=parsed_info['carrier'],
+                    subscription_type=parsed_info['subscription_type'],
+                    speed=parsed_info['speed'],
+                    has_tv=parsed_info['has_tv'],
+                    contract_period=contract_period,
+                    product_plan=parsed_info['product_plan'],
+                    tv_channels=parsed_info['tv_channels'],
+                    monthly_fee=parsed_info['monthly_fee'],
+                    installation_fee=parsed_info.get('installation_fee', ''),
+                    gift_info=parsed_info['gift_info'],
+                    additional_benefits=parsed_info['additional_benefits'],
+                    raw_product_title=product.name
                 )
                 
                 print(f"\n[GroupBuyInternetDetail 생성 완료]")
-                print(f"  - carrier: {carrier}")
-                print(f"  - subscription_type: {subscription_type}")
-                print(f"  - speed: {speed}")
-                print(f"  - has_tv: {has_tv}")
+                print(f"  - carrier: {parsed_info['carrier']}")
+                print(f"  - subscription_type: {parsed_info['subscription_type']}")
+                print(f"  - speed: {parsed_info['speed']}")
+                print(f"  - has_tv: {parsed_info['has_tv']}")
+                print(f"  - product_plan: {parsed_info['product_plan']}")
+                print(f"  - tv_channels: {parsed_info['tv_channels']}")
                 print(f"  - contract_period: {contract_period}")
             
             # 다중 지역 처리 - regions 필드가 있는 경우 GroupBuyRegion 모델에 저장

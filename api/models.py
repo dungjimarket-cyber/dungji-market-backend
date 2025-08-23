@@ -657,6 +657,48 @@ class GroupBuyInternetDetail(models.Model):
         verbose_name='약정기간'
     )
     
+    # 커스텀 필드 추가
+    product_plan = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='상품 플랜명',
+        help_text='예: 기가, 광랜, 슬림, 베이직, 에센스'
+    )
+    tv_channels = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='TV 채널 정보',
+        help_text='예: 기본형, 프리미엄, 200채널'
+    )
+    monthly_fee = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='월 요금',
+        help_text='예: 30,000원, 4만원대'
+    )
+    installation_fee = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='설치비',
+        help_text='예: 무료, 30,000원'
+    )
+    gift_info = models.TextField(
+        blank=True,
+        verbose_name='사은품 정보',
+        help_text='예: 신세계 상품권 10만원, 현금 캐시백 5만원'
+    )
+    additional_benefits = models.TextField(
+        blank=True,
+        verbose_name='추가 혜택',
+        help_text='예: 넷플릭스 무료, 와이파이 공유기 제공'
+    )
+    raw_product_title = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='원본 상품명',
+        help_text='파싱 전 원본 상품 제목'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

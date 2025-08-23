@@ -94,7 +94,9 @@ class GroupBuyInternetDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupBuyInternetDetail
         fields = ['carrier', 'carrier_display', 'subscription_type', 'subscription_type_display', 
-                  'speed', 'has_tv', 'contract_period']
+                  'speed', 'has_tv', 'contract_period', 'product_plan', 'tv_channels',
+                  'monthly_fee', 'installation_fee', 'gift_info', 'additional_benefits',
+                  'raw_product_title']
     
     def get_subscription_type_display(self, obj):
         """가입유형을 한글로 변환하여 반환"""
