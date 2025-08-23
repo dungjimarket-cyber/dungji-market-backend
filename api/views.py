@@ -701,7 +701,13 @@ class GroupBuyViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = GroupBuy.objects.select_related('product', 'product__category').all()
+        queryset = GroupBuy.objects.select_related(
+            'product', 
+            'product__category'
+        ).prefetch_related(
+            'product__custom_values',
+            'product__custom_values__field'
+        ).all()
         status_param = self.request.query_params.get('status', None)
         category_id = self.request.query_params.get('category', None)
         sort_param = self.request.query_params.get('sort', None)

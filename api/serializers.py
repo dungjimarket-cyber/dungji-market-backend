@@ -270,7 +270,9 @@ class GroupBuySerializer(serializers.ModelSerializer):
         """product_details 필드를 가져오는 메서드
         
         1. GroupBuyTelecomDetail 모델에 저장된 통신 정보를 우선 사용
-        2. 없는 필드는 상품의 원래 정보로 보완
+        2. GroupBuyInternetDetail 모델에 저장된 인터넷 정보를 우선 사용
+        3. 없는 필드는 상품의 원래 정보로 보완
+        4. ProductCustomValue의 커스텀 필드 정보 포함
         """
         # 기본 상품 정보 가져오기
         product_info = ProductSerializer(obj.product).data
