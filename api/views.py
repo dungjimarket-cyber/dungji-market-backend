@@ -839,14 +839,18 @@ class GroupBuyViewSet(ModelViewSet):
             
         # 요금제 필터 처리 (합집합 처리)
         if plan_info:
-            # 요금제 매핑 (프론트엔드 → 백엔드)
+            # 요금제 매핑 (프론트엔드 → 백엔드 실제 저장값)
+            # 데이터베이스에는 3,5,7,9,10만원대 및 5G_basic_plus, 5G_premium_plus 형태로 저장됨
             plan_mapping = {
+                '3만원대': ['3만원대', '3만원', '5G_basic', 'basic', '3'],
+                '4만원대': ['4만원대', '4만원', '5G_basic', 'basic', '4'],  # 4만원대는 DB에 없지만 매핑
                 '5만원대': ['5만원대', '5만원', '5G_standard', 'standard', '5'],
-                '6만원대': ['6만원대', '6만원', '6G_standard', '6'],
-                '7만원대': ['7만원대', '7만원', '7G_premium', '7'],
-                '8만원대': ['8만원대', '8만원', '8G_premium', '8'],
-                '9만원대': ['9만원대', '9만원', '9G_special', '9'],
-                '10만원이상': ['10만원이상', '10만원', '10G_platinum', 'platinum', '10']
+                '6만원대': ['6만원대', '6만원', '5G_basic_plus', 'basic_plus', '6'],  # 5G_basic_plus로 저장됨
+                '7만원대': ['7만원대', '7만원', '5G_premium', 'premium', '7'],
+                '8만원대': ['8만원대', '8만원', '5G_premium_plus', 'premium_plus', '8'],  # 5G_premium_plus로 저장됨
+                '9만원대': ['9만원대', '9만원', '5G_special', 'special', '9'],
+                '10만원대': ['10만원대', '10만원', '5G_platinum', 'platinum', '10'],
+                '10만원이상': ['10만원대', '10만원이상', '10만원', '5G_platinum', 'platinum', '10']
             }
             
             # 쉼표로 구분된 여러 요금제 처리
