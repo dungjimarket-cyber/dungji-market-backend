@@ -693,6 +693,8 @@ def get_user_profile(request):
             'created_at': user.date_joined,
             'birth_date': user.birth_date.isoformat() if user.birth_date else None,
             'gender': user.gender,
+            'average_rating': user.average_rating,  # 평균 별점 추가
+            'review_count': user.review_count,  # 리뷰 개수 추가
         }
         
         return Response(profile_data)

@@ -26,6 +26,23 @@ class User(AbstractUser):
     
     def __str__(self):
         return f"{self.nickname} ({self.get_role_display()})"
+    
+    @property
+    def average_rating(self):
+        """판매자가 받은 평균 별점 계산"""
+        from django.db.models import Avg
+        if self.role != 'seller':
+            return None
+        
+        avg = self.received_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating']
+        return round(avg, 1) if avg else None
+    
+    @property
+    def review_count(self):
+        """판매자가 받은 리뷰 개수"""
+        if self.role != 'seller':
+            return 0
+        return self.received_reviews.count()
     SNS_TYPE_CHOICES = (
         ('google', 'Google'),
         ('kakao', 'Kakao'),
@@ -1191,6 +1208,7 @@ class Review(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews', verbose_name='작성자')
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, related_name='reviews', verbose_name='공동구매')
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_reviews', verbose_name='판매자', null=True, blank=True)
     rating = models.PositiveSmallIntegerField(choices=RATING_CHOICES, verbose_name='별점')
     content = models.TextField(verbose_name='리뷰 내용')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='작성일')
