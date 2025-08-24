@@ -795,29 +795,86 @@ class GroupBuyViewSet(ModelViewSet):
                 # OR 조건으로 통신사 필터링
                 queryset = queryset.filter(
                     Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
-                    telecom_detail__telecom_carrier__in=carriers
+                    internet_detail__carrier__in=carriers
                 )
             else:
                 # 단일 값 처리
                 queryset = queryset.filter(
                     Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
-                    telecom_detail__telecom_carrier=internet_carrier
+                    internet_detail__carrier=internet_carrier
+                )
+        
+        # 인터넷/인터넷+TV 가입유형 필터 처리 (별도 파라미터)
+        internet_subscription_type = self.request.query_params.get('internet_subscription_type', None)
+        if internet_subscription_type:
+            # 쉼표로 구분된 값들 처리
+            if ',' in internet_subscription_type:
+                types = [t.strip() for t in internet_subscription_type.split(',')]
+                queryset = queryset.filter(
+                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
+                    internet_detail__subscription_type__in=types
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
+                    internet_detail__subscription_type=internet_subscription_type
                 )
             
-        # 가입유형 필터 처리
+        # 휴대폰 가입유형 필터 처리
         if subscription_type:
-            # GroupBuyTelecomDetail과 조인하여 가입유형으로 필터링
-            queryset = queryset.filter(telecom_detail__subscription_type=subscription_type)
+            # 쉼표로 구분된 값들 처리
+            if ',' in subscription_type:
+                types = [t.strip() for t in subscription_type.split(',')]
+                # 휴대폰 카테고리만 적용
+                queryset = queryset.filter(
+                    product__category__name='휴대폰',
+                    telecom_detail__subscription_type__in=types
+                )
+            else:
+                # GroupBuyTelecomDetail과 조인하여 가입유형으로 필터링
+                queryset = queryset.filter(
+                    product__category__name='휴대폰',
+                    telecom_detail__subscription_type=subscription_type
+                )
             
         # 요금제 필터 처리 (합집합 처리)
         if plan_info:
+            # 요금제 매핑 (프론트엔드 → 백엔드)
+            plan_mapping = {
+                '5만원대': ['5만원대', '5만원', '5G_standard', 'standard', '5'],
+                '6만원대': ['6만원대', '6만원', '6G_standard', '6'],
+                '7만원대': ['7만원대', '7만원', '7G_premium', '7'],
+                '8만원대': ['8만원대', '8만원', '8G_premium', '8'],
+                '9만원대': ['9만원대', '9만원', '9G_special', '9'],
+                '10만원이상': ['10만원이상', '10만원', '10G_platinum', 'platinum', '10']
+            }
+            
             # 쉼표로 구분된 여러 요금제 처리
             if ',' in plan_info:
                 plan_infos = [p.strip() for p in plan_info.split(',')]
-                queryset = queryset.filter(telecom_detail__plan_info__in=plan_infos)
+                # 매핑된 값들을 모두 포함
+                mapped_plans = []
+                for plan in plan_infos:
+                    if plan in plan_mapping:
+                        mapped_plans.extend(plan_mapping[plan])
+                    else:
+                        mapped_plans.append(plan)
+                
+                # OR 조건으로 필터링
+                q_objects = Q()
+                for plan in mapped_plans:
+                    q_objects |= Q(telecom_detail__plan_info__icontains=plan)
+                queryset = queryset.filter(q_objects)
             else:
                 # 단일 요금제 필터링
-                queryset = queryset.filter(telecom_detail__plan_info=plan_info)
+                if plan_info in plan_mapping:
+                    # 매핑된 값들 중 하나라도 포함되면 매칭
+                    q_objects = Q()
+                    for plan in plan_mapping[plan_info]:
+                        q_objects |= Q(telecom_detail__plan_info__icontains=plan)
+                    queryset = queryset.filter(q_objects)
+                else:
+                    queryset = queryset.filter(telecom_detail__plan_info__icontains=plan_info)
         
         # 인터넷 속도 필터 처리 (합집합 처리)
         if internet_speed:
