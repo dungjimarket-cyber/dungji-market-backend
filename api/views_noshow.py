@@ -189,3 +189,129 @@ def check_noshow_report_eligibility(request):
         'eligible': True,
         'message': '노쇼 신고가 가능합니다.'
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def batch_report_buyer_noshow(request):
+    """
+    판매자가 여러 구매자를 일괄 노쇼 신고
+    
+    Request Body:
+    {
+        "groupbuy_id": 123,
+        "reported_users": [
+            {"user_id": 1, "content": "연락 두절"},
+            {"user_id": 2, "content": "거래 불이행"}
+        ]
+    }
+    """
+    user = request.user
+    
+    # 판매자 권한 확인
+    if user.role != 'seller':
+        return Response({
+            'error': '구매자 노쇼는 판매자만 신고할 수 있습니다.'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    groupbuy_id = request.data.get('groupbuy_id')
+    reported_users = request.data.get('reported_users', [])
+    
+    if not groupbuy_id or not reported_users:
+        return Response({
+            'error': '필수 데이터가 누락되었습니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        groupbuy = GroupBuy.objects.get(id=groupbuy_id)
+    except GroupBuy.DoesNotExist:
+        return Response({
+            'error': '존재하지 않는 공구입니다.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # 해당 공구에서 선택된 입찰이 있는지 확인
+    from .models_bid import Bid
+    selected_bid = Bid.objects.filter(
+        groupbuy=groupbuy,
+        seller=user,
+        status='accepted'
+    ).first()
+    
+    if not selected_bid:
+        return Response({
+            'error': '해당 공구에서 선택된 입찰이 없습니다.'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # 참여자 목록 가져오기
+    from .models import Participation
+    valid_participants = Participation.objects.filter(
+        groupbuy=groupbuy
+    ).values_list('user_id', flat=True)
+    
+    success_reports = []
+    failed_reports = []
+    
+    for report_data in reported_users:
+        user_id = report_data.get('user_id')
+        content = report_data.get('content', '노쇼 신고')
+        
+        try:
+            reported_user = User.objects.get(id=user_id)
+            
+            # 참여자인지 확인
+            if user_id not in valid_participants:
+                failed_reports.append({
+                    'user_id': user_id,
+                    'reason': '해당 공구 참여자가 아닙니다.'
+                })
+                continue
+            
+            # 이미 신고했는지 확인
+            existing_report = NoShowReport.objects.filter(
+                reporter=user,
+                reported_user=reported_user,
+                groupbuy=groupbuy
+            ).exists()
+            
+            if existing_report:
+                failed_reports.append({
+                    'user_id': user_id,
+                    'reason': '이미 신고된 사용자입니다.'
+                })
+                continue
+            
+            # 신고 생성
+            report = NoShowReport.objects.create(
+                reporter=user,
+                reported_user=reported_user,
+                groupbuy=groupbuy,
+                bid=selected_bid,
+                report_type='buyer_noshow',
+                content=content
+            )
+            
+            success_reports.append({
+                'user_id': user_id,
+                'report_id': report.id,
+                'message': '신고가 접수되었습니다.'
+            })
+            
+            logger.info(f"배치 노쇼 신고 생성: {user} -> {reported_user} ({groupbuy.title})")
+            
+        except User.DoesNotExist:
+            failed_reports.append({
+                'user_id': user_id,
+                'reason': '존재하지 않는 사용자입니다.'
+            })
+        except Exception as e:
+            failed_reports.append({
+                'user_id': user_id,
+                'reason': str(e)
+            })
+    
+    return Response({
+        'success': len(success_reports),
+        'failed': len(failed_reports),
+        'success_reports': success_reports,
+        'failed_reports': failed_reports
+    }, status=status.HTTP_201_CREATED if success_reports else status.HTTP_400_BAD_REQUEST)

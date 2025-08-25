@@ -53,7 +53,7 @@ from api.views_final_selection import (
     get_final_decision_status, get_contact_info,
     get_buyer_confirmation_stats
 )
-from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility
+from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility, batch_report_buyer_noshow
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
 from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check
@@ -150,6 +150,7 @@ urlpatterns = [
     path('api/groupbuys/<int:groupbuy_id>/buyer-confirmation-stats/', get_buyer_confirmation_stats, name='get_buyer_confirmation_stats'),
     # 노쇼 신고 관련 API
     path('api/noshow-reports/check-eligibility/', check_noshow_report_eligibility, name='check_noshow_report_eligibility'),
+    path('api/noshow-reports/batch-report/', batch_report_buyer_noshow, name='batch_report_buyer_noshow'),
     # 배너 및 이벤트 API
     path('api/banners/', BannerListView.as_view(), name='banner_list'),
     path('api/banners/main/', get_main_banners, name='main_banners'),

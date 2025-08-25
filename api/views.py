@@ -788,21 +788,14 @@ class GroupBuyViewSet(ModelViewSet):
         
         # 인터넷/인터넷+TV 통신사 필터 처리 (별도 파라미터)
         if internet_carrier:
-            # 인터넷과 인터넷+TV 카테고리에서만 적용
             # 쉼표로 구분된 값들 처리
             if ',' in internet_carrier:
                 carriers = [c.strip() for c in internet_carrier.split(',')]
                 # OR 조건으로 통신사 필터링
-                queryset = queryset.filter(
-                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
-                    internet_detail__carrier__in=carriers
-                )
+                queryset = queryset.filter(internet_detail__carrier__in=carriers)
             else:
                 # 단일 값 처리
-                queryset = queryset.filter(
-                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
-                    internet_detail__carrier=internet_carrier
-                )
+                queryset = queryset.filter(internet_detail__carrier=internet_carrier)
         
         # 인터넷/인터넷+TV 가입유형 필터 처리 (별도 파라미터)
         internet_subscription_type = self.request.query_params.get('internet_subscription_type', None)
@@ -810,32 +803,19 @@ class GroupBuyViewSet(ModelViewSet):
             # 쉼표로 구분된 값들 처리
             if ',' in internet_subscription_type:
                 types = [t.strip() for t in internet_subscription_type.split(',')]
-                queryset = queryset.filter(
-                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
-                    internet_detail__subscription_type__in=types
-                )
+                queryset = queryset.filter(internet_detail__subscription_type__in=types)
             else:
-                queryset = queryset.filter(
-                    Q(product__category__name='인터넷') | Q(product__category__name='인터넷+TV'),
-                    internet_detail__subscription_type=internet_subscription_type
-                )
+                queryset = queryset.filter(internet_detail__subscription_type=internet_subscription_type)
             
         # 휴대폰 가입유형 필터 처리
         if subscription_type:
             # 쉼표로 구분된 값들 처리
             if ',' in subscription_type:
                 types = [t.strip() for t in subscription_type.split(',')]
-                # 휴대폰 카테고리만 적용
-                queryset = queryset.filter(
-                    product__category__name='휴대폰',
-                    telecom_detail__subscription_type__in=types
-                )
+                queryset = queryset.filter(telecom_detail__subscription_type__in=types)
             else:
                 # GroupBuyTelecomDetail과 조인하여 가입유형으로 필터링
-                queryset = queryset.filter(
-                    product__category__name='휴대폰',
-                    telecom_detail__subscription_type=subscription_type
-                )
+                queryset = queryset.filter(telecom_detail__subscription_type=subscription_type)
             
         # 요금제 필터 처리 (합집합 처리)
         if plan_info:
@@ -975,16 +955,36 @@ class GroupBuyViewSet(ModelViewSet):
                 Q(region_name__icontains=region_search)  # 구 region_name 필드 (호환성)
             ).exclude(region_type='nationwide').distinct()  # 전국 비대면 제외 및 중복 제거
         
-        # 내지역 필터 처리 (정확한 지역 매칭)
+        # 내지역 필터 처리 (정확한 지역 매칭 + 하위 지역 포함)
         if region:
-            # 정확한 지역명 매칭
-            queryset = queryset.filter(
-                Q(regions__region__name=region) |  # GroupBuyRegion을 통한 정확한 매칭
-                Q(regions__region__full_name=region) |  # full_name으로도 매칭
-                Q(region__name=region) |  # 직접 연결된 region의 정확한 매칭
-                Q(region_name=region) |  # 백업 지역명 정확한 매칭
-                Q(region_type='nationwide')  # 전국 비대면 공구도 포함
-            ).distinct()
+            # 상위 지역(시/도)인 경우 하위 지역도 포함
+            from api.models import Region
+            
+            # 입력된 지역이 상위 지역인지 확인
+            parent_region = Region.objects.filter(
+                name=region,
+                parent_id__isnull=True  # parent_id가 null이면 상위 지역
+            ).first()
+            
+            if parent_region:
+                # 상위 지역인 경우: 해당 지역과 모든 하위 지역 포함
+                sub_regions = Region.objects.filter(parent_id=parent_region.id)
+                region_ids = [parent_region.id] + list(sub_regions.values_list('id', flat=True))
+                
+                queryset = queryset.filter(
+                    Q(regions__region_id__in=region_ids) |  # 해당 지역 및 하위 지역
+                    Q(region_id__in=region_ids) |  # 직접 연결된 region
+                    Q(region_type='nationwide')  # 전국 비대면 공구도 포함
+                ).distinct()
+            else:
+                # 하위 지역이거나 정확한 매칭
+                queryset = queryset.filter(
+                    Q(regions__region__name=region) |  # GroupBuyRegion을 통한 정확한 매칭
+                    Q(regions__region__full_name=region) |  # full_name으로도 매칭
+                    Q(region__name=region) |  # 직접 연결된 region의 정확한 매칭
+                    Q(region_name=region) |  # 백업 지역명 정확한 매칭
+                    Q(region_type='nationwide')  # 전국 비대면 공구도 포함
+                ).distinct()
             
         # 정렬 처리 - ordering 파라미터 우선 사용
         if ordering_param:
