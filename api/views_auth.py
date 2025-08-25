@@ -998,10 +998,14 @@ def update_referral_code(request):
         
         logger.info(f"판매회원 {user.username}이 추천인 코드 {referral_code} 입력 완료 (보너스 입찰권 10개 지급)")
         
+        # 추천인 이름 가져오기
+        referrer_name = partner.user.nickname or partner.user.username
+        
         return Response({
             'success': True,
             'message': '추천인 코드가 등록되었습니다. 보너스 입찰권 10개가 지급되었습니다.',
-            'bonus_tokens': 10
+            'bonus_tokens': 10,
+            'referrer_name': referrer_name
         })
         
     except Exception as e:
@@ -1572,6 +1576,7 @@ def check_referral_status(request):
     """
     try:
         user = request.user
+        logger.info(f"추천인 상태 확인: 사용자 {user.username}, referred_by={user.referred_by}")
         
         # 추천인 정보 확인 - referred_by 필드 사용
         has_referral = bool(user.referred_by)
@@ -1579,18 +1584,28 @@ def check_referral_status(request):
         referrer_name = None
         
         if has_referral and referral_code:
-            # 추천인 코드로 파트너 찾기
-            partner = Partner.objects.filter(partner_code=referral_code).first()
+            # 추천인 코드로 파트너 찾기 (대소문자 구분 없이)
+            from api.models_partner import Partner as PartnerModel
+            partner = PartnerModel.objects.filter(partner_code__iexact=referral_code).first()
+            logger.info(f"추천인 코드 {referral_code}로 파트너 검색 결과: {partner}")
+            
             if partner:
-                referrer_name = partner.user.username
+                # 파트너의 사용자 정보에서 닉네임 또는 사용자명 가져오기
+                referrer_name = partner.user.nickname or partner.user.username
+                logger.info(f"추천인 이름: {referrer_name}")
+            else:
+                logger.warning(f"추천인 코드 {referral_code}에 해당하는 파트너를 찾을 수 없음")
         
-        return Response({
+        result = {
             'has_referral': has_referral,
             'referral_code': referral_code,
             'referrer_name': referrer_name,
             'is_seller': user.role == 'seller',
             'can_add_referral': user.role == 'seller' and not has_referral
-        })
+        }
+        
+        logger.info(f"추천인 상태 확인 결과: {result}")
+        return Response(result)
     
     except Exception as e:
         logger.error(f"추천인 상태 확인 오류: {str(e)}")
