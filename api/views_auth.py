@@ -1573,17 +1573,16 @@ def check_referral_status(request):
     try:
         user = request.user
         
-        # 추천인 정보 확인
-        has_referral = bool(user.referrer_user_id)
-        referral_code = None
+        # 추천인 정보 확인 - referred_by 필드 사용
+        has_referral = bool(user.referred_by)
+        referral_code = user.referred_by if has_referral else None
         referrer_name = None
         
-        if has_referral and user.referrer_user:
-            referrer_name = user.referrer_user.username
-            # 추천인의 파트너 코드 가져오기
-            partner = Partner.objects.filter(user=user.referrer_user).first()
+        if has_referral and referral_code:
+            # 추천인 코드로 파트너 찾기
+            partner = Partner.objects.filter(partner_code=referral_code).first()
             if partner:
-                referral_code = partner.partner_code
+                referrer_name = partner.user.username
         
         return Response({
             'has_referral': has_referral,
