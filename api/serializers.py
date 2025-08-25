@@ -250,11 +250,14 @@ class GroupBuySerializer(serializers.ModelSerializer):
     # 다중 지역 정보 추가
     regions = serializers.SerializerMethodField()
     
+    # 인터넷/인터넷+TV 상품의 최고 지원금 추가
+    max_support_amount = serializers.IntegerField(read_only=True)
+    
     class Meta:
         model = GroupBuy
         fields = ['id', 'title', 'description', 'product', 'product_name', 'product_info', 'creator', 'creator_name',
                 'host_username', 'status', 'cancellation_reason', 'min_participants', 'max_participants', 'start_time', 'end_time', 'final_selection_end',
-                'seller_selection_end', 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'internet_detail', 'product_details', 'regions']
+                'seller_selection_end', 'current_participants', 'region_type', 'region', 'region_name', 'telecom_detail', 'internet_detail', 'product_details', 'regions', 'max_support_amount']
         extra_kwargs = {
             'product': {'required': True, 'write_only': False},  # 쓰기 가능하게 유지
             'creator': {'required': True},  # creator 필드를 필수로 지정

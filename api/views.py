@@ -1010,18 +1010,47 @@ class GroupBuyViewSet(ModelViewSet):
                     Q(region_type='nationwide')  # 전국 비대면 공구도 포함
                 ).distinct()
             
-        # 정렬 처리 - ordering 파라미터 우선 사용
-        if ordering_param:
-            # ordering 파라미터가 있으면 그대로 사용
-            # 쉼표로 구분된 여러 필드 지원
-            ordering_fields = [field.strip() for field in ordering_param.split(',')]
-            queryset = queryset.order_by(*ordering_fields)
-        elif sort_param == 'popular':
-            # 인기순: 참여자 많은 순으로 정렬
-            queryset = queryset.order_by('-current_participants', '-start_time')
+        # 인터넷/인터넷+TV 카테고리의 경우 최고 지원금 순으로 정렬
+        if category in ['인터넷', '인터넷+TV', 'internet', 'internet_tv']:
+            # 각 GroupBuy에 대한 최고 입찰금액을 서브쿼리로 계산
+            from django.db.models import Subquery, OuterRef, Max
+            from api.models_bid import Bid
+            
+            # 각 공구의 최고 입찰금액을 가져오는 서브쿼리
+            max_bid_subquery = Bid.objects.filter(
+                groupbuy=OuterRef('pk'),
+                bid_type='support',
+                status__in=['pending', 'accepted', 'completed']
+            ).values('groupbuy').annotate(
+                max_amount=Max('amount')
+            ).values('max_amount')
+            
+            # 최고 입찰금액을 annotate하고 이를 기준으로 정렬
+            queryset = queryset.annotate(
+                max_support_amount=Subquery(max_bid_subquery)
+            )
+            
+            # ordering 파라미터가 있으면 그것을 우선 사용, 없으면 지원금 순
+            if ordering_param:
+                ordering_fields = [field.strip() for field in ordering_param.split(',')]
+                queryset = queryset.order_by(*ordering_fields)
+            else:
+                # 지원금이 높은 순으로 정렬 (null 값은 마지막)
+                from django.db.models import F
+                queryset = queryset.order_by(F('max_support_amount').desc(nulls_last=True), '-start_time')
         else:
-            # 최신순 (기본 정렬)
-            queryset = queryset.order_by('-start_time')
+            # 정렬 처리 - ordering 파라미터 우선 사용
+            if ordering_param:
+                # ordering 파라미터가 있으면 그대로 사용
+                # 쉼표로 구분된 여러 필드 지원
+                ordering_fields = [field.strip() for field in ordering_param.split(',')]
+                queryset = queryset.order_by(*ordering_fields)
+            elif sort_param == 'popular':
+                # 인기순: 참여자 많은 순으로 정렬
+                queryset = queryset.order_by('-current_participants', '-start_time')
+            else:
+                # 최신순 (기본 정렬)
+                queryset = queryset.order_by('-start_time')
         
         # 공구 상태 자동 업데이트 (최대 100개까지만 처리)
         for groupbuy in queryset[:100]:
