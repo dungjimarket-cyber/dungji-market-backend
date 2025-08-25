@@ -139,38 +139,44 @@ def register_user_v2(request):
         # 추천인 코드
         referral_code = data.get('referral_code', '')
         
-        # 추천인 코드 검증 (입력된 경우만)
-        referrer_user = None
-        if referral_code:
-            # 실제 파트너 시스템과 연동하여 추천인 코드 검증
-            from api.models_partner import Partner
-            try:
-                # 파트너 코드로 파트너 조회 (대소문자 구분 없이)
-                partner = Partner.objects.filter(
-                    partner_code__iexact=referral_code,
-                    is_active=True
-                ).first()
-                
-                if partner:
-                    referrer_user = partner.user
-                    logger.info(f"유효한 추천인 코드 사용: {referral_code} (파트너: {partner.partner_name})")
-                else:
-                    # 파트너가 아닌 일반 사용자의 추천 코드인지 확인 (향후 확장용)
-                    if referral_code.upper() == 'PARTNER':
-                        # 임시 테스트 코드 지원
-                        referrer_user = User.objects.filter(role='admin').first()
-                        logger.info(f"테스트 추천인 코드 사용: {referral_code}")
+        # 카카오톡 판매회원은 추천인 코드 스킵 (마이페이지에서 입력)
+        if social_provider == 'kakao' and role == 'seller':
+            referral_code = ''
+            referrer_user = None
+            logger.info(f"카카오톡 판매회원 가입 - 추천인 코드 스킵")
+        else:
+            # 추천인 코드 검증 (입력된 경우만)
+            referrer_user = None
+            if referral_code:
+                # 실제 파트너 시스템과 연동하여 추천인 코드 검증
+                from api.models_partner import Partner
+                try:
+                    # 파트너 코드로 파트너 조회 (대소문자 구분 없이)
+                    partner = Partner.objects.filter(
+                        partner_code__iexact=referral_code,
+                        is_active=True
+                    ).first()
+                    
+                    if partner:
+                        referrer_user = partner.user
+                        logger.info(f"유효한 추천인 코드 사용: {referral_code} (파트너: {partner.partner_name})")
                     else:
-                        logger.info(f"무효한 추천인 코드: {referral_code}")
-                        # 추천인 코드가 무효한 경우 에러 반환
-                        return Response({
-                            'error': '추천인코드가 유효하지 않습니다'
-                        }, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.error(f"추천인 코드 검증 오류: {e}")
-                return Response({
-                    'error': '추천인코드가 유효하지 않습니다'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                        # 파트너가 아닌 일반 사용자의 추천 코드인지 확인 (향후 확장용)
+                        if referral_code.upper() == 'PARTNER':
+                            # 임시 테스트 코드 지원
+                            referrer_user = User.objects.filter(role='admin').first()
+                            logger.info(f"테스트 추천인 코드 사용: {referral_code}")
+                        else:
+                            logger.info(f"무효한 추천인 코드: {referral_code}")
+                            # 추천인 코드가 무효한 경우 에러 반환
+                            return Response({
+                                'error': '추천인코드가 유효하지 않습니다'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.error(f"추천인 코드 검증 오류: {e}")
+                    return Response({
+                        'error': '추천인코드가 유효하지 않습니다'
+                    }, status=status.HTTP_400_BAD_REQUEST)
         
         # 카카오톡 판매회원 가입 허용 (109번 요구사항 반영)
         
@@ -907,6 +913,102 @@ def check_nickname(request):
         'available': not exists,
         'message': '이미 사용중인 닉네임입니다.' if exists else '사용 가능한 닉네임입니다.'
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_referral_code(request):
+    """판매회원 추천인 코드 업데이트"""
+    user = request.user
+    referral_code = request.data.get('referral_code', '').strip()
+    
+    # 판매회원인지 확인
+    if user.role != 'seller':
+        return Response(
+            {'error': '판매회원만 추천인 코드를 입력할 수 있습니다.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # 이미 추천인 코드가 설정되어 있는지 확인
+    if user.referred_by:
+        return Response(
+            {'error': '추천인 코드는 한 번만 입력할 수 있습니다.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 추천인 코드가 입력되지 않은 경우
+    if not referral_code:
+        return Response(
+            {'error': '추천인 코드를 입력해주세요.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 추천인 코드 검증
+    from api.models_partner import Partner, ReferralRecord, PartnerNotification
+    
+    try:
+        # 파트너 코드로 파트너 조회 (대소문자 구분 없이)
+        partner = Partner.objects.filter(
+            partner_code__iexact=referral_code,
+            is_active=True
+        ).first()
+        
+        if not partner:
+            # 테스트 코드 확인
+            if referral_code.upper() == 'PARTNER':
+                # 임시 테스트 코드는 허용하지 않음
+                return Response({
+                    'error': '추천인코드가 유효하지 않습니다'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'error': '추천인코드가 유효하지 않습니다'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 추천인 코드 저장
+        user.referred_by = referral_code
+        user.save()
+        
+        # 추천 기록 생성
+        referral_record = ReferralRecord.objects.create(
+            partner=partner,
+            referred_user=user,
+            subscription_status='active',
+            total_amount=0,
+            commission_amount=0
+        )
+        
+        # 파트너에게 알림 발송
+        PartnerNotification.objects.create(
+            partner=partner,
+            notification_type='signup',
+            title='신규 회원 가입',
+            message=f'{user.nickname}님이 추천 코드 {referral_code}를 통해 등록했습니다.',
+            referral_record=referral_record
+        )
+        
+        # 추천인 코드 입력 보너스 입찰권 지급 (10개)
+        from api.models import BidToken
+        for i in range(10):
+            BidToken.objects.create(
+                seller=user,
+                token_type='single',
+                status='active'
+            )
+        
+        logger.info(f"판매회원 {user.username}이 추천인 코드 {referral_code} 입력 완료 (보너스 입찰권 10개 지급)")
+        
+        return Response({
+            'success': True,
+            'message': '추천인 코드가 등록되었습니다. 보너스 입찰권 10개가 지급되었습니다.',
+            'bonus_tokens': 10
+        })
+        
+    except Exception as e:
+        logger.error(f"추천인 코드 업데이트 오류: {str(e)}")
+        return Response({
+            'error': '추천인 코드 처리 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
