@@ -992,8 +992,8 @@ class GroupBuyViewSet(ModelViewSet):
             
             if parent_region:
                 # 상위 지역인 경우: 해당 지역과 모든 하위 지역 포함
-                sub_regions = Region.objects.filter(parent_id=parent_region.id)
-                region_ids = [parent_region.id] + list(sub_regions.values_list('id', flat=True))
+                sub_regions = Region.objects.filter(parent_id=parent_region.pk)
+                region_ids = [parent_region.pk] + list(sub_regions.values_list('pk', flat=True))
                 
                 queryset = queryset.filter(
                     Q(regions__region_id__in=region_ids) |  # 해당 지역 및 하위 지역
