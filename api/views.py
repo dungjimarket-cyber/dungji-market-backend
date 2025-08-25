@@ -788,14 +788,38 @@ class GroupBuyViewSet(ModelViewSet):
         
         # 인터넷/인터넷+TV 통신사 필터 처리 (별도 파라미터)
         if internet_carrier:
+            # 통신사 매핑 (프론트엔드 값 -> 데이터베이스 값)
+            carrier_mapping = {
+                'skt': ['SK', 'SKT', 'SK브로드밴드', 'SK Broadband'],
+                'kt': ['KT', 'kt', 'KT올레', 'KT Olleh'],
+                'lgu': ['LGU', 'LG U+', 'LGU+', 'LG유플러스', 'LG Uplus'],
+                'sk': ['SK', 'SKT', 'SK브로드밴드', 'SK Broadband'],
+                'lgu+': ['LGU', 'LG U+', 'LGU+', 'LG유플러스', 'LG Uplus'],
+            }
+            
             # 쉼표로 구분된 값들 처리
             if ',' in internet_carrier:
-                carriers = [c.strip() for c in internet_carrier.split(',')]
-                # OR 조건으로 통신사 필터링
-                queryset = queryset.filter(internet_detail__carrier__in=carriers)
+                carriers = [c.strip().lower() for c in internet_carrier.split(',')]
+                q_objects = Q()
+                for carrier in carriers:
+                    if carrier in carrier_mapping:
+                        # 매핑된 값들 중 하나라도 매칭
+                        for mapped_carrier in carrier_mapping[carrier]:
+                            q_objects |= Q(internet_detail__carrier__iexact=mapped_carrier)
+                    else:
+                        # 매핑에 없으면 직접 매칭
+                        q_objects |= Q(internet_detail__carrier__iexact=carrier)
+                queryset = queryset.filter(q_objects)
             else:
                 # 단일 값 처리
-                queryset = queryset.filter(internet_detail__carrier=internet_carrier)
+                carrier_lower = internet_carrier.strip().lower()
+                if carrier_lower in carrier_mapping:
+                    q_objects = Q()
+                    for mapped_carrier in carrier_mapping[carrier_lower]:
+                        q_objects |= Q(internet_detail__carrier__iexact=mapped_carrier)
+                    queryset = queryset.filter(q_objects)
+                else:
+                    queryset = queryset.filter(internet_detail__carrier__iexact=internet_carrier)
         
         # 인터넷/인터넷+TV 가입유형 필터 처리 (별도 파라미터)
         internet_subscription_type = self.request.query_params.get('internet_subscription_type', None)

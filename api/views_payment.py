@@ -52,7 +52,7 @@ def create_payment_request(request):
     
     # 상품명 생성
     if token_type == 'single':
-        order_name = f"입찰권 {quantity}개"
+        order_name = f"견적 이용권 {quantity}개"
     else:
         order_name = "무제한 구독권 (30일)"
     

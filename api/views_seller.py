@@ -3,7 +3,7 @@
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from django.db.models import Q
+from django.db.models import Q, Count
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -425,12 +425,52 @@ def get_bid_tokens(request):
         'purchase_date': purchase.purchase_date
     } for purchase in recent_purchases]
     
+    # 만료 예정 토큰 정보 추가 (83일부터 표시)
+    expiring_tokens = []
+    expiring_date = now + timezone.timedelta(days=83)
+    
+    # 83일 이내에 만료 예정인 무제한 구독권
+    expiring_unlimited = valid_tokens.filter(
+        token_type='unlimited',
+        expires_at__lte=expiring_date,
+        expires_at__gt=now
+    )
+    
+    for token in expiring_unlimited:
+        days_remaining = (token.expires_at - now).days
+        expiring_tokens.append({
+            'id': token.id,
+            'type': 'unlimited',
+            'type_display': '견적 이용권',
+            'expires_at': token.expires_at,
+            'days_remaining': days_remaining,
+            'quantity': 1
+        })
+    
+    # 83일 이내에 만료 예정인 개별 토큰들
+    expiring_singles = valid_tokens.filter(
+        token_type='single',
+        expires_at__lte=expiring_date,
+        expires_at__gt=now
+    ).values('expires_at').annotate(count=Count('id')).order_by('expires_at')
+    
+    for item in expiring_singles:
+        days_remaining = (item['expires_at'] - now).days
+        expiring_tokens.append({
+            'type': 'single',
+            'type_display': '견적 이용권',
+            'expires_at': item['expires_at'],
+            'days_remaining': days_remaining,
+            'quantity': item['count']
+        })
+    
     response_data = {
         'single_tokens': single_tokens,
         'unlimited_subscription': unlimited_subscription,
         'unlimited_expires_at': unlimited_expires_at,
         'total_tokens': single_tokens + (1 if unlimited_subscription else 0),
-        'recent_purchases': purchase_data
+        'recent_purchases': purchase_data,
+        'expiring_tokens': expiring_tokens  # 만료 예정 토큰 정보 추가
     }
     
     return Response(response_data)

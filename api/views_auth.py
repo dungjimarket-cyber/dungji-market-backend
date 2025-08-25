@@ -162,10 +162,15 @@ def register_user_v2(request):
                         logger.info(f"테스트 추천인 코드 사용: {referral_code}")
                     else:
                         logger.info(f"무효한 추천인 코드: {referral_code}")
-                        referrer_user = None
+                        # 추천인 코드가 무효한 경우 에러 반환
+                        return Response({
+                            'error': '추천인코드가 유효하지 않습니다'
+                        }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.error(f"추천인 코드 검증 오류: {e}")
-                referrer_user = None
+                return Response({
+                    'error': '추천인코드가 유효하지 않습니다'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # 카카오톡 판매회원 가입 허용 (109번 요구사항 반영)
         
