@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import User, Region, GroupBuy, Participation
+from .models import User, Region, GroupBuy, Participation, Partner
 from .models_verification import EmailVerification
 from .utils.s3_utils import upload_file_to_s3
 from .utils.resend_sender import ResendSender
