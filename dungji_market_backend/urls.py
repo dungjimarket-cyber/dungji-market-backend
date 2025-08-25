@@ -43,7 +43,7 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback, check_kakao_user_exists
 from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
@@ -104,6 +104,7 @@ urlpatterns = [
         path('sns-login/', create_sns_user, name='sns_login'),
         path('profile/', user_profile, name='profile'),
         path('update-referral-code/', update_referral_code, name='update_referral_code'),
+        path('check-referral-status/', check_referral_status, name='check_referral_status'),
         path('social/<str:provider>/', social_login_dispatch, name='social_login'),
         path('callback/kakao/', kakao_callback, name='kakao_callback'),
         path('check-kakao-user/', check_kakao_user_exists, name='check_kakao_user_exists'),

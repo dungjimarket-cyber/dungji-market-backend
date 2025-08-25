@@ -765,14 +765,21 @@ class GroupBuyViewSet(ModelViewSet):
                     queryset = queryset.filter(status__in=['recruiting', 'bidding'])
 
         # category 필터 처리
+        category = None  # 카테고리 이름을 저장할 변수
         if category_id:
             # category_id가 숫자인지 문자열인지 확인하여 적절한 필터 적용
             try:
                 # 숫자인 경우 ID로 필터링
                 int(category_id)
                 queryset = queryset.filter(product__category_id=category_id)
+                # 카테고리 이름 가져오기
+                from api.models_product import Category
+                cat_obj = Category.objects.filter(id=category_id).first()
+                if cat_obj:
+                    category = cat_obj.name
             except ValueError:
                 # 문자열인 경우 카테고리 이름으로 필터링
+                category = category_id  # 문자열인 경우 그대로 사용
                 queryset = queryset.filter(product__category__name=category_id)
             
         # 통신사 필터 처리 (합집합 처리)

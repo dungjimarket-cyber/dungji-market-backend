@@ -139,13 +139,13 @@ def register_user_v2(request):
         # 추천인 코드
         referral_code = data.get('referral_code', '')
         
-        # 카카오톡 판매회원은 추천인 코드 스킵 (마이페이지에서 입력)
-        if social_provider == 'kakao' and role == 'seller':
+        # 모든 판매회원은 추천인 코드 스킵 (마이페이지에서 입력)
+        if role == 'seller':
             referral_code = ''
             referrer_user = None
-            logger.info(f"카카오톡 판매회원 가입 - 추천인 코드 스킵")
+            logger.info(f"판매회원 가입 - 추천인 코드 스킵 (마이페이지에서 입력)")
         else:
-            # 추천인 코드 검증 (입력된 경우만)
+            # 구매회원은 가입 시 추천인 코드 검증 (입력된 경우만)
             referrer_user = None
             if referral_code:
                 # 실제 파트너 시스템과 연동하여 추천인 코드 검증
@@ -1561,5 +1561,41 @@ def reset_password_with_email(request):
         logger.error(f"비밀번호 재설정 오류: {str(e)}")
         return Response(
             {'error': '비밀번호 변경 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_referral_status(request):
+    """
+    사용자의 추천인 코드 입력 상태 확인
+    """
+    try:
+        user = request.user
+        
+        # 추천인 정보 확인
+        has_referral = bool(user.referrer_user_id)
+        referral_code = None
+        referrer_name = None
+        
+        if has_referral and user.referrer_user:
+            referrer_name = user.referrer_user.username
+            # 추천인의 파트너 코드 가져오기
+            partner = Partner.objects.filter(user=user.referrer_user).first()
+            if partner:
+                referral_code = partner.partner_code
+        
+        return Response({
+            'has_referral': has_referral,
+            'referral_code': referral_code,
+            'referrer_name': referrer_name,
+            'is_seller': user.role == 'seller',
+            'can_add_referral': user.role == 'seller' and not has_referral
+        })
+    
+    except Exception as e:
+        logger.error(f"추천인 상태 확인 오류: {str(e)}")
+        return Response(
+            {'error': '추천인 정보를 확인할 수 없습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
