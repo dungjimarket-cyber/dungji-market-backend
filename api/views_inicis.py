@@ -225,9 +225,9 @@ def verify_inicis_payment(request):
                 payment.save()
                 
                 # 입찰권 지급 (10,000원당 1개)
-                token_count = payment.amount // 10000
+                token_count = int(payment.amount // 10000)
                 if token_count > 0:
-                    for _ in range(int(token_count)):
+                    for _ in range(token_count):
                         BidToken.objects.create(
                             user=user,
                             token_type='paid',
@@ -236,16 +236,20 @@ def verify_inicis_payment(request):
                         )
                     
                     # 사용자 입찰권 개수 업데이트
-                    user.bid_tokens += int(token_count)
+                    user.bid_tokens += token_count
                     user.save()
                 
                 logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
             
+            # user 인스턴스 새로고침하여 최신 bid_tokens 값 가져오기  
+            user.refresh_from_db()
+            current_tokens = user.bid_tokens
+            
             return Response({
                 'success': True,
                 'message': '결제가 완료되었습니다.',
-                'token_count': int(token_count),
-                'total_tokens': user.bid_tokens
+                'token_count': token_count,
+                'total_tokens': current_tokens
             })
         else:
             # 결제 실패 처리
@@ -269,6 +273,9 @@ def verify_inicis_payment(request):
             
     except Exception as e:
         logger.error(f"이니시스 결제 검증 중 오류: {str(e)}")
+        logger.error(f"오류 타입: {type(e)}")
+        import traceback
+        logger.error(f"스택 트레이스: {traceback.format_exc()}")
         return Response(
             {'error': '결제 검증 중 오류가 발생했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
