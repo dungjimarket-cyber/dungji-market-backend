@@ -30,6 +30,7 @@ class KFTCService:
         self.use_test_mode = getattr(settings, 'KFTC_TEST_MODE', True)
         
         # API 엔드포인트 설정
+        # 개발자센터 문서에 따르면 테스트는 testapi, 운영은 openapi 사용
         if self.use_test_mode:
             self.base_url = "https://testapi.openbanking.or.kr"
             logger.info("KFTC 서비스: 테스트 모드로 초기화")

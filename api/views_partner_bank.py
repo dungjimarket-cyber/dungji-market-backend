@@ -230,20 +230,34 @@ def verify_bank_account(request):
         
         # 테스트 모드 확인
         if getattr(settings, 'KFTC_TEST_MODE', True):
-            # 테스트 모드에서는 특정 계좌만 실패 처리
-            if account_num == '1234567890':
-                return Response({
-                    'verified': False,
-                    'error': '예금주명이 일치하지 않습니다.',
-                    'message': '입력하신 예금주명을 다시 확인해주세요.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            logger.info(f"테스트 모드에서 계좌 검증: 은행={bank_code}, 계좌={account_num}, 예금주={account_holder_name}, 생년월일={account_holder_info}")
             
-            # 그 외에는 성공
+            # 테스트 모드에서는 KFTC 테스트 계좌만 성공 처리
+            # 금융결제원 테스트 계좌 예시
+            test_accounts = [
+                {'bank': '004', 'account': '9876543210', 'name': '홍길동', 'birth': '901225'},
+                {'bank': '088', 'account': '110354055057', 'name': '홍길동', 'birth': '901225'},
+                {'bank': '020', 'account': '1002123456789', 'name': '김철수', 'birth': '880315'},
+            ]
+            
+            # 테스트 계좌 매칭 확인
+            for test in test_accounts:
+                if (bank_code == test['bank'] and 
+                    account_num.replace('-', '') == test['account'] and
+                    account_holder_name == test['name'] and
+                    account_holder_info == test['birth']):
+                    return Response({
+                        'verified': True,
+                        'message': '계좌 인증이 완료되었습니다. (테스트)',
+                        'account_holder': account_holder_name
+                    })
+            
+            # 매칭되지 않으면 실패
             return Response({
-                'verified': True,
-                'message': '계좌 인증이 완료되었습니다.',
-                'account_holder': account_holder_info
-            })
+                'verified': False,
+                'error': '테스트 계좌 정보가 일치하지 않습니다.',
+                'message': '테스트 모드에서는 금융결제원 테스트 계좌만 사용 가능합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # 실제 KFTC API 호출
         # account_holder_name이 있으면 이름까지 검증, 없으면 계좌만 검증
