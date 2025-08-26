@@ -1021,7 +1021,7 @@ class GroupBuyViewSet(ModelViewSet):
         if category in ['인터넷', '인터넷+TV', 'internet', 'internet_tv']:
             # 각 GroupBuy에 대한 최고 입찰금액을 서브쿼리로 계산
             from django.db.models import Subquery, OuterRef, Max
-            from api.models_bid import Bid
+            from api.models import Bid
             
             # 각 공구의 최고 입찰금액을 가져오는 서브쿼리
             max_bid_subquery = Bid.objects.filter(
