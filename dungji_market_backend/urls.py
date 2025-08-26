@@ -31,7 +31,8 @@ from api.views_seller import (
     purchase_bid_tokens, get_bid_tokens, get_remote_sales_status
 )
 from api.views_payment import (
-    create_payment_request, confirm_payment, cancel_payment
+    prepare_payment, payment_return, payment_close, payment_popup,
+    verify_payment, cancel_payment
 )
 from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
@@ -136,10 +137,17 @@ urlpatterns = [
     # 입찰권 관련 API
     path('api/bid-tokens/purchase/', purchase_bid_tokens, name='purchase_bid_tokens'),
     path('api/bid-tokens/', get_bid_tokens, name='get_bid_tokens'),
-    # 토스페이먼츠 결제 API
-    path('api/payments/create/', create_payment_request, name='create_payment'),
-    path('api/payments/confirm/', confirm_payment, name='confirm_payment'),
-    path('api/payments/cancel/', cancel_payment, name='cancel_payment'),
+    # 토스페이먼츠 결제 API (사용안함)
+    # path('api/payments/create/', create_payment_request, name='create_payment'),
+    # path('api/payments/confirm/', confirm_payment, name='confirm_payment'),
+    # path('api/payments/cancel/', cancel_payment, name='cancel_payment'),
+    # 이니시스 결제 API
+    path('api/payments/inicis/prepare/', prepare_payment, name='prepare_inicis_payment'),
+    path('api/payments/inicis/verify/', verify_payment, name='verify_inicis_payment'),
+    path('api/payments/inicis/cancel/', cancel_payment, name='cancel_inicis_payment'),
+    path('api/payments/inicis/return/', payment_return, name='inicis_payment_return'),
+    path('api/payments/inicis/close/', payment_close, name='inicis_payment_close'),
+    path('api/payments/inicis/popup/', payment_popup, name='inicis_payment_popup'),
     # 비대면 판매인증 상태 조회 API
     path('api/users/me/remote-sales-status/', get_remote_sales_status, name='get_remote_sales_status'),
     # 사용자 참여 정보 API
