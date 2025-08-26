@@ -13,7 +13,6 @@ class Payment(models.Model):
     
     PAYMENT_METHOD_CHOICES = [
         ('inicis', '이니시스'),
-        ('toss', '토스페이먼츠'),
         ('kakao', '카카오페이'),
         ('naver', '네이버페이'),
     ]
