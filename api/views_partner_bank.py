@@ -214,7 +214,8 @@ def verify_bank_account(request):
         # 요청 데이터 추출
         bank_code = request.data.get('bank_code', '').strip()
         account_num = request.data.get('account_num', '').strip()
-        account_holder_info = request.data.get('account_holder_info', '').strip()  # 예금주명
+        account_holder_name = request.data.get('account_holder_name', '').strip()  # 예금주명 
+        account_holder_info = request.data.get('account_holder_info', '').strip()  # 생년월일 (YYMMDD)
         
         # 필수 필드 검증
         if not all([bank_code, account_num, account_holder_info]):
@@ -245,11 +246,20 @@ def verify_bank_account(request):
             })
         
         # 실제 KFTC API 호출
-        success, result = kftc_service.verify_account(
-            bank_code=bank_code,
-            account_num=account_num,
-            account_holder_info=account_holder_info
-        )
+        # account_holder_name이 있으면 이름까지 검증, 없으면 계좌만 검증
+        if account_holder_name:
+            success, result = kftc_service.verify_account_with_name(
+                bank_code=bank_code,
+                account_num=account_num,
+                account_holder_name=account_holder_name,
+                account_holder_info=account_holder_info
+            )
+        else:
+            success, result = kftc_service.verify_account(
+                bank_code=bank_code,
+                account_num=account_num,
+                account_holder_info=account_holder_info
+            )
         
         if success:
             return Response({
