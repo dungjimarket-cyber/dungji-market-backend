@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 class InicisPaymentService:
     """이니시스 결제 서비스"""
     
-    # 상점 정보
-    MID = 'dungjima14'  # 상점 아이디
-    SIGNKEY = 'ekek*24641'  # 상점 비밀번호/서명키
+    # 상점 정보 (테스트 환경)
+    MID = 'INIpayTest'  # 테스트 상점 아이디
+    SIGNKEY = 'SU5JTElURVNUMDk='  # 테스트 서명키
     
     # API URLs
     PROD_URL = 'https://iniapi.inicis.com/api/v1'
@@ -36,9 +36,8 @@ class InicisPaymentService:
     @classmethod
     def get_api_url(cls):
         """환경에 따른 API URL 반환"""
-        if settings.DEBUG:
-            return cls.TEST_URL
-        return cls.PROD_URL
+        # 아직 계약 전이므로 항상 테스트 환경 사용
+        return cls.TEST_URL
     
     @classmethod
     def generate_signature(cls, params):

@@ -50,16 +50,25 @@ class KFTCService:
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
             
+            # 운영/테스트 환경에 따른 scope 설정
+            if self.use_test_mode:
+                scope = 'oob'
+            else:
+                # 운영 환경에서는 inquiry_real_name scope 사용
+                scope = 'inquiry_real_name'
+            
             data = {
                 'client_id': self.client_id,
                 'client_secret': self.client_secret,
-                'scope': 'oob',
+                'scope': scope,
                 'grant_type': 'client_credentials'
             }
             
             logger.info(f"KFTC 토큰 요청: {url}")
             logger.info(f"KFTC Client ID: {self.client_id[:10]}...")  # ID 일부만 로깅
+            logger.info(f"KFTC Client Secret 길이: {len(self.client_secret) if self.client_secret else 0}")
             logger.info(f"KFTC 운영모드: {not self.use_test_mode}")
+            logger.debug(f"KFTC 요청 데이터: client_id={self.client_id}, scope={data.get('scope')}, grant_type={data.get('grant_type')}")
             response = requests.post(url, headers=headers, data=data, timeout=10)
             
             # 응답 로깅
