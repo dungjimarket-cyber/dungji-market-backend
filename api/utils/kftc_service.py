@@ -58,6 +58,8 @@ class KFTCService:
             }
             
             logger.info(f"KFTC 토큰 요청: {url}")
+            logger.info(f"KFTC Client ID: {self.client_id[:10]}...")  # ID 일부만 로깅
+            logger.info(f"KFTC 운영모드: {not self.use_test_mode}")
             response = requests.post(url, headers=headers, data=data, timeout=10)
             
             # 응답 로깅
@@ -95,8 +97,8 @@ class KFTCService:
             org_code = "T991666190"  # 테스트 이용기관코드
         else:
             # 운영 환경에서는 실제 발급받은 이용기관코드 사용
-            # TODO: 운영 이용기관코드 확인 후 업데이트 필요
-            org_code = "M202405001"  # 임시 운영 코드 (실제 코드로 교체 필요)
+            # 금융결제원에서 발급받은 실제 이용기관코드를 사용해야 합니다
+            org_code = getattr(settings, 'KFTC_ORG_CODE', "M202405001")  # 운영 이용기관코드
             
         subject_code = "U"  # 이용기관 생성
         date_str = datetime.now().strftime("%Y%m%d%H")  # YYYYMMDDHH
@@ -159,11 +161,13 @@ class KFTCService:
             }
             
             logger.info(f"KFTC 계좌 실명 조회 요청: 은행코드={bank_code}, 계좌번호={account_num[:4]}****")
+            logger.info(f"KFTC 요청 파라미터: bank_tran_id={bank_tran_id}, account_holder_info={account_holder_info}")
             
             response = requests.post(url, headers=headers, json=params, timeout=10)
             
             # 응답 처리
             result = response.json()
+            logger.info(f"KFTC 응답: {result}")
             
             # 응답 코드 확인
             if result.get('rsp_code') == 'A0000':

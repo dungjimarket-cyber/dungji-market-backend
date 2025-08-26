@@ -78,7 +78,7 @@ def prepare_inicis_payment(request):
         user = request.user
         
         # 판매자만 입찰권 구매 가능
-        if not user.is_seller():
+        if user.role != 'seller':
             return Response(
                 {'error': '판매자만 입찰권을 구매할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
