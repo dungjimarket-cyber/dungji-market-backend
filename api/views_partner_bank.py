@@ -4,6 +4,7 @@
 
 import logging
 from django.utils import timezone
+from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -191,6 +192,82 @@ def register_bank_account(request):
         logger.error(f"은행계좌 등록 중 오류: {str(e)}")
         return Response({
             'error': '계좌 등록 중 오류가 발생했습니다.',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_bank_account(request):
+    """
+    파트너 은행계좌 실명인증 (저장하지 않고 인증만)
+    """
+    try:
+        # 파트너 확인
+        try:
+            partner = Partner.objects.get(user=request.user)
+        except Partner.DoesNotExist:
+            return Response({
+                'error': '파트너 정보를 찾을 수 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 요청 데이터 추출
+        bank_code = request.data.get('bank_code', '').strip()
+        account_num = request.data.get('account_num', '').strip()
+        account_holder_info = request.data.get('account_holder_info', '').strip()  # 예금주명
+        
+        # 필수 필드 검증
+        if not all([bank_code, account_num, account_holder_info]):
+            return Response({
+                'error': '필수 정보를 모두 입력해주세요.',
+                'verified': False
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # KFTC API를 통한 계좌 실명인증 (테스트 모드에서는 항상 성공)
+        logger.info(f"계좌 실명인증 요청: 파트너={partner.partner_name}, 은행={bank_code}, 계좌={account_num[:4]}****")
+        
+        # 테스트 모드 확인
+        if settings.KFTC_TEST_MODE:
+            # 테스트 모드에서는 특정 계좌만 실패 처리
+            if account_num == '1234567890':
+                return Response({
+                    'verified': False,
+                    'error': '예금주명이 일치하지 않습니다.',
+                    'message': '입력하신 예금주명을 다시 확인해주세요.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 그 외에는 성공
+            return Response({
+                'verified': True,
+                'message': '계좌 인증이 완료되었습니다.',
+                'account_holder': account_holder_info
+            })
+        
+        # 실제 KFTC API 호출
+        success, result = kftc_service.verify_account(
+            bank_code=bank_code,
+            account_num=account_num,
+            account_holder_info=account_holder_info
+        )
+        
+        if success:
+            return Response({
+                'verified': True,
+                'message': '계좌 인증이 완료되었습니다.',
+                'account_holder': result.get('account_holder_name', account_holder_info)
+            })
+        else:
+            return Response({
+                'verified': False,
+                'error': result.get('error', '계좌 인증에 실패했습니다.'),
+                'message': result.get('message', '입력하신 정보를 다시 확인해주세요.')
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    except Exception as e:
+        logger.error(f"은행계좌 인증 중 오류: {str(e)}")
+        return Response({
+            'verified': False,
+            'error': '계좌 인증 중 오류가 발생했습니다.',
             'message': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -64,7 +64,7 @@ from api.views_partner import (
     mark_all_notifications_read, statistics, generate_qr_code
 )
 from api.views_partner_bank import (
-    register_bank_account, get_bank_account, delete_bank_account
+    register_bank_account, get_bank_account, delete_bank_account, verify_bank_account
 )
 from api.views_inquiry import InquiryViewSet
 
@@ -186,6 +186,7 @@ urlpatterns = [
     
     # 파트너 은행계좌 관리
     path('api/partners/bank-account/', get_bank_account, name='partner_get_bank_account'),
+    path('api/partners/bank-account/verify/', verify_bank_account, name='partner_verify_bank_account'),
     path('api/partners/bank-account/register/', register_bank_account, name='partner_register_bank_account'),
     path('api/partners/bank-account/delete/', delete_bank_account, name='partner_delete_bank_account'),
     
