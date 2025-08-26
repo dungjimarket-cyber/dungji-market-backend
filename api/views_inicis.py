@@ -43,21 +43,19 @@ class InicisPaymentService:
     def generate_signature(cls, params):
         """
         이니시스 서명 생성
-        SHA-512 해시 사용
+        SHA-256 해시 사용
         표준결제창 연동 규격에 따른 서명 생성
         """
-        # 서명 생성 규칙: signKey + mid + oid + price + timestamp
-        sign_key = cls.SIGNKEY
-        mid = params.get('mid', cls.MID)
+        # 공식 샘플 기준 서명 생성
         oid = params.get('oid', '')
         price = params.get('price', '')
         timestamp = params.get('timestamp', '')
         
-        # SHA-512 해시 데이터
-        hash_data = f"{sign_key}{mid}{oid}{price}{timestamp}"
+        # SHA-256 해시 데이터 - signature
+        # signature = SHA256("oid=xxx&price=xxx&timestamp=xxx")
+        signature_data = f"oid={oid}&price={price}&timestamp={timestamp}"
+        signature = hashlib.sha256(signature_data.encode('utf-8')).hexdigest()
         
-        # SHA-512 해시 생성
-        signature = hashlib.sha512(hash_data.encode('utf-8')).hexdigest()
         return signature
     
     @classmethod
@@ -66,12 +64,25 @@ class InicisPaymentService:
         이니시스 mkey 생성
         SHA-256 해시 사용
         """
-        # mkey 생성 규칙: mid + signKey
-        mkey_data = f"{params.get('mid', cls.MID)}{cls.SIGNKEY}"
-        
-        # SHA-256 해시 생성
-        mkey = hashlib.sha256(mkey_data.encode('utf-8')).hexdigest()
+        # mkey = SHA256(signKey)
+        mkey = hashlib.sha256(cls.SIGNKEY.encode('utf-8')).hexdigest()
         return mkey
+    
+    @classmethod
+    def generate_verification(cls, params):
+        """
+        이니시스 verification 생성
+        SHA-256 해시 사용
+        """
+        # verification = SHA256("oid=xxx&price=xxx&signKey=xxx&timestamp=xxx")
+        oid = params.get('oid', '')
+        price = params.get('price', '')
+        timestamp = params.get('timestamp', '')
+        
+        verification_data = f"oid={oid}&price={price}&signKey={cls.SIGNKEY}&timestamp={timestamp}"
+        verification = hashlib.sha256(verification_data.encode('utf-8')).hexdigest()
+        
+        return verification
 
 
 @api_view(['POST'])
@@ -120,6 +131,7 @@ def prepare_inicis_payment(request):
         # 서명 생성
         signature = InicisPaymentService.generate_signature(sign_params)
         mkey = InicisPaymentService.generate_mkey(sign_params)
+        verification = InicisPaymentService.generate_verification(sign_params)
         
         # Payment 레코드 생성 (대기 상태)
         payment = Payment.objects.create(
@@ -147,6 +159,7 @@ def prepare_inicis_payment(request):
             'timestamp': timestamp,
             'signature': signature,
             'mkey': mkey,
+            'verification': verification,
             'payment_id': payment.id
         })
         
