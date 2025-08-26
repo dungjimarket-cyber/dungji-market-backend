@@ -211,12 +211,16 @@ def verify_inicis_payment(request):
             with transaction.atomic():
                 # Payment 업데이트
                 payment.status = 'completed'
-                payment.tid = tid
+                # authToken이 너무 길므로 order_id를 tid로 사용
+                payment.tid = order_id[:200]  # 200자 제한
                 payment.completed_at = datetime.now()
                 payment.payment_data.update({
-                    'authToken': auth_token,
+                    'authToken': auth_token,  # 긴 토큰은 JSON 필드에 저장
                     'authResultCode': auth_result_code,
-                    'tid': tid
+                    'originalTid': tid,
+                    'authUrl': data.get('authUrl'),
+                    'netCancelUrl': data.get('netCancelUrl'),
+                    'idc_name': data.get('idc_name'),
                 })
                 payment.save()
                 
@@ -248,7 +252,11 @@ def verify_inicis_payment(request):
             payment.status = 'failed'
             payment.payment_data.update({
                 'authResultCode': auth_result_code,
-                'failReason': data.get('authResultMsg', '결제 실패')
+                'authToken': auth_token,  # 실패해도 토큰은 저장
+                'failReason': data.get('authResultMsg', '결제 실패'),
+                'authUrl': data.get('authUrl'),
+                'netCancelUrl': data.get('netCancelUrl'),
+                'idc_name': data.get('idc_name'),
             })
             payment.save()
             
