@@ -27,7 +27,7 @@ class InicisPaymentService:
     
     # 상점 정보 (테스트 환경)
     MID = 'INIpayTest'  # 테스트 상점 아이디
-    SIGNKEY = 'SU5JTElURVNUMDk='  # 테스트 서명키
+    SIGNKEY = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS'  # 테스트 서명키 (공식 샘플과 동일)
     
     # API URLs
     PROD_URL = 'https://iniapi.inicis.com/api/v1'
