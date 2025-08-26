@@ -268,24 +268,33 @@ def kakao_callback(request):
     )
     user_info = user_info_response.json()
     
-    logger.info(f"카카오 사용자 정보: {user_info}")
+    logger.info(f"카카오 사용자 정보 전체: {user_info}")
     
     # 필요한 정보 추출 (추가된 스코프 포함)
     kakao_id = user_info.get('id')
     kakao_account = user_info.get('kakao_account', {})
     profile = kakao_account.get('profile', {})
     
+    # kakao_account 내용 상세 로깅
+    logger.info(f"kakao_account 정보: {kakao_account}")
+    logger.info(f"profile 정보: {profile}")
+    
     # 기본 정보
     email = kakao_account.get('email', f'{kakao_id}@kakao.user')
     nickname = profile.get('nickname', '')
     profile_image = profile.get('profile_image_url', '')
     
-    # 추가 정보
+    # 추가 정보 - phone_number 필드 확인
     phone_number = kakao_account.get('phone_number', '')  # 전화번호 추가
+    logger.info(f"카카오에서 받은 phone_number raw: '{phone_number}'")
+    
     # 전화번호 포맷 변환 (+82 10-1234-5678 -> 01012345678)
     if phone_number:
-        phone_number = phone_number.replace('+82 ', '0').replace('-', '')
-        logger.info(f"카카오 전화번호 변환: {kakao_account.get('phone_number')} -> {phone_number}")
+        original_phone = phone_number
+        phone_number = phone_number.replace('+82 ', '0').replace('-', '').replace(' ', '')
+        logger.info(f"카카오 전화번호 변환: {original_phone} -> {phone_number}")
+    else:
+        logger.warning("카카오에서 전화번호를 받지 못했습니다.")
     
     # 기존 SNS 로그인 엔드포인트로 POST 요청 생성
     sns_login_data = {

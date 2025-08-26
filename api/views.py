@@ -108,8 +108,9 @@ def create_sns_user(request):
             logger.info(f"이메일 정보 없음, 기본 이메일 생성: {email}")
         
         # 디버깅 로그 추가
-        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, phone={phone_number}, role={role}, referral_code={referral_code}")
+        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, role={role}, referral_code={referral_code}")
         logger.info(f"프로필 이미지 URL: {profile_image}")
+        logger.info(f"전화번호: '{phone_number}' (타입: {type(phone_number)}, 길이: {len(phone_number) if phone_number else 0})")
 
         if not sns_id or not sns_type or not email:
             return Response(
@@ -284,6 +285,12 @@ def create_sns_user(request):
             
             logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}, role: {role}")
         
+        # 전화번호 확인 로그
+        if phone_number:
+            logger.info(f"사용자 생성 시 전화번호 포함: {phone_number}")
+        else:
+            logger.warning(f"사용자 생성 시 전화번호 없음")
+        
         # 사용자 생성
         user = User.objects.create_user(
             username=email,
@@ -297,6 +304,9 @@ def create_sns_user(request):
             role=role  # role 설정 (이미 위에서 추출됨)
         )
         is_new_user = True  # 신규 사용자로 플래그 설정
+        
+        # 생성된 사용자의 전화번호 확인
+        logger.info(f"생성된 사용자 정보: id={user.id}, phone_number={user.phone_number}")
         
         # 프로필 이미지 별도 설정
         if profile_image:
