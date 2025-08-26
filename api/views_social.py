@@ -115,8 +115,13 @@ def get_kakao_auth_url(next_url, redirect_uri=None, role=None, request=None):
     actual_redirect_uri = redirect_uri or DEFAULT_REDIRECT_URI
     
     
-    # 카카오 로그인 URL 생성
-    kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={KAKAO_CLIENT_ID}&redirect_uri={actual_redirect_uri}&response_type=code&state={state}"
+    # 카카오 로그인 URL 생성 - 추가 스코프 포함
+    # profile_nickname: 닉네임
+    # profile_image: 프로필 사진
+    # account_email: 이메일
+    # phone_number: 전화번호
+    scope = "profile_nickname,profile_image,account_email,phone_number"
+    kakao_auth_url = f"https://kauth.kakao.com/oauth/authorize?client_id={KAKAO_CLIENT_ID}&redirect_uri={actual_redirect_uri}&response_type=code&state={state}&scope={scope}"
     
     logger.info(f"카카오 인증 URL: {kakao_auth_url}")
     logger.info(f"사용된 리디렉트 URI: {actual_redirect_uri}")
@@ -265,14 +270,22 @@ def kakao_callback(request):
     
     logger.info(f"카카오 사용자 정보: {user_info}")
     
-    # 필요한 정보 추출
+    # 필요한 정보 추출 (추가된 스코프 포함)
     kakao_id = user_info.get('id')
     kakao_account = user_info.get('kakao_account', {})
     profile = kakao_account.get('profile', {})
     
+    # 기본 정보
     email = kakao_account.get('email', f'{kakao_id}@kakao.user')
     nickname = profile.get('nickname', '')
     profile_image = profile.get('profile_image_url', '')
+    
+    # 추가 정보
+    phone_number = kakao_account.get('phone_number', '')  # 전화번호 추가
+    # 전화번호 포맷 변환 (+82 10-1234-5678 -> 01012345678)
+    if phone_number:
+        phone_number = phone_number.replace('+82 ', '0').replace('-', '')
+        logger.info(f"카카오 전화번호 변환: {kakao_account.get('phone_number')} -> {phone_number}")
     
     # 기존 SNS 로그인 엔드포인트로 POST 요청 생성
     sns_login_data = {
@@ -281,6 +294,7 @@ def kakao_callback(request):
         'email': email,
         'name': nickname,
         'profile_image': profile_image,
+        'phone_number': phone_number,  # 전화번호 추가
         'role': role,  # 가입 유형 전달
         'referral_code': referral_code  # 추천인 코드 전달
     }

@@ -63,6 +63,9 @@ from api.views_partner import (
     export_data, PartnerNotificationListView, mark_notification_read,
     mark_all_notifications_read, statistics, generate_qr_code
 )
+from api.views_partner_bank import (
+    register_bank_account, get_bank_account, delete_bank_account
+)
 from api.views_inquiry import InquiryViewSet
 
 router = DefaultRouter()
@@ -180,6 +183,11 @@ urlpatterns = [
     path('api/partners/notifications/read-all/', mark_all_notifications_read, name='partner_mark_all_notifications_read'),
     path('api/partners/statistics/', statistics, name='partner_statistics'),
     path('api/partners/qr-code/<str:partner_code>/', generate_qr_code, name='partner_qr_code'),
+    
+    # 파트너 은행계좌 관리
+    path('api/partners/bank-account/', get_bank_account, name='partner_get_bank_account'),
+    path('api/partners/bank-account/register/', register_bank_account, name='partner_register_bank_account'),
+    path('api/partners/bank-account/delete/', delete_bank_account, name='partner_delete_bank_account'),
     
     # Admin APIs for bid token management (API 경로로 변경)
     path('api/admin/user/<int:user_id>/adjust-tokens/', adjust_user_bid_tokens, name='admin_adjust_user_bid_tokens'),

@@ -306,3 +306,8 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 # Business Number Verification API Key (공공데이터포털 국세청 API)
 BUSINESS_VERIFICATION_API_KEY = os.getenv('BUSINESS_VERIFICATION_API_KEY', '')
+
+# KFTC (금융결제원) API 설정
+KFTC_CLIENT_ID = os.getenv('KFTC_CLIENT_ID')
+KFTC_CLIENT_SECRET = os.getenv('KFTC_CLIENT_SECRET')
+KFTC_TEST_MODE = os.getenv('KFTC_TEST_MODE', 'True').lower() == 'true'

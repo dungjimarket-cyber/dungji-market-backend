@@ -98,6 +98,7 @@ def create_sns_user(request):
         email = data.get('email')
         name = data.get('name', '')
         profile_image = data.get('profile_image', '')
+        phone_number = data.get('phone_number', '')  # 전화번호 추가
         role = data.get('role', 'buyer')  # role 파라미터 추가
         referral_code = data.get('referral_code', '')  # 추천인 코드 추가
         
@@ -107,7 +108,7 @@ def create_sns_user(request):
             logger.info(f"이메일 정보 없음, 기본 이메일 생성: {email}")
         
         # 디버깅 로그 추가
-        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, role={role}, referral_code={referral_code}")
+        logger.info(f"SNS 로그인 요청: sns_id={sns_id}, sns_type={sns_type}, email={email}, name={name}, phone={phone_number}, role={role}, referral_code={referral_code}")
         logger.info(f"프로필 이미지 URL: {profile_image}")
 
         if not sns_id or not sns_type or not email:
@@ -141,6 +142,17 @@ def create_sns_user(request):
             if profile_image:
                 logger.info(f"사용자({user.id})의 프로필 이미지 업데이트")
                 user.profile_image = profile_image
+            
+            # 전화번호 업데이트 (카카오에서 제공한 경우)
+            if phone_number and not user.phone_number:
+                logger.info(f"사용자({user.id})의 전화번호 업데이트: {phone_number}")
+                user.phone_number = phone_number
+            
+            # 닉네임 업데이트 (비어있거나 자동 생성된 닉네임인 경우만)
+            if name and (not user.nickname or user.nickname.startswith('참새') or user.nickname.startswith('어미새')):
+                logger.info(f"사용자({user.id})의 닉네임 업데이트: {user.nickname} -> {name}")
+                user.nickname = name
+                user.first_name = name
                 
             user.save()
             # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
@@ -281,6 +293,7 @@ def create_sns_user(request):
             nickname=name,  # nickname 필드에도 동일하게 설정
             sns_type=sns_type,
             sns_id=sns_id,
+            phone_number=phone_number if phone_number else None,  # 전화번호 저장
             role=role  # role 설정 (이미 위에서 추출됨)
         )
         is_new_user = True  # 신규 사용자로 플래그 설정
