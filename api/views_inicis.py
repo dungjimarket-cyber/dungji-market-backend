@@ -44,13 +44,15 @@ class InicisPaymentService:
     def generate_signature(cls, params):
         """
         이니시스 서명 생성
-        SHA-512 해시 사용
+        SHA-256 해시 사용
+        표준결제창 연동 규격에 따른 서명 생성
         """
-        # 서명 생성 규칙: mid + oid + price + timestamp + signKey
-        sign_data = f"{params.get('mid', '')}{params.get('oid', '')}{params.get('price', '')}{params.get('timestamp', '')}{cls.SIGNKEY}"
+        # 서명 생성 규칙: oid + price + timestamp
+        # 이니시스 표준결제창에서는 oid, price, timestamp 3개 값만 사용
+        sign_data = f"oid={params.get('oid', '')}&price={params.get('price', '')}&timestamp={params.get('timestamp', '')}"
         
-        # SHA-512 해시 생성
-        signature = hashlib.sha512(sign_data.encode('utf-8')).hexdigest()
+        # SHA-256 해시 생성
+        signature = hashlib.sha256(sign_data.encode('utf-8')).hexdigest()
         return signature
     
     @classmethod
