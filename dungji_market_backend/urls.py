@@ -137,10 +137,8 @@ urlpatterns = [
     # 입찰권 관련 API
     path('api/bid-tokens/purchase/', purchase_bid_tokens, name='purchase_bid_tokens'),
     path('api/bid-tokens/', get_bid_tokens, name='get_bid_tokens'),
-    # 토스페이먼츠 결제 API (사용안함)
-    # path('api/payments/create/', create_payment_request, name='create_payment'),
-    # path('api/payments/confirm/', confirm_payment, name='confirm_payment'),
-    # path('api/payments/cancel/', cancel_payment, name='cancel_payment'),
+    # 구버전 결제 API (임시 지원)
+    path('api/payments/create/', prepare_payment, name='old_create_payment'),
     # 이니시스 결제 API
     path('api/payments/inicis/prepare/', prepare_payment, name='prepare_inicis_payment'),
     path('api/payments/inicis/verify/', verify_payment, name='verify_inicis_payment'),

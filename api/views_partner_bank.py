@@ -223,11 +223,12 @@ def verify_bank_account(request):
                 'verified': False
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # KFTC API를 통한 계좌 실명인증 (테스트 모드에서는 항상 성공)
+        # KFTC API를 통한 계좌 실명인증
         logger.info(f"계좌 실명인증 요청: 파트너={partner.partner_name}, 은행={bank_code}, 계좌={account_num[:4]}****")
+        logger.info(f"KFTC_TEST_MODE: {getattr(settings, 'KFTC_TEST_MODE', True)}")
         
         # 테스트 모드 확인
-        if settings.KFTC_TEST_MODE:
+        if getattr(settings, 'KFTC_TEST_MODE', True):
             # 테스트 모드에서는 특정 계좌만 실패 처리
             if account_num == '1234567890':
                 return Response({

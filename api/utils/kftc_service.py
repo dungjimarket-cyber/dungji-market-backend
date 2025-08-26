@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 class KFTCService:
     """금융결제원 오픈뱅킹 API 서비스"""
     
-    # API 엔드포인트
-    BASE_URL = "https://testapi.openbanking.or.kr"  # 테스트 환경
-    # BASE_URL = "https://openapi.openbanking.or.kr"  # 운영 환경
+    # API 엔드포인트는 __init__에서 동적으로 설정
     
     # API 경로
     TOKEN_PATH = "/oauth/2.0/token"
@@ -31,10 +29,15 @@ class KFTCService:
         self.client_secret = getattr(settings, 'KFTC_CLIENT_SECRET', '9ff0b139-8d1b-4e6f-ae20-d7fd7493ec90')
         self.use_test_mode = getattr(settings, 'KFTC_TEST_MODE', True)
         
+        # API 엔드포인트 설정
         if self.use_test_mode:
             self.base_url = "https://testapi.openbanking.or.kr"
+            logger.info("KFTC 서비스: 테스트 모드로 초기화")
         else:
             self.base_url = "https://openapi.openbanking.or.kr"
+            logger.info("KFTC 서비스: 운영 모드로 초기화")
+            
+        logger.info(f"KFTC API URL: {self.base_url}")
     
     def _get_access_token(self) -> Optional[str]:
         """
@@ -54,16 +57,25 @@ class KFTCService:
                 'grant_type': 'client_credentials'
             }
             
+            logger.info(f"KFTC 토큰 요청: {url}")
             response = requests.post(url, headers=headers, data=data, timeout=10)
-            response.raise_for_status()
             
+            # 응답 로깅
+            logger.info(f"KFTC 토큰 응답 상태: {response.status_code}")
+            
+            if not response.ok:
+                logger.error(f"KFTC 토큰 발급 HTTP 에러: {response.status_code} - {response.text}")
+                return None
+                
             result = response.json()
+            logger.info(f"KFTC 토큰 응답: {result}")
             
             if 'access_token' in result:
                 logger.info("KFTC 액세스 토큰 발급 성공")
                 return result['access_token']
             else:
-                logger.error(f"KFTC 액세스 토큰 발급 실패: {result}")
+                error_msg = result.get('error_description', result.get('error', '알 수 없는 오류'))
+                logger.error(f"KFTC 액세스 토큰 발급 실패: {error_msg}")
                 return None
                 
         except requests.RequestException as e:
@@ -78,8 +90,14 @@ class KFTCService:
         은행거래고유번호 생성
         형식: 이용기관코드(10자리) + 생성주체구분코드(1자리) + 생성일자(9자리) + 일련번호(9자리)
         """
-        # 테스트 환경에서는 고정된 이용기관코드 사용
-        org_code = "T991666190"  # 테스트 이용기관코드
+        # 환경별 이용기관코드 설정
+        if self.use_test_mode:
+            org_code = "T991666190"  # 테스트 이용기관코드
+        else:
+            # 운영 환경에서는 실제 발급받은 이용기관코드 사용
+            # TODO: 운영 이용기관코드 확인 후 업데이트 필요
+            org_code = "M202405001"  # 임시 운영 코드 (실제 코드로 교체 필요)
+            
         subject_code = "U"  # 이용기관 생성
         date_str = datetime.now().strftime("%Y%m%d%H")  # YYYYMMDDHH
         
@@ -111,7 +129,10 @@ class KFTCService:
             # 액세스 토큰 발급
             access_token = self._get_access_token()
             if not access_token:
-                return False, {'error': '액세스 토큰 발급 실패'}
+                return False, {
+                    'error': '액세스 토큰 발급 실패',
+                    'message': '입력하신 정보를 다시 확인해주세요.'
+                }
             
             # 거래일시 생성
             if not tran_dtime:
