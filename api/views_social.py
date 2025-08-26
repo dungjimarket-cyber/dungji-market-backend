@@ -285,14 +285,32 @@ def kakao_callback(request):
     logger.info(f"kakao_account 정보: {kakao_account}")
     logger.info(f"profile 정보: {profile}")
     
+    # 가능한 모든 전화번호 필드 확인
+    logger.info(f"kakao_account 키 목록: {kakao_account.keys()}")
+    
     # 기본 정보
     email = kakao_account.get('email', f'{kakao_id}@kakao.user')
     nickname = profile.get('nickname', '')
     profile_image = profile.get('profile_image_url', '')
     
-    # 추가 정보 - phone_number 필드 확인
-    phone_number = kakao_account.get('phone_number', '')  # 전화번호 추가
-    logger.info(f"카카오에서 받은 phone_number raw: '{phone_number}'")
+    # 추가 정보 - 다양한 전화번호 필드 확인
+    phone_number = kakao_account.get('phone_number', '')  # phone_number 필드
+    if not phone_number:
+        phone_number = kakao_account.get('phoneNumber', '')  # phoneNumber 필드 (camelCase)
+    if not phone_number:
+        phone_number = kakao_account.get('phone', '')  # phone 필드
+    
+    # has_phone_number 필드 확인
+    has_phone_number = kakao_account.get('has_phone_number', False)
+    phone_number_needs_agreement = kakao_account.get('phone_number_needs_agreement', False)
+    
+    logger.info(f"전화번호 관련 필드 상태:")
+    logger.info(f"  - phone_number: '{kakao_account.get('phone_number', 'N/A')}'")
+    logger.info(f"  - phoneNumber: '{kakao_account.get('phoneNumber', 'N/A')}'") 
+    logger.info(f"  - phone: '{kakao_account.get('phone', 'N/A')}'")
+    logger.info(f"  - has_phone_number: {has_phone_number}")
+    logger.info(f"  - phone_number_needs_agreement: {phone_number_needs_agreement}")
+    logger.info(f"최종 phone_number: '{phone_number}'")
     
     # 전화번호 포맷 변환 (+82 10-1234-5678 -> 01012345678)
     if phone_number:
