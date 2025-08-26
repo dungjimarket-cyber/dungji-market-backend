@@ -68,7 +68,7 @@ class KFTCService:
             logger.info(f"KFTC 토큰 요청: {url}")
             logger.info(f"KFTC Client ID: {self.client_id[:10]}...")  # ID 일부만 로깅
             logger.info(f"KFTC Client Secret 길이: {len(self.client_secret) if self.client_secret else 0}")
-            logger.info(f"KFTC 운영모드: {not self.use_test_mode}")
+            logger.info(f"KFTC 테스트 모드: {not self.use_test_mode}")
             logger.info(f"KFTC Scope: {scope}")
             logger.debug(f"KFTC 요청 데이터: client_id={self.client_id}, scope={data.get('scope')}, grant_type={data.get('grant_type')}")
             # 실제 요청 데이터 로깅 (디버깅용)
