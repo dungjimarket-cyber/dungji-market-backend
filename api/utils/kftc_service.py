@@ -54,8 +54,8 @@ class KFTCService:
             if self.use_test_mode:
                 scope = 'oob'
             else:
-                # 운영 환경에서는 inquiry_real_name scope 사용
-                scope = 'inquiry_real_name'
+                # 운영 환경에서는 oob scope 사용 (inquiry.real_name은 개별 권한 요청 필요)
+                scope = 'oob'
             
             data = {
                 'client_id': self.client_id,
@@ -68,14 +68,23 @@ class KFTCService:
             logger.info(f"KFTC Client ID: {self.client_id[:10]}...")  # ID 일부만 로깅
             logger.info(f"KFTC Client Secret 길이: {len(self.client_secret) if self.client_secret else 0}")
             logger.info(f"KFTC 운영모드: {not self.use_test_mode}")
+            logger.info(f"KFTC Scope: {scope}")
             logger.debug(f"KFTC 요청 데이터: client_id={self.client_id}, scope={data.get('scope')}, grant_type={data.get('grant_type')}")
+            # 실제 요청 데이터 로깅 (디버깅용)
+            logger.info(f"KFTC 요청 전체 데이터: {data}")
             response = requests.post(url, headers=headers, data=data, timeout=10)
             
             # 응답 로깅
             logger.info(f"KFTC 토큰 응답 상태: {response.status_code}")
+            logger.info(f"KFTC 토큰 응답 헤더: {dict(response.headers)}")
             
             if not response.ok:
                 logger.error(f"KFTC 토큰 발급 HTTP 에러: {response.status_code} - {response.text}")
+                try:
+                    error_json = response.json()
+                    logger.error(f"KFTC 토큰 에러 상세: {error_json}")
+                except:
+                    pass
                 return None
                 
             result = response.json()
