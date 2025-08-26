@@ -57,7 +57,8 @@ def check_kakao_user_exists(request):
                 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8'
             },
             params={
-                'property_keys': '["kakao_account.profile", "kakao_account.email", "kakao_account.phone_number", "kakao_account.name"]'
+                'property_keys': json.dumps(["kakao_account.profile", "kakao_account.email", "kakao_account.phone_number", "kakao_account.name"]),
+                'secure_resource': 'true'  # 민감한 정보 조회를 위해 필요
             }
         )
         
@@ -267,14 +268,19 @@ def kakao_callback(request):
     # 사용자 정보 요청 - property_keys로 필요한 정보 명시
     user_info_response = requests.get(
         "https://kapi.kakao.com/v2/user/me",
-        headers={'Authorization': f'Bearer {access_token}'},
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8'
+        },
         params={
-            'property_keys': '["kakao_account.profile", "kakao_account.email", "kakao_account.phone_number", "kakao_account.name"]'
+            'property_keys': json.dumps(["kakao_account.profile", "kakao_account.email", "kakao_account.phone_number", "kakao_account.name"]),
+            'secure_resource': 'true'  # 민감정보 조회 옵션 추가
         }
     )
     user_info = user_info_response.json()
     
     logger.info(f"카카오 사용자 정보 전체: {user_info}")
+    logger.info(f"카카오 API 응답 상태코드: {user_info_response.status_code}")
     
     # 필요한 정보 추출 (추가된 스코프 포함)
     kakao_id = user_info.get('id')
@@ -304,12 +310,14 @@ def kakao_callback(request):
     has_phone_number = kakao_account.get('has_phone_number', False)
     phone_number_needs_agreement = kakao_account.get('phone_number_needs_agreement', False)
     
+    # 전화번호 관련 모든 필드 로그
     logger.info(f"전화번호 관련 필드 상태:")
     logger.info(f"  - phone_number: '{kakao_account.get('phone_number', 'N/A')}'")
     logger.info(f"  - phoneNumber: '{kakao_account.get('phoneNumber', 'N/A')}'") 
     logger.info(f"  - phone: '{kakao_account.get('phone', 'N/A')}'")
     logger.info(f"  - has_phone_number: {has_phone_number}")
     logger.info(f"  - phone_number_needs_agreement: {phone_number_needs_agreement}")
+    logger.info(f"  - is_phone_number_valid: {kakao_account.get('is_phone_number_valid', 'N/A')}")
     logger.info(f"최종 phone_number: '{phone_number}'")
     
     # 전화번호 포맷 변환 (+82 10-1234-5678 -> 01012345678)
