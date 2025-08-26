@@ -49,12 +49,15 @@ def check_kakao_user_exists(request):
                 'error': 'access_token이 필요합니다.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 카카오 API로 사용자 정보 요청
+        # 카카오 API로 사용자 정보 요청 - 추가 정보 포함
         kakao_response = requests.get(
             'https://kapi.kakao.com/v2/user/me',
             headers={
                 'Authorization': f'Bearer {access_token}',
                 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8'
+            },
+            params={
+                'property_keys': '["kakao_account.profile", "kakao_account.email", "kakao_account.phone_number", "kakao_account.name"]'
             }
         )
         
@@ -261,10 +264,13 @@ def kakao_callback(request):
     # 인증 성공 후 처리    
     access_token = token_json['access_token']
     
-    # 사용자 정보 요청
+    # 사용자 정보 요청 - property_keys로 필요한 정보 명시
     user_info_response = requests.get(
         "https://kapi.kakao.com/v2/user/me",
-        headers={'Authorization': f'Bearer {access_token}'}
+        headers={'Authorization': f'Bearer {access_token}'},
+        params={
+            'property_keys': '["kakao_account.profile", "kakao_account.email", "kakao_account.phone_number", "kakao_account.name"]'
+        }
     )
     user_info = user_info_response.json()
     
