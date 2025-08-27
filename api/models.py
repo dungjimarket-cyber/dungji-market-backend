@@ -1079,7 +1079,7 @@ class Badge(models.Model):
 class Notification(models.Model):
     NOTIFICATION_TYPES = [
         ('reminder', '리마인더'),
-        ('success', '성공/낙찰'),
+        ('success', '성공/최종선정'),
         ('failure', '실패/취소'),
         ('info', '정보/상태변경'),
     ]

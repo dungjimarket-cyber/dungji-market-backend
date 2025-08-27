@@ -520,9 +520,9 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 
 class BidSerializer(serializers.ModelSerializer):
-    """입찰 데이터를 위한 시리얼라이저
+    """견적 제안 데이터를 위한 시리얼라이저
     
-    판매자가 입찰한 내역 및 상태를 관리합니다.
+    판매자가 제안한 견적 내역 및 상태를 관리합니다.
     """
     seller_name = serializers.CharField(source='seller.username', read_only=True)
     groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
@@ -619,7 +619,7 @@ class NoShowReportSerializer(serializers.ModelSerializer):
                     'report_type': '구매자 노쇼는 판매자만 신고할 수 있습니다.'
                 })
             
-            # 해당 공구에서 선택된 입찰이 있는지 확인
+            # 해당 공구에서 선택된 제안이 있는지 확인
             from .models import Bid
             selected_bid = Bid.objects.filter(
                 groupbuy=groupbuy,
@@ -629,7 +629,7 @@ class NoShowReportSerializer(serializers.ModelSerializer):
             
             if not selected_bid:
                 raise serializers.ValidationError({
-                    'groupbuy': '해당 공구에서 선택된 입찰이 없습니다.'
+                    'groupbuy': '해당 공구에서 선택된 제안이 없습니다.'
                 })
             
             # 신고 대상이 참여자인지 확인

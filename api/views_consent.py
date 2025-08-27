@@ -142,7 +142,7 @@ def start_consent_process(request, pk=None):
             status=status.HTTP_403_FORBIDDEN
         )
     
-    # 선택된 입찰 확인
+    # 선택된 제안 확인
     bid_id = request.data.get('bid_id')
     if not bid_id:
         return Response(
