@@ -200,13 +200,17 @@ def verify_inicis_payment(request):
         
         # 이미 처리된 결제인지 확인
         if payment.status == 'completed':
+            # 이미 처리된 결제의 토큰 정보 가져오기
+            token_count = BidToken.objects.filter(payment=payment).count()
             return Response({
                 'success': True,
-                'message': '이미 처리된 결제입니다.'
+                'message': '이미 처리된 결제입니다.',
+                'token_count': token_count,
+                'total_tokens': int(user.bid_tokens) if user.bid_tokens else 0
             })
         
-        # 결제 성공 여부 확인
-        if auth_result_code == '0000':
+        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
+        if auth_result_code in ['00', '0000']:
             # 결제 성공 처리
             with transaction.atomic():
                 # Payment 업데이트
@@ -249,7 +253,7 @@ def verify_inicis_payment(request):
                 'success': True,
                 'message': '결제가 완료되었습니다.',
                 'token_count': token_count,
-                'total_tokens': current_tokens
+                'total_tokens': int(current_tokens) if current_tokens else 0
             })
         else:
             # 결제 실패 처리
