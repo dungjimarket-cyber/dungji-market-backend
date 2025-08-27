@@ -16,7 +16,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from api.models import User, BidToken
+from api.models import User, BidToken, BidTokenPurchase
 from api.models_payment import Payment
 
 logger = logging.getLogger(__name__)
@@ -340,6 +340,18 @@ def verify_inicis_payment(request):
                             )
                         logger.info(f"견적이용권 {token_count}개 생성: 만료일 {expires_at.strftime('%Y-%m-%d')}")
                 
+                # BidTokenPurchase 레코드 생성 (구매 내역용)
+                BidTokenPurchase.objects.create(
+                    seller=user,
+                    token_type='unlimited' if is_subscription else 'single',
+                    quantity=1 if is_subscription else token_count,
+                    total_price=payment.amount,
+                    payment_status='completed',
+                    payment_date=datetime.now(),
+                    order_id=order_id,
+                    payment_key=auth_token[:200] if auth_token else None
+                )
+                
                 logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
             
             # 사용자의 현재 총 입찰권 개수 계산
@@ -587,6 +599,18 @@ def inicis_webhook(request):
                                         token_type='single',
                                         expires_at=expires_at  # 90일 만료
                                     )
+                        
+                        # BidTokenPurchase 레코드 생성 (구매 내역용)
+                        BidTokenPurchase.objects.create(
+                            seller=user,
+                            token_type='unlimited' if is_subscription else 'single',
+                            quantity=1 if is_subscription else int(token_count),
+                            total_price=payment.amount,
+                            payment_status='completed',
+                            payment_date=datetime.now(),
+                            order_id=order_id,
+                            payment_key=payment.tid
+                        )
                         
                         logger.info(f"가상계좌 입금 완료: order_id={order_id}, amount={payment.amount}")
                 
