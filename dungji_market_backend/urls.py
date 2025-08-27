@@ -68,6 +68,10 @@ from api.views_partner_bank import (
     register_bank_account, get_bank_account, delete_bank_account, verify_bank_account
 )
 from api.views_inquiry import InquiryViewSet
+from api.views_auth_email import (
+    request_password_reset, verify_reset_token, reset_password as reset_password_with_token,
+    send_verification_email, verify_email_code, change_email
+)
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -203,6 +207,14 @@ urlpatterns = [
     path('api/admin/bid-tokens/adjust/', adjust_bid_tokens, name='admin_adjust_bid_tokens'),
     path('api/admin/bid-tokens/grant-subscription/', grant_subscription, name='admin_grant_subscription'),
     path('api/admin/users/search/', search_users, name='admin_search_users'),
+    
+    # 이메일 인증 관련 API
+    path('api/auth/email/request-reset/', request_password_reset, name='request_password_reset'),
+    path('api/auth/email/verify-token/', verify_reset_token, name='verify_reset_token'),
+    path('api/auth/email/reset-password/', reset_password_with_token, name='reset_password_with_token'),
+    path('api/auth/email/send-verification/', send_verification_email, name='send_verification_email'),
+    path('api/auth/email/verify-code/', verify_email_code, name='verify_email_code'),
+    path('api/auth/email/change/', change_email, name='change_email'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

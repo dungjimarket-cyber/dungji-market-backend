@@ -66,6 +66,26 @@ CORS_ALLOW_HEADERS = [
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@dungjimarket.com')
 SITE_URL = os.getenv('SITE_URL', 'https://dungjimarket.com')
 
+# Resend API 키
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+
+# Django 기본 이메일 백엔드 설정 (Resend를 사용하지 않는 경우 대체)
+if os.getenv('EMAIL_BACKEND'):
+    EMAIL_BACKEND = os.getenv('EMAIL_BACKEND')
+else:
+    # 개발 환경에서는 콘솔 출력
+    if DEBUG:
+        EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    else:
+        EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# SMTP 설정 (Gmail 예시)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = os.getenv('EMAIL_PORT', 587)
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+
 # CSRF 설정
 CSRF_TRUSTED_ORIGINS = [
     "https://dungjimarket.com",
