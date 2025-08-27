@@ -425,11 +425,11 @@ def get_bid_tokens(request):
         'purchase_date': purchase.purchase_date
     } for purchase in recent_purchases]
     
-    # 만료 예정 토큰 정보 추가 (83일부터 표시)
+    # 만료 예정 토큰 정보 추가 (만료 7일 전부터 표시 - 90일 토큰은 83일차부터)
     expiring_tokens = []
-    expiring_date = now + timezone.timedelta(days=83)
+    expiring_date = now + timezone.timedelta(days=7)
     
-    # 83일 이내에 만료 예정인 무제한 구독권
+    # 7일 이내에 만료 예정인 무제한 구독권
     expiring_unlimited = valid_tokens.filter(
         token_type='unlimited',
         expires_at__lte=expiring_date,
@@ -447,7 +447,7 @@ def get_bid_tokens(request):
             'quantity': 1
         })
     
-    # 83일 이내에 만료 예정인 개별 토큰들
+    # 7일 이내에 만료 예정인 개별 토큰들
     expiring_singles = valid_tokens.filter(
         token_type='single',
         expires_at__lte=expiring_date,

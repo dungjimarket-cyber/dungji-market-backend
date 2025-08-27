@@ -293,11 +293,15 @@ def verify_inicis_payment(request):
                     # 단품 입찰권 (1,990원당 1개)
                     token_count = int(payment.amount // 1990)
                     if token_count > 0:
+                        # 단품 이용권은 생성일로부터 90일 후 만료
+                        expires_at = datetime.now() + timedelta(days=90)
                         for _ in range(token_count):
                             BidToken.objects.create(
                                 seller=user,
-                                token_type='single'
+                                token_type='single',
+                                expires_at=expires_at  # 90일 만료
                             )
+                        logger.info(f"견적이용권 {token_count}개 생성: 만료일 {expires_at.strftime('%Y-%m-%d')}")
                 
                 logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
             
@@ -536,10 +540,12 @@ def inicis_webhook(request):
                             # 단품 입찰권 (1,990원당 1개)
                             token_count = payment.amount // 1990
                             if token_count > 0:
+                                expires_at = datetime.now() + timedelta(days=90)
                                 for _ in range(int(token_count)):
                                     BidToken.objects.create(
                                         seller=user,
-                                        token_type='single'
+                                        token_type='single',
+                                        expires_at=expires_at  # 90일 만료
                                     )
                         
                         logger.info(f"가상계좌 입금 완료: order_id={order_id}, amount={payment.amount}")
