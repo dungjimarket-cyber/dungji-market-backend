@@ -24,6 +24,9 @@ class User(AbstractUser):
         ('admin', '관리자'),
     )
     
+    # email 필드 오버라이드 - 선택사항으로 변경
+    email = models.EmailField(blank=True, null=True, verbose_name='이메일')
+    
     def __str__(self):
         return f"{self.nickname} ({self.get_role_display()})"
     

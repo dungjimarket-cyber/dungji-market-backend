@@ -255,6 +255,8 @@ def verify_inicis_payment(request):
                 
                 logger.info(f"상품명: {payment.product_name}, 구독권 여부: {is_subscription}, 금액: {payment.amount}")
                 
+                subscription_expires_at = None  # 초기화
+                
                 if is_subscription:
                     # 무제한 구독권 (29,900원)
                     if payment.amount >= 29900:
@@ -270,18 +272,20 @@ def verify_inicis_payment(request):
                             # 기존 구독권이 있으면 그 만료일 이후부터 시작
                             start_date = existing_subscription.expires_at
                             expires_at = start_date + timedelta(days=30)
-                            logger.info(f"기존 구독권 연장: {start_date} → {expires_at}")
+                            logger.info(f"구독권 추가: {start_date.strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')} (기존 구독 이후)")
                         else:
                             # 기존 구독권이 없으면 현재부터 30일
                             expires_at = datetime.now() + timedelta(days=30)
-                            logger.info(f"신규 구독권 생성: 현재 → {expires_at}")
+                            logger.info(f"구독권 신규 구매: {datetime.now().strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')}")
                         
-                        BidToken.objects.create(
+                        new_subscription = BidToken.objects.create(
                             seller=user,
                             token_type='unlimited',
                             expires_at=expires_at
                         )
                         token_count = 1
+                        # 응답에 포함할 구독권 정보 저장
+                        subscription_expires_at = expires_at
                     else:
                         token_count = 0
                         logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
@@ -315,14 +319,31 @@ def verify_inicis_payment(request):
             
             current_tokens = single_tokens  # 단품 개수를 기본으로 표시
             
-            return Response({
+            # 구매 완료 메시지 설정
+            response_data = {
                 'success': True,
-                'message': '결제가 완료되었습니다.',
                 'token_count': token_count,
                 'total_tokens': current_tokens,
                 'subscription_count': subscription_count,
                 'is_subscription': is_subscription
-            })
+            }
+            
+            if is_subscription:
+                if subscription_count > 1:
+                    message = f'구독권이 추가되었습니다. (현재 {subscription_count}개 보유)'
+                else:
+                    message = '구독권이 구매 완료되었습니다.'
+                
+                # 구독권 만료일 정보 추가
+                if subscription_expires_at:
+                    response_data['subscription_expires_at'] = subscription_expires_at.isoformat()
+                    response_data['subscription_period'] = f"{(subscription_expires_at - timedelta(days=30)).strftime('%Y-%m-%d')} ~ {subscription_expires_at.strftime('%Y-%m-%d')}"
+            else:
+                message = f'견적이용권 {token_count}개가 구매 완료되었습니다.'
+            
+            response_data['message'] = message
+            
+            return Response(response_data)
         else:
             # 결제 실패 처리
             payment.status = 'failed'

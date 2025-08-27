@@ -251,8 +251,9 @@ def register_user_v2(request):
         
         with transaction.atomic():
             # 사용자 생성
-            # 이메일이 제공된 경우 실제 이메일 사용, 아니면 임시 이메일
-            user_email = email if email else f'{nickname}@dungji.com'
+            # 이메일이 제공된 경우 실제 이메일 사용, 아니면 빈 문자열
+            # 이메일이 없는 경우 빈 문자열로 처리하여 DB에 NULL이 들어가도록 함
+            user_email = email if email else ''
             
             # username 설정
             # 일반 회원가입인 경우 username_field 사용
@@ -278,8 +279,8 @@ def register_user_v2(request):
                 username=username_for_db,
                 email=user_email,
                 phone_number=phone_number,
-                nickname=business_name if role == 'seller' and business_name else nickname,
-                first_name=verified_name or (business_name if role == 'seller' and business_name else nickname),  # 인증 시 입력한 이름 우선 사용
+                nickname=nickname,  # 닉네임은 항상 사용자가 입력한 nickname 사용
+                first_name=verified_name or nickname,  # 인증 시 입력한 이름 우선 사용, 없으면 닉네임 사용
                 role=role,
                 sns_type=social_provider if social_provider else 'email',
                 sns_id=social_id if social_id else None,
