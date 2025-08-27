@@ -201,7 +201,7 @@ def verify_inicis_payment(request):
         # 이미 처리된 결제인지 확인
         if payment.status == 'completed':
             # 이미 처리된 결제의 토큰 정보 가져오기
-            is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
+            is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
             if is_subscription:
                 token_count = 1 if payment.amount >= 29900 else 0
             else:
@@ -235,7 +235,9 @@ def verify_inicis_payment(request):
                 
                 # 입찰권 지급 - 상품 유형에 따라 처리
                 # productName에서 구독권 여부 확인
-                is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
+                is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
+                
+                logger.info(f"상품명: {payment.product_name}, 구독권 여부: {is_subscription}, 금액: {payment.amount}")
                 
                 if is_subscription:
                     # 무제한 구독권 (29,900원)
@@ -352,7 +354,7 @@ def cancel_inicis_payment(request):
                 )
             
             # 입찰권 제거 (상품 유형에 따라 처리)
-            is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
+            is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
             
             if is_subscription:
                 # 구독권 취소 - unlimited 타입 토큰 삭제
@@ -428,7 +430,7 @@ def inicis_webhook(request):
                         
                         # 입찰권 지급
                         user = payment.user
-                        is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
+                        is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
                         
                         if is_subscription:
                             # 무제한 구독권 (29,900원)
