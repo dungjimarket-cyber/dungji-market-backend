@@ -201,7 +201,11 @@ def verify_inicis_payment(request):
         # 이미 처리된 결제인지 확인
         if payment.status == 'completed':
             # 이미 처리된 결제의 토큰 정보 가져오기
-            token_count = int(payment.amount // 1990)  # 결제 금액으로 계산 (1,990원당 1개)
+            is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
+            if is_subscription:
+                token_count = 1 if payment.amount >= 29900 else 0
+            else:
+                token_count = int(payment.amount // 1990)
             current_tokens = BidToken.objects.filter(seller=user, status='active').count()
             return Response({
                 'success': True,
@@ -229,14 +233,31 @@ def verify_inicis_payment(request):
                 })
                 payment.save()
                 
-                # 입찰권 지급 (1,990원당 1개)
-                token_count = int(payment.amount // 1990)
-                if token_count > 0:
-                    for _ in range(token_count):
+                # 입찰권 지급 - 상품 유형에 따라 처리
+                # productName에서 구독권 여부 확인
+                is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
+                
+                if is_subscription:
+                    # 무제한 구독권 (29,900원)
+                    if payment.amount >= 29900:
                         BidToken.objects.create(
-                            seller=user,  # seller 필드 사용 (BidToken 모델 정의에 따름)
-                            token_type='single'  # 단품 입찰권
+                            seller=user,
+                            token_type='unlimited',
+                            expires_at=datetime.now() + timedelta(days=30)  # 30일 구독
                         )
+                        token_count = 1
+                    else:
+                        token_count = 0
+                        logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
+                else:
+                    # 단품 입찰권 (1,990원당 1개)
+                    token_count = int(payment.amount // 1990)
+                    if token_count > 0:
+                        for _ in range(token_count):
+                            BidToken.objects.create(
+                                seller=user,
+                                token_type='single'
+                            )
                 
                 logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
             
@@ -330,16 +351,29 @@ def cancel_inicis_payment(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 입찰권 제거 (결제 금액 기준으로 계산)
-            token_count = int(payment.amount // 1990)  # 1,990원당 1개
-            # 가장 최근에 생성된 활성 토큰부터 삭제
-            tokens_to_delete = BidToken.objects.filter(
-                seller=user,
-                status='active'
-            ).order_by('-created_at')[:token_count]
+            # 입찰권 제거 (상품 유형에 따라 처리)
+            is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
             
-            for token in tokens_to_delete:
-                token.delete()
+            if is_subscription:
+                # 구독권 취소 - unlimited 타입 토큰 삭제
+                BidToken.objects.filter(
+                    seller=user,
+                    token_type='unlimited',
+                    status='active'
+                ).delete()
+                token_count = 1
+            else:
+                # 단품 취소 - 결제 금액 기준으로 계산
+                token_count = int(payment.amount // 1990)
+                # 가장 최근에 생성된 single 타입 활성 토큰부터 삭제
+                tokens_to_delete = BidToken.objects.filter(
+                    seller=user,
+                    token_type='single',
+                    status='active'
+                ).order_by('-created_at')[:token_count]
+                
+                for token in tokens_to_delete:
+                    token.delete()
             
             # Payment 상태 업데이트
             payment.status = 'cancelled'
@@ -394,14 +428,28 @@ def inicis_webhook(request):
                         
                         # 입찰권 지급
                         user = payment.user
-                        token_count = payment.amount // 1990  # 1,990원당 1개
+                        is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower()
                         
-                        if token_count > 0:
-                            for _ in range(int(token_count)):
+                        if is_subscription:
+                            # 무제한 구독권 (29,900원)
+                            if payment.amount >= 29900:
                                 BidToken.objects.create(
-                                    seller=user,  # seller 필드 사용
-                                    token_type='single'  # 단품 입찰권
+                                    seller=user,
+                                    token_type='unlimited',
+                                    expires_at=datetime.now() + timedelta(days=30)
                                 )
+                                token_count = 1
+                            else:
+                                token_count = 0
+                        else:
+                            # 단품 입찰권 (1,990원당 1개)
+                            token_count = payment.amount // 1990
+                            if token_count > 0:
+                                for _ in range(int(token_count)):
+                                    BidToken.objects.create(
+                                        seller=user,
+                                        token_type='single'
+                                    )
                         
                         logger.info(f"가상계좌 입금 완료: order_id={order_id}, amount={payment.amount}")
                 
