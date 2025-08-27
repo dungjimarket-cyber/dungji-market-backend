@@ -19,6 +19,7 @@ class Payment(models.Model):
     
     STATUS_CHOICES = [
         ('pending', '대기중'),
+        ('waiting_deposit', '입금대기'),  # 무통장입금 대기
         ('completed', '완료'),
         ('failed', '실패'),
         ('cancelled', '취소'),
@@ -87,6 +88,32 @@ class Payment(models.Model):
         default=dict,
         blank=True,
         verbose_name='결제 데이터'
+    )
+    
+    # 가상계좌 정보 (무통장입금용)
+    vbank_name = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='입금은행명'
+    )
+    vbank_num = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='입금계좌번호'
+    )
+    vbank_date = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name='입금기한'
+    )
+    vbank_holder = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='예금주명'
     )
     
     # 취소/환불 정보

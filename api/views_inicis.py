@@ -232,7 +232,43 @@ def verify_inicis_payment(request):
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            # 결제 성공 처리
+            # 결제 수단 확인
+            pay_method = data.get('payMethod', '')
+            
+            # 가상계좌(무통장입금)인 경우 별도 처리
+            if pay_method == 'VBank':
+                # 무통장입금은 입금대기 상태로 설정
+                with transaction.atomic():
+                    payment.status = 'waiting_deposit'
+                    payment.tid = order_id[:200]
+                    payment.vbank_name = data.get('vactBankName', '')
+                    payment.vbank_num = data.get('VACT_Num', '')
+                    payment.vbank_date = data.get('VACT_Date', '')
+                    payment.vbank_holder = data.get('VACT_Name', '')
+                    payment.payment_data.update({
+                        'authToken': auth_token,
+                        'authResultCode': auth_result_code,
+                        'originalTid': tid,
+                        'payMethod': pay_method,
+                        'vactBankCode': data.get('vactBankCode'),
+                    })
+                    payment.save()
+                    
+                    logger.info(f"무통장입금 대기: order_id={order_id}, bank={payment.vbank_name}, account={payment.vbank_num}")
+                    
+                    # 무통장입금 안내 응답
+                    return Response({
+                        'success': True,
+                        'message': f'무통장입금 계좌가 발급되었습니다. {payment.vbank_name} {payment.vbank_num}로 {payment.vbank_date}까지 입금해주세요.',
+                        'is_vbank': True,
+                        'vbank_name': payment.vbank_name,
+                        'vbank_num': payment.vbank_num,
+                        'vbank_date': payment.vbank_date,
+                        'vbank_holder': payment.vbank_holder,
+                        'amount': payment.amount
+                    })
+            
+            # 실시간 결제(카드, 계좌이체, 휴대폰) 처리
             with transaction.atomic():
                 # Payment 업데이트
                 payment.status = 'completed'
@@ -246,6 +282,7 @@ def verify_inicis_payment(request):
                     'authUrl': data.get('authUrl'),
                     'netCancelUrl': data.get('netCancelUrl'),
                     'idc_name': data.get('idc_name'),
+                    'payMethod': pay_method,
                 })
                 payment.save()
                 
@@ -498,12 +535,15 @@ def inicis_webhook(request):
             try:
                 payment = Payment.objects.get(order_id=order_id)
                 
-                if payment.status != 'completed':
+                # waiting_deposit 상태의 결제만 처리
+                if payment.status == 'waiting_deposit':
                     with transaction.atomic():
                         # Payment 상태 업데이트
                         payment.status = 'completed'
-                        payment.tid = tid
+                        payment.tid = tid if tid else payment.tid
                         payment.completed_at = datetime.now()
+                        payment.payment_data['deposit_confirmed'] = True
+                        payment.payment_data['deposit_confirmed_at'] = datetime.now().isoformat()
                         payment.save()
                         
                         # 입찰권 지급
