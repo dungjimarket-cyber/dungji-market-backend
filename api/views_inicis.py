@@ -206,12 +206,28 @@ def verify_inicis_payment(request):
                 token_count = 1 if payment.amount >= 29900 else 0
             else:
                 token_count = int(payment.amount // 1990)
-            current_tokens = BidToken.objects.filter(seller=user, status='active').count()
+            
+            # 단품 및 구독권 개수 계산
+            single_tokens = BidToken.objects.filter(
+                seller=user,
+                token_type='single',
+                status='active'
+            ).count()
+            
+            subscription_count = BidToken.objects.filter(
+                seller=user,
+                token_type='unlimited',
+                status='active',
+                expires_at__gt=datetime.now()
+            ).count()
+            
             return Response({
                 'success': True,
                 'message': '이미 처리된 결제입니다.',
                 'token_count': token_count,
-                'total_tokens': current_tokens
+                'total_tokens': single_tokens,
+                'subscription_count': subscription_count,
+                'is_subscription': is_subscription
             })
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
@@ -242,10 +258,28 @@ def verify_inicis_payment(request):
                 if is_subscription:
                     # 무제한 구독권 (29,900원)
                     if payment.amount >= 29900:
+                        # 기존 활성 구독권 확인
+                        existing_subscription = BidToken.objects.filter(
+                            seller=user,
+                            token_type='unlimited',
+                            status='active',
+                            expires_at__gt=datetime.now()  # 아직 만료되지 않은 구독권
+                        ).order_by('-expires_at').first()
+                        
+                        if existing_subscription:
+                            # 기존 구독권이 있으면 그 만료일 이후부터 시작
+                            start_date = existing_subscription.expires_at
+                            expires_at = start_date + timedelta(days=30)
+                            logger.info(f"기존 구독권 연장: {start_date} → {expires_at}")
+                        else:
+                            # 기존 구독권이 없으면 현재부터 30일
+                            expires_at = datetime.now() + timedelta(days=30)
+                            logger.info(f"신규 구독권 생성: 현재 → {expires_at}")
+                        
                         BidToken.objects.create(
                             seller=user,
                             token_type='unlimited',
-                            expires_at=datetime.now() + timedelta(days=30)  # 30일 구독
+                            expires_at=expires_at
                         )
                         token_count = 1
                     else:
@@ -264,16 +298,30 @@ def verify_inicis_payment(request):
                 logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
             
             # 사용자의 현재 총 입찰권 개수 계산
-            current_tokens = BidToken.objects.filter(
+            # 단품 입찰권 개수
+            single_tokens = BidToken.objects.filter(
                 seller=user, 
+                token_type='single',
                 status='active'
             ).count()
+            
+            # 구독권 개수 (만료되지 않은 것만)
+            subscription_count = BidToken.objects.filter(
+                seller=user,
+                token_type='unlimited',
+                status='active',
+                expires_at__gt=datetime.now()
+            ).count()
+            
+            current_tokens = single_tokens  # 단품 개수를 기본으로 표시
             
             return Response({
                 'success': True,
                 'message': '결제가 완료되었습니다.',
                 'token_count': token_count,
-                'total_tokens': current_tokens
+                'total_tokens': current_tokens,
+                'subscription_count': subscription_count,
+                'is_subscription': is_subscription
             })
         else:
             # 결제 실패 처리
@@ -357,12 +405,17 @@ def cancel_inicis_payment(request):
             is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
             
             if is_subscription:
-                # 구독권 취소 - unlimited 타입 토큰 삭제
-                BidToken.objects.filter(
+                # 구독권 취소 - 가장 마지막에 구매한 구독권 삭제 (만료일이 가장 늦은 것)
+                latest_subscription = BidToken.objects.filter(
                     seller=user,
                     token_type='unlimited',
                     status='active'
-                ).delete()
+                ).order_by('-expires_at').first()
+                
+                if latest_subscription:
+                    latest_subscription.delete()
+                    logger.info(f"구독권 취소: 만료일 {latest_subscription.expires_at}")
+                
                 token_count = 1
             else:
                 # 단품 취소 - 결제 금액 기준으로 계산
@@ -435,10 +488,25 @@ def inicis_webhook(request):
                         if is_subscription:
                             # 무제한 구독권 (29,900원)
                             if payment.amount >= 29900:
+                                # 기존 활성 구독권 확인
+                                existing_subscription = BidToken.objects.filter(
+                                    seller=user,
+                                    token_type='unlimited',
+                                    status='active',
+                                    expires_at__gt=datetime.now()
+                                ).order_by('-expires_at').first()
+                                
+                                if existing_subscription:
+                                    # 기존 구독권이 있으면 그 만료일 이후부터 시작
+                                    expires_at = existing_subscription.expires_at + timedelta(days=30)
+                                else:
+                                    # 기존 구독권이 없으면 현재부터 30일
+                                    expires_at = datetime.now() + timedelta(days=30)
+                                
                                 BidToken.objects.create(
                                     seller=user,
                                     token_type='unlimited',
-                                    expires_at=datetime.now() + timedelta(days=30)
+                                    expires_at=expires_at
                                 )
                                 token_count = 1
                             else:
