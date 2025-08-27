@@ -10,6 +10,8 @@ from .models import (
 from .models_verification import BusinessNumberVerification
 from .models_inquiry import Inquiry
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
+from .models_notice import Notice, NoticeImage, NoticeComment
+from .admin_notice import NoticeAdmin, NoticeCommentAdmin
 from django.utils.html import mark_safe
 from django.conf import settings
 import logging
