@@ -41,13 +41,13 @@ class SellerProfileView(APIView):
         #         status=status.HTTP_403_FORBIDDEN
         #     )
         
-        # 활성 입찰 수 계산 (입찰기록 - 모든 입찰)
+        # 활성 견적 제안 수 계산 (제안기록 - 모든 제안)
         active_bids = Bid.objects.filter(seller=user).count()
         
-        # 선택 대기 중인 입찰 수 계산 (최종선택 대기중 - 낙찰되어 판매자 최종선택이 필요한 입찰)
+        # 선택 대기 중인 견적 수 계산 (최종선택 대기중 - 선정되어 판매자 최종선택이 필요한 견적)
         pending_selection = Bid.objects.filter(
             seller=user,
-            status='selected',  # 낙찰된 입찰만
+            status='selected',  # 선정된 견적만
             final_decision='pending',  # 판매자가 아직 최종선택하지 않음
             groupbuy__status='final_selection_seller'  # 판매자 최종선택 단계
         ).count()
@@ -56,7 +56,7 @@ class SellerProfileView(APIView):
         # Settlement이 없거나 pending인 경우
         pending_sales = Bid.objects.filter(
             seller=user, 
-            status='selected',  # 낙찰된 입찰
+            status='selected',  # 선정된 견적
             final_decision='confirmed',  # 판매자가 판매 확정한 것
             groupbuy__status='completed'  # 공구가 완료된 상태
         ).exclude(
@@ -76,20 +76,20 @@ class SellerProfileView(APIView):
             if reviews.exists():
                 rating = sum(review.rating for review in reviews) / reviews.count()
         
-        # 남은 입찰권 및 무제한 입찰권 여부 (실제 데이터)
+        # 남은 제안권 및 무제한 제안권 여부 (실제 데이터)
         now = timezone.now()
         
-        # 활성 상태의 입찰권 필터링
+        # 활성 상태의 제안권 필터링
         active_tokens = BidToken.objects.filter(
             seller=user, 
             status='active',
             expires_at__gt=now
         )
         
-        # 기본 입찰권 개수
+        # 기본 제안권 개수
         remaining_bids = active_tokens.filter(token_type='single').count()
         
-        # 무제한 입찰권 보유 여부
+        # 무제한 제안권 보유 여부
         has_unlimited_bids = active_tokens.filter(token_type='unlimited').exists()
         
         # 응답 데이터 구성
@@ -289,10 +289,10 @@ class SellerProfileView(APIView):
 @permission_classes([IsAuthenticated])
 def purchase_bid_tokens(request):
     """
-    입찰권 구매 API
+    제안권 구매 API
     
     요청 데이터:
-    - token_type: 입찰권 유형 ('single' - 입찰권 단품, 'unlimited' - 무제한 구독권)
+    - token_type: 제안권 유형 ('single' - 제안권 단품, 'unlimited' - 무제한 구독권)
     - quantity: 구매할 수량 (default: 1, unlimited은 항상 1개)
     """
     user = request.user
@@ -305,26 +305,26 @@ def purchase_bid_tokens(request):
     token_type = request.data.get('token_type', 'single')
     quantity = int(request.data.get('quantity', 1))
     
-    # 입찰권 유형 검증
+    # 제안권 유형 검증
     if token_type not in ['single', 'unlimited']:
-        return Response({"detail": "유효하지 않은 입찰권 유형입니다."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "유효하지 않은 제안권 유형입니다."}, status=status.HTTP_400_BAD_REQUEST)
     
     # 수량 검증 (무제한은 항상 1개만 구매 가능)
     if token_type == 'unlimited' and quantity > 1:
-        return Response({"detail": "무제한 입찰권은 한 번에 1개만 구매 가능합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "무제한 제안권은 한 번에 1개만 구매 가능합니다."}, status=status.HTTP_400_BAD_REQUEST)
     
     if quantity < 1 or quantity > 100:
         return Response({"detail": "구매 수량은 1~100 사이의 값이어야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
     
     # 가격 계산
     price_map = {
-        'single': 1990,   # 1,990원 (입찰권 단품)
+        'single': 1990,   # 1,990원 (제안권 단품)
         'unlimited': 29900 # 29,900원 (무제한 구독권 30일)
     }
     unit_price = price_map.get(token_type)
     total_price = unit_price * quantity
     
-    # 구매 내역 생성 및 입찰권 생성
+    # 구매 내역 생성 및 제안권 생성
     try:
         with transaction.atomic():
             # 구매 내역 생성
@@ -337,12 +337,12 @@ def purchase_bid_tokens(request):
                 payment_date=timezone.now()
             )
             
-            # 입찰권 생성
+            # 제안권 생성
             tokens = []
             for _ in range(quantity):
                 # 만료일 계산 (토큰 유형에 따라 다름)
                 if token_type == 'single':
-                    # 단품 입찰권은 유효기간 없음
+                    # 단품 제안권은 유효기간 없음
                     token = BidToken.objects.create(
                         seller=user,
                         token_type=token_type,
@@ -379,7 +379,7 @@ def purchase_bid_tokens(request):
 @permission_classes([IsAuthenticated])
 def get_bid_tokens(request):
     """
-    사용자의 입찰권 목록 조회 API
+    사용자의 제안권 목록 조회 API
     """
     user = request.user
     
@@ -395,7 +395,7 @@ def get_bid_tokens(request):
     # 유효한 토큰만 필터링 (만료일이 없거나 현재 시간보다 미래인 경우)
     valid_tokens = active_tokens.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
     
-    # 입찰권 타입별 집계
+    # 제안권 타입별 집계
     single_tokens = valid_tokens.filter(token_type='single').count()
     
     # 무제한 구독권 확인
@@ -480,7 +480,7 @@ def get_bid_tokens(request):
 @permission_classes([IsAuthenticated])
 def get_bid_summary(request):
     """
-    판매자의 입찰 요약 정보 조회
+    판매자의 견적 제안 요약 정보 조회
     """
     user = request.user
     
@@ -499,22 +499,22 @@ def get_bid_summary(request):
     #         status=status.HTTP_403_FORBIDDEN
     #     )
     
-    # 전체 입찰 수
+    # 전체 제안 수
     total_bids = Bid.objects.filter(seller=user).count()
     
-    # 활성화된 입찰 수 (pending 상태)
+    # 활성화된 제안 수 (pending 상태)
     active_bids = Bid.objects.filter(seller=user, status='pending').count()
     
-    # 완료된 입찰 수 (confirmed 또는 rejected 상태)
+    # 완료된 제안 수 (confirmed 또는 rejected 상태)
     completed_bids = Bid.objects.filter(
         seller=user, 
         status__in=['confirmed', 'rejected']
     ).count()
     
-    # 수락된 입찰 수 (confirmed 상태)
+    # 수락된 제안 수 (confirmed 상태)
     accepted_bids = Bid.objects.filter(seller=user, status='confirmed').count()
     
-    # 거절된 입찰 수 (rejected 상태)
+    # 거절된 제안 수 (rejected 상태)
     rejected_bids = Bid.objects.filter(seller=user, status='rejected').count()
     
     data = {
@@ -558,7 +558,7 @@ class SellerSalesView(APIView):
         status_filter = request.query_params.get('status', None)
         search_query = request.query_params.get('search', None)
         
-        # 기본 쿼리셋 - 판매자의 선택된 입찰
+        # 기본 쿼리셋 - 판매자의 선택된 제안
         queryset = Bid.objects.filter(
             seller=user,
             status__in=['selected', 'confirmed']
@@ -648,11 +648,11 @@ class SellerSalesView(APIView):
             bid = Bid.objects.get(id=bid_id, seller=user)
         except Bid.DoesNotExist:
             return Response(
-                {"detail": "해당 입찰 정보를 찾을 수 없습니다."},
+                {"detail": "해당 견적 제안 정보를 찾을 수 없습니다."},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # 선택된 입찰이 아닌 경우
+        # 선택된 제안이 아닌 경우
         if bid.status not in ['selected', 'confirmed']:
             return Response(
                 {"detail": "판매 확정 상태가 아닙니다."},

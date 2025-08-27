@@ -16,13 +16,13 @@ class NotificationScheduler:
     @staticmethod
     def send_bid_reminders():
         """
-        입찰 마감 전 알림을 발송합니다.
+        견적 제안 마감 전 알림을 발송합니다.
         
-        입찰 마감 시간이 가까워지는 공구에 대해 참여자들에게 알림을 발송합니다.
+        견적 제안 마감 시간이 가까워지는 공구에 대해 참여자들에게 알림을 발송합니다.
         """
         now = timezone.now()
         
-        # 입찰 중인 공구 중 마감 시간이 12시간 이내인 공구 조회
+        # 견적 제안 중인 공구 중 마감 시간이 12시간 이내인 공구 조회
         active_groupbuys = GroupBuy.objects.filter(
             status='bidding',
             end_time__gt=now,
@@ -35,7 +35,7 @@ class NotificationScheduler:
             
             # 2시간 간격으로 알림 발송 (12, 10, 8, 6, 4, 2시간 전)
             if hours_left in [12, 10, 8, 6, 4, 2] and hours_left > 0:
-                logger.info(f"공구 '{groupbuy.title}' 입찰 마감 {hours_left}시간 전 알림 발송")
+                logger.info(f"공구 '{groupbuy.title}' 견적 제안 마감 {hours_left}시간 전 알림 발송")
                 
                 # 참여자 목록 조회
                 participants = groupbuy.participation_set.all()
@@ -47,7 +47,7 @@ class NotificationScheduler:
                     Notification.objects.create(
                         user=user,
                         groupbuy=groupbuy,
-                        message=f"입찰 마감까지 {hours_left}시간 남았습니다. 입찰에 참여해주세요.",
+                        message=f"공구 마감까지 {hours_left}시간 남았습니다. 견적에 참여해주세요.",
                         notification_type='reminder'
                     )
                     
@@ -63,9 +63,9 @@ class NotificationScheduler:
     @staticmethod
     def send_bid_confirmation_reminders():
         """
-        입찰 확정 전 알림을 발송합니다.
+        견적 확정 전 알림을 발송합니다.
         
-        입찰 확정 시간이 가까워지는 공구에 대해 입찰자들에게 알림을 발송합니다.
+        견적 확정 시간이 가까워지는 공구에 대해 제안자들에게 알림을 발송합니다.
         """
         now = timezone.now()
         
@@ -131,7 +131,7 @@ class NotificationScheduler:
             if hours_left in [6, 5, 4, 3, 2, 1] and hours_left > 0:
                 logger.info(f"공구 '{groupbuy.title}' 판매자 확정 {hours_left}시간 전 알림 발송")
                 
-                # 낙찰된 입찰 조회
+                # 선정된 견적 조회
                 winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
                 
                 if winning_bid and winning_bid.final_decision == 'pending':
@@ -199,7 +199,7 @@ class NotificationScheduler:
                 groupbuy.seller_selection_end = now + timedelta(hours=6)
                 groupbuy.save()
                 
-                # 낙찰된 입찰 조회
+                # 선정된 견적 조회
                 winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
                 
                 if winning_bid and winning_bid.seller:
@@ -239,7 +239,7 @@ class NotificationScheduler:
                         notification_type='failure'
                     )
                 
-                # 모든 입찰자들에게 알림
+                # 모든 제안자들에게 알림
                 all_bids = Bid.objects.filter(groupbuy=groupbuy)
                 for bid in all_bids:
                     if bid.seller:
@@ -268,7 +268,7 @@ class NotificationScheduler:
         for groupbuy in expired_groupbuys:
             logger.info(f"공구 '{groupbuy.title}' 판매자 최종선택 기한 만료 처리")
             
-            # 낙찰된 입찰 조회
+            # 선정된 견적 조회
             winning_bid = Bid.objects.filter(
                 groupbuy=groupbuy,
                 status='selected'
@@ -310,29 +310,8 @@ class NotificationScheduler:
                         notification_type='info'
                     )
                     
-                    # 입찰권 환불 처리 (단품 입찰권만 환불, 무제한 구독권 제외)
-                    if winning_bid.bid_token and winning_bid.bid_token.token_type == 'single':
-                        try:
-                            # 입찰권 상태를 다시 활성으로 변경
-                            winning_bid.bid_token.status = 'active'
-                            winning_bid.bid_token.used_at = None
-                            winning_bid.bid_token.used_for = None
-                            winning_bid.bid_token.save()
-                            
-                            # 입찰과 입찰권 연결 해제
-                            winning_bid.bid_token = None
-                            winning_bid.save()
-                            
-                            # 환불 알림 추가
-                            Notification.objects.create(
-                                user=winning_bid.seller,
-                                groupbuy=groupbuy,
-                                message=f"구매확정률이 50% 이하여서 사용한 입찰권이 환불되었습니다.",
-                                notification_type='info'
-                            )
-                            logger.info(f"입찰권 자동 환불 완료 - 판매자: {winning_bid.seller.id}, 공구: {groupbuy.id}")
-                        except Exception as e:
-                            logger.error(f"입찰권 자동 환불 실패: {str(e)}")
+                    # 이용권 환불은 지원하지 않음 (구매확정률 50% 이하 시 패널티만 면제)
+                    pass
             
             # 최종 상태 결정
             seller_confirmed = winning_bid and winning_bid.final_decision == 'confirmed'
@@ -392,10 +371,10 @@ class NotificationScheduler:
         logger.info("알림 스케줄러 작업 시작")
         
         try:
-            # 입찰 마감 알림
+            # 견적 제안 마감 알림
             NotificationScheduler.send_bid_reminders()
             
-            # 입찰 확정 알림
+            # 견적 확정 알림
             NotificationScheduler.send_bid_confirmation_reminders()
             
             # 판매자 확정 알림

@@ -6,7 +6,7 @@ KG이니시스 표준결제 연동
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from django.conf import settings
 from django.db import transaction
@@ -201,12 +201,13 @@ def verify_inicis_payment(request):
         # 이미 처리된 결제인지 확인
         if payment.status == 'completed':
             # 이미 처리된 결제의 토큰 정보 가져오기
-            token_count = BidToken.objects.filter(payment=payment).count()
+            token_count = int(payment.amount // 10000)  # 결제 금액으로 계산
+            current_tokens = BidToken.objects.filter(seller=user, status='active').count()
             return Response({
                 'success': True,
                 'message': '이미 처리된 결제입니다.',
                 'token_count': token_count,
-                'total_tokens': int(user.bid_tokens) if user.bid_tokens else 0
+                'total_tokens': current_tokens
             })
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
@@ -233,27 +234,23 @@ def verify_inicis_payment(request):
                 if token_count > 0:
                     for _ in range(token_count):
                         BidToken.objects.create(
-                            user=user,
-                            token_type='paid',
-                            payment=payment,
-                            description=f'이니시스 결제 ({order_id})'
+                            seller=user,  # seller 필드 사용 (BidToken 모델 정의에 따름)
+                            token_type='single'  # 단품 입찰권
                         )
-                    
-                    # 사용자 입찰권 개수 업데이트
-                    user.bid_tokens += token_count
-                    user.save()
                 
                 logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
             
-            # user 인스턴스 새로고침하여 최신 bid_tokens 값 가져오기  
-            user.refresh_from_db()
-            current_tokens = user.bid_tokens
+            # 사용자의 현재 총 입찰권 개수 계산
+            current_tokens = BidToken.objects.filter(
+                seller=user, 
+                status='active'
+            ).count()
             
             return Response({
                 'success': True,
                 'message': '결제가 완료되었습니다.',
                 'token_count': token_count,
-                'total_tokens': int(current_tokens) if current_tokens else 0
+                'total_tokens': current_tokens
             })
         else:
             # 결제 실패 처리
@@ -317,10 +314,14 @@ def cancel_inicis_payment(request):
         
         # 결제 취소 처리
         with transaction.atomic():
-            # 사용된 입찰권이 있는지 확인
+            # 사용된 입찰권이 있는지 확인 (결제 시점 기준으로 생성된 토큰 중에서)
+            # payment와 연결된 필드가 없으므로 시간 기준으로 확인
+            payment_time = payment.created_at if hasattr(payment, 'created_at') else payment.completed_at
             used_tokens = BidToken.objects.filter(
-                payment=payment,
-                is_used=True
+                seller=user,
+                status='used',
+                created_at__gte=payment_time - timedelta(minutes=5),  # 결제 시점 전후 5분 내 생성된 토큰
+                created_at__lte=payment_time + timedelta(minutes=5)
             ).exists()
             
             if used_tokens:
@@ -329,13 +330,16 @@ def cancel_inicis_payment(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 입찰권 제거
-            token_count = BidToken.objects.filter(payment=payment).count()
-            BidToken.objects.filter(payment=payment).delete()
+            # 입찰권 제거 (결제 금액 기준으로 계산)
+            token_count = int(payment.amount // 10000)
+            # 가장 최근에 생성된 활성 토큰부터 삭제
+            tokens_to_delete = BidToken.objects.filter(
+                seller=user,
+                status='active'
+            ).order_by('-created_at')[:token_count]
             
-            # 사용자 입찰권 개수 감소
-            user.bid_tokens = max(0, user.bid_tokens - token_count)
-            user.save()
+            for token in tokens_to_delete:
+                token.delete()
             
             # Payment 상태 업데이트
             payment.status = 'cancelled'
@@ -395,14 +399,9 @@ def inicis_webhook(request):
                         if token_count > 0:
                             for _ in range(int(token_count)):
                                 BidToken.objects.create(
-                                    user=user,
-                                    token_type='paid',
-                                    payment=payment,
-                                    description=f'가상계좌 입금 ({order_id})'
+                                    seller=user,  # seller 필드 사용
+                                    token_type='single'  # 단품 입찰권
                                 )
-                            
-                            user.bid_tokens += int(token_count)
-                            user.save()
                         
                         logger.info(f"가상계좌 입금 완료: order_id={order_id}, amount={payment.amount}")
                 

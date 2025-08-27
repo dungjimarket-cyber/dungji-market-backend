@@ -176,7 +176,7 @@ def seller_final_decision(request, groupbuy_id):
                     )
             except Bid.DoesNotExist:
                 return Response(
-                    {'error': '낙찰받지 못한 공구입니다.'},
+                    {'error': '견적을 제안 받지 못한 공구입니다.'},
                     status=status.HTTP_404_NOT_FOUND
                 )
         elif groupbuy.status not in ['final_selection_seller']:
@@ -194,7 +194,7 @@ def seller_final_decision(request, groupbuy_id):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # 낙찰된 입찰 조회
+        # 선정된 견적 조회
         bid = Bid.objects.get(
             groupbuy=groupbuy,
             seller=user,
@@ -281,7 +281,7 @@ def seller_final_decision(request, groupbuy_id):
         )
     except Bid.DoesNotExist:
         return Response(
-            {'error': '낙찰된 입찰을 찾을 수 없습니다.'},
+            {'error': '선정된 견적을 찾을 수 없습니다.'},
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
@@ -339,7 +339,7 @@ def get_final_decision_status(request, groupbuy_id):
                 })
             except Bid.DoesNotExist:
                 return Response({
-                    'error': '낙찰된 입찰이 없습니다.'
+                    'error': '선정된 견적이 없습니다.'
                 }, status=status.HTTP_404_NOT_FOUND)
         
         else:
@@ -600,7 +600,7 @@ def check_seller_decision_completed(groupbuy):
             # 공구 취소
             groupbuy.status = 'cancelled'
             if winning_bid.final_decision == 'cancelled':
-                groupbuy.cancellation_reason = '낙찰자의 판매포기로 인한 공구 진행 취소'
+                groupbuy.cancellation_reason = '판매자의 판매포기로 인한 공구 진행 취소'
             else:
                 groupbuy.cancellation_reason = '거래 조건 미충족으로 인한 공구 취소'
             groupbuy.save()
