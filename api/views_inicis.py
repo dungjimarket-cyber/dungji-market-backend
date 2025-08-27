@@ -201,7 +201,7 @@ def verify_inicis_payment(request):
         # 이미 처리된 결제인지 확인
         if payment.status == 'completed':
             # 이미 처리된 결제의 토큰 정보 가져오기
-            token_count = int(payment.amount // 10000)  # 결제 금액으로 계산
+            token_count = int(payment.amount // 1990)  # 결제 금액으로 계산 (1,990원당 1개)
             current_tokens = BidToken.objects.filter(seller=user, status='active').count()
             return Response({
                 'success': True,
@@ -229,8 +229,8 @@ def verify_inicis_payment(request):
                 })
                 payment.save()
                 
-                # 입찰권 지급 (10,000원당 1개)
-                token_count = int(payment.amount // 10000)
+                # 입찰권 지급 (1,990원당 1개)
+                token_count = int(payment.amount // 1990)
                 if token_count > 0:
                     for _ in range(token_count):
                         BidToken.objects.create(
@@ -331,7 +331,7 @@ def cancel_inicis_payment(request):
                 )
             
             # 입찰권 제거 (결제 금액 기준으로 계산)
-            token_count = int(payment.amount // 10000)
+            token_count = int(payment.amount // 1990)  # 1,990원당 1개
             # 가장 최근에 생성된 활성 토큰부터 삭제
             tokens_to_delete = BidToken.objects.filter(
                 seller=user,
@@ -394,7 +394,7 @@ def inicis_webhook(request):
                         
                         # 입찰권 지급
                         user = payment.user
-                        token_count = payment.amount // 10000
+                        token_count = payment.amount // 1990  # 1,990원당 1개
                         
                         if token_count > 0:
                             for _ in range(int(token_count)):
