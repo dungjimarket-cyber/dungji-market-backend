@@ -37,27 +37,27 @@ def update_groupbuy_status(groupbuy):
         bids = Bid.objects.filter(groupbuy=groupbuy).order_by('-amount', 'created_at')
         
         if bids.exists():
-            # 최고 입찰자를 낙찰자로 선정
+            # 최고 제안자를 판매자로 선정
             winning_bid = bids.first()
             winning_bid.is_selected = True
             winning_bid.status = 'selected'
             winning_bid.save()
-            logger.info(f"공구 '{groupbuy.title}' 낙찰자 선정: {winning_bid.seller.username} (지원금: {winning_bid.amount}원)")
+            logger.info(f"공구 '{groupbuy.title}' 판매자 선정: {winning_bid.seller.username} (지원금: {winning_bid.amount}원)")
             
-            # 낙찰자에게 알림 발송
+            # 선정된 판매자에게 알림 발송
             Notification.objects.create(
                 user=winning_bid.seller,
                 groupbuy=groupbuy,
-                message=f"축하합니다! '{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구에 낙찰되셨습니다. 구매자 최종선택을 기다려주세요.",
+                message=f"축하합니다! '{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구에 선정되셨습니다. 구매자 최종선택을 기다려주세요.",
                 notification_type='bid_winner'
             )
             
-            # 낙찰되지 않은 입찰자들에게 알림
-            for bid in bids[1:]:  # 첫 번째(낙찰자) 제외
+            # 선정되지 않은 제안자들에게 알림
+            for bid in bids[1:]:  # 첫 번째(선정자) 제외
                 Notification.objects.create(
                     user=bid.seller,
                     groupbuy=groupbuy,
-                    message=f"'{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구의 입찰 결과, 아쉽게도 낙찰되지 않으셨습니다.",
+                    message=f"'{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구에 선정되지 않으셨습니다. 다음 기회에 도전해주세요.",
                     notification_type='bid_not_selected'
                 )
             
@@ -70,7 +70,7 @@ def update_groupbuy_status(groupbuy):
         else:
             groupbuy.status = 'cancelled'
             groupbuy.save()
-            logger.info(f"공구 '{groupbuy.title}' 상태 변경: recruiting -> cancelled (입찰 없음)")
+            logger.info(f"공구 '{groupbuy.title}' 상태 변경: recruiting -> cancelled (제안 없음)")
             changed = True
     
     # 구매자 최종선택 단계 -> 판매자 최종선택 또는 취소
@@ -86,14 +86,14 @@ def update_groupbuy_status(groupbuy):
         ).count()
         
         if confirmed_participants > 0:
-            # 이미 낙찰자가 선정되어 있는지 확인
+            # 이미 판매자가 선정되어 있는지 확인
             winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
             if not winning_bid:
                 winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
             
             if winning_bid:
-                # 낙찰자가 이미 있는 경우 - 판매자 최종선택 단계로 진행
-                # 낙찰자에게 판매 확정 요청 알림
+                # 판매자가 이미 있는 경우 - 판매자 최종선택 단계로 진행
+                # 판매자에게 판매 확정 요청 알림
                 Notification.objects.create(
                     user=winning_bid.seller,
                     groupbuy=groupbuy,
@@ -114,7 +114,7 @@ def update_groupbuy_status(groupbuy):
             logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> {groupbuy.status} (참여자 확정 없음)")
             groupbuy.notify_status_change()
             
-            # 모든 입찰자에게 취소 알림
+            # 모든 제안자에게 취소 알림
             from ..models import Notification
             bids = Bid.objects.filter(groupbuy=groupbuy)
             for bid in bids:
@@ -130,7 +130,7 @@ def update_groupbuy_status(groupbuy):
     # 3. 판매자 최종선택 시간 만료 처리
     elif groupbuy.status == 'final_selection_seller' and groupbuy.seller_selection_end and now > groupbuy.seller_selection_end:
         from ..models import Bid
-        # 낙찰된 입찰자가 판매확정했는지 확인
+        # 선정된 판매자가 판매확정했는지 확인
         winning_bid = Bid.objects.filter(groupbuy=groupbuy, is_selected=True).first()
         if not winning_bid:
             winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
@@ -143,7 +143,7 @@ def update_groupbuy_status(groupbuy):
         else:
             # 판매자가 미선택 또는 포기한 경우 -> 취소
             groupbuy.status = 'cancelled'
-            groupbuy.cancellation_reason = '낙찰자의 판매포기로 인한 공구 진행 취소' if winning_bid and winning_bid.final_decision == 'cancelled' else '판매자 최종선택 기간 만료'
+            groupbuy.cancellation_reason = '판매자의 판매포기로 인한 공구 진행 취소' if winning_bid and winning_bid.final_decision == 'cancelled' else '판매자 최종선택 기간 만료'
             groupbuy.save()
             logger.info(f"공구 '{groupbuy.title}' 상태 변경: {original_status} -> cancelled (판매자 미선택/포기)")
             

@@ -470,14 +470,14 @@ def check_buyer_decisions_completed(groupbuy):
                 
                 logger.info(f"GroupBuy {groupbuy.id}: 자동으로 최고 입찰자 선택 - Bid {highest_bid.id} (금액: {highest_bid.amount}원)")
                 
-                # 낙찰 알림 발송
+                # 선정 알림 발송
                 Notification.objects.create(
                     user=highest_bid.seller,
                     groupbuy=groupbuy,
-                    message=f"축하합니다! {groupbuy.title} 공구에 낙찰되었습니다. 판매 확정/포기를 선택해주세요."
+                    message=f"축하합니다! {groupbuy.title} 공구에 선정되었습니다. 판매 확정/포기를 선택해주세요."
                 )
                 
-                # 낙찰되지 않은 다른 입찰자들에게 알림
+                # 선정되지 않은 다른 제안자들에게 알림
                 other_bids = Bid.objects.filter(
                     groupbuy=groupbuy,
                     status='pending'
@@ -487,7 +487,7 @@ def check_buyer_decisions_completed(groupbuy):
                     Notification.objects.create(
                         user=bid.seller,
                         groupbuy=groupbuy,
-                        message=f"{groupbuy.title} 공구의 낙찰에 실패했습니다. 다음 기회에 도전해주세요."
+                        message=f"{groupbuy.title} 공구에 선정되지 않았습니다. 다음 기회에 도전해주세요."
                     )
             
             # 판매자 최종선택 단계로 전환
@@ -495,7 +495,7 @@ def check_buyer_decisions_completed(groupbuy):
             groupbuy.seller_selection_end = timezone.now() + timezone.timedelta(hours=6)
             groupbuy.save()
             
-            # 낙찰된 판매자에게 최종선택 알림
+            # 선정된 판매자에게 최종선택 알림
             winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
             if winning_bid:
                 Notification.objects.create(

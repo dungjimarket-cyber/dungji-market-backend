@@ -188,19 +188,19 @@ class ResendSender:
         """
         notification_config = {
             'bid_reminder': {
-                'subject': '[둥지마켓] 입찰 마감 알림',
+                'subject': '[둥지마켓] 제안 마감 알림',
                 'template': 'emails/bid_reminder.html'
             },
             'bid_won': {
-                'subject': '[둥지마켓] 입찰 낙찰 알림', 
+                'subject': '[둥지마켓] 판매자 선정 알림', 
                 'template': 'emails/bid_won.html'
             },
             'bid_lost': {
-                'subject': '[둥지마켓] 입찰 실패 알림',
+                'subject': '[둥지마켓] 판매자 미선정 알림',
                 'template': 'emails/bid_lost.html'
             },
             'bid_confirmation_reminder': {
-                'subject': '[둥지마켓] 입찰 확정 알림',
+                'subject': '[둥지마켓] 제안 확정 알림',
                 'template': 'emails/bid_confirmation_reminder.html'
             },
             'seller_confirmation_reminder': {

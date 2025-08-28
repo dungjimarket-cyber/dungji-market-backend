@@ -57,7 +57,7 @@ class EmailSender:
     @staticmethod
     def send_bid_reminder(user_email, groupbuy_title, groupbuy_id, hours_left):
         """
-        입찰 마감 알림 이메일을 발송합니다.
+        제안 마감 알림 이메일을 발송합니다.
         
         Args:
             user_email (str): 사용자 이메일
@@ -68,7 +68,7 @@ class EmailSender:
         Returns:
             bool: 이메일 발송 성공 여부
         """
-        subject = f"[둥지마켓] 입찰 마감 {hours_left}시간 전 알림"
+        subject = f"[둥지마켓] 제안 마감 {hours_left}시간 전 알림"
         context = {
             'groupbuy_title': groupbuy_title,
             'groupbuy_id': groupbuy_id,
@@ -85,7 +85,7 @@ class EmailSender:
     @staticmethod
     def send_bid_confirmation_reminder(user_email, groupbuy_title, groupbuy_id, hours_left):
         """
-        입찰 확정 알림 이메일을 발송합니다.
+        제안 확정 알림 이메일을 발송합니다.
         
         Args:
             user_email (str): 사용자 이메일
@@ -96,7 +96,7 @@ class EmailSender:
         Returns:
             bool: 이메일 발송 성공 여부
         """
-        subject = f"[둥지마켓] 입찰 확정 {hours_left}시간 전 알림"
+        subject = f"[둥지마켓] 제안 확정 {hours_left}시간 전 알림"
         context = {
             'groupbuy_title': groupbuy_title,
             'groupbuy_id': groupbuy_id,

@@ -1940,7 +1940,7 @@ class GroupBuyViewSet(ModelViewSet):
                         'amount': my_bid.amount,
                         'total_bidders': all_bids.count(),
                         'status': 'won' if my_rank == 1 else 'lost',
-                        'message': '축하합니다! 낙찰되셨습니다! 🎉' if my_rank == 1 else f'아쉽지만 낙찰되지 못했습니다 😢 (내 순위: {my_rank}위)'
+                        'message': '축하합니다! 선정되셨습니다! 🎉' if my_rank == 1 else f'아쉽지만 선정되지 못했습니다 😢 (내 순위: {my_rank}위)'
                     }
         
         return Response(data)
@@ -2338,19 +2338,19 @@ class GroupBuyViewSet(ModelViewSet):
                 
                 # 상태 표시 조정
                 if groupbuy.status == 'recruiting':
-                    # 모집기간 중에는 모두 "입찰중"
-                    gb_data['display_status'] = '입찰중'
+                    # 모집기간 중에는 모두 "제안중"
+                    gb_data['display_status'] = '제안중'
                 elif my_rank == 1:
-                    # 1등은 "낙찰"
-                    gb_data['display_status'] = '낙찰'
+                    # 1등은 "선정"
+                    gb_data['display_status'] = '선정'
                 else:
-                    # 2등 이하는 "낙찰실패"
-                    gb_data['display_status'] = '낙찰실패'
+                    # 2등 이하는 "미선정"
+                    gb_data['display_status'] = '미선정'
             else:
-                # 모집기간 중에는 순위 없음, 상태는 "입찰중"
+                # 모집기간 중에는 순위 없음, 상태는 "제안중"
                 gb_data['my_bid_rank'] = None
                 gb_data['total_bidders'] = None
-                gb_data['display_status'] = '입찰중'
+                gb_data['display_status'] = '제안중'
             
             groupbuy_data.append(gb_data)
         
