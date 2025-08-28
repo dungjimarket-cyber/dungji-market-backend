@@ -2,6 +2,8 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from datetime import timedelta
 from .models import Notification
 from .serializers_notification import NotificationSerializer
 import logging
@@ -18,12 +20,16 @@ class NotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        """사용자별 알림 목록을 반환합니다."""
-        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+        """사용자별 알림 목록을 반환합니다. (최근 7일 이내만)"""
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        return Notification.objects.filter(
+            user=self.request.user,
+            created_at__gte=seven_days_ago
+        ).order_by('-created_at')
     
     def list(self, request):
         """
-        사용자의 모든 알림을 조회합니다.
+        사용자의 최근 7일 이내 알림을 조회합니다.
         읽지 않은 알림과 읽은 알림을 구분하여 반환합니다.
         """
         queryset = self.get_queryset()
