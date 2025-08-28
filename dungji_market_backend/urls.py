@@ -48,6 +48,7 @@ from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_us
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback, check_kakao_user_exists
 from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
+from api.views_phone_verification import send_phone_verification, verify_phone, check_phone_verification_status, update_phone_number
 # voting 관련 import는 voting 상태 제거로 인해 삭제됨
 from api.views_final_selection import (
     buyer_final_decision, seller_final_decision, 
@@ -152,6 +153,12 @@ urlpatterns = [
     path('api/payments/inicis/close/', inicis_close, name='inicis_close'),
     # 비대면 판매인증 상태 조회 API
     path('api/users/me/remote-sales-status/', get_remote_sales_status, name='get_remote_sales_status'),
+    
+    # 휴대폰 인증 API
+    path('api/phone/send-verification/', send_phone_verification, name='send_phone_verification'),
+    path('api/phone/verify/', verify_phone, name='verify_phone'),
+    path('api/phone/status/', check_phone_verification_status, name='check_phone_verification_status'),
+    path('api/phone/update/', update_phone_number, name='update_phone_number'),
     # 사용자 참여 정보 API
     path('api/users/me/participations/', ParticipationViewSet.as_view({'get': 'me'}), name='user_participations'),
     # 동의 프로세스 시작 API

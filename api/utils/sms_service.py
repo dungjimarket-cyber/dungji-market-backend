@@ -56,29 +56,39 @@ class SMSService:
         return True, None
     
     def _send_aligo_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
-        """알리고 SMS API 구현 예시"""
-        # TODO: 실제 알리고 API 구현
-        # import requests
-        # 
-        # url = "https://apis.aligo.in/send/"
-        # data = {
-        #     'key': self.api_key,
-        #     'user_id': self.api_secret,
-        #     'sender': self.sender_number,
-        #     'receiver': phone_number,
-        #     'msg': message,
-        #     'msg_type': 'SMS'
-        # }
-        # 
-        # response = requests.post(url, data=data)
-        # result = response.json()
-        # 
-        # if result.get('result_code') == '1':
-        #     return True, None
-        # else:
-        #     return False, result.get('message', 'SMS 발송 실패')
+        """알리고 SMS API 실제 구현"""
+        import requests
         
-        return self._send_mock_sms(phone_number, message)
+        # 개발 모드에서는 Mock 사용
+        if settings.DEBUG and not getattr(settings, 'USE_REAL_SMS', False):
+            logger.info(f"[알리고 개발모드] To: {phone_number}, Message: {message}")
+            return True, None
+        
+        url = "https://apis.aligo.in/send/"
+        data = {
+            'key': self.api_key,
+            'user_id': getattr(settings, 'ALIGO_USER_ID', ''),
+            'sender': self.sender_number,
+            'receiver': phone_number.replace('-', ''),  # 하이픈 제거
+            'msg': message,
+            'msg_type': 'SMS',
+            'title': '[둥지마켓] 인증번호'
+        }
+        
+        try:
+            response = requests.post(url, data=data)
+            result = response.json()
+            
+            if result.get('result_code') == '1':
+                logger.info(f"SMS 발송 성공: {phone_number}")
+                return True, None
+            else:
+                error_msg = result.get('message', 'SMS 발송 실패')
+                logger.error(f"알리고 SMS 발송 실패: {error_msg}")
+                return False, error_msg
+        except Exception as e:
+            logger.error(f"알리고 API 오류: {e}", exc_info=True)
+            return False, "SMS 발송 중 오류가 발생했습니다."
     
     def _send_twilio_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
         """Twilio SMS API 구현 예시"""

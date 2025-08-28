@@ -54,6 +54,8 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='buyer')
     nickname = models.CharField(max_length=100, default='', verbose_name='닉네임', help_text='사용자가 표시될 이름')
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
+    phone_verified = models.BooleanField(default=False, verbose_name='휴대폰 인증 여부')
+    phone_verified_at = models.DateTimeField(null=True, blank=True, verbose_name='휴대폰 인증 일시')
     profile_image = models.URLField(blank=True)  # 외부 스토리지 사용 가정
     business_reg_number = models.CharField(max_length=20, blank=True, null=True)
     is_business_verified = models.BooleanField(default=False)
