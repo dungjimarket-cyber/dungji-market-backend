@@ -329,3 +329,10 @@ KFTC_CLIENT_ID = os.getenv('KFTC_CLIENT_ID')
 KFTC_CLIENT_SECRET = os.getenv('KFTC_CLIENT_SECRET')
 KFTC_TEST_MODE = os.getenv('KFTC_TEST_MODE', 'True').lower() == 'true'
 KFTC_ORG_CODE = os.getenv('KFTC_ORG_CODE', 'M202402018')
+
+# SMS Settings (알리고)
+SMS_PROVIDER = os.getenv('SMS_PROVIDER', 'mock')
+SMS_API_KEY = os.getenv('SMS_API_KEY', '')
+ALIGO_USER_ID = os.getenv('ALIGO_USER_ID', '')
+SMS_SENDER_NUMBER = os.getenv('SMS_SENDER_NUMBER', '010-1234-5678')
+USE_REAL_SMS = os.getenv('USE_REAL_SMS', 'False').lower() == 'true'
