@@ -144,9 +144,12 @@ def prepare_inicis_payment(request):
     """
     try:
         user = request.user
+        logger.info(f"=== 이니시스 결제 준비 시작 ===")
+        logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         
         # 판매자만 입찰권 구매 가능
         if user.role != 'seller':
+            logger.error(f"권한 오류: 사용자 역할 {user.role}은 판매자가 아님")
             return Response(
                 {'error': '판매자만 입찰권을 구매할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
@@ -154,6 +157,8 @@ def prepare_inicis_payment(request):
         
         # 요청 데이터
         data = request.data
+        logger.info(f"요청 데이터: {data}")
+        
         order_id = data.get('orderId')
         amount = int(data.get('amount', 0))
         product_name = data.get('productName', '입찰권')
@@ -161,7 +166,10 @@ def prepare_inicis_payment(request):
         buyer_tel = data.get('buyerTel', user.phone_number or '')
         buyer_email = data.get('buyerEmail', user.email)
         
+        logger.info(f"파싱된 파라미터: order_id={order_id}, amount={amount}, product={product_name}")
+        
         if amount <= 0:
+            logger.error(f"결제 금액 오류: {amount}")
             return Response(
                 {'error': '결제 금액이 유효하지 않습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -169,6 +177,7 @@ def prepare_inicis_payment(request):
         
         # 타임스탬프 생성
         timestamp = str(int(datetime.now().timestamp() * 1000))
+        logger.info(f"타임스탬프 생성: {timestamp}")
         
         # 서명 생성을 위한 파라미터
         sign_params = {
@@ -178,10 +187,14 @@ def prepare_inicis_payment(request):
             'timestamp': timestamp
         }
         
+        logger.info(f"서명 파라미터: {sign_params}")
+        
         # 서명 생성
         signature = InicisPaymentService.generate_signature(sign_params)
         mkey = InicisPaymentService.generate_mkey(sign_params)
         verification = InicisPaymentService.generate_verification(sign_params)
+        
+        logger.info(f"생성된 서명: signature={signature[:20]}..., mkey={mkey[:20]}..., verification={verification[:20]}...")
         
         # Payment 레코드 생성 (대기 상태)
         payment = Payment.objects.create(
@@ -201,9 +214,9 @@ def prepare_inicis_payment(request):
             }
         )
         
-        logger.info(f"이니시스 결제 준비 완료: user={user.id}, order_id={order_id}, amount={amount}")
+        logger.info(f"Payment 레코드 생성 완료: ID={payment.id}")
         
-        return Response({
+        response_data = {
             'success': True,
             'orderId': order_id,
             'timestamp': timestamp,
@@ -211,10 +224,17 @@ def prepare_inicis_payment(request):
             'mkey': mkey,
             'verification': verification,
             'payment_id': payment.id
-        })
+        }
+        
+        logger.info(f"응답 데이터 준비 완료: {response_data}")
+        logger.info(f"=== 이니시스 결제 준비 완료 ===")
+        
+        return Response(response_data)
         
     except Exception as e:
         logger.error(f"이니시스 결제 준비 중 오류: {str(e)}")
+        import traceback
+        logger.error(f"스택 트레이스: {traceback.format_exc()}")
         return Response(
             {'error': '결제 준비 중 오류가 발생했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -288,7 +308,7 @@ def verify_inicis_payment(request):
             
             if auth_url and auth_token:
                 logger.info(f"이니시스 승인 요청 시작: order_id={order_id}")
-                approval_result = InicisService.request_payment_approval(
+                approval_result = InicisPaymentService.request_payment_approval(
                     order_id, auth_token, auth_url, net_cancel_url
                 )
                 
