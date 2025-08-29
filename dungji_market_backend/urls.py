@@ -32,7 +32,7 @@ from api.views_seller import (
 )
 from api.views_inicis import (
     prepare_inicis_payment, verify_inicis_payment, cancel_inicis_payment,
-    inicis_webhook, inicis_return, inicis_close
+    inicis_webhook, inicis_return, inicis_close, generate_mobile_hash
 )
 from api.views_region import RegionViewSet
 from api.views_notification import NotificationViewSet
@@ -151,6 +151,7 @@ urlpatterns = [
     path('api/payments/inicis/webhook/', inicis_webhook, name='inicis_webhook'),
     path('api/payments/inicis/return/', inicis_return, name='inicis_return'),
     path('api/payments/inicis/close/', inicis_close, name='inicis_close'),
+    path('api/payments/inicis/mobile-hash/', generate_mobile_hash, name='generate_mobile_hash'),
     # 비대면 판매인증 상태 조회 API
     path('api/users/me/remote-sales-status/', get_remote_sales_status, name='get_remote_sales_status'),
     

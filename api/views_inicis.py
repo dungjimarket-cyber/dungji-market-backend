@@ -25,9 +25,12 @@ logger = logging.getLogger(__name__)
 class InicisPaymentService:
     """이니시스 결제 서비스"""
     
-    # 상점 정보 (테스트 환경)
-    MID = 'INIpayTest'  # 테스트 상점 아이디
-    SIGNKEY = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS'  # 테스트 서명키 (공식 샘플과 동일)
+    # 상점 정보 (운영 환경)
+    MID = 'dungjima14'  # 실제 상점 아이디
+    SIGNKEY = 'MzVBZ0hzWU5kOXpnQUczclRIR2dMdz09'  # 웹결제 사인키
+    API_KEY = 'yT5fxdUqycph7JBJ'  # INIAPI key
+    API_IV = 'KvDu7eNXGotbaV=='  # INIAPI iv
+    MOBILE_HASHKEY = 'D1EEF4CE7B4D9B1795BBFD255D35FE24'  # 모바일 hashkey
     
     # API URLs
     PROD_URL = 'https://iniapi.inicis.com/api/v1'
@@ -36,8 +39,8 @@ class InicisPaymentService:
     @classmethod
     def get_api_url(cls):
         """환경에 따른 API URL 반환"""
-        # 아직 계약 전이므로 항상 테스트 환경 사용
-        return cls.TEST_URL
+        # 실제 운영 환경 사용
+        return cls.PROD_URL
     
     @classmethod
     def generate_signature(cls, params):
@@ -674,6 +677,36 @@ def inicis_return(request):
         logger.error(f"이니시스 리턴 처리 중 오류: {str(e)}")
         return Response(
             {'error': '결제 처리 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_mobile_hash(request):
+    """
+    모바일 결제용 해시키 생성
+    """
+    try:
+        data = request.data
+        order_id = data.get('orderId')
+        amount = data.get('amount')
+        
+        # 모바일 해시 생성 (간단한 예시)
+        # 실제로는 이니시스 모바일 해시키 규격에 맞춰 생성
+        import hashlib
+        hash_data = f"{InicisPaymentService.MID}_{order_id}_{amount}_{InicisPaymentService.MOBILE_HASHKEY}"
+        mobile_hash = hashlib.md5(hash_data.encode('utf-8')).hexdigest()
+        
+        return Response({
+            'success': True,
+            'hash': mobile_hash
+        })
+        
+    except Exception as e:
+        logger.error(f"모바일 해시키 생성 중 오류: {str(e)}")
+        return Response(
+            {'error': '해시키 생성에 실패했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
