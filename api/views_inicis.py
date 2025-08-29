@@ -730,6 +730,7 @@ def inicis_webhook(request):
         )
 
 
+@csrf_exempt
 @api_view(['GET', 'POST'])
 def inicis_return(request):
     """
