@@ -43,6 +43,53 @@ class InicisPaymentService:
         return cls.PROD_URL
     
     @classmethod
+    def request_payment_approval(cls, order_id, auth_token, auth_url, net_cancel_url):
+        """
+        이니시스 결제 승인 요청
+        2단계 승인 처리
+        """
+        try:
+            import requests
+            
+            # 승인 요청 파라미터
+            params = {
+                'authToken': auth_token,
+                'authUrl': auth_url,
+                'netCancelUrl': net_cancel_url,
+                'mid': cls.MID,
+            }
+            
+            logger.info(f"이니시스 승인 요청: order_id={order_id}, params={params}")
+            
+            # 이니시스 승인 API 호출
+            response = requests.post(
+                auth_url,  # 이니시스에서 제공한 승인 URL
+                data=params,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result_text = response.text
+                logger.info(f"이니시스 승인 응답: {result_text}")
+                
+                # 응답 파싱 (key=value&key=value 형식)
+                result_params = {}
+                for pair in result_text.split('&'):
+                    if '=' in pair:
+                        key, value = pair.split('=', 1)
+                        result_params[key] = value
+                
+                return result_params
+            else:
+                logger.error(f"이니시스 승인 API 오류: {response.status_code}, {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"이니시스 승인 요청 실패: {str(e)}")
+            return None
+    
+    @classmethod
     def generate_signature(cls, params):
         """
         이니시스 서명 생성
@@ -235,8 +282,41 @@ def verify_inicis_payment(request):
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            # 결제 수단 확인
-            pay_method = data.get('payMethod', '')
+            # 실제 이니시스 서버에 승인 요청 (보안 강화)
+            auth_url = data.get('authUrl')
+            net_cancel_url = data.get('netCancelUrl')
+            
+            if auth_url and auth_token:
+                logger.info(f"이니시스 승인 요청 시작: order_id={order_id}")
+                approval_result = InicisService.request_payment_approval(
+                    order_id, auth_token, auth_url, net_cancel_url
+                )
+                
+                if not approval_result:
+                    logger.error(f"이니시스 승인 실패: order_id={order_id}")
+                    return Response({
+                        'success': False,
+                        'error': '결제 승인에 실패했습니다.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # 승인 결과 확인
+                result_code = approval_result.get('resultCode', '')
+                result_msg = approval_result.get('resultMsg', '')
+                
+                if result_code != '00':
+                    logger.error(f"이니시스 승인 거부: order_id={order_id}, code={result_code}, msg={result_msg}")
+                    return Response({
+                        'success': False,
+                        'error': f'결제가 승인되지 않았습니다: {result_msg}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                logger.info(f"이니시스 승인 성공: order_id={order_id}, result={approval_result}")
+                
+                # 승인 결과에서 결제 방법 확인
+                pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
+            else:
+                logger.warning(f"authUrl 또는 authToken이 없음: order_id={order_id}")
+                pay_method = data.get('payMethod', '')
             
             # 가상계좌(무통장입금)인 경우 별도 처리
             if pay_method == 'VBank':
@@ -707,6 +787,51 @@ def generate_mobile_hash(request):
         logger.error(f"모바일 해시키 생성 중 오류: {str(e)}")
         return Response(
             {'error': '해시키 생성에 실패했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pending_payments(request):
+    """
+    사용자의 입금 대기 중인 결제 내역 조회
+    """
+    try:
+        user = request.user
+        
+        # 입금 대기 상태인 결제 내역 조회
+        pending_payments = Payment.objects.filter(
+            user=user,
+            status='waiting_deposit'
+        ).order_by('-created_at')
+        
+        payment_list = []
+        for payment in pending_payments:
+            payment_data = {
+                'id': payment.id,
+                'order_id': payment.order_id,
+                'amount': int(payment.amount),
+                'product_name': payment.product_name,
+                'vbank_name': payment.vbank_name,
+                'vbank_num': payment.vbank_num,
+                'vbank_holder': payment.vbank_holder,
+                'vbank_date': payment.vbank_date,
+                'created_at': payment.created_at.isoformat(),
+                'payment_method': payment.payment_method
+            }
+            payment_list.append(payment_data)
+        
+        return Response({
+            'success': True,
+            'pending_payments': payment_list,
+            'count': len(payment_list)
+        })
+        
+    except Exception as e:
+        logger.error(f"입금 대기 결제 조회 중 오류: {str(e)}")
+        return Response(
+            {'error': '결제 내역 조회 중 오류가 발생했습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
