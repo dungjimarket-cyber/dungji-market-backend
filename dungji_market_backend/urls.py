@@ -45,7 +45,7 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status, verify_user_phone, reset_password_phone
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback, check_kakao_user_exists
 from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
@@ -108,6 +108,9 @@ urlpatterns = [
         path('find-username-by-phone/', find_username, name='find_username_by_phone'),
         path('reset-password/', reset_password, name='reset_password'),
         path('reset-password-by-phone/', reset_password, name='reset_password_by_phone'),
+        # 휴대폰 기반 비밀번호 재설정 API
+        path('verify-user-phone/', verify_user_phone, name='verify_user_phone'),
+        path('reset-password-phone/', reset_password_phone, name='reset_password_phone'),
         # 이메일 기반 비밀번호 재설정 API
         path('password-reset/send-email/', send_password_reset_email, name='send_password_reset_email'),
         path('password-reset/verify-email/', verify_password_reset_email, name='verify_password_reset_email'),

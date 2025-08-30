@@ -1614,3 +1614,135 @@ def check_referral_status(request):
             {'error': '추천인 정보를 확인할 수 없습니다.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_user_phone(request):
+    """
+    아이디와 휴대폰 번호 일치 확인
+    비밀번호 찾기 1단계: 사용자 확인
+    """
+    try:
+        username = request.data.get('username', '').strip()
+        phone_number = request.data.get('phone_number', '').strip()
+        
+        if not username or not phone_number:
+            return Response({
+                'success': False,
+                'message': '아이디와 휴대폰 번호를 입력해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 전화번호 형식 정규화
+        phone_number = phone_number.replace('-', '').replace(' ', '')
+        
+        # 사용자 조회
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': '일치하는 사용자 정보가 없습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # 휴대폰 번호 확인
+        if user.phone_number != phone_number:
+            return Response({
+                'success': False,
+                'message': '일치하는 사용자 정보가 없습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # 카카오 계정 확인
+        if user.kakao_id:
+            return Response({
+                'success': False,
+                'message': '카카오 계정은 카카오 로그인을 이용해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"비밀번호 찾기 사용자 확인 성공: username={username}")
+        
+        return Response({
+            'success': True,
+            'message': '사용자 확인이 완료되었습니다.',
+            'user_id': user.id
+        })
+        
+    except Exception as e:
+        logger.error(f"사용자 휴대폰 확인 오류: {str(e)}")
+        return Response({
+            'success': False,
+            'message': '사용자 확인 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_phone(request):
+    """
+    휴대폰 인증 후 비밀번호 변경
+    비밀번호 찾기 2단계: 비밀번호 재설정
+    """
+    try:
+        user_id = request.data.get('user_id')
+        phone_number = request.data.get('phone_number', '').strip()
+        verification_code = request.data.get('verification_code', '').strip()
+        new_password = request.data.get('new_password', '').strip()
+        
+        if not all([user_id, phone_number, verification_code, new_password]):
+            return Response({
+                'success': False,
+                'message': '필수 정보를 모두 입력해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 전화번호 형식 정규화
+        phone_number = phone_number.replace('-', '').replace(' ', '')
+        
+        # 사용자 조회
+        try:
+            user = User.objects.get(id=user_id, phone_number=phone_number)
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': '사용자 정보가 일치하지 않습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # 휴대폰 인증 확인
+        from .models_verification import PhoneVerification
+        verification = PhoneVerification.objects.filter(
+            phone_number=phone_number,
+            code=verification_code,
+            is_verified=True,
+            created_at__gte=timezone.now() - timedelta(minutes=30)  # 30분 이내 인증
+        ).first()
+        
+        if not verification:
+            return Response({
+                'success': False,
+                'message': '휴대폰 인증이 유효하지 않습니다. 다시 인증해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 비밀번호 유효성 검사
+        if len(new_password) < 8:
+            return Response({
+                'success': False,
+                'message': '비밀번호는 8자 이상이어야 합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 비밀번호 변경
+        user.password = make_password(new_password)
+        user.save()
+        
+        # 인증 기록 삭제
+        PhoneVerification.objects.filter(phone_number=phone_number).delete()
+        
+        logger.info(f"비밀번호 재설정 성공: user_id={user_id}")
+        
+        return Response({
+            'success': True,
+            'message': '비밀번호가 성공적으로 변경되었습니다.'
+        })
+        
+    except Exception as e:
+        logger.error(f"비밀번호 재설정 오류: {str(e)}")
+        return Response({
+            'success': False,
+            'message': '비밀번호 변경 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
