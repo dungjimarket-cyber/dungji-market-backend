@@ -1667,11 +1667,17 @@ def verify_user_phone(request):
             }, status=status.HTTP_404_NOT_FOUND)
         
         # 카카오 계정 확인
-        if hasattr(user, 'kakao_id') and user.kakao_id:
+        is_kakao = hasattr(user, 'kakao_id') and user.kakao_id
+        is_social = hasattr(user, 'sns_type') and user.sns_type  # SNS 타입 확인
+        provider = getattr(user, 'sns_type', None)  # provider 정보
+        
+        if is_kakao or provider == 'kakao':
             logger.info(f"카카오 계정 사용자: {username}")
             return Response({
                 'success': False,
-                'message': '카카오 계정은 카카오 로그인을 이용해주세요.'
+                'message': '카카오 계정의 경우 카카오 계정 찾기를 이용해주세요.',
+                'is_social': True,
+                'provider': 'kakao'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         logger.info(f"비밀번호 찾기 사용자 확인 성공: username={username}")
@@ -1679,7 +1685,9 @@ def verify_user_phone(request):
         return Response({
             'success': True,
             'message': '사용자 확인이 완료되었습니다.',
-            'user_id': user.id
+            'user_id': user.id,
+            'is_social': is_social,
+            'provider': provider
         })
         
     except Exception as e:
@@ -1717,6 +1725,17 @@ def reset_password_phone(request):
         # 사용자 조회 (phone_number 비교 시 정규화)
         try:
             user = User.objects.get(id=user_id)
+            
+            # 카카오 계정 재확인 (보안 강화)
+            if hasattr(user, 'kakao_id') and user.kakao_id:
+                logger.warning(f"카카오 계정 비밀번호 변경 시도 차단: user_id={user_id}")
+                return Response({
+                    'success': False,
+                    'message': '카카오 계정은 비밀번호를 변경할 수 없습니다.',
+                    'is_social': True,
+                    'provider': 'kakao'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             # 전화번호 정규화하여 비교
             user_phone_normalized = user.phone_number.replace('-', '').replace(' ', '') if user.phone_number else ''
             if user_phone_normalized != phone_number:
@@ -1775,7 +1794,9 @@ def reset_password_phone(request):
         
         return Response({
             'success': True,
-            'message': '비밀번호가 성공적으로 변경되었습니다.'
+            'message': '비밀번호가 변경되었습니다. 다시 로그인해주세요.',
+            'redirect_to': '/login',  # 프론트엔드에서 리다이렉트할 경로
+            'user_id': user_id
         })
         
     except Exception as e:
