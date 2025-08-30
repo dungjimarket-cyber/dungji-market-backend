@@ -1098,13 +1098,21 @@ def find_id_by_phone(request):
         is_social = False
         provider = None
         
+        # SocialAccount 모델 체크 - allauth 설치 여부와 관계없이 작동
         try:
-            from allauth.socialaccount.models import SocialAccount
-            social_account = SocialAccount.objects.filter(user=user).first()
-            if social_account:
-                is_social = True
-                provider = social_account.provider
-                logger.info(f"SNS 계정 감지: user_id={user.id}, provider={provider}")
+            # Django 앱이 설치되어 있는지 확인
+            from django.apps import apps
+            if apps.is_installed('allauth.socialaccount'):
+                from allauth.socialaccount.models import SocialAccount
+                social_account = SocialAccount.objects.filter(user=user).first()
+                if social_account:
+                    is_social = True
+                    provider = social_account.provider
+                    logger.info(f"SNS 계정 감지: user_id={user.id}, provider={provider}")
+            else:
+                logger.info(f"allauth.socialaccount 앱이 설치되지 않음 - 일반 계정으로 처리")
+        except ImportError:
+            logger.warning(f"SocialAccount 모델을 가져올 수 없음 - 일반 계정으로 처리")
         except Exception as e:
             logger.error(f"SocialAccount 체크 오류: {str(e)}")
         
