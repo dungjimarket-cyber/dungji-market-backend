@@ -1927,3 +1927,50 @@ def reset_password_phone(request):
             'message': error_message,
             'error_type': type(e).__name__  # 오류 타입 추가
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_phone_duplicate(request):
+    """
+    휴대폰번호 중복 체크 API
+    """
+    try:
+        phone_number = request.data.get('phone_number', '').replace('-', '')
+        
+        if not phone_number:
+            return Response({
+                'available': False,
+                'message': '휴대폰번호를 입력해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 현재 사용자 제외 옵션 (프로필 수정 시)
+        exclude_user_id = None
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        if auth_header and auth_header.startswith('Bearer '):
+            try:
+                from rest_framework_simplejwt.tokens import AccessToken
+                token = auth_header.split(' ')[1]
+                access_token = AccessToken(token)
+                exclude_user_id = access_token['user_id']
+            except:
+                pass
+        
+        # 중복 체크 쿼리
+        query = User.objects.filter(phone_number=phone_number)
+        if exclude_user_id:
+            query = query.exclude(id=exclude_user_id)
+        
+        is_duplicate = query.exists()
+        
+        return Response({
+            'available': not is_duplicate,
+            'message': '이미 등록된 번호입니다.' if is_duplicate else '사용 가능한 번호입니다.'
+        })
+    
+    except Exception as e:
+        logger.error(f"휴대폰번호 중복 체크 오류: {str(e)}")
+        return Response({
+            'available': False,
+            'message': '중복 체크 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
