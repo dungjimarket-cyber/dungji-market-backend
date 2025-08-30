@@ -18,6 +18,7 @@ from .models_verification import EmailVerification, PhoneVerification
 from .utils.s3_utils import upload_file_to_s3
 from .utils.resend_sender import ResendSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
+from django.conf import settings
 import json
 import re
 import requests
@@ -1779,7 +1780,15 @@ def reset_password_phone(request):
         
     except Exception as e:
         logger.error(f"비밀번호 재설정 오류: user_id={user_id}, error={str(e)}", exc_info=True)
+        
+        # 디버그 모드에서는 상세 오류 표시
+        if settings.DEBUG:
+            error_message = f"오류: {str(e)}"
+        else:
+            error_message = '비밀번호 변경 중 오류가 발생했습니다.'
+        
         return Response({
             'success': False,
-            'message': '비밀번호 변경 중 오류가 발생했습니다.'
+            'message': error_message,
+            'error_type': type(e).__name__  # 오류 타입 추가
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
