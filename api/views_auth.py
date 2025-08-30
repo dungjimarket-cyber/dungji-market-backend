@@ -1793,17 +1793,12 @@ def reset_password_phone(request):
         
         logger.info(f"비밀번호 재설정 성공: user_id={user_id}")
         
-        response = Response({
+        # 단순한 JSON 응답만 반환
+        return Response({
             'success': True,
             'message': '비밀번호가 변경되었습니다. 다시 로그인해주세요.',
             'user_id': user_id
         }, status=status.HTTP_200_OK)
-        
-        # 명시적으로 JSON 응답임을 표시
-        response['Content-Type'] = 'application/json'
-        response['X-No-Redirect'] = 'true'  # 커스텀 헤더로 리다이렉트 아님을 명시
-        
-        return response
         
     except Exception as e:
         logger.error(f"비밀번호 재설정 오류: user_id={user_id}, error={str(e)}", exc_info=True)
