@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Region, GroupBuy, Participation, Partner
@@ -1792,12 +1793,18 @@ def reset_password_phone(request):
         
         logger.info(f"비밀번호 재설정 성공: user_id={user_id}")
         
-        return Response({
+        response = Response({
             'success': True,
             'message': '비밀번호가 변경되었습니다. 다시 로그인해주세요.',
             'redirect_to': '/login',  # 프론트엔드에서 리다이렉트할 경로
             'user_id': user_id
-        })
+        }, status=status.HTTP_200_OK)
+        
+        # 명시적으로 JSON 응답임을 표시
+        response['Content-Type'] = 'application/json'
+        response['X-No-Redirect'] = 'true'  # 커스텀 헤더로 리다이렉트 아님을 명시
+        
+        return response
         
     except Exception as e:
         logger.error(f"비밀번호 재설정 오류: user_id={user_id}, error={str(e)}", exc_info=True)
