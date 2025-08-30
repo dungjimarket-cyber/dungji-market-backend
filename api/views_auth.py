@@ -1796,7 +1796,6 @@ def reset_password_phone(request):
         response = Response({
             'success': True,
             'message': '비밀번호가 변경되었습니다. 다시 로그인해주세요.',
-            'redirect_to': '/login',  # 프론트엔드에서 리다이렉트할 경로
             'user_id': user_id
         }, status=status.HTTP_200_OK)
         
