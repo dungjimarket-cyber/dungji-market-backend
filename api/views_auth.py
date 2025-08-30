@@ -1094,17 +1094,17 @@ def find_id_by_phone(request):
         # 휴대폰 번호로 사용자 찾기
         user = User.objects.get(phone_number=phone_number)
         
-        # SNS 계정 체크 - User 모델의 social_provider 필드 확인
+        # SNS 계정 체크 - User 모델의 sns_type 필드 확인
         is_social = False
         provider = None
         
-        # User 모델의 social_provider 필드 체크
-        if hasattr(user, 'social_provider') and user.social_provider:
+        # User 모델의 sns_type 필드 체크 (email이 아닌 경우 SNS 계정)
+        if hasattr(user, 'sns_type') and user.sns_type and user.sns_type != 'email':
             is_social = True
-            provider = user.social_provider
-            logger.info(f"SNS 계정 감지: user_id={user.id}, provider={provider}, social_id={getattr(user, 'social_id', 'N/A')}")
+            provider = user.sns_type
+            logger.info(f"SNS 계정 감지: user_id={user.id}, sns_type={provider}, sns_id={getattr(user, 'sns_id', 'N/A')}")
         else:
-            logger.info(f"일반 계정: user_id={user.id}, username={user.username}")
+            logger.info(f"일반 계정: user_id={user.id}, username={user.username}, sns_type={getattr(user, 'sns_type', 'N/A')}")
         
         # SNS 계정인 경우
         if is_social:
