@@ -1626,6 +1626,8 @@ def verify_user_phone(request):
         username = request.data.get('username', '').strip()
         phone_number = request.data.get('phone_number', '').strip()
         
+        logger.info(f"비밀번호 찾기 시도: username={username}, phone_number={phone_number[:3]}****")
+        
         if not username or not phone_number:
             return Response({
                 'success': False,
@@ -1638,21 +1640,34 @@ def verify_user_phone(request):
         # 사용자 조회
         try:
             user = User.objects.get(username=username)
+            logger.info(f"사용자 찾음: {user.username}, phone_number={user.phone_number}")
         except User.DoesNotExist:
+            logger.warning(f"사용자를 찾을 수 없음: username={username}")
             return Response({
                 'success': False,
                 'message': '일치하는 사용자 정보가 없습니다.'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # 휴대폰 번호 확인
-        if user.phone_number != phone_number:
+        # 휴대폰 번호가 없는 경우 처리
+        if not user.phone_number:
+            logger.warning(f"사용자 {username}의 휴대폰 번호가 등록되지 않음")
+            return Response({
+                'success': False,
+                'message': '등록된 휴대폰 번호가 없습니다. 고객센터에 문의해주세요.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 휴대폰 번호 확인 (DB의 전화번호도 정규화하여 비교)
+        user_phone_normalized = user.phone_number.replace('-', '').replace(' ', '') if user.phone_number else ''
+        if user_phone_normalized != phone_number:
+            logger.warning(f"휴대폰 번호 불일치: 입력={phone_number}, DB={user_phone_normalized}")
             return Response({
                 'success': False,
                 'message': '일치하는 사용자 정보가 없습니다.'
             }, status=status.HTTP_404_NOT_FOUND)
         
         # 카카오 계정 확인
-        if user.kakao_id:
+        if hasattr(user, 'kakao_id') and user.kakao_id:
+            logger.info(f"카카오 계정 사용자: {username}")
             return Response({
                 'success': False,
                 'message': '카카오 계정은 카카오 로그인을 이용해주세요.'
@@ -1667,7 +1682,7 @@ def verify_user_phone(request):
         })
         
     except Exception as e:
-        logger.error(f"사용자 휴대폰 확인 오류: {str(e)}")
+        logger.error(f"사용자 휴대폰 확인 오류: username={username}, error={str(e)}", exc_info=True)
         return Response({
             'success': False,
             'message': '사용자 확인 중 오류가 발생했습니다.'
@@ -1686,6 +1701,8 @@ def reset_password_phone(request):
         verification_code = request.data.get('verification_code', '').strip()
         new_password = request.data.get('new_password', '').strip()
         
+        logger.info(f"비밀번호 재설정 시도: user_id={user_id}, phone_number={phone_number[:3] if phone_number else ''}****")
+        
         if not all([user_id, phone_number, verification_code, new_password]):
             return Response({
                 'success': False,
@@ -1695,10 +1712,16 @@ def reset_password_phone(request):
         # 전화번호 형식 정규화
         phone_number = phone_number.replace('-', '').replace(' ', '')
         
-        # 사용자 조회
+        # 사용자 조회 (phone_number 비교 시 정규화)
         try:
-            user = User.objects.get(id=user_id, phone_number=phone_number)
+            user = User.objects.get(id=user_id)
+            # 전화번호 정규화하여 비교
+            user_phone_normalized = user.phone_number.replace('-', '').replace(' ', '') if user.phone_number else ''
+            if user_phone_normalized != phone_number:
+                logger.warning(f"전화번호 불일치: user_id={user_id}, 입력={phone_number}, DB={user_phone_normalized}")
+                raise User.DoesNotExist
         except User.DoesNotExist:
+            logger.warning(f"사용자 정보 불일치: user_id={user_id}, phone_number={phone_number}")
             return Response({
                 'success': False,
                 'message': '사용자 정보가 일치하지 않습니다.'
