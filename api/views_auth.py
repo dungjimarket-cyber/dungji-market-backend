@@ -1072,6 +1072,94 @@ def find_username(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def find_id_by_phone(request):
+    """
+    아이디 찾기 전용 API
+    - 휴대폰 번호로 사용자 검색
+    - SNS 계정 체크
+    - SNS 계정인 경우 아이디 미제공
+    """
+    phone_number = request.data.get('phone_number', '').strip()
+    
+    if not phone_number:
+        return Response({
+            'success': False,
+            'error': '휴대폰 번호를 입력해주세요.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 하이픈, 공백 제거
+    phone_number = phone_number.replace('-', '').replace(' ', '')
+    
+    try:
+        # 휴대폰 번호로 사용자 찾기
+        user = User.objects.get(phone_number=phone_number)
+        
+        # SNS 계정 체크
+        is_social = False
+        provider = None
+        
+        try:
+            from allauth.socialaccount.models import SocialAccount
+            social_account = SocialAccount.objects.filter(user=user).first()
+            if social_account:
+                is_social = True
+                provider = social_account.provider
+                logger.info(f"SNS 계정 감지: user_id={user.id}, provider={provider}")
+        except Exception as e:
+            logger.error(f"SocialAccount 체크 오류: {str(e)}")
+        
+        # SNS 계정인 경우
+        if is_social:
+            provider_messages = {
+                'kakao': '카카오톡 계정으로 가입하신 회원입니다.\n카카오톡 로그인을 이용해주세요.\n\n일반 로그인이 필요하신 경우 고객센터로 문의해주세요.',
+                'google': '구글 계정으로 가입하신 회원입니다.\n구글 로그인을 이용해주세요.\n\n일반 로그인이 필요하신 경우 고객센터로 문의해주세요.',
+                'naver': '네이버 계정으로 가입하신 회원입니다.\n네이버 로그인을 이용해주세요.\n\n일반 로그인이 필요하신 경우 고객센터로 문의해주세요.'
+            }
+            
+            message = provider_messages.get(
+                provider, 
+                f'{provider} 계정으로 가입하신 회원입니다.\nSNS 로그인을 이용해주세요.'
+            )
+            
+            return Response({
+                'success': False,
+                'is_social': True,
+                'provider': provider,
+                'message': message,
+                'username': None  # SNS 계정은 아이디 미제공
+            })
+        
+        # 일반 계정인 경우 - 아이디 마스킹 처리
+        username = user.username
+        if len(username) > 3:
+            masked_username = username[:2] + '*' * (len(username) - 3) + username[-1]
+        else:
+            masked_username = username[0] + '*' * (len(username) - 1) if username else ''
+        
+        return Response({
+            'success': True,
+            'is_social': False,
+            'provider': None,
+            'username': masked_username,
+            'message': f'회원님의 아이디는 {masked_username} 입니다.'
+        })
+        
+    except User.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': '해당 휴대폰 번호로 등록된 계정을 찾을 수 없습니다.'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        logger.error(f"아이디 찾기 오류: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': '아이디 찾기 중 오류가 발생했습니다.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def reset_password(request):
     """비밀번호 재설정"""
     username = request.data.get('username')
