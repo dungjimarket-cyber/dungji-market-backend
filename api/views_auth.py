@@ -1732,7 +1732,7 @@ def reset_password_phone(request):
         # 휴대폰 인증 확인 (is_verified 조건 제거 - 코드 일치만 확인)
         verification = PhoneVerification.objects.filter(
             phone_number=phone_number,
-            code=verification_code,
+            verification_code=verification_code,  # 필드명 수정: code -> verification_code
             status='pending',  # pending 상태인 인증만
             created_at__gte=timezone.now() - timedelta(minutes=30)  # 30분 이내 인증
         ).first()
@@ -1745,7 +1745,7 @@ def reset_password_phone(request):
                 created_at__gte=timezone.now() - timedelta(minutes=30)
             )
             for v in all_verifications:
-                logger.info(f"존재하는 인증: code={v.code}, status={v.status}, is_verified={v.is_verified}")
+                logger.info(f"존재하는 인증: verification_code={v.verification_code}, status={v.status}")
             
             return Response({
                 'success': False,
@@ -1753,8 +1753,8 @@ def reset_password_phone(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # 인증 성공 시 verified로 변경
-        verification.is_verified = True
         verification.status = 'verified'
+        verification.verified_at = timezone.now()
         verification.save()
         
         # 비밀번호 유효성 검사
