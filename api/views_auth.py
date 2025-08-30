@@ -1032,8 +1032,35 @@ def find_username(request):
     
     try:
         user = User.objects.get(phone_number=phone_number)
+        
+        # 카카오 계정 체크
+        is_social = False
+        provider = None
+        
+        # SocialAccount 모델 체크
+        try:
+            from allauth.socialaccount.models import SocialAccount
+            social_account = SocialAccount.objects.filter(user=user).first()
+            if social_account:
+                is_social = True
+                provider = social_account.provider
+        except:
+            pass
+        
+        # 카카오 계정인 경우
+        if is_social and provider == 'kakao':
+            return Response({
+                'username': None,  # 아이디 표시 안 함
+                'is_social': True,
+                'provider': 'kakao',
+                'message': '카카오톡 계정으로 가입하신 회원입니다.'
+            })
+        
+        # 일반 계정인 경우
         return Response({
             'username': user.username,
+            'is_social': is_social,
+            'provider': provider,
             'message': '아이디를 찾았습니다.'
         })
     except User.DoesNotExist:
