@@ -1728,19 +1728,33 @@ def reset_password_phone(request):
                 'message': '사용자 정보가 일치하지 않습니다.'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # 휴대폰 인증 확인
+        # 휴대폰 인증 확인 (is_verified 조건 제거 - 코드 일치만 확인)
         verification = PhoneVerification.objects.filter(
             phone_number=phone_number,
             code=verification_code,
-            is_verified=True,
+            status='pending',  # pending 상태인 인증만
             created_at__gte=timezone.now() - timedelta(minutes=30)  # 30분 이내 인증
         ).first()
         
         if not verification:
+            logger.warning(f"인증 실패: phone={phone_number}, code={verification_code}")
+            # 디버깅을 위해 더 상세한 정보 로깅
+            all_verifications = PhoneVerification.objects.filter(
+                phone_number=phone_number,
+                created_at__gte=timezone.now() - timedelta(minutes=30)
+            )
+            for v in all_verifications:
+                logger.info(f"존재하는 인증: code={v.code}, status={v.status}, is_verified={v.is_verified}")
+            
             return Response({
                 'success': False,
                 'message': '휴대폰 인증이 유효하지 않습니다. 다시 인증해주세요.'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 인증 성공 시 verified로 변경
+        verification.is_verified = True
+        verification.status = 'verified'
+        verification.save()
         
         # 비밀번호 유효성 검사
         if len(new_password) < 8:
