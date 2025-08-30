@@ -1695,6 +1695,7 @@ def reset_password_phone(request):
     휴대폰 인증 후 비밀번호 변경
     비밀번호 찾기 2단계: 비밀번호 재설정
     """
+    user_id = None
     try:
         user_id = request.data.get('user_id')
         phone_number = request.data.get('phone_number', '').strip()
@@ -1763,7 +1764,7 @@ def reset_password_phone(request):
         })
         
     except Exception as e:
-        logger.error(f"비밀번호 재설정 오류: {str(e)}")
+        logger.error(f"비밀번호 재설정 오류: user_id={user_id}, error={str(e)}", exc_info=True)
         return Response({
             'success': False,
             'message': '비밀번호 변경 중 오류가 발생했습니다.'
