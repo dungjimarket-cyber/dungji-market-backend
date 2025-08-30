@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Region, GroupBuy, Participation, Partner
-from .models_verification import EmailVerification
+from .models_verification import EmailVerification, PhoneVerification
 from .utils.s3_utils import upload_file_to_s3
 from .utils.resend_sender import ResendSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
@@ -1705,7 +1705,6 @@ def reset_password_phone(request):
             }, status=status.HTTP_404_NOT_FOUND)
         
         # 휴대폰 인증 확인
-        from .models_verification import PhoneVerification
         verification = PhoneVerification.objects.filter(
             phone_number=phone_number,
             code=verification_code,
