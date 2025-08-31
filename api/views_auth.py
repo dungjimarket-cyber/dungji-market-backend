@@ -1297,6 +1297,7 @@ def user_profile(request):
                 'current_penalty_level': user.current_penalty_level,
                 'created_at': user.date_joined,
                 'business_number': user.business_number,
+                'representative_name': user.representative_name,  # 대표자명 추가
                 'is_remote_sales': user.is_remote_sales,
                 'birth_date': user.birth_date.isoformat() if user.birth_date else None,
                 'gender': user.gender,
@@ -1387,6 +1388,9 @@ def user_profile(request):
             # 사업자 정보 업데이트
             if 'business_number' in data:
                 user.business_number = data['business_number']
+            
+            if 'representative_name' in data:
+                user.representative_name = data['representative_name']
             
             if 'is_remote_sales' in data:
                 value = data['is_remote_sales']
