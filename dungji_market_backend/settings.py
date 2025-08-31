@@ -25,20 +25,49 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DJANGO_ENV = os.getenv('DJANGO_ENV', 'development')  # 환경 구분: development, staging, production
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '').split(',')
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://dungjimarket.com",
-    "https://www.dungjimarket.com",
-    "http://13.125.227.190:8000",
-    "https://api.dungjimarket.com",
-    "http://api.dungjimarket.com"
-]
+# 환경별 CORS 설정
+if DJANGO_ENV == 'development':
+    # 로컬 개발 환경
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    CORS_ALLOW_ALL_ORIGINS = True  # 개발 환경에서는 모든 오리진 허용
+elif DJANGO_ENV == 'staging':
+    # 스테이징 환경 (develop 브랜치)
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        # Vercel Preview 도메인들
+        "https://dungji-market-frontend-git-develop-dungjimarkets-projects.vercel.app",
+        "https://dungjimarket-develop.vercel.app", 
+        # 스테이징 백엔드
+        "https://staging-api.dungjimarket.com",
+        "http://staging-api.dungjimarket.com",
+    ]
+    CORS_ALLOW_ALL_ORIGINS = False
+else:
+    # 프로덕션 환경
+    CORS_ALLOWED_ORIGINS = [
+        "https://dungjimarket.com",
+        "https://www.dungjimarket.com",
+        "https://api.dungjimarket.com",
+        "http://api.dungjimarket.com",
+        "http://13.125.227.190:8000",  # 기존 운영 서버
+    ]
+    CORS_ALLOW_ALL_ORIGINS = False
+
+# .env에서 추가 CORS 도메인이 설정된 경우 추가
+env_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', '')
+if env_cors_origins:
+    additional_origins = [origin.strip() for origin in env_cors_origins.split(',') if origin.strip()]
+    CORS_ALLOWED_ORIGINS.extend(additional_origins)
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # 개발 환경에서만 모든 오리진 허용
 
 # CORS 추가 설정
 CORS_ALLOW_METHODS = [
@@ -86,15 +115,42 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 
-# CSRF 설정
-CSRF_TRUSTED_ORIGINS = [
-    "https://dungjimarket.com",
-    "https://api.dungjimarket.com",
-    "http://api.dungjimarket.com",
-    "https://www.dungjimarket.com",
-    "http://localhost:3000",
-    "http://13.125.227.190:8000"
-]
+# 환경별 CSRF 설정
+if DJANGO_ENV == 'development':
+    # 로컬 개발 환경
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+elif DJANGO_ENV == 'staging':
+    # 스테이징 환경 (develop 브랜치)
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        # Vercel Preview 도메인들
+        "https://dungji-market-frontend-git-develop-dungjimarkets-projects.vercel.app",
+        "https://dungjimarket-develop.vercel.app",
+        # 스테이징 백엔드
+        "https://staging-api.dungjimarket.com",
+        "http://staging-api.dungjimarket.com",
+    ]
+else:
+    # 프로덕션 환경
+    CSRF_TRUSTED_ORIGINS = [
+        "https://dungjimarket.com",
+        "https://www.dungjimarket.com",
+        "https://api.dungjimarket.com",
+        "http://api.dungjimarket.com",
+        "http://13.125.227.190:8000",  # 기존 운영 서버
+    ]
+
+# .env에서 추가 CSRF 도메인이 설정된 경우 추가
+env_csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+if env_csrf_origins:
+    additional_csrf_origins = [origin.strip() for origin in env_csrf_origins.split(',') if origin.strip()]
+    CSRF_TRUSTED_ORIGINS.extend(additional_csrf_origins)
 # Application definition
 
 INSTALLED_APPS = [
