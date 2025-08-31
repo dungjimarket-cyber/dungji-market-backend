@@ -107,6 +107,48 @@ class Notice(models.Model):
         verbose_name='썸네일 이미지'
     )
     
+    # 메인 노출 관련 필드
+    show_in_main = models.BooleanField(
+        default=False,
+        verbose_name='메인 화면 노출',
+        help_text='메인 화면에 노출할지 여부'
+    )
+    
+    DISPLAY_TYPE_CHOICES = [
+        ('banner', '배너 이미지'),
+        ('text', '텍스트 공지'),
+        ('both', '배너 + 텍스트'),
+    ]
+    
+    display_type = models.CharField(
+        max_length=10,
+        choices=DISPLAY_TYPE_CHOICES,
+        default='text',
+        verbose_name='노출 방식',
+        help_text='메인 화면 노출 방식'
+    )
+    
+    main_banner_image = models.ImageField(
+        upload_to='notices/banners/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='메인 배너 이미지',
+        help_text='메인 화면 배너 이미지 (권장: 1200x400)'
+    )
+    
+    banner_link = models.URLField(
+        blank=True,
+        null=True,
+        verbose_name='배너 클릭 링크',
+        help_text='배너 클릭 시 이동할 URL (비워두면 공지사항 상세 페이지로 이동)'
+    )
+    
+    main_display_order = models.IntegerField(
+        default=0,
+        verbose_name='메인 노출 순서',
+        help_text='숫자가 작을수록 먼저 표시 (0이 가장 먼저)'
+    )
+    
     class Meta:
         verbose_name = '공지사항'
         verbose_name_plural = '공지사항'
@@ -114,6 +156,7 @@ class Notice(models.Model):
         indexes = [
             models.Index(fields=['-is_pinned', '-created_at']),
             models.Index(fields=['is_published', 'published_at']),
+            models.Index(fields=['show_in_main', 'main_display_order']),
         ]
     
     def __str__(self):

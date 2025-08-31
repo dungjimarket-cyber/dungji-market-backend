@@ -64,12 +64,12 @@ class NoticeAdmin(admin.ModelAdmin):
     form = NoticeAdminForm
     list_display = [
         'id', 'category_badge', 'title_display', 'author',
-        'is_pinned_display', 'is_published_display', 
-        'view_count', 'published_at', 'created_at'
+        'is_pinned_display', 'show_in_main_display', 'display_type',
+        'is_published_display', 'view_count', 'published_at', 'created_at'
     ]
     list_filter = [
-        'category', 'is_pinned', 'is_published',
-        'created_at', 'published_at'
+        'category', 'is_pinned', 'show_in_main', 'display_type',
+        'is_published', 'created_at', 'published_at'
     ]
     search_fields = ['title', 'content', 'summary']
     readonly_fields = [
@@ -87,6 +87,16 @@ class NoticeAdmin(admin.ModelAdmin):
                 ('is_pinned', 'is_published'),
                 'published_at'
             )
+        }),
+        ('메인 화면 노출 설정', {
+            'fields': (
+                'show_in_main',
+                'display_type',
+                'main_display_order',
+                'main_banner_image',
+                'banner_link'
+            ),
+            'description': '메인 화면에 노출할 공지사항 설정입니다. display_type이 "배너"인 경우 main_banner_image를 업로드해주세요.'
         }),
         ('내용', {
             'fields': ('content', 'content_preview'),
@@ -148,6 +158,15 @@ class NoticeAdmin(admin.ModelAdmin):
             )
         return '-'
     is_pinned_display.short_description = "고정"
+    
+    def show_in_main_display(self, obj):
+        """메인 노출 상태 표시"""
+        if obj.show_in_main:
+            return format_html(
+                '<span style="color: #10b981;">✅ 메인노출</span>'
+            )
+        return '-'
+    show_in_main_display.short_description = "메인노출"
     
     def is_published_display(self, obj):
         """게시 상태 표시"""

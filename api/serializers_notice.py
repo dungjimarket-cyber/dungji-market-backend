@@ -51,7 +51,8 @@ class NoticeListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'category', 'category_display', 'summary', 'content',
             'author_name', 'is_pinned', 'is_new', 'view_count',
-            'comment_count', 'created_at', 'updated_at', 'published_at', 'thumbnail'
+            'comment_count', 'created_at', 'updated_at', 'published_at', 'thumbnail',
+            'show_in_main', 'display_type', 'main_banner_image', 'banner_link', 'main_display_order'
         ]
 
 

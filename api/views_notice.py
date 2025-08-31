@@ -117,6 +117,30 @@ class NoticeViewSet(viewsets.ModelViewSet):
         ]
         return Response(categories)
     
+    @action(detail=False, methods=['get'])
+    def main(self, request):
+        """메인 화면 노출 공지사항"""
+        queryset = self.get_queryset().filter(
+            show_in_main=True
+        ).order_by('main_display_order', '-published_at')
+        
+        # display_type별로 분류
+        banners = []
+        texts = []
+        
+        for notice in queryset:
+            serializer_data = NoticeListSerializer(notice).data
+            
+            if notice.display_type in ['banner', 'both']:
+                banners.append(serializer_data)
+            if notice.display_type in ['text', 'both']:
+                texts.append(serializer_data)
+        
+        return Response({
+            'banners': banners[:5],  # 최대 5개 배너
+            'texts': texts[:3]  # 최대 3개 텍스트 공지
+        })
+    
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def create_comment(self, request, pk=None):
         """댓글 작성"""
