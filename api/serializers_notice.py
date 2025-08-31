@@ -49,9 +49,9 @@ class NoticeListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notice
         fields = [
-            'id', 'title', 'category', 'category_display', 'summary',
+            'id', 'title', 'category', 'category_display', 'summary', 'content',
             'author_name', 'is_pinned', 'is_new', 'view_count',
-            'comment_count', 'created_at', 'published_at', 'thumbnail'
+            'comment_count', 'created_at', 'updated_at', 'published_at', 'thumbnail'
         ]
 
 
