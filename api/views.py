@@ -2976,7 +2976,7 @@ class GroupBuyViewSet(ModelViewSet):
         
         if not winning_bid:
             return Response(
-                {'message': '아직 낙찰된 입찰이 없습니다.'}, 
+                {'message': '아직 제안된 견적이 없습니다.'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         

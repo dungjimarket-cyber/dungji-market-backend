@@ -503,7 +503,7 @@ class BidViewSet(viewsets.ModelViewSet):
                 user=groupbuy.creator,
                 type='bid_cancelled',
                 title='모든 입찰이 취소되었습니다',
-                message=f'{groupbuy.title} 공구의 모든 입찰이 취소되어 다시 모집중 상태로 변경되었습니다.',
+                message=f'{groupbuy.title} 공구의 모든 견적이 취소되어 다시 모집중 상태로 변경되었습니다.',
                 related_object=groupbuy
             )
         

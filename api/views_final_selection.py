@@ -247,7 +247,7 @@ def seller_final_decision(request, groupbuy_id):
                             bid.bid_token = None
                             bid.save()
                             
-                            penalty_message += " 사용한 입찰권이 환불되었습니다."
+                            penalty_message += " 사용한 이용권이 환불되었습니다."
                             logger.info(f"입찰권 환불 완료 - 사용자: {user.id}, 공구: {groupbuy.id}")
                         except Exception as e:
                             logger.error(f"입찰권 환불 실패: {str(e)}")

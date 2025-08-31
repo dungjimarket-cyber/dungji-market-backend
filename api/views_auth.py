@@ -1006,7 +1006,7 @@ def update_referral_code(request):
         
         return Response({
             'success': True,
-            'message': '추천인 코드가 등록되었습니다. 보너스 입찰권 10개가 지급되었습니다.',
+            'message': '추천코드 등록 완료. 견적 이용권 10개가 지급되었습니다.',
             'bonus_tokens': 10,
             'referrer_name': referrer_name
         })
