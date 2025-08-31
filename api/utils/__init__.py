@@ -48,7 +48,7 @@ def update_groupbuy_status(groupbuy):
             Notification.objects.create(
                 user=winning_bid.seller,
                 groupbuy=groupbuy,
-                message=f"축하합니다! '{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구에 선정되셨습니다. 구매자 최종선택을 기다려주세요.",
+                message=f"축하합니다! '{groupbuy.product.name if groupbuy.product else groupbuy.title}' 공구에 선정되셨습니다. 구매자들의 최종 선택 후 판매 확정을 진행해주세요.",
                 notification_type='bid_winner'
             )
             
