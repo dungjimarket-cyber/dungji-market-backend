@@ -1,0 +1,33 @@
+# Staging 환경용 Dockerfile
+FROM python:3.9-slim
+
+# 시스템 패키지 설치
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 의존성 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# 정적 파일 디렉토리 생성
+RUN mkdir -p staticfiles mediafiles
+
+# 포트 노출
+EXPOSE 8000
+
+# 헬스체크 엔드포인트 생성을 위한 스크립트
+RUN echo 'from django.http import JsonResponse\n\
+def health_check(request):\n\
+    return JsonResponse({"status": "healthy", "environment": "staging"})' > health_check.py
+
+# 기본 명령어
+CMD ["gunicorn", "dungji_market_backend.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]

@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile.staging
+    ports:
+      - "8001:8000"  # 프로덕션과 다른 포트 사용
+    environment:
+      - DJANGO_ENV=staging
+      - DEBUG=True
+    env_file:
+      - .env.staging
+    volumes:
+      - ./staticfiles:/app/staticfiles
+      - ./mediafiles:/app/mediafiles
+    command: >
+      sh -c "
+        python manage.py migrate &&
+        python manage.py collectstatic --noinput &&
+        gunicorn dungji_market_backend.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120 --reload
+      "
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./staticfiles:/usr/share/nginx/html/static
+      - ./mediafiles:/usr/share/nginx/html/media
+      - ./nginx.staging.conf:/etc/nginx/conf.d/default.conf
+      - ./ssl:/etc/nginx/ssl  # SSL 인증서 (Let's Encrypt)
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  staticfiles:
+  mediafiles:

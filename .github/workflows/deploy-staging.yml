@@ -1,0 +1,122 @@
+name: Deploy to Staging Server
+
+on:
+  push:
+    branches:
+      - develop  # develop 브랜치에 푸시할 때만 실행
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2 Staging
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js (for any frontend assets)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies and run tests
+      run: |
+        pip install -r requirements.txt
+        # python manage.py test  # 테스트가 있다면 활성화
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-2
+        
+    - name: Create deployment archive
+      run: |
+        # 배포에 필요한 파일들만 압축
+        tar -czf staging-deploy.tar.gz \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='__pycache__' \
+          --exclude='*.pyc' \
+          --exclude='.pytest_cache' \
+          --exclude='venv' \
+          --exclude='node_modules' \
+          --exclude='.env' \
+          .
+          
+    - name: Upload to S3
+      run: |
+        aws s3 cp staging-deploy.tar.gz s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-$(date +%Y%m%d-%H%M%S).tar.gz
+        aws s3 cp staging-deploy.tar.gz s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz
+        
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USER }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        port: 22
+        script: |
+          set -e
+          
+          # 배포 디렉토리로 이동
+          cd /home/ubuntu/dungji-market-staging
+          
+          # 기존 컨테이너 정지 및 제거
+          sudo docker-compose -f docker-compose.staging.yml down || true
+          
+          # 새 코드 다운로드
+          aws s3 cp s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz .
+          
+          # 백업 생성
+          sudo cp -r . ../dungji-market-staging-backup-$(date +%Y%m%d-%H%M%S) || true
+          
+          # 새 코드 압축 해제
+          tar -xzf staging-deploy-latest.tar.gz
+          
+          # .env.staging 파일 확인
+          if [ ! -f .env.staging ]; then
+            echo "DJANGO_ENV=staging" > .env.staging
+            echo "DEBUG=True" >> .env.staging
+            echo "SECRET_KEY=${{ secrets.STAGING_SECRET_KEY }}" >> .env.staging
+            echo "DJANGO_ALLOWED_HOSTS=staging-api.dungjimarket.com,localhost,127.0.0.1" >> .env.staging
+          fi
+          
+          # Docker 이미지 빌드 및 컨테이너 시작
+          sudo docker-compose -f docker-compose.staging.yml build
+          sudo docker-compose -f docker-compose.staging.yml up -d
+          
+          # 헬스체크
+          sleep 30
+          curl -f http://localhost:8001/api/health/ || {
+            echo "Health check failed! Rolling back..."
+            sudo docker-compose -f docker-compose.staging.yml logs
+            exit 1
+          }
+          
+          # 정리
+          rm -f staging-deploy-latest.tar.gz
+          
+          echo "✅ Staging deployment completed successfully!"
+          
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        text: |
+          Staging deployment ${{ job.status }}!
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Actor: ${{ github.actor }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
