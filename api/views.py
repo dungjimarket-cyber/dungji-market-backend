@@ -3280,6 +3280,8 @@ class GroupBuyViewSet(ModelViewSet):
                     'id': participation.user.id,
                     'username': participation.user.username,
                     'email': participation.user.email,
+                    'phone_number': participation.user.phone_number if hasattr(participation.user, 'phone_number') else None,
+                    'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else None,
                 },
                 'joined_at': participation.joined_at,
                 'is_leader': participation.is_leader,
