@@ -1093,7 +1093,7 @@ class Notification(models.Model):
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE)
     message = models.TextField()
     notification_type = models.CharField(
-        max_length=20, 
+        max_length=30, 
         choices=NOTIFICATION_TYPES, 
         default='info'
     )
