@@ -32,7 +32,7 @@ class NoticeViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """권한 설정"""
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'main', 'pinned', 'recent', 'categories']:
             permission_classes = [AllowAny]
         elif self.action in ['create_comment', 'update_comment', 'delete_comment']:
             permission_classes = [IsAuthenticated]
