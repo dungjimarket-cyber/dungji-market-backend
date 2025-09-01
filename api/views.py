@@ -3227,10 +3227,23 @@ class GroupBuyViewSet(ModelViewSet):
         groupbuy = self.get_object()
         user = request.user
         
-        # 권한 확인: 공구 생성자이거나 관리자인 경우만 접근 가능
-        if not (groupbuy.creator == user or user.is_staff or user.is_superuser):
+        # 권한 확인: 공구 생성자, 선택된 판매자, 또는 관리자인 경우만 접근 가능
+        # 선택된 판매자 확인
+        selected_seller = None
+        try:
+            from .models import Bid
+            selected_bid = Bid.objects.filter(
+                groupbuy=groupbuy, 
+                status='accepted'
+            ).select_related('seller').first()
+            if selected_bid:
+                selected_seller = selected_bid.seller
+        except:
+            pass
+            
+        if not (groupbuy.creator == user or user == selected_seller or user.is_staff or user.is_superuser):
             return Response(
-                {'error': '공구 생성자 또는 관리자만 참여자 정보를 조회할 수 있습니다.'},
+                {'error': '공구 생성자, 선택된 판매자 또는 관리자만 참여자 정보를 조회할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
