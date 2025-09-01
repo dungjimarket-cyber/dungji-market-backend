@@ -51,6 +51,90 @@ class NoShowReportViewSet(ModelViewSet):
         
         return queryset.order_by('-created_at')
     
+    def create(self, request, *args, **kwargs):
+        """
+        신고 생성 (파일 업로드 처리 포함)
+        """
+        # 기본 데이터 복사
+        data = request.data.copy()
+        
+        # 파일 처리 - evidence_image_1, evidence_image_2, evidence_image_3 형식으로 오는 파일들 처리
+        files_to_save = {}
+        
+        # 기존 evidence_image 필드 처리 (backward compatibility)
+        if 'evidence_image' in request.FILES:
+            files_to_save['evidence_image'] = request.FILES['evidence_image']
+        
+        # 새로운 형식의 파일들 처리 (evidence_image_1, evidence_image_2, evidence_image_3)
+        for i in range(1, 4):
+            file_key = f'evidence_image_{i}'
+            if file_key in request.FILES:
+                if i == 1:
+                    files_to_save['evidence_image'] = request.FILES[file_key]
+                elif i == 2:
+                    files_to_save['evidence_image_2'] = request.FILES[file_key]
+                elif i == 3:
+                    files_to_save['evidence_image_3'] = request.FILES[file_key]
+        
+        # 시리얼라이저 생성
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        
+        # 파일과 함께 저장
+        instance = serializer.save(reporter=request.user, **files_to_save)
+        
+        # 로깅
+        logger.info(f"노쇼 신고 생성: {instance.reporter} -> {instance.reported_user} ({instance.groupbuy.title})")
+        logger.info(f"파일 업로드: evidence_image={bool(instance.evidence_image)}, "
+                   f"evidence_image_2={bool(instance.evidence_image_2)}, "
+                   f"evidence_image_3={bool(instance.evidence_image_3)}")
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    def update(self, request, *args, **kwargs):
+        """
+        신고 수정 (파일 업로드 처리 포함)
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # 기본 데이터 복사
+        data = request.data.copy()
+        
+        # 파일 처리
+        files_to_save = {}
+        
+        # 기존 evidence_image 필드 처리
+        if 'evidence_image' in request.FILES:
+            files_to_save['evidence_image'] = request.FILES['evidence_image']
+        
+        # 새로운 형식의 파일들 처리
+        for i in range(1, 4):
+            file_key = f'evidence_image_{i}'
+            if file_key in request.FILES:
+                if i == 1:
+                    files_to_save['evidence_image'] = request.FILES[file_key]
+                elif i == 2:
+                    files_to_save['evidence_image_2'] = request.FILES[file_key]
+                elif i == 3:
+                    files_to_save['evidence_image_3'] = request.FILES[file_key]
+        
+        # 시리얼라이저로 업데이트
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        
+        # 파일과 함께 저장
+        instance = serializer.save(**files_to_save)
+        
+        # 로깅
+        logger.info(f"노쇼 신고 수정: {instance.id}")
+        logger.info(f"파일 업로드: evidence_image={bool(instance.evidence_image)}, "
+                   f"evidence_image_2={bool(instance.evidence_image_2)}, "
+                   f"evidence_image_3={bool(instance.evidence_image_3)}")
+        
+        return Response(serializer.data)
+    
     def perform_create(self, serializer):
         """
         신고 생성 시 신고자 자동 설정
