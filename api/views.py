@@ -2714,8 +2714,10 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 구매자 정보 조회
-        participations = groupbuy.participation_set.select_related('user').all()
+        # 구매확정된 구매자 정보만 조회 (노쇼 신고 대상)
+        participations = groupbuy.participation_set.select_related('user').filter(
+            final_decision='confirmed'
+        )
         
         buyers_data = []
         for participation in participations:
@@ -2725,7 +2727,9 @@ class GroupBuyViewSet(ModelViewSet):
                     'id': participation.user.id,
                     'email': participation.user.email,
                     'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else participation.user.username,
-                    'phone': participation.user.phone_number if participation.final_decision == 'confirmed' else None
+                    'username': participation.user.username,
+                    'phone': participation.user.phone_number,  # 구매확정된 사용자는 항상 연락처 표시
+                    'phone_number': participation.user.phone_number  # 호환성을 위해 두 필드 모두 제공
                 },
                 'final_decision': participation.final_decision,
                 'final_decision_at': participation.final_decision_at,
@@ -2740,8 +2744,8 @@ class GroupBuyViewSet(ModelViewSet):
             'title': groupbuy.title,
             'status': groupbuy.status,
             'product_name': groupbuy.product_name or (groupbuy.product.name if groupbuy.product else ''),
-            'confirmed_buyers_count': participations.filter(final_decision='confirmed').count(),
-            'total_participants': participations.count()
+            'confirmed_buyers_count': participations.count(),  # 이미 confirmed만 필터링됨
+            'total_participants': groupbuy.participation_set.count()  # 전체 참여자 수
         }
         
         return Response({
