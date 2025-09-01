@@ -1255,6 +1255,8 @@ class NoShowReport(models.Model):
     
     content = models.TextField(verbose_name='신고 내용')
     evidence_image = models.ImageField(upload_to='noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지')
+    evidence_image_2 = models.ImageField(upload_to='noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지 2')
+    evidence_image_3 = models.ImageField(upload_to='noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지 3')
     
     status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='pending', verbose_name='처리 상태')
     admin_comment = models.TextField(blank=True, verbose_name='관리자 코멘트')
