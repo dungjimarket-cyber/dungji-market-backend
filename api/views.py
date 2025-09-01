@@ -3230,6 +3230,8 @@ class GroupBuyViewSet(ModelViewSet):
         # 권한 확인: 공구 생성자, 선택된 판매자, 또는 관리자인 경우만 접근 가능
         # 선택된 판매자 확인
         selected_seller = None
+        is_selected_seller = False
+        
         try:
             from .models import Bid
             selected_bid = Bid.objects.filter(
@@ -3238,10 +3240,27 @@ class GroupBuyViewSet(ModelViewSet):
             ).select_related('seller').first()
             if selected_bid:
                 selected_seller = selected_bid.seller
-        except:
+                is_selected_seller = (user == selected_seller)
+                
+            # status가 accepted가 아닌 경우 selected 상태도 확인
+            if not selected_bid:
+                selected_bid = Bid.objects.filter(
+                    groupbuy=groupbuy,
+                    status='selected'
+                ).select_related('seller').first()
+                if selected_bid:
+                    selected_seller = selected_bid.seller
+                    is_selected_seller = (user == selected_seller)
+        except Exception as e:
+            print(f"Error checking selected seller: {e}")
             pass
+        
+        # 판매자 권한 확인 (user_type도 체크)
+        is_seller = user.user_type == '판매' or user.role == 'seller'
+        
+        print(f"Permission check - User: {user.username}, Creator: {groupbuy.creator}, Selected Seller: {selected_seller}, Is Selected: {is_selected_seller}, Is Seller: {is_seller}")
             
-        if not (groupbuy.creator == user or user == selected_seller or user.is_staff or user.is_superuser):
+        if not (groupbuy.creator == user or is_selected_seller or user.is_staff or user.is_superuser):
             return Response(
                 {'error': '공구 생성자, 선택된 판매자 또는 관리자만 참여자 정보를 조회할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
