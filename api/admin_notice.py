@@ -98,6 +98,17 @@ class NoticeAdmin(admin.ModelAdmin):
             ),
             'description': '메인 화면에 노출할 공지사항 설정입니다. display_type이 "배너"인 경우 main_banner_image를 업로드해주세요.'
         }),
+        ('팝업 설정', {
+            'fields': (
+                'popup_width',
+                'popup_height',
+                'popup_image',
+                'popup_link',
+                'popup_expires_at'
+            ),
+            'classes': ('collapse',),
+            'description': 'display_type이 "팝업"인 경우 설정해주세요. 팝업 크기와 이미지, 만료일시를 설정할 수 있습니다.'
+        }),
         ('내용', {
             'fields': ('content', 'content_preview'),
             'classes': ('wide',)

@@ -127,9 +127,24 @@ class NoticeViewSet(viewsets.ModelViewSet):
         # display_type별로 분류
         banners = []
         texts = []
+        popups = []
         
         for notice in queryset:
             serializer_data = NoticeListSerializer(notice).data
+            
+            # 팝업 타입 처리
+            if notice.display_type == 'popup':
+                # 팝업 종료일시 체크
+                if notice.popup_expires_at and notice.popup_expires_at < timezone.now():
+                    continue  # 만료된 팝업은 건너뛰기
+                    
+                # 팝업 전용 데이터 추가
+                serializer_data['popup_width'] = notice.popup_width
+                serializer_data['popup_height'] = notice.popup_height
+                serializer_data['popup_image'] = notice.popup_image.url if notice.popup_image else None
+                serializer_data['popup_link'] = notice.popup_link
+                serializer_data['popup_expires_at'] = notice.popup_expires_at.isoformat() if notice.popup_expires_at else None
+                popups.append(serializer_data)
             
             if notice.display_type in ['banner', 'both']:
                 banners.append(serializer_data)
@@ -138,7 +153,8 @@ class NoticeViewSet(viewsets.ModelViewSet):
         
         return Response({
             'banners': banners[:5],  # 최대 5개 배너
-            'texts': texts[:3]  # 최대 3개 텍스트 공지
+            'texts': texts[:3],  # 최대 3개 텍스트 공지
+            'popups': popups[:1]  # 최대 1개 팝업 (보통 한 번에 하나만 표시)
         })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
