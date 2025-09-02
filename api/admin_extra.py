@@ -4,7 +4,7 @@ from django.utils.html import mark_safe
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q, Count, Sum
-from .models import Review, NoShowReport
+from .models import Review, NoShowReport, NoShowObjection
 from .models_remote_sales import RemoteSalesCertification
 
 
@@ -192,23 +192,43 @@ class RemoteSalesCertificationAdmin(admin.ModelAdmin):
 @admin.register(NoShowReport)
 class NoShowReportAdmin(admin.ModelAdmin):
     """노쇼 신고 관리"""
-    list_display = ['reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'created_at', 'processed_at']
-    list_filter = ['status', 'report_type', 'created_at', 'processed_at']
+    list_display = ['id', 'reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'edit_status', 'cancel_status', 'created_at']
+    list_filter = ['status', 'report_type', 'is_cancelled', 'edit_count', 'created_at', 'processed_at']
     search_fields = ['reporter__username', 'reported_user__username', 'groupbuy__title', 'content']
-    readonly_fields = ['created_at', 'processed_at', 'processed_by', 'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
+    readonly_fields = ['created_at', 'updated_at', 'processed_at', 'processed_by', 'edit_count', 
+                      'cancelled_at', 'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
     date_hierarchy = 'created_at'
     
     fieldsets = (
         ('신고 정보', {
-            'fields': ('reporter', 'reported_user', 'groupbuy', 'report_type', 'content', 'created_at')
+            'fields': ('reporter', 'reported_user', 'groupbuy', 'report_type', 'content', 'created_at', 'updated_at')
         }),
         ('증빙 자료', {
-            'fields': ('evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display')
+            'fields': ('evidence_image', 'evidence_image_2', 'evidence_image_3',
+                      'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display')
+        }),
+        ('수정/취소 정보', {
+            'fields': ('edit_count', 'is_cancelled', 'cancelled_at', 'cancellation_reason'),
+            'classes': ('collapse',)
         }),
         ('처리 정보', {
             'fields': ('status', 'admin_comment', 'processed_by', 'processed_at')
         }),
     )
+    
+    def edit_status(self, obj):
+        """수정 상태 표시"""
+        if obj.edit_count > 0:
+            return mark_safe(f'<span style="color: blue;">수정 {obj.edit_count}회</span>')
+        return '-'
+    edit_status.short_description = '수정'
+    
+    def cancel_status(self, obj):
+        """취소 상태 표시"""
+        if obj.is_cancelled:
+            return mark_safe('<span style="color: red;">취소됨</span>')
+        return '-'
+    cancel_status.short_description = '취소'
     
     actions = ['confirm_reports', 'reject_reports']
     
@@ -275,6 +295,123 @@ class NoShowReportAdmin(admin.ModelAdmin):
         if change and 'status' in form.changed_data:
             from django.utils import timezone
             if obj.status in ['confirmed', 'rejected'] and not obj.processed_by:
+                obj.processed_by = request.user
+                obj.processed_at = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(NoShowObjection)
+class NoShowObjectionAdmin(admin.ModelAdmin):
+    """노쇼 이의제기 관리"""
+    list_display = ['id', 'get_report_info', 'objector', 'status', 'edit_status', 'cancel_status', 'created_at', 'processed_at']
+    list_filter = ['status', 'is_cancelled', 'edit_count', 'created_at', 'processed_at']
+    search_fields = ['objector__username', 'noshow_report__groupbuy__title', 'content']
+    readonly_fields = ['created_at', 'updated_at', 'processed_at', 'processed_by', 'edit_count',
+                      'cancelled_at', 'evidence_display_1', 'evidence_display_2', 'evidence_display_3']
+    date_hierarchy = 'created_at'
+    raw_id_fields = ['noshow_report']
+    
+    fieldsets = (
+        ('이의제기 정보', {
+            'fields': ('noshow_report', 'objector', 'content', 'created_at', 'updated_at')
+        }),
+        ('증빙 자료', {
+            'fields': ('evidence_image_1', 'evidence_image_2', 'evidence_image_3',
+                      'evidence_display_1', 'evidence_display_2', 'evidence_display_3'),
+            'classes': ('collapse',)
+        }),
+        ('수정/취소 정보', {
+            'fields': ('edit_count', 'is_cancelled', 'cancelled_at', 'cancellation_reason'),
+            'classes': ('collapse',)
+        }),
+        ('처리 정보', {
+            'fields': ('status', 'admin_comment', 'processed_by', 'processed_at')
+        }),
+    )
+    
+    def get_report_info(self, obj):
+        """관련 신고 정보"""
+        return mark_safe(f'신고 #{obj.noshow_report.id}<br/><small>{obj.noshow_report.groupbuy.title}</small>')
+    get_report_info.short_description = '관련 신고'
+    
+    def edit_status(self, obj):
+        """수정 상태 표시"""
+        if obj.edit_count > 0:
+            return mark_safe(f'<span style="color: blue;">수정 {obj.edit_count}회</span>')
+        return '-'
+    edit_status.short_description = '수정'
+    
+    def cancel_status(self, obj):
+        """취소 상태 표시"""
+        if obj.is_cancelled:
+            return mark_safe('<span style="color: red;">취소됨</span>')
+        return '-'
+    cancel_status.short_description = '취소'
+    
+    def evidence_display_1(self, obj):
+        """증빙 이미지 1 표시"""
+        if obj.evidence_image_1:
+            return mark_safe(
+                f'<a href="{obj.evidence_image_1.url}" target="_blank">'
+                f'<img src="{obj.evidence_image_1.url}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                f'<a href="{obj.evidence_image_1.url}" download>다운로드</a>'
+            )
+        return "없음"
+    evidence_display_1.short_description = "증빙 파일 1"
+    
+    def evidence_display_2(self, obj):
+        """증빙 이미지 2 표시"""
+        if obj.evidence_image_2:
+            return mark_safe(
+                f'<a href="{obj.evidence_image_2.url}" target="_blank">'
+                f'<img src="{obj.evidence_image_2.url}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                f'<a href="{obj.evidence_image_2.url}" download>다운로드</a>'
+            )
+        return "없음"
+    evidence_display_2.short_description = "증빙 파일 2"
+    
+    def evidence_display_3(self, obj):
+        """증빙 이미지 3 표시"""
+        if obj.evidence_image_3:
+            return mark_safe(
+                f'<a href="{obj.evidence_image_3.url}" target="_blank">'
+                f'<img src="{obj.evidence_image_3.url}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                f'<a href="{obj.evidence_image_3.url}" download>다운로드</a>'
+            )
+        return "없음"
+    evidence_display_3.short_description = "증빙 파일 3"
+    
+    actions = ['approve_objections', 'reject_objections']
+    
+    def approve_objections(self, request, queryset):
+        """이의제기 승인"""
+        updated = queryset.filter(status='pending').update(
+            status='resolved',
+            processed_at=timezone.now(),
+            processed_by=request.user,
+            admin_comment='관리자가 이의제기를 승인했습니다.'
+        )
+        # 관련 신고 상태도 업데이트
+        for obj in queryset.filter(status='resolved'):
+            obj.noshow_report.status = 'on_hold'
+            obj.noshow_report.save()
+        self.message_user(request, f'{updated}개의 이의제기가 승인되었습니다.')
+    approve_objections.short_description = '선택한 이의제기 승인'
+    
+    def reject_objections(self, request, queryset):
+        """이의제기 거부"""
+        updated = queryset.filter(status='pending').update(
+            status='rejected',
+            processed_at=timezone.now(),
+            processed_by=request.user
+        )
+        self.message_user(request, f'{updated}개의 이의제기가 거부되었습니다.')
+    reject_objections.short_description = '선택한 이의제기 거부'
+    
+    def save_model(self, request, obj, form, change):
+        """모델 저장 시 처리자 정보 업데이트"""
+        if change and 'status' in form.changed_data:
+            if obj.status in ['resolved', 'rejected'] and not obj.processed_by:
                 obj.processed_by = request.user
                 obj.processed_at = timezone.now()
         super().save_model(request, obj, form, change)
