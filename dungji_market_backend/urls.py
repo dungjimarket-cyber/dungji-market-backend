@@ -57,6 +57,7 @@ from api.views_final_selection import (
     get_buyer_confirmation_stats
 )
 from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility, batch_report_buyer_noshow
+from api.views_objection import NoShowObjectionViewSet, check_objection_eligibility
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
 from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check
@@ -91,6 +92,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'admin', AdminViewSet, basename='admin')
 router.register(r'consents', ParticipantConsentViewSet, basename='consent')
 router.register(r'noshow-reports', NoShowReportViewSet, basename='noshow-report')
+router.register(r'noshow-objections', NoShowObjectionViewSet, basename='noshow-objection')
 router.register(r'inquiries', InquiryViewSet, basename='inquiry')
 router.register(r'notices', NoticeViewSet, basename='notice')
 
@@ -181,6 +183,9 @@ urlpatterns = [
     # 노쇼 신고 관련 API
     path('api/noshow-reports/check-eligibility/', check_noshow_report_eligibility, name='check_noshow_report_eligibility'),
     path('api/noshow-reports/batch-report/', batch_report_buyer_noshow, name='batch_report_buyer_noshow'),
+    
+    # 노쇼 이의제기 관련
+    path('api/noshow-objections/check-eligibility/<int:report_id>/', check_objection_eligibility, name='check_objection_eligibility'),
     # 배너 및 이벤트 API
     path('api/banners/', BannerListView.as_view(), name='banner_list'),
     path('api/banners/main/', get_main_banners, name='main_banners'),

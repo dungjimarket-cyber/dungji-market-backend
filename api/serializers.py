@@ -684,3 +684,51 @@ class NoShowReportSerializer(serializers.ModelSerializer):
             data['participation'] = participation
         
         return data
+
+
+class NoShowObjectionSerializer(serializers.ModelSerializer):
+    """노쇼 이의제기 시리얼라이저"""
+    objector_name = serializers.CharField(source='objector.username', read_only=True)
+    noshow_report_id = serializers.IntegerField(source='noshow_report.id', read_only=True)
+    groupbuy_title = serializers.CharField(source='noshow_report.groupbuy.title', read_only=True)
+    
+    class Meta:
+        from .models import NoShowObjection
+        model = NoShowObjection
+        fields = [
+            'id', 'noshow_report', 'noshow_report_id', 'objector', 'objector_name',
+            'content', 'evidence_image_1', 'evidence_image_2', 'evidence_image_3',
+            'status', 'admin_comment', 'created_at', 'updated_at', 
+            'processed_at', 'processed_by', 'groupbuy_title'
+        ]
+        read_only_fields = [
+            'id', 'objector', 'status', 'admin_comment', 
+            'created_at', 'updated_at', 'processed_at', 'processed_by'
+        ]
+    
+    def validate(self, data):
+        """이의제기 유효성 검사"""
+        request = self.context.get('request')
+        if not request:
+            return data
+        
+        user = request.user
+        noshow_report = data.get('noshow_report')
+        
+        # 피신고자만 이의제기 가능
+        if noshow_report.reported_user != user:
+            raise serializers.ValidationError({
+                'noshow_report': '본인이 받은 신고에 대해서만 이의제기할 수 있습니다.'
+            })
+        
+        # 이미 이의제기가 있는지 확인
+        from .models import NoShowObjection
+        if NoShowObjection.objects.filter(
+            noshow_report=noshow_report,
+            objector=user
+        ).exists():
+            raise serializers.ValidationError({
+                'noshow_report': '이미 이의제기를 하셨습니다. 이의제기는 1회만 가능합니다.'
+            })
+        
+        return data

@@ -1295,6 +1295,90 @@ class NoShowReport(models.Model):
     def __str__(self):
         return f'{self.reporter.username}이 {self.reported_user.username}을 신고 ({self.groupbuy.title})'
 
+
+class NoShowObjection(models.Model):
+    """
+    노쇼 신고에 대한 이의제기 모델
+    """
+    OBJECTION_STATUS_CHOICES = [
+        ('pending', '처리중'),
+        ('processing', '검토중'),
+        ('resolved', '해결'),
+        ('rejected', '거부'),
+    ]
+    
+    noshow_report = models.ForeignKey(
+        NoShowReport,
+        on_delete=models.CASCADE,
+        related_name='objections',
+        verbose_name='노쇼 신고'
+    )
+    objector = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='noshow_objections',
+        verbose_name='이의제기자'
+    )
+    content = models.TextField(verbose_name='이의제기 내용')
+    
+    # 증빙 자료 (최대 3개)
+    evidence_image_1 = models.FileField(
+        upload_to='noshow_objections/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='증빙자료 1'
+    )
+    evidence_image_2 = models.FileField(
+        upload_to='noshow_objections/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='증빙자료 2'
+    )
+    evidence_image_3 = models.FileField(
+        upload_to='noshow_objections/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='증빙자료 3'
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=OBJECTION_STATUS_CHOICES,
+        default='pending',
+        verbose_name='상태'
+    )
+    admin_comment = models.TextField(
+        blank=True,
+        verbose_name='관리자 답변'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일시')
+    processed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_objections',
+        verbose_name='처리한 관리자'
+    )
+    
+    class Meta:
+        verbose_name = '노쇼 이의제기'
+        verbose_name_plural = '노쇼 이의제기 관리'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['noshow_report', 'objector'],
+                name='unique_objection_per_report'
+            )
+        ]
+    
+    def __str__(self):
+        return f'{self.objector.username}의 이의제기 (신고 #{self.noshow_report.id})'
+
+
 @receiver(post_save, sender=GroupBuy)
 def handle_status_change(sender, instance, **kwargs):
     update_fields = kwargs.get('update_fields')

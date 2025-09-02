@@ -152,6 +152,44 @@ class NoShowReportViewSet(ModelViewSet):
         
         return Response(serializer.data)
     
+    def list(self, request, *args, **kwargs):
+        """
+        신고 목록 조회 - 피신고 내역은 제한된 정보만 반환
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            data = serializer.data
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            data = serializer.data
+        
+        # 피신고 내역은 제한된 정보만 반환
+        report_type = request.query_params.get('type')
+        if report_type == 'received':
+            # 피신고 내역일 경우 민감한 정보 제거
+            limited_data = []
+            for item in data:
+                limited_item = {
+                    'id': item.get('id'),
+                    'groupbuy_id': item.get('groupbuy'),
+                    'groupbuy_title': item.get('groupbuy_title'),
+                    'report_type': item.get('report_type'),
+                    'status': item.get('status'),
+                    'created_at': item.get('created_at'),
+                    'processed_at': item.get('processed_at'),
+                    'admin_comment': item.get('admin_comment'),
+                    # 신고자 정보, 신고 내용, 증빙자료는 제외
+                }
+                limited_data.append(limited_item)
+            data = limited_data
+        
+        if page is not None:
+            return self.get_paginated_response(data)
+        return Response(data)
+    
     def perform_create(self, serializer):
         """
         신고 생성 시 신고자 자동 설정
@@ -196,7 +234,7 @@ class NoShowReportViewSet(ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        """노쇼 신고 취소 (공구를 판매완료로 변경)"""
+        """노쇼 신고 취소"""
         report = self.get_object()
         
         # 취소 권한 확인
@@ -211,19 +249,45 @@ class NoShowReportViewSet(ModelViewSet):
                 'error': '처리중 상태에서만 취소 가능합니다.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 공구 상태를 판매완료로 변경
         groupbuy = report.groupbuy
+        message = ''
         
-        # 판매자인 경우에만 공구 상태 변경
+        # 신고자가 판매자인 경우: 공구를 판매완료로 변경
         if request.user.role == 'seller' or request.user.user_type == '판매':
             groupbuy.status = 'completed'
             groupbuy.completed_at = timezone.now()
             groupbuy.save()
             
-            # 구매확정된 참여자들의 구매완료 처리는 제거
-            # 구매자가 직접 구매완료 버튼을 눌러야 함
+            message = '노쇼 신고가 취소되었습니다. 공구가 판매완료로 처리되었습니다.'
+            logger.info(f"판매자의 노쇼 신고 취소로 공구 {groupbuy.id} 판매완료 처리")
+        
+        # 신고자가 구매자인 경우: 구매완료 처리
+        else:
+            # 해당 구매자의 참여 정보 찾기
+            participation = Participation.objects.filter(
+                groupbuy=groupbuy,
+                user=request.user
+            ).first()
             
-            logger.info(f"노쇼 신고 취소로 공구 {groupbuy.id} 판매완료 처리")
+            if participation:
+                participation.status = 'completed'
+                participation.save()
+                
+                # 모든 구매자가 구매완료했는지 확인
+                all_completed = not Participation.objects.filter(
+                    groupbuy=groupbuy,
+                    final_decision='confirmed'
+                ).exclude(status='completed').exists()
+                
+                if all_completed:
+                    groupbuy.status = 'completed'
+                    groupbuy.completed_at = timezone.now()
+                    groupbuy.save()
+                    message = '노쇼 신고가 취소되었습니다. 구매완료 처리되었으며, 모든 거래가 완료되어 공구가 종료되었습니다.'
+                else:
+                    message = '노쇼 신고가 취소되었습니다. 구매완료 처리되었습니다.'
+                
+                logger.info(f"구매자의 노쇼 신고 취소로 구매완료 처리 (사용자: {request.user.id}, 공구: {groupbuy.id})")
         
         # 노쇼 신고 삭제
         report_id = report.id
@@ -232,7 +296,7 @@ class NoShowReportViewSet(ModelViewSet):
         logger.info(f"노쇼 신고 {report_id} 취소됨")
         
         return Response({
-            'message': '노쇼 신고가 취소되었습니다. 공구가 판매완료로 처리되었습니다.',
+            'message': message,
             'groupbuy_status': groupbuy.status
         })
     
@@ -255,59 +319,68 @@ class NoShowReportViewSet(ModelViewSet):
         
         # 해당 공구의 상태 처리
         groupbuy = report.groupbuy
-        
-        # 구매확정된 전체 참여자 수
-        confirmed_participants = Participation.objects.filter(
-            groupbuy=groupbuy,
-            final_decision='confirmed'
-        )
-        confirmed_count = confirmed_participants.count()
-        
-        # 노쇼 신고된 구매자 수 (처리완료된 신고만)
-        noshow_reports = NoShowReport.objects.filter(
-            groupbuy=groupbuy,
-            status='completed'
-        )
-        
-        # 중복 제거된 노쇼 구매자 ID 목록
-        noshow_buyer_ids = set()
-        for noshow_report in noshow_reports:
-            if noshow_report.noshow_buyers:
-                noshow_buyer_ids.update(noshow_report.noshow_buyers)
-            # 기존 단일 신고 방식도 지원
-            if noshow_report.reported_user:
-                noshow_buyer_ids.add(noshow_report.reported_user.id)
-        
-        noshow_count = len(noshow_buyer_ids)
-        
-        # 공구 상태 자동 변경
         action_taken = 'confirmed_only'
         message = '노쇼 신고가 처리완료되었습니다.'
         
-        if confirmed_count > 0 and noshow_count == confirmed_count:
-            # 전원 노쇼인 경우 -> 공구 취소
+        # 신고 유형에 따라 처리 분기
+        if report.report_type == 'seller_noshow':
+            # 구매자가 판매자를 노쇼 신고한 경우 -> 공구 취소
             groupbuy.status = 'cancelled'
-            groupbuy.cancel_reason = '구매자 전원 노쇼'
+            groupbuy.cancellation_reason = '판매자 노쇼로 인한 공구 취소'
             groupbuy.save()
             
             action_taken = 'cancelled'
-            message = '구매자 전원 노쇼로 공구가 취소되었습니다.'
+            message = '판매자 노쇼로 공구가 취소되었습니다.'
             
-            logger.info(f"공구 {groupbuy.id} 전원 노쇼로 취소 처리")
+            logger.info(f"판매자 노쇼로 공구 {groupbuy.id} 취소 처리")
             
-        elif noshow_count > 0 and noshow_count < confirmed_count:
-            # 일부만 노쇼인 경우 -> 판매완료
-            groupbuy.status = 'completed'
-            groupbuy.completed_at = timezone.now()
-            groupbuy.save()
+        else:
+            # 판매자가 구매자를 노쇼 신고한 경우 (기존 로직)
+            # 구매확정된 전체 참여자 수
+            confirmed_participants = Participation.objects.filter(
+                groupbuy=groupbuy,
+                final_decision='confirmed'
+            )
+            confirmed_count = confirmed_participants.count()
             
-            # 구매자들의 구매완료 처리는 제거
-            # 구매자가 직접 구매완료 버튼을 눌러야 함
+            # 노쇼 신고된 구매자 수 (처리완료된 신고만)
+            noshow_reports = NoShowReport.objects.filter(
+                groupbuy=groupbuy,
+                status='completed'
+            )
             
-            action_taken = 'completed'
-            message = f'노쇼 {noshow_count}명 제외하고 거래가 완료되었습니다.'
+            # 중복 제거된 노쇼 구매자 ID 목록
+            noshow_buyer_ids = set()
+            for noshow_report in noshow_reports:
+                if noshow_report.noshow_buyers:
+                    noshow_buyer_ids.update(noshow_report.noshow_buyers)
+                # 기존 단일 신고 방식도 지원
+                if noshow_report.reported_user:
+                    noshow_buyer_ids.add(noshow_report.reported_user.id)
             
-            logger.info(f"공구 {groupbuy.id} 부분 노쇼로 판매완료 처리")
+            noshow_count = len(noshow_buyer_ids)
+            
+            if confirmed_count > 0 and noshow_count == confirmed_count:
+                # 전원 노쇼인 경우 -> 공구 취소
+                groupbuy.status = 'cancelled'
+                groupbuy.cancellation_reason = '구매자 전원 노쇼로 인한 공구 취소'
+                groupbuy.save()
+                
+                action_taken = 'cancelled'
+                message = '구매자 전원 노쇼로 공구가 취소되었습니다.'
+                
+                logger.info(f"공구 {groupbuy.id} 전원 노쇼로 취소 처리")
+                
+            elif noshow_count > 0 and noshow_count < confirmed_count:
+                # 일부만 노쇼인 경우 -> 판매완료
+                groupbuy.status = 'completed'
+                groupbuy.completed_at = timezone.now()
+                groupbuy.save()
+                
+                action_taken = 'completed'
+                message = f'노쇼 {noshow_count}명 제외하고 거래가 완료되었습니다.'
+                
+                logger.info(f"공구 {groupbuy.id} 부분 노쇼로 판매완료 처리")
         
         return Response({
             'status': 'success',
