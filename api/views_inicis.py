@@ -312,32 +312,10 @@ def verify_inicis_payment(request):
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            # 모바일 결제 승인 요청
-            auth_url = data.get('authUrl')
-            auth_token = data.get('authToken')
-            
-            logger.info(f"이니시스 모바일 결제 승인 시작: order_id={order_id}, authResultCode={auth_result_code}")
-            
-            # 승인 요청 필요
-            if auth_url and auth_token:
-                approval_result = InicisPaymentService.mobile_payment_approval(
-                    auth_url, auth_token
-                )
-                
-                if not approval_result or approval_result.get('resultCode') not in ['00', '0000']:
-                    error_msg = approval_result.get('resultMsg', '승인 실패') if approval_result else '승인 요청 실패'
-                    logger.error(f"이니시스 승인 실패: {error_msg}")
-                    return Response({
-                        'success': False,
-                        'error': f'결제 승인 실패: {error_msg}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                logger.info(f"이니시스 승인 성공: {approval_result}")
-            
             pay_method = data.get('payMethod', '')
             
-            # 가상계좌(무통장입금)인 경우 별도 처리
-            if pay_method == 'VBank':
+            # 가상계좌(무통장입금)인 경우 별도 처리 (승인 불필요)
+            if pay_method == 'VBank' or pay_method == 'VBANK':
                 # 무통장입금은 입금대기 상태로 설정
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
@@ -369,135 +347,159 @@ def verify_inicis_payment(request):
                         'amount': payment.amount
                     })
             
-            # 실시간 결제(카드, 계좌이체, 휴대폰) 처리
-            with transaction.atomic():
-                # Payment 업데이트
-                payment.status = 'completed'
-                # authToken이 너무 길므로 order_id를 tid로 사용
-                payment.tid = order_id[:200]  # 200자 제한
-                payment.completed_at = datetime.now()
-                payment.payment_data.update({
-                    'authToken': auth_token,  # 긴 토큰은 JSON 필드에 저장
-                    'authResultCode': auth_result_code,
-                    'originalTid': tid,
-                    'authUrl': data.get('authUrl'),  # 참고용 저장
-                    'netCancelUrl': data.get('netCancelUrl'),  # 취소 시 사용
-                    'idc_name': data.get('idc_name'),
-                    'payMethod': pay_method,
-                })
-                payment.save()
+            # 실시간 결제(카드, 계좌이체, 휴대폰) 처리 - 승인 필요
+            else:
+                # 모바일 결제 승인 요청
+                auth_url = data.get('authUrl')
+                auth_token = data.get('authToken')
                 
-                # 입찰권 지급 - 상품 유형에 따라 처리
-                # productName에서 구독권 여부 확인
-                is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
+                logger.info(f"이니시스 모바일 결제 승인 시작: order_id={order_id}, authResultCode={auth_result_code}")
                 
-                logger.info(f"상품명: {payment.product_name}, 구독권 여부: {is_subscription}, 금액: {payment.amount}")
+                # 승인 요청 필요
+                if auth_url and auth_token:
+                    approval_result = InicisPaymentService.mobile_payment_approval(
+                        auth_url, auth_token
+                    )
+                    
+                    if not approval_result or approval_result.get('resultCode') not in ['00', '0000']:
+                        error_msg = approval_result.get('resultMsg', '승인 실패') if approval_result else '승인 요청 실패'
+                        logger.error(f"이니시스 승인 실패: {error_msg}")
+                        return Response({
+                            'success': False,
+                            'error': f'결제 승인 실패: {error_msg}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    logger.info(f"이니시스 승인 성공: {approval_result}")
                 
-                subscription_expires_at = None  # 초기화
+                # 실시간 결제 처리
+                with transaction.atomic():
+                    # Payment 업데이트
+                    payment.status = 'completed'
+                    # authToken이 너무 길므로 order_id를 tid로 사용
+                    payment.tid = order_id[:200]  # 200자 제한
+                    payment.completed_at = datetime.now()
+                    payment.payment_data.update({
+                        'authToken': auth_token,  # 긴 토큰은 JSON 필드에 저장
+                        'authResultCode': auth_result_code,
+                        'originalTid': tid,
+                        'authUrl': data.get('authUrl'),  # 참고용 저장
+                        'netCancelUrl': data.get('netCancelUrl'),  # 취소 시 사용
+                        'idc_name': data.get('idc_name'),
+                        'payMethod': pay_method,
+                    })
+                    payment.save()
+                    
+                    # 입찰권 지급 - 상품 유형에 따라 처리
+                    # productName에서 구독권 여부 확인
+                    is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
+                    
+                    logger.info(f"상품명: {payment.product_name}, 구독권 여부: {is_subscription}, 금액: {payment.amount}")
+                    
+                    subscription_expires_at = None  # 초기화
+                    
+                    if is_subscription:
+                        # 무제한 구독권 (29,900원)
+                        if payment.amount >= 29900:
+                            # 기존 활성 구독권 확인
+                            existing_subscription = BidToken.objects.filter(
+                                seller=user,
+                                token_type='unlimited',
+                                status='active',
+                                expires_at__gt=datetime.now()  # 아직 만료되지 않은 구독권
+                            ).order_by('-expires_at').first()
+                            
+                            if existing_subscription:
+                                # 기존 구독권이 있으면 그 만료일 이후부터 시작
+                                start_date = existing_subscription.expires_at
+                                expires_at = start_date + timedelta(days=30)
+                                logger.info(f"구독권 추가: {start_date.strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')} (기존 구독 이후)")
+                            else:
+                                # 기존 구독권이 없으면 현재부터 30일
+                                expires_at = datetime.now() + timedelta(days=30)
+                                logger.info(f"구독권 신규 구매: {datetime.now().strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')}")
+                            
+                            new_subscription = BidToken.objects.create(
+                                seller=user,
+                                token_type='unlimited',
+                                expires_at=expires_at
+                            )
+                            token_count = 1
+                            # 응답에 포함할 구독권 정보 저장
+                            subscription_expires_at = expires_at
+                        else:
+                            token_count = 0
+                            logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
+                    else:
+                        # 단품 입찰권 (1,990원당 1개)
+                        token_count = int(payment.amount // 1990)
+                        if token_count > 0:
+                            # 단품 이용권은 생성일로부터 90일 후 만료
+                            expires_at = datetime.now() + timedelta(days=90)
+                            for _ in range(token_count):
+                                BidToken.objects.create(
+                                    seller=user,
+                                    token_type='single',
+                                    expires_at=expires_at  # 90일 만료
+                                )
+                            logger.info(f"견적이용권 {token_count}개 생성: 만료일 {expires_at.strftime('%Y-%m-%d')}")
+                    
+                    # BidTokenPurchase 레코드 생성 (구매 내역용)
+                    BidTokenPurchase.objects.create(
+                        seller=user,
+                        token_type='unlimited' if is_subscription else 'single',
+                        quantity=1 if is_subscription else token_count,
+                        total_price=payment.amount,
+                        payment_status='completed',
+                        payment_date=datetime.now(),
+                        order_id=order_id,
+                        payment_key=auth_token[:200] if auth_token else None
+                    )
+                    
+                    logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
+                
+                # 사용자의 현재 총 입찰권 개수 계산
+                # 단품 입찰권 개수
+                single_tokens = BidToken.objects.filter(
+                    seller=user, 
+                    token_type='single',
+                    status='active'
+                ).count()
+                
+                # 구독권 개수 (만료되지 않은 것만)
+                subscription_count = BidToken.objects.filter(
+                    seller=user,
+                    token_type='unlimited',
+                    status='active',
+                    expires_at__gt=datetime.now()
+                ).count()
+                
+                current_tokens = single_tokens  # 단품 개수를 기본으로 표시
+                
+                # 구매 완료 메시지 설정
+                response_data = {
+                    'success': True,
+                    'token_count': token_count,
+                    'total_tokens': current_tokens,
+                    'subscription_count': subscription_count,
+                    'is_subscription': is_subscription
+                }
                 
                 if is_subscription:
-                    # 무제한 구독권 (29,900원)
-                    if payment.amount >= 29900:
-                        # 기존 활성 구독권 확인
-                        existing_subscription = BidToken.objects.filter(
-                            seller=user,
-                            token_type='unlimited',
-                            status='active',
-                            expires_at__gt=datetime.now()  # 아직 만료되지 않은 구독권
-                        ).order_by('-expires_at').first()
-                        
-                        if existing_subscription:
-                            # 기존 구독권이 있으면 그 만료일 이후부터 시작
-                            start_date = existing_subscription.expires_at
-                            expires_at = start_date + timedelta(days=30)
-                            logger.info(f"구독권 추가: {start_date.strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')} (기존 구독 이후)")
-                        else:
-                            # 기존 구독권이 없으면 현재부터 30일
-                            expires_at = datetime.now() + timedelta(days=30)
-                            logger.info(f"구독권 신규 구매: {datetime.now().strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')}")
-                        
-                        new_subscription = BidToken.objects.create(
-                            seller=user,
-                            token_type='unlimited',
-                            expires_at=expires_at
-                        )
-                        token_count = 1
-                        # 응답에 포함할 구독권 정보 저장
-                        subscription_expires_at = expires_at
+                    if subscription_count > 1:
+                        message = f'구독권이 추가되었습니다. (현재 {subscription_count}개 보유)'
                     else:
-                        token_count = 0
-                        logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
+                        message = '구독권이 구매 완료되었습니다.'
+                    
+                    # 구독권 만료일 정보 추가
+                    if subscription_expires_at:
+                        response_data['subscription_expires_at'] = subscription_expires_at.isoformat()
+                        response_data['subscription_period'] = f"{(subscription_expires_at - timedelta(days=30)).strftime('%Y-%m-%d')} ~ {subscription_expires_at.strftime('%Y-%m-%d')}"
                 else:
-                    # 단품 입찰권 (1,990원당 1개)
-                    token_count = int(payment.amount // 1990)
-                    if token_count > 0:
-                        # 단품 이용권은 생성일로부터 90일 후 만료
-                        expires_at = datetime.now() + timedelta(days=90)
-                        for _ in range(token_count):
-                            BidToken.objects.create(
-                                seller=user,
-                                token_type='single',
-                                expires_at=expires_at  # 90일 만료
-                            )
-                        logger.info(f"견적이용권 {token_count}개 생성: 만료일 {expires_at.strftime('%Y-%m-%d')}")
+                    message = f'견적이용권 {token_count}개가 구매 완료되었습니다.'
                 
-                # BidTokenPurchase 레코드 생성 (구매 내역용)
-                BidTokenPurchase.objects.create(
-                    seller=user,
-                    token_type='unlimited' if is_subscription else 'single',
-                    quantity=1 if is_subscription else token_count,
-                    total_price=payment.amount,
-                    payment_status='completed',
-                    payment_date=datetime.now(),
-                    order_id=order_id,
-                    payment_key=auth_token[:200] if auth_token else None
-                )
+                response_data['message'] = message
                 
-                logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
-            
-            # 사용자의 현재 총 입찰권 개수 계산
-            # 단품 입찰권 개수
-            single_tokens = BidToken.objects.filter(
-                seller=user, 
-                token_type='single',
-                status='active'
-            ).count()
-            
-            # 구독권 개수 (만료되지 않은 것만)
-            subscription_count = BidToken.objects.filter(
-                seller=user,
-                token_type='unlimited',
-                status='active',
-                expires_at__gt=datetime.now()
-            ).count()
-            
-            current_tokens = single_tokens  # 단품 개수를 기본으로 표시
-            
-            # 구매 완료 메시지 설정
-            response_data = {
-                'success': True,
-                'token_count': token_count,
-                'total_tokens': current_tokens,
-                'subscription_count': subscription_count,
-                'is_subscription': is_subscription
-            }
-            
-            if is_subscription:
-                if subscription_count > 1:
-                    message = f'구독권이 추가되었습니다. (현재 {subscription_count}개 보유)'
-                else:
-                    message = '구독권이 구매 완료되었습니다.'
-                
-                # 구독권 만료일 정보 추가
-                if subscription_expires_at:
-                    response_data['subscription_expires_at'] = subscription_expires_at.isoformat()
-                    response_data['subscription_period'] = f"{(subscription_expires_at - timedelta(days=30)).strftime('%Y-%m-%d')} ~ {subscription_expires_at.strftime('%Y-%m-%d')}"
-            else:
-                message = f'견적이용권 {token_count}개가 구매 완료되었습니다.'
-            
-            response_data['message'] = message
-            
-            return Response(response_data)
+                return Response(response_data)
         else:
             # 결제 실패 처리
             payment.status = 'failed'
