@@ -102,6 +102,32 @@ jobs:
         echo "S3_DEPLOYMENT_BUCKET: ${{ env.S3_DEPLOYMENT_BUCKET }}"
         echo "SSH key exists: $([[ -n "${{ env.STAGING_SSH_KEY }}" ]] && echo 'yes' || echo 'no')"
     
+    - name: Add GitHub Actions IP to security group
+      run: |
+        # GitHub Actions runner의 공인 IP 확인
+        RUNNER_IP=$(curl -s https://checkip.amazonaws.com)/32
+        echo "GitHub Actions Runner IP: $RUNNER_IP"
+        
+        # 보안 그룹 ID 찾기
+        SECURITY_GROUP_ID=$(aws ec2 describe-instances \
+          --filters "Name=ip-address,Values=${{ env.STAGING_HOST }}" \
+          --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+          --output text)
+        
+        echo "Security Group ID: $SECURITY_GROUP_ID"
+        
+        # 임시로 SSH 접근 허용 추가
+        aws ec2 authorize-security-group-ingress \
+          --group-id $SECURITY_GROUP_ID \
+          --protocol tcp \
+          --port 22 \
+          --cidr $RUNNER_IP \
+          --region ap-northeast-2 || echo "Rule already exists or failed to add"
+        
+        # 나중에 정리하기 위해 환경변수에 저장
+        echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
+        echo "SECURITY_GROUP_ID=$SECURITY_GROUP_ID" >> $GITHUB_ENV
+    
     - name: Create SSH key file
       run: |
         # SSH 키가 있는지 확인
@@ -165,9 +191,22 @@ jobs:
           echo "✅ Staging deployment completed successfully!"
         EOF
     
-    - name: Cleanup SSH key
+    - name: Cleanup SSH key and security group
       if: always()
-      run: rm -f staging-key.pem
+      run: |
+        # SSH 키 파일 정리
+        rm -f staging-key.pem
+        
+        # 보안 그룹에서 임시 규칙 제거
+        if [[ -n "${{ env.RUNNER_IP }}" ]] && [[ -n "${{ env.SECURITY_GROUP_ID }}" ]]; then
+          echo "Removing temporary SSH access for IP: ${{ env.RUNNER_IP }}"
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ env.SECURITY_GROUP_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${{ env.RUNNER_IP }} \
+            --region ap-northeast-2 || echo "Failed to remove rule or rule doesn't exist"
+        fi
       
     - name: Notify deployment status
       if: always() && env.SLACK_WEBHOOK_URL != ''
