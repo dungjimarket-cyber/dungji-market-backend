@@ -220,17 +220,8 @@ class NoShowReportViewSet(ModelViewSet):
             groupbuy.completed_at = timezone.now()
             groupbuy.save()
             
-            # 구매확정된 참여자들을 구매완료 처리
-            confirmed_participants = Participation.objects.filter(
-                groupbuy=groupbuy,
-                final_decision='confirmed'
-            )
-            
-            for participation in confirmed_participants:
-                if not participation.is_purchase_completed:
-                    participation.is_purchase_completed = True
-                    participation.purchase_completed_at = timezone.now()
-                    participation.save()
+            # 구매확정된 참여자들의 구매완료 처리는 제거
+            # 구매자가 직접 구매완료 버튼을 눌러야 함
             
             logger.info(f"노쇼 신고 취소로 공구 {groupbuy.id} 판매완료 처리")
         
@@ -310,16 +301,8 @@ class NoShowReportViewSet(ModelViewSet):
             groupbuy.completed_at = timezone.now()
             groupbuy.save()
             
-            # 노쇼가 아닌 구매자들의 구매완료 처리
-            normal_participants = confirmed_participants.exclude(
-                user_id__in=noshow_buyer_ids
-            )
-            
-            for participation in normal_participants:
-                if not participation.is_purchase_completed:
-                    participation.is_purchase_completed = True
-                    participation.purchase_completed_at = timezone.now()
-                    participation.save()
+            # 구매자들의 구매완료 처리는 제거
+            # 구매자가 직접 구매완료 버튼을 눌러야 함
             
             action_taken = 'completed'
             message = f'노쇼 {noshow_count}명 제외하고 거래가 완료되었습니다.'
