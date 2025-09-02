@@ -78,8 +78,11 @@ class InicisPaymentService:
                 for pair in result_text.split('&'):
                     if '=' in pair:
                         key, value = pair.split('=', 1)
-                        result_params[key] = value
+                        # URL 디코딩
+                        import urllib.parse
+                        result_params[key] = urllib.parse.unquote(value)
                 
+                logger.info(f"이니시스 승인 파싱 결과: {result_params}")
                 return result_params
             else:
                 logger.error(f"이니시스 승인 API 오류: {response.status_code}, {response.text}")
@@ -308,26 +311,47 @@ def verify_inicis_payment(request):
             
             if auth_url and auth_token:
                 logger.info(f"이니시스 승인 요청 시작: order_id={order_id}")
+                logger.info(f"승인 요청 파라미터: authUrl={auth_url}, authToken={auth_token[:50]}..., netCancelUrl={net_cancel_url}")
                 approval_result = InicisPaymentService.request_payment_approval(
                     order_id, auth_token, auth_url, net_cancel_url
                 )
                 
                 if not approval_result:
-                    logger.error(f"이니시스 승인 실패: order_id={order_id}")
+                    logger.error(f"이니시스 승인 실패 (응답 없음): order_id={order_id}")
                     return Response({
                         'success': False,
-                        'error': '결제 승인에 실패했습니다.'
+                        'error': '결제 승인 요청에 실패했습니다. (응답 없음)'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 # 승인 결과 확인
                 result_code = approval_result.get('resultCode', '')
                 result_msg = approval_result.get('resultMsg', '')
                 
-                if result_code != '00':
+                # 다양한 필드명 체크 (이니시스 응답이 일관되지 않을 수 있음)
+                if not result_code:
+                    result_code = approval_result.get('ResultCode', '')
+                if not result_msg:
+                    result_msg = approval_result.get('ResultMsg', '')
+                
+                logger.info(f"승인 결과 코드: {result_code}, 메시지: {result_msg}")
+                
+                if result_code not in ['00', '0000']:  # '00' 또는 '0000' 모두 성공으로 처리
                     logger.error(f"이니시스 승인 거부: order_id={order_id}, code={result_code}, msg={result_msg}")
+                    logger.error(f"전체 승인 결과: {approval_result}")
+                    
+                    # 더 자세한 오류 메시지 생성
+                    error_message = '결제가 승인되지 않았습니다'
+                    if result_msg:
+                        error_message = f'결제 승인 실패: {result_msg}'
+                    elif result_code:
+                        error_message = f'결제 승인 실패 (코드: {result_code})'
+                    
                     return Response({
                         'success': False,
-                        'error': f'결제가 승인되지 않았습니다: {result_msg}'
+                        'error': error_message,
+                        'result_code': result_code,
+                        'result_msg': result_msg,
+                        'debug_info': approval_result
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 logger.info(f"이니시스 승인 성공: order_id={order_id}, result={approval_result}")
