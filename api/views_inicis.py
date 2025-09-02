@@ -51,21 +51,15 @@ class InicisPaymentService:
         try:
             import requests
             
-            # 승인 요청 파라미터
-            params = {
-                'authToken': auth_token,
-                'authUrl': auth_url,
-                'netCancelUrl': net_cancel_url,
-                'mid': cls.MID,
-            }
+            # 모바일 결제 승인은 authUrl을 그대로 호출
+            # authUrl에 이미 모든 파라미터가 포함되어 있음
+            logger.info(f"이니시스 승인 요청: order_id={order_id}")
+            logger.info(f"승인 URL: {auth_url[:100]}...")  # URL 일부만 로깅
+            logger.info(f"authToken: {auth_token[:50]}...")  # 토큰 일부만 로깅
             
-            logger.info(f"이니시스 승인 요청: order_id={order_id}, params={params}")
-            
-            # 이니시스 승인 API 호출
-            response = requests.post(
-                auth_url,  # 이니시스에서 제공한 승인 URL
-                data=params,
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            # 이니시스 승인 API 호출 - 모바일은 GET 요청
+            response = requests.get(
+                auth_url,  # authUrl을 그대로 사용
                 timeout=30
             )
             
