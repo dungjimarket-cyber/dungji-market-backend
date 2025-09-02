@@ -195,7 +195,7 @@ class NoShowReportAdmin(admin.ModelAdmin):
     list_display = ['reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'created_at', 'processed_at']
     list_filter = ['status', 'report_type', 'created_at', 'processed_at']
     search_fields = ['reporter__username', 'reported_user__username', 'groupbuy__title', 'content']
-    readonly_fields = ['created_at', 'processed_at', 'processed_by']
+    readonly_fields = ['created_at', 'processed_at', 'processed_by', 'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
     date_hierarchy = 'created_at'
     
     fieldsets = (
@@ -203,7 +203,7 @@ class NoShowReportAdmin(admin.ModelAdmin):
             'fields': ('reporter', 'reported_user', 'groupbuy', 'report_type', 'content', 'created_at')
         }),
         ('증빙 자료', {
-            'fields': ('evidence_image',)
+            'fields': ('evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display')
         }),
         ('처리 정보', {
             'fields': ('status', 'admin_comment', 'processed_by', 'processed_at')
@@ -234,6 +234,42 @@ class NoShowReportAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated}개의 신고가 반려되었습니다.')
     reject_reports.short_description = '선택한 신고 반려'
     
+    def evidence_image_display(self, obj):
+        """증빙 이미지 1 표시"""
+        if obj.evidence_image:
+            from django.utils.html import format_html
+            return format_html(
+                '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                '<a href="{}" download>다운로드</a>',
+                obj.evidence_image.url, obj.evidence_image.url, obj.evidence_image.url
+            )
+        return "없음"
+    evidence_image_display.short_description = "증빙 파일 1"
+
+    def evidence_image_2_display(self, obj):
+        """증빙 이미지 2 표시"""
+        if obj.evidence_image_2:
+            from django.utils.html import format_html
+            return format_html(
+                '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                '<a href="{}" download>다운로드</a>',
+                obj.evidence_image_2.url, obj.evidence_image_2.url, obj.evidence_image_2.url
+            )
+        return "없음"
+    evidence_image_2_display.short_description = "증빙 파일 2"
+
+    def evidence_image_3_display(self, obj):
+        """증빙 이미지 3 표시"""
+        if obj.evidence_image_3:
+            from django.utils.html import format_html
+            return format_html(
+                '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                '<a href="{}" download>다운로드</a>',
+                obj.evidence_image_3.url, obj.evidence_image_3.url, obj.evidence_image_3.url
+            )
+        return "없음"
+    evidence_image_3_display.short_description = "증빙 파일 3"
+
     def save_model(self, request, obj, form, change):
         """모델 저장 시 처리자 정보 업데이트"""
         if change and 'status' in form.changed_data:

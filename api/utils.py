@@ -66,7 +66,7 @@ def update_groupbuy_status(groupbuy):
                     user=winning_bid.seller,
                     groupbuy=groupbuy,
                     notification_type='bid_winner',
-                    message=f"축하합니다! {groupbuy.title} 공구에 낙찰되셨습니다. 구매자들의 최종 선택 후 판매 확정을 진행해주세요."
+                    message=f"축하합니다! {groupbuy.title} 공구에 선정되셨습니다. 구매자들의 최종 선택 후 판매 확정을 진행해주세요."
                 )
                 
                 # 낙찰되지 않은 입찰자들에게 알림
@@ -75,7 +75,7 @@ def update_groupbuy_status(groupbuy):
                         user=bid.seller,
                         groupbuy=groupbuy,
                         notification_type='bid_not_selected',
-                        message=f"{groupbuy.title} 공구에 낙찰되지 않으셨습니다. (낙찰 지원금: {winning_bid.amount:,}원)"
+                        message=f"{groupbuy.title} 공구에 선정되지 않으셨습니다. (선정된 지원금: {winning_bid.amount:,}원)"
                     )
             except Exception as e:
                 print(f"알림 생성 중 오류: {e}")

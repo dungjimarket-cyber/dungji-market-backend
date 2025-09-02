@@ -593,10 +593,13 @@ class NoShowReportSerializer(serializers.ModelSerializer):
         model = NoShowReport
         fields = ['id', 'reporter', 'reporter_name', 'reported_user', 'reported_user_name',
                  'groupbuy', 'groupbuy_title', 'participation', 'bid', 'report_type',
-                 'content', 'evidence_image', 'status', 'admin_comment', 'created_at',
-                 'updated_at', 'processed_at', 'processed_by']
+                 'content', 'evidence_image', 'evidence_image_2', 'evidence_image_3', 
+                 'status', 'admin_comment', 'created_at',
+                 'updated_at', 'processed_at', 'processed_by', 'edit_count', 
+                 'last_edited_at', 'noshow_buyers']
         read_only_fields = ['id', 'reporter', 'status', 'admin_comment', 'created_at',
-                           'updated_at', 'processed_at', 'processed_by']
+                           'updated_at', 'processed_at', 'processed_by', 'edit_count',
+                           'last_edited_at']
     
     def validate(self, data):
         """유효성 검사"""

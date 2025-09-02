@@ -107,6 +107,84 @@ class Notice(models.Model):
         verbose_name='썸네일 이미지'
     )
     
+    # 메인 노출 관련 필드
+    show_in_main = models.BooleanField(
+        default=False,
+        verbose_name='메인 화면 노출',
+        help_text='메인 화면에 노출할지 여부'
+    )
+    
+    DISPLAY_TYPE_CHOICES = [
+        ('banner', '배너 이미지'),
+        ('text', '텍스트 공지'),
+        ('both', '배너 + 텍스트'),
+        ('popup', '팝업'),
+    ]
+    
+    display_type = models.CharField(
+        max_length=10,
+        choices=DISPLAY_TYPE_CHOICES,
+        default='text',
+        verbose_name='노출 방식',
+        help_text='메인 화면 노출 방식'
+    )
+    
+    main_banner_image = models.ImageField(
+        upload_to='notices/banners/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='메인 배너 이미지',
+        help_text='메인 화면 배너 이미지 (권장: 1200x400)'
+    )
+    
+    banner_link = models.URLField(
+        blank=True,
+        null=True,
+        verbose_name='배너 클릭 링크',
+        help_text='배너 클릭 시 이동할 URL (비워두면 공지사항 상세 페이지로 이동)'
+    )
+    
+    main_display_order = models.IntegerField(
+        default=0,
+        verbose_name='메인 노출 순서',
+        help_text='숫자가 작을수록 먼저 표시 (0이 가장 먼저)'
+    )
+    
+    # 팝업 관련 필드
+    popup_width = models.IntegerField(
+        default=500,
+        verbose_name='팝업 너비',
+        help_text='팝업 창 너비 (픽셀)'
+    )
+    
+    popup_height = models.IntegerField(
+        default=600,
+        verbose_name='팝업 높이',
+        help_text='팝업 창 높이 (픽셀)'
+    )
+    
+    popup_image = models.ImageField(
+        upload_to='notices/popups/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='팝업 이미지',
+        help_text='팝업에 표시할 이미지'
+    )
+    
+    popup_link = models.URLField(
+        blank=True,
+        null=True,
+        verbose_name='팝업 클릭 링크',
+        help_text='팝업 클릭 시 이동할 URL'
+    )
+    
+    popup_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='팝업 종료일시',
+        help_text='이 시간 이후에는 팝업이 자동으로 표시되지 않음'
+    )
+    
     class Meta:
         verbose_name = '공지사항'
         verbose_name_plural = '공지사항'
@@ -114,6 +192,7 @@ class Notice(models.Model):
         indexes = [
             models.Index(fields=['-is_pinned', '-created_at']),
             models.Index(fields=['is_published', 'published_at']),
+            models.Index(fields=['show_in_main', 'main_display_order']),
         ]
     
     def __str__(self):

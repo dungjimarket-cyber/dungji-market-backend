@@ -32,7 +32,7 @@ class NoticeViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """권한 설정"""
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'main', 'pinned', 'recent', 'categories']:
             permission_classes = [AllowAny]
         elif self.action in ['create_comment', 'update_comment', 'delete_comment']:
             permission_classes = [IsAuthenticated]
@@ -116,6 +116,46 @@ class NoticeViewSet(viewsets.ModelViewSet):
             for choice in Notice.CATEGORY_CHOICES
         ]
         return Response(categories)
+    
+    @action(detail=False, methods=['get'])
+    def main(self, request):
+        """메인 화면 노출 공지사항"""
+        queryset = self.get_queryset().filter(
+            show_in_main=True
+        ).order_by('main_display_order', '-published_at')
+        
+        # display_type별로 분류
+        banners = []
+        texts = []
+        popups = []
+        
+        for notice in queryset:
+            serializer_data = NoticeListSerializer(notice).data
+            
+            # 팝업 타입 처리
+            if notice.display_type == 'popup':
+                # 팝업 종료일시 체크
+                if notice.popup_expires_at and notice.popup_expires_at < timezone.now():
+                    continue  # 만료된 팝업은 건너뛰기
+                    
+                # 팝업 전용 데이터 추가
+                serializer_data['popup_width'] = notice.popup_width
+                serializer_data['popup_height'] = notice.popup_height
+                serializer_data['popup_image'] = notice.popup_image.url if notice.popup_image else None
+                serializer_data['popup_link'] = notice.popup_link
+                serializer_data['popup_expires_at'] = notice.popup_expires_at.isoformat() if notice.popup_expires_at else None
+                popups.append(serializer_data)
+            
+            if notice.display_type in ['banner', 'both']:
+                banners.append(serializer_data)
+            if notice.display_type in ['text', 'both']:
+                texts.append(serializer_data)
+        
+        return Response({
+            'banners': banners[:5],  # 최대 5개 배너
+            'texts': texts[:3],  # 최대 3개 텍스트 공지
+            'popups': popups[:1]  # 최대 1개 팝업 (보통 한 번에 하나만 표시)
+        })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def create_comment(self, request, pk=None):

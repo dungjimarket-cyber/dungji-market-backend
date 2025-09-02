@@ -2714,8 +2714,10 @@ class GroupBuyViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 구매자 정보 조회
-        participations = groupbuy.participation_set.select_related('user').all()
+        # 구매확정된 구매자 정보만 조회 (노쇼 신고 대상)
+        participations = groupbuy.participation_set.select_related('user').filter(
+            final_decision='confirmed'
+        )
         
         buyers_data = []
         for participation in participations:
@@ -2725,7 +2727,9 @@ class GroupBuyViewSet(ModelViewSet):
                     'id': participation.user.id,
                     'email': participation.user.email,
                     'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else participation.user.username,
-                    'phone': participation.user.phone_number if participation.final_decision == 'confirmed' else None
+                    'username': participation.user.username,
+                    'phone': participation.user.phone_number,  # 구매확정된 사용자는 항상 연락처 표시
+                    'phone_number': participation.user.phone_number  # 호환성을 위해 두 필드 모두 제공
                 },
                 'final_decision': participation.final_decision,
                 'final_decision_at': participation.final_decision_at,
@@ -2740,8 +2744,8 @@ class GroupBuyViewSet(ModelViewSet):
             'title': groupbuy.title,
             'status': groupbuy.status,
             'product_name': groupbuy.product_name or (groupbuy.product.name if groupbuy.product else ''),
-            'confirmed_buyers_count': participations.filter(final_decision='confirmed').count(),
-            'total_participants': participations.count()
+            'confirmed_buyers_count': participations.count(),  # 이미 confirmed만 필터링됨
+            'total_participants': groupbuy.participation_set.count()  # 전체 참여자 수
         }
         
         return Response({
@@ -2976,7 +2980,7 @@ class GroupBuyViewSet(ModelViewSet):
         
         if not winning_bid:
             return Response(
-                {'message': '아직 낙찰된 입찰이 없습니다.'}, 
+                {'message': '아직 제안된 견적이 없습니다.'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -3227,10 +3231,42 @@ class GroupBuyViewSet(ModelViewSet):
         groupbuy = self.get_object()
         user = request.user
         
-        # 권한 확인: 공구 생성자이거나 관리자인 경우만 접근 가능
-        if not (groupbuy.creator == user or user.is_staff or user.is_superuser):
+        # 권한 확인: 공구 생성자, 선택된 판매자, 또는 관리자인 경우만 접근 가능
+        # 선택된 판매자 확인
+        selected_seller = None
+        is_selected_seller = False
+        
+        try:
+            from .models import Bid
+            selected_bid = Bid.objects.filter(
+                groupbuy=groupbuy, 
+                status='accepted'
+            ).select_related('seller').first()
+            if selected_bid:
+                selected_seller = selected_bid.seller
+                is_selected_seller = (user == selected_seller)
+                
+            # status가 accepted가 아닌 경우 selected 상태도 확인
+            if not selected_bid:
+                selected_bid = Bid.objects.filter(
+                    groupbuy=groupbuy,
+                    status='selected'
+                ).select_related('seller').first()
+                if selected_bid:
+                    selected_seller = selected_bid.seller
+                    is_selected_seller = (user == selected_seller)
+        except Exception as e:
+            print(f"Error checking selected seller: {e}")
+            pass
+        
+        # 판매자 권한 확인 (user_type도 체크)
+        is_seller = user.user_type == '판매' or user.role == 'seller'
+        
+        print(f"Permission check - User: {user.username}, Creator: {groupbuy.creator}, Selected Seller: {selected_seller}, Is Selected: {is_selected_seller}, Is Seller: {is_seller}")
+            
+        if not (groupbuy.creator == user or is_selected_seller or user.is_staff or user.is_superuser):
             return Response(
-                {'error': '공구 생성자 또는 관리자만 참여자 정보를 조회할 수 있습니다.'},
+                {'error': '공구 생성자, 선택된 판매자 또는 관리자만 참여자 정보를 조회할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -3248,6 +3284,8 @@ class GroupBuyViewSet(ModelViewSet):
                     'id': participation.user.id,
                     'username': participation.user.username,
                     'email': participation.user.email,
+                    'phone_number': participation.user.phone_number if hasattr(participation.user, 'phone_number') else None,
+                    'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else None,
                 },
                 'joined_at': participation.joined_at,
                 'is_leader': participation.is_leader,
