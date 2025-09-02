@@ -139,10 +139,13 @@ class NoticeViewSet(viewsets.ModelViewSet):
                     continue  # 만료된 팝업은 건너뛰기
                     
                 # 팝업 전용 데이터 추가
+                serializer_data['popup_type'] = notice.popup_type
                 serializer_data['popup_width'] = notice.popup_width
                 serializer_data['popup_height'] = notice.popup_height
                 serializer_data['popup_image'] = notice.popup_image.url if notice.popup_image else None
                 serializer_data['popup_link'] = notice.popup_link
+                serializer_data['popup_link_target'] = notice.popup_link_target
+                serializer_data['popup_show_today_close'] = notice.popup_show_today_close
                 serializer_data['popup_expires_at'] = notice.popup_expires_at.isoformat() if notice.popup_expires_at else None
                 popups.append(serializer_data)
             
