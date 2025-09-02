@@ -65,6 +65,9 @@ class InicisPaymentService:
             # URL 인코딩
             encoded_data = urllib.parse.urlencode(approval_data)
             
+            logger.info(f"승인 요청 URL: {auth_url}")
+            logger.info(f"승인 요청 데이터: {approval_data}")
+            
             # 승인 API 호출
             response = requests.post(
                 auth_url,
@@ -77,17 +80,25 @@ class InicisPaymentService:
             )
             
             logger.info(f"승인 응답 상태: {response.status_code}")
-            logger.info(f"승인 응답 내용: {response.text[:500]}")
+            logger.info(f"승인 응답 전체: {response.text}")
             
             if response.status_code == 200:
                 # 응답 파싱
                 result_params = {}
-                for pair in response.text.split('&'):
-                    if '=' in pair:
-                        key, value = pair.split('=', 1)
-                        result_params[key] = urllib.parse.unquote(value)
                 
-                logger.info(f"승인 결과: {result_params}")
+                # JSON 응답인 경우
+                try:
+                    import json
+                    result_params = json.loads(response.text)
+                    logger.info(f"승인 결과 (JSON): {result_params}")
+                except json.JSONDecodeError:
+                    # URL 인코딩된 응답인 경우
+                    for pair in response.text.split('&'):
+                        if '=' in pair:
+                            key, value = pair.split('=', 1)
+                            result_params[key] = urllib.parse.unquote(value)
+                    logger.info(f"승인 결과 (URL-encoded): {result_params}")
+                
                 return result_params
             else:
                 logger.error(f"승인 API 오류: {response.status_code}, {response.text}")
@@ -314,8 +325,11 @@ def verify_inicis_payment(request):
         if auth_result_code in ['00', '0000']:
             pay_method = data.get('payMethod', '')
             
+            logger.info(f"결제 방법 확인: {pay_method}")
+            logger.info(f"전체 인증 데이터: {data}")
+            
             # 가상계좌(무통장입금)인 경우 별도 처리 (승인 불필요)
-            if pay_method == 'VBank' or pay_method == 'VBANK':
+            if pay_method in ['VBank', 'VBANK', 'vbank']:
                 # 무통장입금은 입금대기 상태로 설정
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
@@ -348,12 +362,16 @@ def verify_inicis_payment(request):
                     })
             
             # 실시간 결제(카드, 계좌이체, 휴대폰) 처리 - 승인 필요
+            # DirectBank = 계좌이체, Card = 카드, HPP = 휴대폰
             else:
                 # 모바일 결제 승인 요청
                 auth_url = data.get('authUrl')
                 auth_token = data.get('authToken')
                 
                 logger.info(f"이니시스 모바일 결제 승인 시작: order_id={order_id}, authResultCode={auth_result_code}")
+                logger.info(f"결제 방법: {pay_method}")
+                logger.info(f"authUrl: {auth_url}")
+                logger.info(f"authToken 길이: {len(auth_token) if auth_token else 0}")
                 
                 # 승인 요청 필요
                 if auth_url and auth_token:
@@ -361,12 +379,32 @@ def verify_inicis_payment(request):
                         auth_url, auth_token
                     )
                     
-                    if not approval_result or approval_result.get('resultCode') not in ['00', '0000']:
-                        error_msg = approval_result.get('resultMsg', '승인 실패') if approval_result else '승인 요청 실패'
-                        logger.error(f"이니시스 승인 실패: {error_msg}")
+                    if not approval_result:
+                        logger.error(f"이니시스 승인 요청 실패: 응답 없음")
                         return Response({
                             'success': False,
-                            'error': f'결제 승인 실패: {error_msg}'
+                            'error': '결제 승인 요청에 실패했습니다.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # 결과 코드 확인 (다양한 필드명 처리)
+                    result_code = approval_result.get('resultCode') or approval_result.get('ResultCode') or approval_result.get('result_code')
+                    result_msg = approval_result.get('resultMsg') or approval_result.get('ResultMsg') or approval_result.get('result_msg')
+                    
+                    if result_code not in ['00', '0000', '00000']:
+                        error_code = approval_result.get('errorCode') or approval_result.get('ErrorCode') or result_code
+                        logger.error(f"이니시스 승인 실패: code={error_code}, msg={result_msg}")
+                        logger.error(f"승인 실패 전체 응답: {approval_result}")
+                        
+                        # 계좌이체 특별 오류 처리
+                        if pay_method in ['DirectBank', 'DIRECTBANK']:
+                            error_msg = f'계좌이체 승인 실패: {result_msg} (code: {error_code})'
+                        else:
+                            error_msg = f'{result_msg} (code: {error_code})'
+                        
+                        return Response({
+                            'success': False,
+                            'error': error_msg,
+                            'error_code': error_code
                         }, status=status.HTTP_400_BAD_REQUEST)
                     
                     logger.info(f"이니시스 승인 성공: {approval_result}")
