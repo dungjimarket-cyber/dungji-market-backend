@@ -192,11 +192,11 @@ class RemoteSalesCertificationAdmin(admin.ModelAdmin):
 @admin.register(NoShowReport)
 class NoShowReportAdmin(admin.ModelAdmin):
     """노쇼 신고 관리"""
-    list_display = ['id', 'reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'edit_status', 'cancel_status', 'created_at']
-    list_filter = ['status', 'report_type', 'is_cancelled', 'edit_count', 'created_at', 'processed_at']
+    list_display = ['id', 'reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'edit_status', 'created_at']
+    list_filter = ['status', 'report_type', 'edit_count', 'created_at', 'processed_at']
     search_fields = ['reporter__username', 'reported_user__username', 'groupbuy__title', 'content']
     readonly_fields = ['created_at', 'updated_at', 'processed_at', 'processed_by', 'edit_count', 
-                      'cancelled_at', 'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
+                      'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
     date_hierarchy = 'created_at'
     
     fieldsets = (
@@ -222,13 +222,6 @@ class NoShowReportAdmin(admin.ModelAdmin):
             return mark_safe(f'<span style="color: blue;">수정 {obj.edit_count}회</span>')
         return '-'
     edit_status.short_description = '수정'
-    
-    def cancel_status(self, obj):
-        """취소 상태 표시"""
-        if obj.is_cancelled:
-            return mark_safe('<span style="color: red;">취소됨</span>')
-        return '-'
-    cancel_status.short_description = '취소'
     
     actions = ['confirm_reports', 'reject_reports']
     
@@ -257,7 +250,6 @@ class NoShowReportAdmin(admin.ModelAdmin):
     def evidence_image_display(self, obj):
         """증빙 이미지 1 표시"""
         if obj.evidence_image:
-            from django.utils.html import format_html
             return format_html(
                 '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
                 '<a href="{}" download>다운로드</a>',
@@ -269,7 +261,6 @@ class NoShowReportAdmin(admin.ModelAdmin):
     def evidence_image_2_display(self, obj):
         """증빙 이미지 2 표시"""
         if obj.evidence_image_2:
-            from django.utils.html import format_html
             return format_html(
                 '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
                 '<a href="{}" download>다운로드</a>',
@@ -281,7 +272,6 @@ class NoShowReportAdmin(admin.ModelAdmin):
     def evidence_image_3_display(self, obj):
         """증빙 이미지 3 표시"""
         if obj.evidence_image_3:
-            from django.utils.html import format_html
             return format_html(
                 '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
                 '<a href="{}" download>다운로드</a>',
