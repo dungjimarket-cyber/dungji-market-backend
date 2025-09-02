@@ -230,7 +230,7 @@ class NoShowReportAdmin(admin.ModelAdmin):
         return '-'
     edit_status.short_description = '수정'
     
-    actions = ['confirm_reports', 'reject_reports']
+    actions = ['confirm_reports', 'reject_reports', 'cancel_reports']
     
     def confirm_reports(self, request, queryset):
         """선택한 신고 확인 처리"""
@@ -253,6 +253,19 @@ class NoShowReportAdmin(admin.ModelAdmin):
         )
         self.message_user(request, f'{updated}개의 신고가 반려되었습니다.')
     reject_reports.short_description = '선택한 신고 반려'
+    
+    def cancel_reports(self, request, queryset):
+        """선택한 신고 취소 (이의제기 등으로 인한 수동 취소)"""
+        from django.utils import timezone
+        count = 0
+        for report in queryset.filter(is_cancelled=False):
+            report.is_cancelled = True
+            report.cancelled_at = timezone.now()
+            report.cancellation_reason = '관리자에 의한 수동 취소'
+            report.save()
+            count += 1
+        self.message_user(request, f'{count}개의 신고가 취소 처리되었습니다.')
+    cancel_reports.short_description = '선택한 신고 취소 처리'
     
     def evidence_image_display(self, obj):
         """증빙 이미지 1 표시"""
@@ -381,7 +394,7 @@ class NoShowObjectionAdmin(admin.ModelAdmin):
     actions = ['approve_objections', 'reject_objections']
     
     def approve_objections(self, request, queryset):
-        """이의제기 승인 - 원본 노쇼 신고를 취소 처리"""
+        """이의제기 승인 - 별도 처리"""
         from django.utils import timezone
         
         updated = queryset.filter(status='pending').update(
@@ -391,17 +404,11 @@ class NoShowObjectionAdmin(admin.ModelAdmin):
             admin_comment='관리자가 이의제기를 승인했습니다.'
         )
         
-        # 관련 노쇼 신고를 취소 처리
-        for obj in queryset.filter(status='resolved'):
-            noshow_report = obj.noshow_report
-            noshow_report.is_cancelled = True
-            noshow_report.cancelled_at = timezone.now()
-            noshow_report.cancellation_reason = f'이의제기 승인 (이의제기 ID: {obj.id})'
-            noshow_report.status = 'on_hold'  # 보류 상태로 변경
-            noshow_report.save()
-            
-        self.message_user(request, f'{updated}개의 이의제기가 승인되었습니다. 관련 노쇼 신고가 취소 처리되었습니다.')
-    approve_objections.short_description = '선택한 이의제기 승인 (노쇼 신고 취소)'
+        # 노쇼 신고와 이의제기는 각각 독립적으로 처리
+        # 이의제기가 승인되어도 노쇼 신고는 유지되며, 패널티는 관리자가 수동으로 조정
+        
+        self.message_user(request, f'{updated}개의 이의제기가 승인되었습니다. 필요시 패널티를 수동으로 조정해주세요.')
+    approve_objections.short_description = '선택한 이의제기 승인'
     
     def reject_objections(self, request, queryset):
         """이의제기 거부"""
