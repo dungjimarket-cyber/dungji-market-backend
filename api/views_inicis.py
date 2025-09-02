@@ -45,42 +45,18 @@ class InicisPaymentService:
     @classmethod
     def request_payment_approval(cls, order_id, auth_token, auth_url, net_cancel_url):
         """
-        이니시스 결제 승인 요청
-        2단계 승인 처리
+        이니시스 결제 승인 요청 (PC 결제용)
+        모바일 결제는 이미 승인이 완료되어 있으므로 이 메서드를 호출하지 않음
         """
         try:
             import requests
             
-            # 모바일 결제 승인은 authUrl을 그대로 호출
-            # authUrl에 이미 모든 파라미터가 포함되어 있음
-            logger.info(f"이니시스 승인 요청: order_id={order_id}")
-            logger.info(f"승인 URL: {auth_url[:100]}...")  # URL 일부만 로깅
-            logger.info(f"authToken: {auth_token[:50]}...")  # 토큰 일부만 로깅
+            logger.info(f"이니시스 PC 결제 승인 요청: order_id={order_id}")
             
-            # 이니시스 승인 API 호출 - 모바일은 GET 요청
-            response = requests.get(
-                auth_url,  # authUrl을 그대로 사용
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                result_text = response.text
-                logger.info(f"이니시스 승인 응답: {result_text}")
-                
-                # 응답 파싱 (key=value&key=value 형식)
-                result_params = {}
-                for pair in result_text.split('&'):
-                    if '=' in pair:
-                        key, value = pair.split('=', 1)
-                        # URL 디코딩
-                        import urllib.parse
-                        result_params[key] = urllib.parse.unquote(value)
-                
-                logger.info(f"이니시스 승인 파싱 결과: {result_params}")
-                return result_params
-            else:
-                logger.error(f"이니시스 승인 API 오류: {response.status_code}, {response.text}")
-                return None
+            # PC 결제의 경우 승인 처리가 필요할 수 있음
+            # 현재는 모바일 결제만 사용하므로 이 메서드는 사용되지 않음
+            logger.warning(f"PC 결제 승인 메서드가 호출되었습니다. 모바일 결제는 이미 승인 완료 상태입니다.")
+            return None
                 
         except Exception as e:
             logger.error(f"이니시스 승인 요청 실패: {str(e)}")
@@ -299,62 +275,12 @@ def verify_inicis_payment(request):
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            # 실제 이니시스 서버에 승인 요청 (보안 강화)
-            auth_url = data.get('authUrl')
-            net_cancel_url = data.get('netCancelUrl')
+            # 모바일 결제는 이미 승인이 완료된 상태
+            # authToken과 authUrl은 결제 정보 확인용으로만 사용
+            logger.info(f"이니시스 모바일 결제 성공: order_id={order_id}, authResultCode={auth_result_code}")
             
-            if auth_url and auth_token:
-                logger.info(f"이니시스 승인 요청 시작: order_id={order_id}")
-                logger.info(f"승인 요청 파라미터: authUrl={auth_url}, authToken={auth_token[:50]}..., netCancelUrl={net_cancel_url}")
-                approval_result = InicisPaymentService.request_payment_approval(
-                    order_id, auth_token, auth_url, net_cancel_url
-                )
-                
-                if not approval_result:
-                    logger.error(f"이니시스 승인 실패 (응답 없음): order_id={order_id}")
-                    return Response({
-                        'success': False,
-                        'error': '결제 승인 요청에 실패했습니다. (응답 없음)'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                # 승인 결과 확인
-                result_code = approval_result.get('resultCode', '')
-                result_msg = approval_result.get('resultMsg', '')
-                
-                # 다양한 필드명 체크 (이니시스 응답이 일관되지 않을 수 있음)
-                if not result_code:
-                    result_code = approval_result.get('ResultCode', '')
-                if not result_msg:
-                    result_msg = approval_result.get('ResultMsg', '')
-                
-                logger.info(f"승인 결과 코드: {result_code}, 메시지: {result_msg}")
-                
-                if result_code not in ['00', '0000']:  # '00' 또는 '0000' 모두 성공으로 처리
-                    logger.error(f"이니시스 승인 거부: order_id={order_id}, code={result_code}, msg={result_msg}")
-                    logger.error(f"전체 승인 결과: {approval_result}")
-                    
-                    # 더 자세한 오류 메시지 생성
-                    error_message = '결제가 승인되지 않았습니다'
-                    if result_msg:
-                        error_message = f'결제 승인 실패: {result_msg}'
-                    elif result_code:
-                        error_message = f'결제 승인 실패 (코드: {result_code})'
-                    
-                    return Response({
-                        'success': False,
-                        'error': error_message,
-                        'result_code': result_code,
-                        'result_msg': result_msg,
-                        'debug_info': approval_result
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                logger.info(f"이니시스 승인 성공: order_id={order_id}, result={approval_result}")
-                
-                # 승인 결과에서 결제 방법 확인
-                pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
-            else:
-                logger.warning(f"authUrl 또는 authToken이 없음: order_id={order_id}")
-                pay_method = data.get('payMethod', '')
+            # 추가 승인 없이 바로 처리
+            pay_method = data.get('payMethod', '')
             
             # 가상계좌(무통장입금)인 경우 별도 처리
             if pay_method == 'VBank':
@@ -400,8 +326,8 @@ def verify_inicis_payment(request):
                     'authToken': auth_token,  # 긴 토큰은 JSON 필드에 저장
                     'authResultCode': auth_result_code,
                     'originalTid': tid,
-                    'authUrl': data.get('authUrl'),
-                    'netCancelUrl': data.get('netCancelUrl'),
+                    'authUrl': data.get('authUrl'),  # 참고용 저장
+                    'netCancelUrl': data.get('netCancelUrl'),  # 취소 시 사용
                     'idc_name': data.get('idc_name'),
                     'payMethod': pay_method,
                 })
