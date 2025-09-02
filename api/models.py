@@ -1237,9 +1237,9 @@ class Review(models.Model):
 class NoShowReport(models.Model):
     """노쇼 신고 모델"""
     REPORT_STATUS_CHOICES = [
-        ('pending', '검토중'),
-        ('confirmed', '확인됨'),
-        ('rejected', '반려됨'),
+        ('pending', '처리중'),
+        ('completed', '처리완료'),
+        ('on_hold', '보류중'),
     ]
     
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='noshow_reports_made', verbose_name='신고자')
@@ -1265,6 +1265,21 @@ class NoShowReport(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
     processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일')
     processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_noshow_reports', verbose_name='처리자')
+    
+    # 수정 관련 필드 추가
+    edit_count = models.IntegerField(default=0, verbose_name='수정 횟수')
+    last_edited_at = models.DateTimeField(null=True, blank=True, verbose_name='마지막 수정 시간')
+    
+    # 노쇼 대상자 목록 (판매자가 여러 구매자 신고 시)
+    noshow_buyers = models.JSONField(default=list, blank=True, verbose_name='노쇼 구매자 목록')
+    
+    def can_edit(self):
+        """수정 가능 여부 확인"""
+        return self.status == 'pending' and self.edit_count < 1
+    
+    def can_cancel(self):
+        """취소 가능 여부 확인"""
+        return self.status == 'pending'
     
     class Meta:
         verbose_name = '노쇼 신고'
