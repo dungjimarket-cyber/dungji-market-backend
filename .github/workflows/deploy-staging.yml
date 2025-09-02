@@ -10,10 +10,24 @@ jobs:
   deploy:
     name: Deploy to AWS EC2 Staging
     runs-on: ubuntu-latest
+    environment: staging  # Environment 사용
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+    
+    - name: Parse staging secrets
+      id: parse_secrets
+      run: |
+        # STAGING_SECRETS에서 환경 변수들을 파싱
+        echo "${{ secrets.STAGING_SECRETS }}" | while IFS= read -r line; do
+          if [[ $line == *"="* ]] && [[ $line != "#"* ]] && [[ -n "$line" ]]; then
+            key=$(echo "$line" | cut -d'=' -f1)
+            value=$(echo "$line" | cut -d'=' -f2-)
+            echo "$key=$value" >> $GITHUB_ENV
+            echo "::add-mask::$value"  # 로그에서 값 숨기기
+          fi
+        done
       
     - name: Setup Node.js (for any frontend assets)
       uses: actions/setup-node@v4
@@ -33,14 +47,15 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
         aws-region: ap-northeast-2
         
     - name: Create deployment archive
       run: |
-        # 배포에 필요한 파일들만 압축
-        tar -czf staging-deploy.tar.gz \
+        # 임시 디렉토리에서 안전하게 압축
+        mkdir -p /tmp/staging-deploy
+        rsync -av --progress . /tmp/staging-deploy/ \
           --exclude='.git' \
           --exclude='.github' \
           --exclude='__pycache__' \
@@ -49,21 +64,26 @@ jobs:
           --exclude='venv' \
           --exclude='node_modules' \
           --exclude='.env' \
-          .
+          --exclude='staging-deploy.tar.gz'
+        
+        # 임시 디렉토리에서 압축
+        cd /tmp/staging-deploy
+        tar -czf /tmp/staging-deploy.tar.gz .
+        mv /tmp/staging-deploy.tar.gz ${{ github.workspace }}/staging-deploy.tar.gz
           
     - name: Upload to S3
       run: |
-        aws s3 cp staging-deploy.tar.gz s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-$(date +%Y%m%d-%H%M%S).tar.gz
-        aws s3 cp staging-deploy.tar.gz s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz
+        aws s3 cp staging-deploy.tar.gz s3://${{ env.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-$(date +%Y%m%d-%H%M%S).tar.gz
+        aws s3 cp staging-deploy.tar.gz s3://${{ env.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz
+    
+    - name: Create SSH key file
+      run: |
+        echo "${{ env.STAGING_SSH_KEY }}" > staging-key.pem
+        chmod 600 staging-key.pem
         
     - name: Deploy to EC2
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.STAGING_HOST }}
-        username: ${{ secrets.STAGING_USER }}
-        key: ${{ secrets.STAGING_SSH_KEY }}
-        port: 22
-        script: |
+      run: |
+        ssh -i staging-key.pem -o StrictHostKeyChecking=no ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }} << 'EOF'
           set -e
           
           # 배포 디렉토리로 이동
@@ -73,7 +93,7 @@ jobs:
           sudo docker-compose -f docker-compose.staging.yml down || true
           
           # 새 코드 다운로드
-          aws s3 cp s3://${{ secrets.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz .
+          aws s3 cp s3://${{ env.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz .
           
           # 백업 생성
           sudo cp -r . ../dungji-market-staging-backup-$(date +%Y%m%d-%H%M%S) || true
@@ -85,7 +105,7 @@ jobs:
           if [ ! -f .env.staging ]; then
             echo "DJANGO_ENV=staging" > .env.staging
             echo "DEBUG=True" >> .env.staging
-            echo "SECRET_KEY=${{ secrets.STAGING_SECRET_KEY }}" >> .env.staging
+            echo "SECRET_KEY=${{ env.STAGING_SECRET_KEY }}" >> .env.staging
             echo "DJANGO_ALLOWED_HOSTS=staging-api.dungjimarket.com,localhost,127.0.0.1" >> .env.staging
           fi
           
@@ -105,18 +125,21 @@ jobs:
           rm -f staging-deploy-latest.tar.gz
           
           echo "✅ Staging deployment completed successfully!"
-          
-    - name: Notify deployment status
+        EOF
+    
+    - name: Cleanup SSH key
       if: always()
+      run: rm -f staging-key.pem
+      
+    - name: Notify deployment status
+      if: always() && env.SLACK_WEBHOOK_URL != ''
       uses: 8398a7/action-slack@v3
       with:
         status: ${{ job.status }}
         channel: '#deployments'
-        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
         text: |
           Staging deployment ${{ job.status }}!
           Branch: ${{ github.ref_name }}
           Commit: ${{ github.sha }}
           Actor: ${{ github.actor }}
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
