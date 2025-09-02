@@ -136,18 +136,38 @@ jobs:
           exit 1
         fi
         
-        # SSH 키 파일 생성
-        echo "${{ env.STAGING_SSH_KEY }}" > staging-key.pem
+        # SSH 키 파일 생성 (printf를 사용해서 개행 문자 정확히 처리)
+        printf "%s\n" "${{ env.STAGING_SSH_KEY }}" > staging-key.pem
         chmod 600 staging-key.pem
         
-        # SSH 키 형식 확인
-        if ! ssh-keygen -l -f staging-key.pem > /dev/null 2>&1; then
-          echo "Warning: SSH key format might be invalid"
+        # SSH 키 형식 및 권한 확인
+        echo "SSH key file created:"
+        ls -la staging-key.pem
+        
+        # SSH 키 유효성 검사
+        if ssh-keygen -l -f staging-key.pem > /dev/null 2>&1; then
+          echo "SSH key format is valid"
+          ssh-keygen -l -f staging-key.pem
+        else
+          echo "SSH key format validation failed, trying alternative approach..."
+          # 대안: base64 인코딩된 키일 경우를 대비
+          echo "${{ env.STAGING_SSH_KEY }}" | base64 -d > staging-key-alt.pem 2>/dev/null || true
+          if [[ -f staging-key-alt.pem ]] && ssh-keygen -l -f staging-key-alt.pem > /dev/null 2>&1; then
+            echo "Using base64 decoded SSH key"
+            mv staging-key-alt.pem staging-key.pem
+            chmod 600 staging-key.pem
+          else
+            echo "Proceeding with original SSH key format"
+          fi
         fi
         
     - name: Deploy to EC2
       run: |
-        ssh -i staging-key.pem -o StrictHostKeyChecking=no ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }} << 'EOF'
+        # SSH 연결 테스트
+        echo "Testing SSH connection to ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }}"
+        
+        # SSH 연결 및 배포 실행
+        ssh -i staging-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=30 ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }} << 'EOF'
           set -e
           
           # 배포 디렉토리로 이동
