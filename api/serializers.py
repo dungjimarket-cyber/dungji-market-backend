@@ -714,20 +714,25 @@ class NoShowObjectionSerializer(serializers.ModelSerializer):
         if not request:
             return data
         
+        # 수정(update)인 경우 유효성 검사 스킵
+        if self.instance:
+            return data
+        
         user = request.user
         noshow_report = data.get('noshow_report')
         
         # 피신고자만 이의제기 가능
-        if noshow_report.reported_user != user:
+        if noshow_report and noshow_report.reported_user != user:
             raise serializers.ValidationError({
                 'noshow_report': '본인이 받은 신고에 대해서만 이의제기할 수 있습니다.'
             })
         
-        # 이미 이의제기가 있는지 확인
+        # 이미 이의제기가 있는지 확인 (취소된 것 제외)
         from .models import NoShowObjection
-        if NoShowObjection.objects.filter(
+        if noshow_report and NoShowObjection.objects.filter(
             noshow_report=noshow_report,
-            objector=user
+            objector=user,
+            is_cancelled=False
         ).exists():
             raise serializers.ValidationError({
                 'noshow_report': '이미 이의제기를 하셨습니다. 이의제기는 1회만 가능합니다.'

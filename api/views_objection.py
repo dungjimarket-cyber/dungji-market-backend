@@ -195,11 +195,12 @@ class NoShowObjectionViewSet(ModelViewSet):
         serializer = self.get_serializer(objection, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         
-        # 수정 횟수 증가
-        objection.edit_count += 1
-        
         # 파일과 함께 저장
         instance = serializer.save(**files_to_save)
+        
+        # 수정 횟수 증가 (직접 업데이트)
+        instance.edit_count = objection.edit_count + 1
+        instance.save(update_fields=['edit_count'])
         
         logger.info(f"이의제기 수정: #{objection.id} by {request.user.username}")
         
@@ -207,7 +208,7 @@ class NoShowObjectionViewSet(ModelViewSet):
             'status': 'success',
             'message': '이의제기가 수정되었습니다.',
             'data': serializer.data,
-            'edit_count': objection.edit_count
+            'edit_count': instance.edit_count
         })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
