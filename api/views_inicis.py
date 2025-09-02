@@ -43,23 +43,60 @@ class InicisPaymentService:
         return cls.PROD_URL
     
     @classmethod
-    def request_payment_approval(cls, order_id, auth_token, auth_url, net_cancel_url):
+    def mobile_payment_approval(cls, auth_url, auth_token):
         """
-        이니시스 결제 승인 요청 (PC 결제용)
-        모바일 결제는 이미 승인이 완료되어 있으므로 이 메서드를 호출하지 않음
+        이니시스 모바일 결제 승인 요청
+        인증 후 실제 결제 승인 처리
         """
         try:
             import requests
+            import urllib.parse
+            from datetime import datetime
             
-            logger.info(f"이니시스 PC 결제 승인 요청: order_id={order_id}")
+            logger.info(f"이니시스 모바일 승인 요청 시작")
             
-            # PC 결제의 경우 승인 처리가 필요할 수 있음
-            # 현재는 모바일 결제만 사용하므로 이 메서드는 사용되지 않음
-            logger.warning(f"PC 결제 승인 메서드가 호출되었습니다. 모바일 결제는 이미 승인 완료 상태입니다.")
-            return None
+            # 승인 요청 데이터
+            approval_data = {
+                'mid': cls.MID,
+                'authToken': auth_token,
+                'timestamp': str(int(datetime.now().timestamp() * 1000))
+            }
+            
+            # URL 인코딩
+            encoded_data = urllib.parse.urlencode(approval_data)
+            
+            # 승인 API 호출
+            response = requests.post(
+                auth_url,
+                data=encoded_data,
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'charset': 'UTF-8'
+                },
+                timeout=30
+            )
+            
+            logger.info(f"승인 응답 상태: {response.status_code}")
+            logger.info(f"승인 응답 내용: {response.text[:500]}")
+            
+            if response.status_code == 200:
+                # 응답 파싱
+                result_params = {}
+                for pair in response.text.split('&'):
+                    if '=' in pair:
+                        key, value = pair.split('=', 1)
+                        result_params[key] = urllib.parse.unquote(value)
+                
+                logger.info(f"승인 결과: {result_params}")
+                return result_params
+            else:
+                logger.error(f"승인 API 오류: {response.status_code}, {response.text}")
+                return None
                 
         except Exception as e:
-            logger.error(f"이니시스 승인 요청 실패: {str(e)}")
+            logger.error(f"이니시스 모바일 승인 요청 실패: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
     
     @classmethod
@@ -275,11 +312,28 @@ def verify_inicis_payment(request):
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            # 모바일 결제는 이미 승인이 완료된 상태
-            # authToken과 authUrl은 결제 정보 확인용으로만 사용
-            logger.info(f"이니시스 모바일 결제 성공: order_id={order_id}, authResultCode={auth_result_code}")
+            # 모바일 결제 승인 요청
+            auth_url = data.get('authUrl')
+            auth_token = data.get('authToken')
             
-            # 추가 승인 없이 바로 처리
+            logger.info(f"이니시스 모바일 결제 승인 시작: order_id={order_id}, authResultCode={auth_result_code}")
+            
+            # 승인 요청 필요
+            if auth_url and auth_token:
+                approval_result = InicisPaymentService.mobile_payment_approval(
+                    auth_url, auth_token
+                )
+                
+                if not approval_result or approval_result.get('resultCode') not in ['00', '0000']:
+                    error_msg = approval_result.get('resultMsg', '승인 실패') if approval_result else '승인 요청 실패'
+                    logger.error(f"이니시스 승인 실패: {error_msg}")
+                    return Response({
+                        'success': False,
+                        'error': f'결제 승인 실패: {error_msg}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                logger.info(f"이니시스 승인 성공: {approval_result}")
+            
             pay_method = data.get('payMethod', '')
             
             # 가상계좌(무통장입금)인 경우 별도 처리
