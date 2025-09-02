@@ -150,6 +150,108 @@ class NoShowObjectionViewSet(ModelViewSet):
             'objection': objection_data,
             'noshow_report': report_data
         })
+    
+    def update(self, request, *args, **kwargs):
+        """
+        이의제기 수정 (1회 제한)
+        """
+        objection = self.get_object()
+        
+        # 본인 확인
+        if objection.objector != request.user:
+            return Response({
+                'error': '본인의 이의제기만 수정할 수 있습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 취소된 이의제기 수정 불가
+        if objection.is_cancelled:
+            return Response({
+                'error': '취소된 이의제기는 수정할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 이미 처리된 이의제기 수정 불가
+        if objection.status in ['resolved', 'rejected']:
+            return Response({
+                'error': '이미 처리된 이의제기는 수정할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 수정 횟수 체크
+        if objection.edit_count >= 1:
+            return Response({
+                'error': '이의제기는 1회만 수정 가능합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 데이터 업데이트
+        data = request.data.copy()
+        files_to_save = {}
+        
+        # 파일 처리
+        for i in range(1, 4):
+            file_key = f'evidence_image_{i}'
+            if file_key in request.FILES:
+                files_to_save[file_key] = request.FILES[file_key]
+        
+        # 시리얼라이저로 업데이트
+        serializer = self.get_serializer(objection, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        
+        # 수정 횟수 증가
+        objection.edit_count += 1
+        
+        # 파일과 함께 저장
+        instance = serializer.save(**files_to_save)
+        
+        logger.info(f"이의제기 수정: #{objection.id} by {request.user.username}")
+        
+        return Response({
+            'status': 'success',
+            'message': '이의제기가 수정되었습니다.',
+            'data': serializer.data,
+            'edit_count': objection.edit_count
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def cancel(self, request, pk=None):
+        """
+        이의제기 취소
+        """
+        objection = self.get_object()
+        
+        # 본인 확인
+        if objection.objector != request.user:
+            return Response({
+                'error': '본인의 이의제기만 취소할 수 있습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 이미 취소된 경우
+        if objection.is_cancelled:
+            return Response({
+                'error': '이미 취소된 이의제기입니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 이미 처리된 이의제기 취소 불가
+        if objection.status in ['resolved', 'rejected']:
+            return Response({
+                'error': '이미 처리된 이의제기는 취소할 수 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 취소 사유
+        cancellation_reason = request.data.get('cancellation_reason', '')
+        
+        # 취소 처리
+        objection.is_cancelled = True
+        objection.cancelled_at = timezone.now()
+        objection.cancellation_reason = cancellation_reason
+        objection.save()
+        
+        logger.info(f"이의제기 취소: #{objection.id} by {request.user.username}")
+        
+        return Response({
+            'status': 'success',
+            'message': '이의제기가 취소되었습니다.',
+            'cancelled_at': objection.cancelled_at,
+            'cancellation_reason': objection.cancellation_reason
+        })
 
 
 @api_view(['GET'])
@@ -168,10 +270,11 @@ def check_objection_eligibility(request, report_id):
                 'reason': '본인이 받은 신고에 대해서만 이의제기할 수 있습니다.'
             })
         
-        # 이미 이의제기가 있는지 확인
+        # 이미 이의제기가 있는지 확인 (취소된 것 제외)
         existing_objection = NoShowObjection.objects.filter(
             noshow_report=report,
-            objector=request.user
+            objector=request.user,
+            is_cancelled=False
         ).first()
         
         if existing_objection:

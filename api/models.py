@@ -1352,6 +1352,14 @@ class NoShowObjection(models.Model):
         verbose_name='관리자 답변'
     )
     
+    # 수정 관련 필드 추가
+    edit_count = models.IntegerField(default=0, verbose_name='수정 횟수')
+    
+    # 취소 관련 필드 추가
+    is_cancelled = models.BooleanField(default=False, verbose_name='취소 여부')
+    cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name='취소일시')
+    cancellation_reason = models.TextField(blank=True, verbose_name='취소 사유')
+    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
     processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일시')

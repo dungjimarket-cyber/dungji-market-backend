@@ -699,11 +699,13 @@ class NoShowObjectionSerializer(serializers.ModelSerializer):
             'id', 'noshow_report', 'noshow_report_id', 'objector', 'objector_name',
             'content', 'evidence_image_1', 'evidence_image_2', 'evidence_image_3',
             'status', 'admin_comment', 'created_at', 'updated_at', 
-            'processed_at', 'processed_by', 'groupbuy_title'
+            'processed_at', 'processed_by', 'groupbuy_title',
+            'edit_count', 'is_cancelled', 'cancelled_at', 'cancellation_reason'
         ]
         read_only_fields = [
             'id', 'objector', 'status', 'admin_comment', 
-            'created_at', 'updated_at', 'processed_at', 'processed_by'
+            'created_at', 'updated_at', 'processed_at', 'processed_by',
+            'edit_count', 'is_cancelled', 'cancelled_at'
         ]
     
     def validate(self, data):
