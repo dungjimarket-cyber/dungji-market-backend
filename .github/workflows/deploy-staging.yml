@@ -19,15 +19,33 @@ jobs:
     - name: Parse staging secrets
       id: parse_secrets
       run: |
-        # STAGING_SECRETS에서 환경 변수들을 파싱
-        echo "${{ secrets.STAGING_SECRETS }}" | while IFS= read -r line; do
-          if [[ $line == *"="* ]] && [[ $line != "#"* ]] && [[ -n "$line" ]]; then
-            key=$(echo "$line" | cut -d'=' -f1)
-            value=$(echo "$line" | cut -d'=' -f2-)
-            echo "$key=$value" >> $GITHUB_ENV
-            echo "::add-mask::$value"  # 로그에서 값 숨기기
+        # STAGING_SECRETS를 파일로 저장
+        echo "${{ secrets.STAGING_SECRETS }}" > /tmp/staging_secrets.env
+        
+        # 파일에서 읽어서 환경 변수 설정
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          # 빈 줄이나 주석 건너뛰기
+          if [[ -z "$line" ]] || [[ "$line" =~ ^[[:space:]]*# ]]; then
+            continue
           fi
-        done
+          
+          # KEY=VALUE 형태 처리
+          if [[ "$line" =~ ^[^=]+= ]]; then
+            key=$(echo "$line" | cut -d'=' -f1 | xargs)
+            value=$(echo "$line" | cut -d'=' -f2- | xargs)
+            
+            # SSH 키의 경우 개행 문자 처리
+            if [[ "$key" == "STAGING_SSH_KEY" ]]; then
+              # SSH 키 전체를 읽어서 파일로 저장
+              echo "$value" > /tmp/staging_key_temp.pem
+              value=$(cat /tmp/staging_key_temp.pem)
+            fi
+            
+            echo "$key=$value" >> $GITHUB_ENV
+            echo "::add-mask::$value"
+            echo "Set environment variable: $key"
+          fi
+        done < /tmp/staging_secrets.env
       
     - name: Setup Node.js (for any frontend assets)
       uses: actions/setup-node@v4
@@ -76,10 +94,30 @@ jobs:
         aws s3 cp staging-deploy.tar.gz s3://${{ env.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-$(date +%Y%m%d-%H%M%S).tar.gz
         aws s3 cp staging-deploy.tar.gz s3://${{ env.S3_DEPLOYMENT_BUCKET }}/staging/staging-deploy-latest.tar.gz
     
+    - name: Debug environment variables
+      run: |
+        echo "Debug: Checking parsed environment variables"
+        echo "STAGING_HOST: ${{ env.STAGING_HOST }}"
+        echo "STAGING_USER: ${{ env.STAGING_USER }}"
+        echo "S3_DEPLOYMENT_BUCKET: ${{ env.S3_DEPLOYMENT_BUCKET }}"
+        echo "SSH key exists: $([[ -n "${{ env.STAGING_SSH_KEY }}" ]] && echo 'yes' || echo 'no')"
+    
     - name: Create SSH key file
       run: |
+        # SSH 키가 있는지 확인
+        if [[ -z "${{ env.STAGING_SSH_KEY }}" ]]; then
+          echo "Error: STAGING_SSH_KEY is empty"
+          exit 1
+        fi
+        
+        # SSH 키 파일 생성
         echo "${{ env.STAGING_SSH_KEY }}" > staging-key.pem
         chmod 600 staging-key.pem
+        
+        # SSH 키 형식 확인
+        if ! ssh-keygen -l -f staging-key.pem > /dev/null 2>&1; then
+          echo "Warning: SSH key format might be invalid"
+        fi
         
     - name: Deploy to EC2
       run: |
