@@ -13,13 +13,15 @@ class BidSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='groupbuy.product.name', read_only=True)
     deadline = serializers.CharField(source='groupbuy.end_time', read_only=True)
     participants_count = serializers.IntegerField(source='groupbuy.current_participants', read_only=True)
+    groupbuy_status = serializers.CharField(source='groupbuy.status', read_only=True)
     
     class Meta:
         model = Bid
         fields = [
             'id', 'seller', 'seller_name', 'groupbuy', 'groupbuy_title', 
             'product_name', 'bid_type', 'amount', 'message', 'status', 
-            'created_at', 'updated_at', 'deadline', 'participants_count'
+            'is_selected', 'created_at', 'updated_at', 'deadline', 
+            'participants_count', 'groupbuy_status'
         ]
         read_only_fields = ['status', 'created_at', 'updated_at']
         extra_kwargs = {
