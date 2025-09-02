@@ -192,8 +192,8 @@ class RemoteSalesCertificationAdmin(admin.ModelAdmin):
 @admin.register(NoShowReport)
 class NoShowReportAdmin(admin.ModelAdmin):
     """노쇼 신고 관리"""
-    list_display = ['id', 'reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'edit_status', 'created_at']
-    list_filter = ['status', 'report_type', 'edit_count', 'created_at', 'processed_at']
+    list_display = ['id', 'reporter', 'reported_user', 'groupbuy', 'report_type', 'status', 'cancelled_status', 'edit_status', 'created_at']
+    list_filter = ['status', 'report_type', 'is_cancelled', 'edit_count', 'created_at', 'processed_at']
     search_fields = ['reporter__username', 'reported_user__username', 'groupbuy__title', 'content']
     readonly_fields = ['created_at', 'updated_at', 'processed_at', 'processed_by', 'edit_count', 
                       'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
@@ -215,6 +215,13 @@ class NoShowReportAdmin(admin.ModelAdmin):
             'fields': ('status', 'admin_comment', 'processed_by', 'processed_at')
         }),
     )
+    
+    def cancelled_status(self, obj):
+        """취소 상태 표시"""
+        if obj.is_cancelled:
+            return mark_safe('<span style="background-color: #DC3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">취소됨</span>')
+        return '-'
+    cancelled_status.short_description = '취소'
     
     def edit_status(self, obj):
         """수정 상태 표시"""
@@ -374,19 +381,27 @@ class NoShowObjectionAdmin(admin.ModelAdmin):
     actions = ['approve_objections', 'reject_objections']
     
     def approve_objections(self, request, queryset):
-        """이의제기 승인"""
+        """이의제기 승인 - 원본 노쇼 신고를 취소 처리"""
+        from django.utils import timezone
+        
         updated = queryset.filter(status='pending').update(
             status='resolved',
             processed_at=timezone.now(),
             processed_by=request.user,
             admin_comment='관리자가 이의제기를 승인했습니다.'
         )
-        # 관련 신고 상태도 업데이트
+        
+        # 관련 노쇼 신고를 취소 처리
         for obj in queryset.filter(status='resolved'):
-            obj.noshow_report.status = 'on_hold'
-            obj.noshow_report.save()
-        self.message_user(request, f'{updated}개의 이의제기가 승인되었습니다.')
-    approve_objections.short_description = '선택한 이의제기 승인'
+            noshow_report = obj.noshow_report
+            noshow_report.is_cancelled = True
+            noshow_report.cancelled_at = timezone.now()
+            noshow_report.cancellation_reason = f'이의제기 승인 (이의제기 ID: {obj.id})'
+            noshow_report.status = 'on_hold'  # 보류 상태로 변경
+            noshow_report.save()
+            
+        self.message_user(request, f'{updated}개의 이의제기가 승인되었습니다. 관련 노쇼 신고가 취소 처리되었습니다.')
+    approve_objections.short_description = '선택한 이의제기 승인 (노쇼 신고 취소)'
     
     def reject_objections(self, request, queryset):
         """이의제기 거부"""

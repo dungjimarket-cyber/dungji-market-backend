@@ -1273,6 +1273,11 @@ class NoShowReport(models.Model):
     # 노쇼 대상자 목록 (판매자가 여러 구매자 신고 시)
     noshow_buyers = models.JSONField(default=list, blank=True, verbose_name='노쇼 구매자 목록')
     
+    # 취소 관련 필드 추가 (이의제기 승인 시 사용)
+    is_cancelled = models.BooleanField(default=False, verbose_name='취소 여부')
+    cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name='취소 시간')
+    cancellation_reason = models.TextField(blank=True, verbose_name='취소 사유')
+    
     def can_edit(self):
         """수정 가능 여부 확인"""
         return self.status == 'pending' and self.edit_count < 1
