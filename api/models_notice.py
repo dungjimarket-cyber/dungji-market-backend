@@ -151,6 +151,20 @@ class Notice(models.Model):
     )
     
     # 팝업 관련 필드
+    POPUP_TYPE_CHOICES = [
+        ('text', '텍스트 팝업'),
+        ('image', '이미지 팝업'),
+        ('mixed', '텍스트 + 이미지'),
+    ]
+    
+    popup_type = models.CharField(
+        max_length=10,
+        choices=POPUP_TYPE_CHOICES,
+        default='text',
+        verbose_name='팝업 타입',
+        help_text='팝업 표시 형식'
+    )
+    
     popup_width = models.IntegerField(
         default=500,
         verbose_name='팝업 너비',
@@ -160,7 +174,7 @@ class Notice(models.Model):
     popup_height = models.IntegerField(
         default=600,
         verbose_name='팝업 높이',
-        help_text='팝업 창 높이 (픽셀)'
+        help_text='팝업 창 높이 (픽셀, 이미지 팝업의 경우 자동 조정)'
     )
     
     popup_image = models.ImageField(
@@ -168,7 +182,7 @@ class Notice(models.Model):
         blank=True,
         null=True,
         verbose_name='팝업 이미지',
-        help_text='팝업에 표시할 이미지'
+        help_text='팝업에 표시할 이미지 (이미지/혼합 타입에서 사용)'
     )
     
     popup_link = models.URLField(
@@ -178,11 +192,28 @@ class Notice(models.Model):
         help_text='팝업 클릭 시 이동할 URL'
     )
     
+    popup_link_target = models.CharField(
+        max_length=10,
+        choices=[
+            ('_self', '현재 창'),
+            ('_blank', '새 창'),
+        ],
+        default='_blank',
+        verbose_name='링크 열기 방식',
+        help_text='팝업 링크 클릭 시 열기 방식'
+    )
+    
     popup_expires_at = models.DateTimeField(
         null=True,
         blank=True,
         verbose_name='팝업 종료일시',
         help_text='이 시간 이후에는 팝업이 자동으로 표시되지 않음'
+    )
+    
+    popup_show_today_close = models.BooleanField(
+        default=True,
+        verbose_name='오늘 하루 보지 않기 표시',
+        help_text='오늘 하루 보지 않기 옵션 표시 여부'
     )
     
     class Meta:
