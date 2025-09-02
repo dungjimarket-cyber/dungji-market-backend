@@ -74,7 +74,7 @@ class NoticeAdmin(admin.ModelAdmin):
     search_fields = ['title', 'content', 'summary']
     readonly_fields = [
         'view_count', 'created_at', 'updated_at',
-        'content_preview'
+        'content_preview', 'popup_image_preview', 'main_banner_preview'
     ]
     date_hierarchy = 'created_at'
     ordering = ['-is_pinned', '-created_at']
@@ -94,6 +94,7 @@ class NoticeAdmin(admin.ModelAdmin):
                 'display_type',
                 'main_display_order',
                 'main_banner_image',
+                'main_banner_preview',
                 'banner_link'
             ),
             'description': '메인 화면에 노출할 공지사항 설정입니다. display_type이 "배너"인 경우 main_banner_image를 업로드해주세요.'
@@ -104,6 +105,7 @@ class NoticeAdmin(admin.ModelAdmin):
                 'popup_width',
                 'popup_height',
                 'popup_image',
+                'popup_image_preview',
                 'popup_link',
                 'popup_link_target',
                 'popup_expires_at',
@@ -206,6 +208,52 @@ class NoticeAdmin(admin.ModelAdmin):
             )
         return "내용 없음"
     content_preview.short_description = "내용 미리보기"
+    
+    def popup_image_preview(self, obj):
+        """팝업 이미지 미리보기"""
+        if obj.popup_image:
+            return format_html(
+                '<div style="margin-top: 10px;">'
+                '<a href="{}" target="_blank">'
+                '<img src="{}" style="max-width: 300px; max-height: 300px; '
+                'border: 1px solid #e5e7eb; border-radius: 8px; padding: 5px; '
+                'background: white;" alt="팝업 이미지" />'
+                '</a>'
+                '<br/><small style="color: #6b7280;">클릭하면 원본 크기로 볼 수 있습니다</small>'
+                '</div>',
+                obj.popup_image.url,
+                obj.popup_image.url
+            )
+        return format_html(
+            '<div style="color: #6b7280; padding: 10px; background: #f3f4f6; '
+            'border-radius: 4px; margin-top: 10px;">'
+            '팝업 이미지가 없습니다. 이미지를 업로드해주세요.'
+            '</div>'
+        )
+    popup_image_preview.short_description = "팝업 이미지 미리보기"
+    
+    def main_banner_preview(self, obj):
+        """메인 배너 이미지 미리보기"""
+        if obj.main_banner_image:
+            return format_html(
+                '<div style="margin-top: 10px;">'
+                '<a href="{}" target="_blank">'
+                '<img src="{}" style="max-width: 400px; max-height: 200px; '
+                'border: 1px solid #e5e7eb; border-radius: 8px; padding: 5px; '
+                'background: white;" alt="배너 이미지" />'
+                '</a>'
+                '<br/><small style="color: #6b7280;">클릭하면 원본 크기로 볼 수 있습니다</small>'
+                '</div>',
+                obj.main_banner_image.url,
+                obj.main_banner_image.url
+            )
+        return format_html(
+            '<div style="color: #6b7280; padding: 10px; background: #f3f4f6; '
+            'border-radius: 4px; margin-top: 10px;">'
+            '배너 이미지가 없습니다. 이미지를 업로드해주세요.'
+            '</div>'
+        )
+    main_banner_preview.short_description = "배너 이미지 미리보기"
     
     def get_queryset(self, request):
         """쿼리셋 최적화"""
