@@ -1,6 +1,6 @@
 # 추가 어드민 클래스들을 별도 파일로 관리
 from django.contrib import admin
-from django.utils.html import mark_safe
+from django.utils.html import mark_safe, format_html
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q, Count, Sum
