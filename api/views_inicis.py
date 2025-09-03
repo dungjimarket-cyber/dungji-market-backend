@@ -273,9 +273,10 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v2.0 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
+        logger.info(f"업데이트된 백엔드 코드 실행 중...")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
