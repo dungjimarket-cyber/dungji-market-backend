@@ -55,11 +55,13 @@ class InicisPaymentService:
             
             logger.info(f"이니시스 모바일 승인 요청 시작")
             
-            # 승인 요청 데이터
+            # 승인 요청 데이터 (이니시스 API 스펙에 맞춤)
             approval_data = {
                 'mid': cls.MID,
                 'authToken': auth_token,
-                'timestamp': str(int(datetime.now().timestamp() * 1000))
+                'timestamp': str(int(datetime.now().timestamp() * 1000)),
+                'charset': 'UTF-8',
+                'format': 'JSON'
             }
             
             # URL 인코딩
@@ -67,6 +69,7 @@ class InicisPaymentService:
             
             logger.info(f"승인 요청 URL: {auth_url}")
             logger.info(f"승인 요청 데이터: {approval_data}")
+            logger.info(f"URL 인코딩된 데이터: {encoded_data}")
             
             # 승인 API 호출
             response = requests.post(
@@ -86,18 +89,34 @@ class InicisPaymentService:
                 # 응답 파싱
                 result_params = {}
                 
-                # JSON 응답인 경우
-                try:
-                    import json
-                    result_params = json.loads(response.text)
-                    logger.info(f"승인 결과 (JSON): {result_params}")
-                except json.JSONDecodeError:
-                    # URL 인코딩된 응답인 경우
-                    for pair in response.text.split('&'):
-                        if '=' in pair:
-                            key, value = pair.split('=', 1)
-                            result_params[key] = urllib.parse.unquote(value)
-                    logger.info(f"승인 결과 (URL-encoded): {result_params}")
+                # XML 응답인 경우 먼저 확인 (이니시스는 주로 XML 응답)
+                if response.text.strip().startswith('<?xml'):
+                    try:
+                        import xml.etree.ElementTree as ET
+                        root = ET.fromstring(response.text)
+                        
+                        # XML에서 필드 추출
+                        for elem in root:
+                            result_params[elem.tag] = elem.text
+                        
+                        logger.info(f"승인 결과 (XML): {result_params}")
+                    except Exception as xml_error:
+                        logger.error(f"XML 파싱 오류: {xml_error}")
+                        logger.error(f"XML 응답 내용: {response.text}")
+                        return None
+                else:
+                    # JSON 응답인 경우
+                    try:
+                        import json
+                        result_params = json.loads(response.text)
+                        logger.info(f"승인 결과 (JSON): {result_params}")
+                    except json.JSONDecodeError:
+                        # URL 인코딩된 응답인 경우
+                        for pair in response.text.split('&'):
+                            if '=' in pair:
+                                key, value = pair.split('=', 1)
+                                result_params[key] = urllib.parse.unquote(value)
+                        logger.info(f"승인 결과 (URL-encoded): {result_params}")
                 
                 return result_params
             else:
@@ -273,10 +292,10 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v2.0 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v2.1 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
-        logger.info(f"업데이트된 백엔드 코드 실행 중...")
+        logger.info(f"XML 파싱 및 파라미터 포맷 개선된 코드 실행 중...")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
