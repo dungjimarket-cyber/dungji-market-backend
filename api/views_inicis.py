@@ -13,7 +13,7 @@ from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from api.models import User, BidToken, BidTokenPurchase
@@ -640,6 +640,7 @@ def cancel_inicis_payment(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def inicis_webhook(request):
     """
     이니시스 웹훅 처리
