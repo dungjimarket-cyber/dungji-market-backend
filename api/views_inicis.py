@@ -402,45 +402,85 @@ def verify_inicis_payment(request):
         if auth_result_code in ['00', '0000']:
             pay_method = data.get('payMethod', '')
             
-            logger.info(f"결제 방법 확인: {pay_method}")
+            # 가상계좌 결제 감지를 위한 추가 파라미터 확인
+            vact_bank_name = data.get('vactBankName')
+            vact_num = data.get('VACT_Num') or data.get('vactNum')
+            vact_date = data.get('VACT_Date') or data.get('vactDate')
+            vact_name = data.get('VACT_Name') or data.get('vactName')
+            
+            # all_params에서 가상계좌 관련 정보 확인
+            all_params = data.get('allParams', {})
+            has_vbank_info = any(key in all_params for key in ['vactBankName', 'VACT_Num', 'vactNum', 'VACT_Date', 'vactDate'])
+            
+            logger.info(f"결제 방법 확인: payMethod='{pay_method}'")
+            logger.info(f"가상계좌 정보 확인: vactBankName={vact_bank_name}, vactNum={vact_num}, vactDate={vact_date}")
+            logger.info(f"가상계좌 정보 존재 여부: {has_vbank_info}")
             logger.info(f"결제 성공 처리 시작: order_id={order_id}")
             
-            # payMethod가 없는 경우 기본값으로 Card 설정 (모바일에서는 payMethod가 없을 수 있음)
+            # payMethod 추론 - 가상계좌 정보가 있으면 VBank로 처리
             if not pay_method:
-                pay_method = 'Card'  # 기본값
-                logger.info(f"payMethod가 없어서 기본값 설정: {pay_method}")
+                if vact_bank_name or vact_num or has_vbank_info:
+                    pay_method = 'VBank'
+                    logger.info(f"가상계좌 정보가 있어서 VBank로 설정: {pay_method}")
+                else:
+                    pay_method = 'Card'  # 기본값
+                    logger.info(f"payMethod가 없고 가상계좌 정보도 없어서 기본값 설정: {pay_method}")
+            
+            logger.info(f"최종 결제 방법: {pay_method}")
             
             # 가상계좌(무통장입금)인 경우 별도 처리 (승인 불필요)
             if pay_method in ['VBank', 'VBANK', 'vbank']:
+                logger.info(f"가상계좌 결제 처리 시작: order_id={order_id}")
+                
+                # 가상계좌 정보 수집 - 다양한 필드명에서 시도
+                vbank_info = {
+                    'name': vact_bank_name or all_params.get('vactBankName', ''),
+                    'num': vact_num or all_params.get('VACT_Num', '') or all_params.get('vactNum', ''),
+                    'date': vact_date or all_params.get('VACT_Date', '') or all_params.get('vactDate', ''),
+                    'holder': vact_name or all_params.get('VACT_Name', '') or all_params.get('vactName', ''),
+                    'code': data.get('vactBankCode', '') or all_params.get('vactBankCode', '')
+                }
+                
+                logger.info(f"가상계좌 정보: {vbank_info}")
+                
                 # 무통장입금은 입금대기 상태로 설정
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
                     payment.tid = order_id[:200]
-                    payment.vbank_name = data.get('vactBankName', '')
-                    payment.vbank_num = data.get('VACT_Num', '')
-                    payment.vbank_date = data.get('VACT_Date', '')
-                    payment.vbank_holder = data.get('VACT_Name', '')
+                    payment.vbank_name = vbank_info['name']
+                    payment.vbank_num = vbank_info['num']
+                    payment.vbank_date = vbank_info['date']
+                    payment.vbank_holder = vbank_info['holder']
                     payment.payment_data.update({
-                        'authToken': auth_token,
+                        'authToken': auth_token[:500] if auth_token else None,  # 너무 긴 토큰 일부만 저장
                         'authResultCode': auth_result_code,
-                        'originalTid': tid,
+                        'originalTid': data.get('tid', ''),
                         'payMethod': pay_method,
-                        'vactBankCode': data.get('vactBankCode'),
+                        'vactBankCode': vbank_info['code'],
+                        'allVbankParams': vbank_info,  # 디버깅용
+                        'processingType': 'vbank_auto_detected'
                     })
                     payment.save()
                     
-                    logger.info(f"무통장입금 대기: order_id={order_id}, bank={payment.vbank_name}, account={payment.vbank_num}")
+                    logger.info(f"무통장입금 대기 설정 완료: order_id={order_id}")
+                    logger.info(f"가상계좌: {payment.vbank_name} {payment.vbank_num} (만료: {payment.vbank_date})")
                     
                     # 무통장입금 안내 응답
+                    message = '무통장입금 계좌가 발급되었습니다.'
+                    if payment.vbank_name and payment.vbank_num:
+                        message += f' {payment.vbank_name} {payment.vbank_num}로 입금해주세요.'
+                        if payment.vbank_date:
+                            message += f' (입금기한: {payment.vbank_date})'
+                    
                     return Response({
                         'success': True,
-                        'message': f'무통장입금 계좌가 발급되었습니다. {payment.vbank_name} {payment.vbank_num}로 {payment.vbank_date}까지 입금해주세요.',
+                        'message': message,
                         'is_vbank': True,
                         'vbank_name': payment.vbank_name,
                         'vbank_num': payment.vbank_num,
                         'vbank_date': payment.vbank_date,
                         'vbank_holder': payment.vbank_holder,
-                        'amount': payment.amount
+                        'amount': int(payment.amount)
                     })
             
             # 실시간 결제(카드, 계좌이체, 휴대폰) 처리 - 승인 필요
