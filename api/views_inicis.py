@@ -424,16 +424,36 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v3.1 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v3.2 - 전체 파라미터 분석 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
-        logger.info(f"P_MID 추출 방식 수정: 실제 상점 ID 직접 사용 (운영/테스트 환경 차이 고려)")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
         auth_result_code = data.get('authResultCode')
         auth_token = data.get('authToken')
         tid = data.get('tid')
+        
+        # 추가 TID 관련 파라미터들
+        P_TID = data.get('P_TID')
+        transaction_id = data.get('transactionId')
+        payment_id = data.get('paymentId')
+        MOID = data.get('MOID')
+        TotPrice = data.get('TotPrice')
+        goodName = data.get('goodName')
+        all_params = data.get('allParams', {})
+        
+        logger.info(f"=== 모든 파라미터 분석 ===")
+        logger.info(f"프론트엔드에서 받은 모든 파라미터: {all_params}")
+        logger.info(f"TID 관련 파라미터들:")
+        logger.info(f"  - tid: {tid}")
+        logger.info(f"  - P_TID: {P_TID}")
+        logger.info(f"  - authToken: {'있음' if auth_token else '없음'} ({len(auth_token) if auth_token else 0}자)")
+        logger.info(f"  - transactionId: {transaction_id}")
+        logger.info(f"  - paymentId: {payment_id}")
+        logger.info(f"  - MOID: {MOID}")
+        logger.info(f"  - TotPrice: {TotPrice}")
+        logger.info(f"  - goodName: {goodName}")
         
         # 필수 파라미터 검증
         if not order_id:
