@@ -51,11 +51,25 @@ class InicisPaymentService:
         try:
             import requests
             
+            # authToken에서 hash 분리 처리 (hAsH: 구분자가 있는 경우)
+            actual_auth_token = auth_token
+            hash_value = None
+            
+            if 'hAsH:' in auth_token:
+                parts = auth_token.split('hAsH:', 1)
+                actual_auth_token = parts[0].strip()
+                hash_value = parts[1].strip() if len(parts) > 1 else None
+                logger.info(f"authToken 분리: token_length={len(actual_auth_token)}, hash={hash_value[:20]}..." if hash_value else "no hash")
+            
             # 승인 요청 파라미터 - 이니시스 API 규격에 맞게 수정
             params = {
-                'authToken': auth_token,
+                'authToken': actual_auth_token,
                 'mid': cls.MID,
             }
+            
+            # hash가 있는 경우 추가 (이니시스 API 규격에 따라)
+            if hash_value:
+                params['hashData'] = hash_value
             
             logger.info(f"이니시스 승인 요청: order_id={order_id}, params={params}")
             
