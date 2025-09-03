@@ -417,14 +417,21 @@ def verify_inicis_payment(request):
             logger.info(f"가상계좌 정보 존재 여부: {has_vbank_info}")
             logger.info(f"결제 성공 처리 시작: order_id={order_id}")
             
-            # payMethod 추론 - 가상계좌 정보가 있으면 VBank로 처리
+            # payMethod 추론 로직 개선
             if not pay_method:
+                # 1차: 가상계좌 정보가 있으면 VBank로 처리
                 if vact_bank_name or vact_num or has_vbank_info:
                     pay_method = 'VBank'
                     logger.info(f"가상계좌 정보가 있어서 VBank로 설정: {pay_method}")
+                # 2차: authToken의 특성으로 판단 (무통장은 보통 매우 긴 토큰)
+                elif auth_token and len(auth_token) > 3000:
+                    # 매우 긴 authToken은 무통장 결제일 가능성이 높음
+                    logger.info(f"긴 authToken({len(auth_token)}자)으로 무통장 결제로 추정")
+                    pay_method = 'VBank'
+                    logger.info(f"authToken 길이 기반으로 VBank로 설정: {pay_method}")
                 else:
                     pay_method = 'Card'  # 기본값
-                    logger.info(f"payMethod가 없고 가상계좌 정보도 없어서 기본값 설정: {pay_method}")
+                    logger.info(f"payMethod가 없고 판단 기준 없어서 기본값 설정: {pay_method}")
             
             logger.info(f"최종 결제 방법: {pay_method}")
             
@@ -443,6 +450,17 @@ def verify_inicis_payment(request):
                 
                 logger.info(f"가상계좌 정보: {vbank_info}")
                 
+                # 가상계좌 정보가 없어도 무통장 결제로 처리 (추후 웹훅으로 정보 업데이트)
+                if not any(vbank_info.values()):
+                    logger.warning(f"가상계좌 정보가 없음 - 추후 웹훅에서 업데이트 예정")
+                    vbank_info = {
+                        'name': '은행 정보 확인 중',
+                        'num': '계좌번호 발급 중',
+                        'date': '입금기한 확인 중',
+                        'holder': '둥지마켓',
+                        'code': ''
+                    }
+                
                 # 무통장입금은 입금대기 상태로 설정
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
@@ -458,7 +476,8 @@ def verify_inicis_payment(request):
                         'payMethod': pay_method,
                         'vactBankCode': vbank_info['code'],
                         'allVbankParams': vbank_info,  # 디버깅용
-                        'processingType': 'vbank_auto_detected'
+                        'processingType': 'vbank_by_authtoken_length',  # 감지 방법
+                        'fullAuthTokenLength': len(auth_token) if auth_token else 0
                     })
                     payment.save()
                     
@@ -466,11 +485,12 @@ def verify_inicis_payment(request):
                     logger.info(f"가상계좌: {payment.vbank_name} {payment.vbank_num} (만료: {payment.vbank_date})")
                     
                     # 무통장입금 안내 응답
-                    message = '무통장입금 계좌가 발급되었습니다.'
-                    if payment.vbank_name and payment.vbank_num:
-                        message += f' {payment.vbank_name} {payment.vbank_num}로 입금해주세요.'
-                        if payment.vbank_date:
+                    if vbank_info['name'] != '은행 정보 확인 중':
+                        message = f'무통장입금 계좌가 발급되었습니다. {payment.vbank_name} {payment.vbank_num}로 입금해주세요.'
+                        if payment.vbank_date and payment.vbank_date != '입금기한 확인 중':
                             message += f' (입금기한: {payment.vbank_date})'
+                    else:
+                        message = '무통장입금이 처리되었습니다. 계좌 정보는 잠시 후 확인 가능합니다.'
                     
                     return Response({
                         'success': True,
@@ -480,7 +500,8 @@ def verify_inicis_payment(request):
                         'vbank_num': payment.vbank_num,
                         'vbank_date': payment.vbank_date,
                         'vbank_holder': payment.vbank_holder,
-                        'amount': int(payment.amount)
+                        'amount': int(payment.amount),
+                        'note': '가상계좌 상세 정보가 없는 경우 웹훅으로 업데이트됩니다.'
                     })
             
             # 실시간 결제(카드, 계좌이체, 휴대폰) 처리 - 승인 필요
