@@ -255,8 +255,91 @@ def verify_inicis_payment(request):
         
         # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            # 결제 수단 확인
-            pay_method = data.get('payMethod', '')
+            # 실제 승인 요청 (공식 샘플 코드 기준)
+            auth_url = data.get('authUrl')
+            auth_token = data.get('authToken')
+            idc_name = data.get('idc_name')
+            net_cancel_url = data.get('netCancelUrl')
+            
+            if not auth_url or not auth_token:
+                logger.error(f"승인에 필요한 파라미터 부족: authUrl={auth_url}, authToken={'있음' if auth_token else '없음'}")
+                return Response({
+                    'success': False,
+                    'error': '승인에 필요한 파라미터가 부족합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 공식 샘플 코드와 동일한 승인 요청
+            import requests
+            import time
+            
+            timestamp = str(int(time.time() * 1000))
+            
+            # SHA256 Hash값 [대상: authToken, timestamp] - 공식 샘플과 동일
+            signature_data = f"authToken={auth_token}&timestamp={timestamp}"
+            signature = hashlib.sha256(signature_data.encode('utf-8')).hexdigest()
+            
+            # SHA256 Hash값 [대상: authToken, signKey, timestamp] - 공식 샘플과 동일
+            verification_data = f"authToken={auth_token}&signKey={InicisPaymentService.SIGNKEY}&timestamp={timestamp}"
+            verification = hashlib.sha256(verification_data.encode('utf-8')).hexdigest()
+            
+            # 승인 요청 파라미터 - 공식 샘플과 동일
+            approval_params = {
+                'mid': InicisPaymentService.MID,
+                'authToken': auth_token,
+                'timestamp': timestamp,
+                'signature': signature,
+                'verification': verification,
+                'charset': 'UTF-8',
+                'format': 'JSON'
+            }
+            
+            logger.info(f"이니시스 승인 요청 시작: order_id={order_id}, authUrl={auth_url}")
+            logger.info(f"승인 파라미터: mid={InicisPaymentService.MID}, timestamp={timestamp}")
+            
+            try:
+                # 이니시스 승인 API 호출
+                response = requests.post(auth_url, data=approval_params, timeout=30)
+                logger.info(f"승인 응답 상태: {response.status_code}")
+                logger.info(f"승인 응답 내용: {response.text}")
+                
+                if response.status_code == 200:
+                    # JSON 응답 파싱
+                    try:
+                        approval_result = response.json()
+                        result_code = approval_result.get('resultCode', '')
+                        result_msg = approval_result.get('resultMsg', '')
+                        
+                        if result_code != '00':
+                            logger.error(f"승인 실패: code={result_code}, msg={result_msg}")
+                            return Response({
+                                'success': False,
+                                'error': f'결제 승인 실패: {result_msg}',
+                                'result_code': result_code
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                        
+                        # 승인 성공 - 결제 수단 확인
+                        pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
+                        logger.info(f"승인 성공: payMethod={pay_method}")
+                        
+                    except ValueError as e:
+                        logger.error(f"승인 응답 JSON 파싱 실패: {e}, 응답: {response.text}")
+                        return Response({
+                            'success': False,
+                            'error': '승인 응답 형식 오류'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                else:
+                    logger.error(f"승인 요청 HTTP 오류: {response.status_code}")
+                    return Response({
+                        'success': False,
+                        'error': '승인 요청 실패'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    
+            except requests.RequestException as e:
+                logger.error(f"승인 요청 네트워크 오류: {e}")
+                return Response({
+                    'success': False,
+                    'error': '승인 요청 네트워크 오류'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # 가상계좌(무통장입금)인 경우 별도 처리
             if pay_method == 'VBank':
