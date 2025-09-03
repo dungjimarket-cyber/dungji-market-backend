@@ -453,6 +453,7 @@ class ProductViewSet(ModelViewSet):
         category = self.request.query_params.get('category', None)
         category_type = self.request.query_params.get('category_type', None)
         product_type = self.request.query_params.get('product_type', None)
+        ordering = self.request.query_params.get('ordering', None)
         
         if category:
             queryset = queryset.filter(category__slug=category)
@@ -460,6 +461,17 @@ class ProductViewSet(ModelViewSet):
             queryset = queryset.filter(category__detail_type=category_type)
         if product_type:
             queryset = queryset.filter(product_type=product_type)
+        
+        # 정렬 처리
+        if ordering:
+            queryset = queryset.order_by(ordering)
+        else:
+            # 기본 정렬: 출시일 최신순 (null 값은 마지막), 그 다음 이름순
+            from django.db.models import F
+            queryset = queryset.order_by(
+                F('release_date').desc(nulls_last=True),  # 최신 출시일 우선, null은 마지막
+                'name'  # 출시일이 같거나 없으면 이름순
+            )
             
         return queryset
     
