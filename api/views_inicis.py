@@ -60,6 +60,10 @@ class InicisPaymentService:
                 hash_value = parts[1].strip() if len(parts) > 1 else None
                 logger.info(f"authToken 분리: token_length={len(actual_auth_token)}, hash={hash_value[:20]}..." if hash_value else "no hash")
             
+            # authToken에서 줄바꿈 문자 제거 (이니시스 API 요구사항)
+            actual_auth_token = actual_auth_token.replace('\r\n', '').replace('\n', '').replace('\r', '')
+            logger.info(f"authToken 정리 완료: token_length={len(actual_auth_token)}")
+            
             # 타임스탬프 생성
             import time
             timestamp = str(int(time.time() * 1000))
