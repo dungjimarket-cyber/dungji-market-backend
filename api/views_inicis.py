@@ -55,11 +55,26 @@ class InicisPaymentService:
             
             logger.info(f"이니시스 모바일 승인 요청 시작")
             
-            # 승인 요청 데이터
+            # authToken 정리 (줄바꿈 제거 및 hAsH 부분 처리)
+            clean_auth_token = auth_token
+            if 'hAsH:' in auth_token:
+                # hAsH: 부분 제거 (이니시스 내부 해시값으로 추정)
+                clean_auth_token = auth_token.split('hAsH:')[0]
+                logger.info(f"authToken에서 hAsH 부분 제거: 원래 길이 {len(auth_token)} -> 정리 후 {len(clean_auth_token)}")
+            
+            # 줄바꿈 문자 제거
+            clean_auth_token = clean_auth_token.replace('\r\n', '').replace('\r', '').replace('\n', '')
+            
+            logger.info(f"정리된 authToken 길이: {len(clean_auth_token)}")
+            logger.info(f"정리된 authToken 앞부분: {clean_auth_token[:50]}...")
+            
+            # 승인 요청 데이터 (이니시스 API 스펙에 맞춤)
             approval_data = {
                 'mid': cls.MID,
-                'authToken': auth_token,
-                'timestamp': str(int(datetime.now().timestamp() * 1000))
+                'authToken': clean_auth_token,
+                'timestamp': str(int(datetime.now().timestamp() * 1000)),
+                'charset': 'UTF-8',
+                'format': 'JSON'
             }
             
             # URL 인코딩
@@ -67,6 +82,7 @@ class InicisPaymentService:
             
             logger.info(f"승인 요청 URL: {auth_url}")
             logger.info(f"승인 요청 데이터: {approval_data}")
+            logger.info(f"URL 인코딩된 데이터: {encoded_data}")
             
             # 승인 API 호출
             response = requests.post(
@@ -86,18 +102,34 @@ class InicisPaymentService:
                 # 응답 파싱
                 result_params = {}
                 
-                # JSON 응답인 경우
-                try:
-                    import json
-                    result_params = json.loads(response.text)
-                    logger.info(f"승인 결과 (JSON): {result_params}")
-                except json.JSONDecodeError:
-                    # URL 인코딩된 응답인 경우
-                    for pair in response.text.split('&'):
-                        if '=' in pair:
-                            key, value = pair.split('=', 1)
-                            result_params[key] = urllib.parse.unquote(value)
-                    logger.info(f"승인 결과 (URL-encoded): {result_params}")
+                # XML 응답인 경우 먼저 확인 (이니시스는 주로 XML 응답)
+                if response.text.strip().startswith('<?xml'):
+                    try:
+                        import xml.etree.ElementTree as ET
+                        root = ET.fromstring(response.text)
+                        
+                        # XML에서 필드 추출
+                        for elem in root:
+                            result_params[elem.tag] = elem.text
+                        
+                        logger.info(f"승인 결과 (XML): {result_params}")
+                    except Exception as xml_error:
+                        logger.error(f"XML 파싱 오류: {xml_error}")
+                        logger.error(f"XML 응답 내용: {response.text}")
+                        return None
+                else:
+                    # JSON 응답인 경우
+                    try:
+                        import json
+                        result_params = json.loads(response.text)
+                        logger.info(f"승인 결과 (JSON): {result_params}")
+                    except json.JSONDecodeError:
+                        # URL 인코딩된 응답인 경우
+                        for pair in response.text.split('&'):
+                            if '=' in pair:
+                                key, value = pair.split('=', 1)
+                                result_params[key] = urllib.parse.unquote(value)
+                        logger.info(f"승인 결과 (URL-encoded): {result_params}")
                 
                 return result_params
             else:
@@ -273,11 +305,33 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
+        logger.info(f"=== 이니시스 결제 검증 시작 v2.2 ===")
+        logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
+        logger.info(f"요청 데이터: {data}")
+        logger.info(f"authToken 정리 로직 추가된 코드 실행 중...")
+        
         # 결제 결과 파라미터
         order_id = data.get('orderId')
         auth_result_code = data.get('authResultCode')
         auth_token = data.get('authToken')
         tid = data.get('tid')
+        
+        # 필수 파라미터 검증
+        if not order_id:
+            logger.error("필수 파라미터 누락: orderId")
+            return Response(
+                {'success': False, 'error': '주문번호가 누락되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not auth_result_code:
+            logger.error("필수 파라미터 누락: authResultCode")
+            return Response(
+                {'success': False, 'error': '인증 결과 코드가 누락되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"파싱된 파라미터: order_id={order_id}, auth_result_code={auth_result_code}, auth_token={'있음' if auth_token else '없음'}")
         
         # Payment 레코드 조회
         try:
@@ -321,12 +375,17 @@ def verify_inicis_payment(request):
                 'is_subscription': is_subscription
             })
         
-        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
+        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)  
         if auth_result_code in ['00', '0000']:
             pay_method = data.get('payMethod', '')
             
             logger.info(f"결제 방법 확인: {pay_method}")
-            logger.info(f"전체 인증 데이터: {data}")
+            logger.info(f"결제 성공 처리 시작: order_id={order_id}")
+            
+            # payMethod가 없는 경우 기본값으로 Card 설정 (모바일에서는 payMethod가 없을 수 있음)
+            if not pay_method:
+                pay_method = 'Card'  # 기본값
+                logger.info(f"payMethod가 없어서 기본값 설정: {pay_method}")
             
             # 가상계좌(무통장입금)인 경우 별도 처리 (승인 불필요)
             if pay_method in ['VBank', 'VBANK', 'vbank']:
@@ -561,11 +620,20 @@ def verify_inicis_payment(request):
     except Exception as e:
         logger.error(f"이니시스 결제 검증 중 오류: {str(e)}")
         logger.error(f"오류 타입: {type(e)}")
+        logger.error(f"요청 데이터: {request.data}")
         import traceback
         logger.error(f"스택 트레이스: {traceback.format_exc()}")
+        
+        # 구체적인 오류 메시지 생성
+        error_message = str(e) if str(e) and str(e) != 'None' else '결제 검증 중 오류가 발생했습니다.'
+        
         return Response(
-            {'error': '결제 검증 중 오류가 발생했습니다.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                'success': False,
+                'error': error_message,
+                'error_code': getattr(e, 'code', None)
+            },
+            status=status.HTTP_400_BAD_REQUEST
         )
 
 
