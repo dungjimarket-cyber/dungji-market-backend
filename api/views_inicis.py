@@ -55,10 +55,23 @@ class InicisPaymentService:
             
             logger.info(f"이니시스 모바일 승인 요청 시작")
             
+            # authToken 정리 (줄바꿈 제거 및 hAsH 부분 처리)
+            clean_auth_token = auth_token
+            if 'hAsH:' in auth_token:
+                # hAsH: 부분 제거 (이니시스 내부 해시값으로 추정)
+                clean_auth_token = auth_token.split('hAsH:')[0]
+                logger.info(f"authToken에서 hAsH 부분 제거: 원래 길이 {len(auth_token)} -> 정리 후 {len(clean_auth_token)}")
+            
+            # 줄바꿈 문자 제거
+            clean_auth_token = clean_auth_token.replace('\r\n', '').replace('\r', '').replace('\n', '')
+            
+            logger.info(f"정리된 authToken 길이: {len(clean_auth_token)}")
+            logger.info(f"정리된 authToken 앞부분: {clean_auth_token[:50]}...")
+            
             # 승인 요청 데이터 (이니시스 API 스펙에 맞춤)
             approval_data = {
                 'mid': cls.MID,
-                'authToken': auth_token,
+                'authToken': clean_auth_token,
                 'timestamp': str(int(datetime.now().timestamp() * 1000)),
                 'charset': 'UTF-8',
                 'format': 'JSON'
@@ -292,10 +305,10 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v2.1 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v2.2 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
-        logger.info(f"XML 파싱 및 파라미터 포맷 개선된 코드 실행 중...")
+        logger.info(f"authToken 정리 로직 추가된 코드 실행 중...")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
