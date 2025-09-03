@@ -466,11 +466,11 @@ class ProductViewSet(ModelViewSet):
         if ordering:
             queryset = queryset.order_by(ordering)
         else:
-            # 기본 정렬: 출시일 최신순 (null 값은 마지막), 그 다음 이름순
+            # 기본 정렬: 이름순, 그 다음 출시일 최신순 (브랜드별 그룹핑)
             from django.db.models import F
             queryset = queryset.order_by(
-                F('release_date').desc(nulls_last=True),  # 최신 출시일 우선, null은 마지막
-                'name'  # 출시일이 같거나 없으면 이름순
+                'name',  # 이름순 (Galaxy, iPhone 등 브랜드별 그룹핑)
+                F('release_date').desc(nulls_last=True)  # 같은 브랜드 내에서 최신 출시일 우선
             )
             
         return queryset

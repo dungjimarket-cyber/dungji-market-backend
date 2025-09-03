@@ -183,7 +183,7 @@ class Product(models.Model):
     class Meta:
         verbose_name = '상품'
         verbose_name_plural = '상품 관리'
-        ordering = ['-release_date', 'name']  # 출시일 최신순(내림차순), 이름순(오름차순)
+        ordering = ['name', '-release_date']  # 이름순(오름차순), 출시일 최신순(내림차순)
     
     def get_detail(self):
         """카테고리 유형에 따라 적절한 상세 정보 모델 반환"""
