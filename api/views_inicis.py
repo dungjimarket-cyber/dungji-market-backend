@@ -45,6 +45,56 @@ class InicisPaymentService:
         return cls.PROD_URL
     
     @classmethod
+    def request_payment_approval(cls, order_id, auth_token, auth_url, net_cancel_url):
+        """
+        이니시스 결제 승인 요청 (커밋 6859302 기반 복원)
+        2단계 승인 처리
+        """
+        try:
+            import requests
+            
+            # 승인 요청 파라미터
+            params = {
+                'authToken': auth_token,
+                'authUrl': auth_url,
+                'netCancelUrl': net_cancel_url,
+                'mid': cls.MID,
+            }
+            
+            logger.info(f"이니시스 승인 요청: order_id={order_id}, params={params}")
+            
+            # 이니시스 승인 API 호출
+            response = requests.post(
+                auth_url,  # 이니시스에서 제공한 승인 URL
+                data=params,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result_text = response.text
+                logger.info(f"이니시스 승인 응답: {result_text}")
+                
+                # 응답 파싱 (key=value&key=value 형식)
+                result_params = {}
+                for pair in result_text.split('&'):
+                    if '=' in pair:
+                        key, value = pair.split('=', 1)
+                        # URL 디코딩
+                        import urllib.parse
+                        result_params[key] = urllib.parse.unquote(value)
+                
+                logger.info(f"이니시스 승인 파싱 결과: {result_params}")
+                return result_params
+            else:
+                logger.error(f"이니시스 승인 API 오류: {response.status_code}, {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"이니시스 승인 요청 실패: {str(e)}")
+            return None
+
+    @classmethod
     def get_vbank_info_from_auth(cls, auth_url, auth_token, order_id):
         """
         이니시스 authToken을 사용하여 가상계좌 정보 조회
@@ -574,15 +624,36 @@ def verify_inicis_payment(request):
             logger.info(f"가상계좌 정보 존재 여부: {has_vbank_info}")
             logger.info(f"결제 성공 처리 시작: order_id={order_id}")
             
-            # payMethod 추론 로직 개선
+            # 커밋 6859302 방식 복원: 실제 승인 API 호출하여 payMethod 획득
+            auth_url = data.get('authUrl') or all_params.get('authUrl')
+            net_cancel_url = data.get('netCancelUrl') or all_params.get('netCancelUrl')
+            
+            if auth_url and auth_token:
+                logger.info("이니시스 승인 API 호출하여 payMethod 확인")
+                approval_result = InicisPaymentService.request_payment_approval(
+                    order_id, auth_token, auth_url, net_cancel_url
+                )
+                
+                if approval_result:
+                    logger.info(f"이니시스 승인 성공: order_id={order_id}, result={approval_result}")
+                    # 승인 결과에서 결제 방법 확인
+                    pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
+                else:
+                    logger.warning(f"이니시스 승인 실패: order_id={order_id}")
+                    return Response(
+                        {'success': False, 'error': '결제 승인에 실패했습니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                logger.warning(f"authUrl 또는 authToken이 없음: order_id={order_id}")
+                pay_method = data.get('payMethod', '')
+            
+            # payMethod가 여전히 없으면 추론 로직 사용
             if not pay_method:
-                # 1차: 가상계좌 정보가 있으면 VBank로 처리
                 if vact_bank_name or vact_num or has_vbank_info:
                     pay_method = 'VBank'
                     logger.info(f"가상계좌 정보가 있어서 VBank로 설정: {pay_method}")
-                # 2차: authToken의 특성으로 판단 (무통장은 보통 매우 긴 토큰)
                 elif auth_token and len(auth_token) > 3000:
-                    # 매우 긴 authToken은 무통장 결제일 가능성이 높음
                     logger.info(f"긴 authToken({len(auth_token)}자)으로 무통장 결제로 추정")
                     pay_method = 'VBank'
                     logger.info(f"authToken 길이 기반으로 VBank로 설정: {pay_method}")
