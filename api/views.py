@@ -3442,12 +3442,16 @@ class UserProfileView(APIView):
             'id': user.id,
             'email': user.email,
             'username': user.username,  # 닉네임 수정을 위해 get_full_name() 사용하지 않고 username만 반환
+            'nickname': user.username,  # nickname 필드도 추가
             'profile_image': user.profile_image,
             'sns_type': user.sns_type,
             'phone_number': user.phone_number,
             'address_detail': user.address_detail,
             'role': user.role,
             'is_business_verified': user.is_business_verified,
+            'business_number': user.business_number,  # 사업자등록번호 추가
+            'business_address': user.business_address,  # 사업장 주소 추가
+            'representative_name': user.representative_name,  # 대표자명 추가
         }
         
         # 주소 지역 정보 추가
