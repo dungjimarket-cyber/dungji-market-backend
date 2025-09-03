@@ -273,11 +273,32 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
+        logger.info(f"=== 이니시스 결제 검증 시작 ===")
+        logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
+        logger.info(f"요청 데이터: {data}")
+        
         # 결제 결과 파라미터
         order_id = data.get('orderId')
         auth_result_code = data.get('authResultCode')
         auth_token = data.get('authToken')
         tid = data.get('tid')
+        
+        # 필수 파라미터 검증
+        if not order_id:
+            logger.error("필수 파라미터 누락: orderId")
+            return Response(
+                {'success': False, 'error': '주문번호가 누락되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not auth_result_code:
+            logger.error("필수 파라미터 누락: authResultCode")
+            return Response(
+                {'success': False, 'error': '인증 결과 코드가 누락되었습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"파싱된 파라미터: order_id={order_id}, auth_result_code={auth_result_code}, auth_token={'있음' if auth_token else '없음'}")
         
         # Payment 레코드 조회
         try:
@@ -321,12 +342,17 @@ def verify_inicis_payment(request):
                 'is_subscription': is_subscription
             })
         
-        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
+        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)  
         if auth_result_code in ['00', '0000']:
             pay_method = data.get('payMethod', '')
             
             logger.info(f"결제 방법 확인: {pay_method}")
-            logger.info(f"전체 인증 데이터: {data}")
+            logger.info(f"결제 성공 처리 시작: order_id={order_id}")
+            
+            # payMethod가 없는 경우 기본값으로 Card 설정 (모바일에서는 payMethod가 없을 수 있음)
+            if not pay_method:
+                pay_method = 'Card'  # 기본값
+                logger.info(f"payMethod가 없어서 기본값 설정: {pay_method}")
             
             # 가상계좌(무통장입금)인 경우 별도 처리 (승인 불필요)
             if pay_method in ['VBank', 'VBANK', 'vbank']:
@@ -561,11 +587,20 @@ def verify_inicis_payment(request):
     except Exception as e:
         logger.error(f"이니시스 결제 검증 중 오류: {str(e)}")
         logger.error(f"오류 타입: {type(e)}")
+        logger.error(f"요청 데이터: {request.data}")
         import traceback
         logger.error(f"스택 트레이스: {traceback.format_exc()}")
+        
+        # 구체적인 오류 메시지 생성
+        error_message = str(e) if str(e) and str(e) != 'None' else '결제 검증 중 오류가 발생했습니다.'
+        
         return Response(
-            {'error': '결제 검증 중 오류가 발생했습니다.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                'success': False,
+                'error': error_message,
+                'error_code': getattr(e, 'code', None)
+            },
+            status=status.HTTP_400_BAD_REQUEST
         )
 
 
