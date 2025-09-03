@@ -66,8 +66,9 @@ class InicisPaymentService:
             # 줄바꿈 제거
             P_TID = P_TID.replace('\r\n', '').replace('\r', '').replace('\n', '')
             
-            # P_MID는 P_TID의 10-20번째 문자 (이니시스 공식 규격)
-            P_MID = P_TID[10:20] if len(P_TID) > 20 else cls.MID
+            # P_MID는 실제 상점 ID 사용 (운영 환경에서는 TID 추출 방식이 다를 수 있음)
+            # 테스트 환경과 운영 환경의 TID 구조가 다를 가능성 고려
+            P_MID = cls.MID  # 실제 상점 ID 직접 사용
             
             logger.info(f"정리된 P_TID 길이: {len(P_TID)}")
             logger.info(f"P_MID 추출: {P_MID}")
@@ -312,10 +313,10 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v3.0 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v3.1 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
-        logger.info(f"이니시스 공식 문서 기준으로 완전 재구성 (P_TID/P_MID, payReq.ini, URL-encoded)")
+        logger.info(f"P_MID 추출 방식 수정: 실제 상점 ID 직접 사용 (운영/테스트 환경 차이 고려)")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
