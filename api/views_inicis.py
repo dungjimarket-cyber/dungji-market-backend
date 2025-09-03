@@ -77,13 +77,11 @@ class InicisPaymentService:
             verification_data = actual_auth_token + cls.SIGNKEY + timestamp
             verification = hashlib.sha256(verification_data.encode('utf-8')).hexdigest()
             
-            # 승인 요청 파라미터 - 이니시스 공식 PC 결제 규격
+            # 승인 요청 파라미터 - 이니시스 INIAPI 규격 (대소문자 정확히 맞춤)
             params = {
                 'mid': cls.MID,
                 'authToken': actual_auth_token,
-                'timestamp': timestamp,
-                'signature': signature,
-                'verification': verification,
+                'hashData': hash_value if hash_value else '',
                 'charset': 'UTF-8',
                 'format': 'XML'
             }
