@@ -53,26 +53,70 @@ class InicisPaymentService:
             import urllib.parse
             from datetime import datetime
             
-            logger.info(f"이니시스 모바일 승인 요청 시작")
+            logger.info(f"=== 이니시스 모바일 승인 요청 시작 ===")
+            logger.info(f"원본 authToken 분석:")
+            logger.info(f"  - 길이: {len(auth_token)}")
+            logger.info(f"  - 타입: {type(auth_token)}")
+            logger.info(f"  - 앞 100자: {repr(auth_token[:100])}")
+            logger.info(f"  - 뒤 100자: {repr(auth_token[-100:])}")
+            logger.info(f"  - hAsH 포함여부: {'hAsH:' in auth_token}")
+            logger.info(f"  - 줄바꿈 포함여부: {'\\n' in auth_token or '\\r' in auth_token}")
             
             # 이니시스 공식 문서에 따른 승인 요청 파라미터
             # P_TID는 authToken 그대로 사용, P_MID는 P_TID에서 추출
+            P_TID_original = auth_token
             P_TID = auth_token
+            
+            logger.info(f"TID 변환 과정:")
+            
             if 'hAsH:' in P_TID:
                 # hAsH 부분 제거
                 P_TID = P_TID.split('hAsH:')[0]
-                logger.info(f"P_TID에서 hAsH 부분 제거: 원래 길이 {len(auth_token)} -> 정리 후 {len(P_TID)}")
+                logger.info(f"  1) hAsH 제거: {len(P_TID_original)} -> {len(P_TID)} 문자")
+                logger.info(f"     제거된 부분: {repr(P_TID_original[len(P_TID):])}")
             
             # 줄바꿈 제거
+            P_TID_before_clean = P_TID
             P_TID = P_TID.replace('\r\n', '').replace('\r', '').replace('\n', '')
+            if P_TID_before_clean != P_TID:
+                logger.info(f"  2) 줄바꿈 제거: {len(P_TID_before_clean)} -> {len(P_TID)} 문자")
             
-            # P_MID는 실제 상점 ID 사용 (운영 환경에서는 TID 추출 방식이 다를 수 있음)
-            # 테스트 환경과 운영 환경의 TID 구조가 다를 가능성 고려
-            P_MID = cls.MID  # 실제 상점 ID 직접 사용
+            # TID 구조 분석
+            logger.info(f"최종 P_TID 분석:")
+            logger.info(f"  - 길이: {len(P_TID)}")
+            logger.info(f"  - 앞 50자: {repr(P_TID[:50])}")
+            logger.info(f"  - 뒤 50자: {repr(P_TID[-50:])}")
             
-            logger.info(f"정리된 P_TID 길이: {len(P_TID)}")
-            logger.info(f"P_MID 추출: {P_MID}")
-            logger.info(f"P_TID 앞부분: {P_TID[:50]}...")
+            # TID에서 상점ID 패턴 확인 (다양한 위치에서 시도)
+            logger.info(f"TID 내 상점ID 패턴 분석:")
+            extracted_mid_candidates = {}
+            for start_pos in [10, 0, 20, 30]:
+                if start_pos < len(P_TID):
+                    potential_mid = P_TID[start_pos:start_pos+10]
+                    extracted_mid_candidates[start_pos] = potential_mid
+                    logger.info(f"  - 위치 {start_pos}: '{potential_mid}'")
+            
+            # 공식 문서에 따른 P_MID 추출 방식 시도 (P_TID.substring(10, 20))
+            P_MID_from_TID = None
+            if len(P_TID) >= 20:
+                P_MID_from_TID = P_TID[10:20]  # JavaScript substring(10, 20)와 동일
+                logger.info(f"공식 문서 방식으로 추출한 P_MID: '{P_MID_from_TID}'")
+            
+            # 두 가지 방식 비교
+            P_MID_direct = cls.MID  # 직접 사용
+            P_MID_extracted = P_MID_from_TID if P_MID_from_TID else P_MID_direct
+            
+            logger.info(f"P_MID 방식 비교:")
+            logger.info(f"  - 직접 사용: '{P_MID_direct}'")
+            logger.info(f"  - TID에서 추출: '{P_MID_extracted}'")
+            logger.info(f"  - 일치 여부: {P_MID_direct == P_MID_extracted}")
+            
+            # 먼저 TID에서 추출한 방식을 시도 (공식 문서 방식)
+            P_MID = P_MID_extracted
+            
+            logger.info(f"최종 파라미터 (공식 문서 방식):")
+            logger.info(f"  - P_MID: {P_MID}")
+            logger.info(f"  - P_TID: {P_TID[:100]}..." + f"({len(P_TID)} 문자)" if len(P_TID) > 100 else f"  - P_TID: {P_TID}")
             
             # 이니시스 공식 승인 API 파라미터 (공식 문서 기준)
             approval_data = {
@@ -83,21 +127,31 @@ class InicisPaymentService:
             # URL 인코딩
             encoded_data = urllib.parse.urlencode(approval_data)
             
-            # 이니시스 공식 승인 API URL 구성
-            # auth_url에서 호스트 부분 추출하여 올바른 엔드포인트로 변경
+            # 이니시스 공식 승인 API URL 구성 및 검증
+            logger.info(f"URL 검증 및 구성:")
+            logger.info(f"  원래 승인 URL: {auth_url}")
+            
+            # auth_url이 기대하는 URL과 일치하는지 확인
             if 'ksstdpay.inicis.com' in auth_url:
-                # https://ksstdpay.inicis.com/api/payAuth -> https://ksmobile.inicis.com/smart/payReq.ini
                 correct_auth_url = "https://ksmobile.inicis.com/smart/payReq.ini"
+            elif 'ksmobile.inicis.com' in auth_url:
+                correct_auth_url = auth_url.replace('/smart/payReq.ini', '/smart/payReq.ini')  # 이미 올바른 형식
             else:
                 # 다른 센터인 경우 기본 구성
                 correct_auth_url = auth_url.replace('payAuth', 'payReq.ini').replace('ksstdpay', 'ksmobile').replace('/api/', '/smart/')
             
-            logger.info(f"원래 승인 URL: {auth_url}")
-            logger.info(f"수정된 승인 URL: {correct_auth_url}")
+            logger.info(f"  올바른 승인 URL: {correct_auth_url}")
+            logger.info(f"  URL 일치 여부: {auth_url == correct_auth_url}")
+            
+            # 공식 문서처럼 URL 검증 진행
+            if auth_url != correct_auth_url:
+                logger.warning(f"  ⚠️  URL 불일치 - 공식 URL로 변경")
+            
             logger.info(f"승인 요청 데이터: {approval_data}")
             logger.info(f"URL 인코딩된 데이터: {encoded_data}")
             
-            # 승인 API 호출
+            # 승인 API 호출 (첫 번째 시도: TID에서 추출한 P_MID 사용)
+            logger.info(f"=== 첫 번째 시도: TID에서 추출한 P_MID 사용 ===")
             response = requests.post(
                 correct_auth_url,
                 data=encoded_data,
@@ -111,38 +165,92 @@ class InicisPaymentService:
             logger.info(f"승인 응답 상태: {response.status_code}")
             logger.info(f"승인 응답 전체: {response.text}")
             
+            # 첫 번째 시도 결과 파싱
+            first_attempt_result = None
             if response.status_code == 200:
-                # 응답 파싱 - 이니시스는 기본적으로 URL-encoded 형식으로 응답
-                result_params = {}
-                
-                # 이니시스 공식 응답 형식: P_STATUS=00&P_RMESG1=정상처리&P_TID=...
-                logger.info(f"이니시스 승인 응답 파싱 시작")
-                
                 try:
-                    # URL-encoded 형식 파싱 (이니시스 표준)
+                    result_params = {}
                     for pair in response.text.split('&'):
                         if '=' in pair:
                             key, value = pair.split('=', 1)
                             result_params[key] = urllib.parse.unquote(value)
                     
-                    logger.info(f"승인 결과 (URL-encoded): {result_params}")
+                    logger.info(f"첫 번째 시도 결과: {result_params}")
                     
-                    # 결과 코드 확인을 위해 필드명 매핑
-                    # P_STATUS -> resultCode, P_RMESG1 -> resultMsg 등
-                    if 'P_STATUS' in result_params:
-                        result_params['resultCode'] = result_params['P_STATUS']
-                    if 'P_RMESG1' in result_params:
-                        result_params['resultMsg'] = result_params['P_RMESG1']
-                    
-                    return result_params
-                    
+                    # P_STATUS가 01 (TID 오류)이고 P_MID를 다르게 시도할 수 있으면 재시도
+                    if result_params.get('P_STATUS') == '01' and P_MID != P_MID_direct:
+                        logger.info(f"TID 오류 발생 - 직접 P_MID로 재시도")
+                        first_attempt_result = result_params
+                    else:
+                        # 성공이거나 다른 오류인 경우 결과 반환
+                        if 'P_STATUS' in result_params:
+                            result_params['resultCode'] = result_params['P_STATUS']
+                        if 'P_RMESG1' in result_params:
+                            result_params['resultMsg'] = result_params['P_RMESG1']
+                        return result_params
+                        
                 except Exception as parse_error:
                     logger.error(f"URL-encoded 파싱 오류: {parse_error}")
                     logger.error(f"응답 내용: {response.text}")
-                    return None
-            else:
-                logger.error(f"승인 API 오류: {response.status_code}, {response.text}")
-                return None
+                    first_attempt_result = {'error': 'parse_error'}
+            
+            # 두 번째 시도: 직접 P_MID 사용 (첫 번째 시도가 TID 오류인 경우)
+            if first_attempt_result and P_MID != P_MID_direct:
+                logger.info(f"=== 두 번째 시도: 직접 P_MID 사용 ===")
+                
+                # 두 번째 파라미터 세트 구성
+                approval_data_direct = {
+                    'P_TID': P_TID,
+                    'P_MID': P_MID_direct
+                }
+                encoded_data_direct = urllib.parse.urlencode(approval_data_direct)
+                
+                logger.info(f"두 번째 시도 파라미터: {approval_data_direct}")
+                
+                response2 = requests.post(
+                    correct_auth_url,
+                    data=encoded_data_direct,
+                    headers={
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'charset': 'UTF-8'
+                    },
+                    timeout=30
+                )
+                
+                logger.info(f"두 번째 시도 응답 상태: {response2.status_code}")
+                logger.info(f"두 번째 시도 응답: {response2.text}")
+                
+                if response2.status_code == 200:
+                    try:
+                        result_params2 = {}
+                        for pair in response2.text.split('&'):
+                            if '=' in pair:
+                                key, value = pair.split('=', 1)
+                                result_params2[key] = urllib.parse.unquote(value)
+                        
+                        logger.info(f"두 번째 시도 결과: {result_params2}")
+                        
+                        # 결과 코드 확인을 위해 필드명 매핑
+                        if 'P_STATUS' in result_params2:
+                            result_params2['resultCode'] = result_params2['P_STATUS']
+                        if 'P_RMESG1' in result_params2:
+                            result_params2['resultMsg'] = result_params2['P_RMESG1']
+                        
+                        return result_params2
+                        
+                    except Exception as parse_error:
+                        logger.error(f"두 번째 시도 파싱 오류: {parse_error}")
+            
+            # 모든 시도 실패 시 첫 번째 결과 반환
+            if first_attempt_result:
+                if 'P_STATUS' in first_attempt_result:
+                    first_attempt_result['resultCode'] = first_attempt_result['P_STATUS']
+                if 'P_RMESG1' in first_attempt_result:
+                    first_attempt_result['resultMsg'] = first_attempt_result['P_RMESG1']
+                return first_attempt_result
+            
+            logger.error(f"모든 승인 시도 실패")
+            return None
                 
         except Exception as e:
             logger.error(f"이니시스 모바일 승인 요청 실패: {str(e)}")
