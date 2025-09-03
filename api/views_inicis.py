@@ -101,12 +101,18 @@ class InicisPaymentService:
             
             logger.info(f"이니시스 승인 요청: order_id={order_id}, params={params}")
             
-            # 이니시스 승인 API 호출
+            # 이니시스 승인 API 호출 (데이터 크기 로깅 추가)
+            logger.info(f"요청 데이터 크기: authToken={len(actual_auth_token)} chars, total_params={len(str(params))} chars")
+            
             response = requests.post(
                 auth_url,  # 이니시스에서 제공한 승인 URL
                 data=params,
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
-                timeout=30
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'Mozilla/5.0 (compatible; InicisAPI/1.0)',
+                },
+                timeout=30,
+                allow_redirects=False
             )
             
             if response.status_code == 200:
