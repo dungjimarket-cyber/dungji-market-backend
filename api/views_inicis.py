@@ -6,6 +6,7 @@ KG이니시스 표준결제 연동
 import hashlib
 import json
 import logging
+import requests
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.conf import settings
@@ -42,6 +43,98 @@ class InicisPaymentService:
         """환경에 따른 API URL 반환"""
         # 실제 운영 환경 사용
         return cls.PROD_URL
+    
+    @classmethod
+    def get_vbank_info_from_auth(cls, auth_url, auth_token, order_id):
+        """
+        이니시스 authToken을 사용하여 가상계좌 정보 조회
+        """
+        try:
+            logger.info(f"=== 가상계좌 정보 조회 시작 ===")
+            logger.info(f"authUrl: {auth_url}")
+            logger.info(f"authToken 길이: {len(auth_token) if auth_token else 0}")
+            logger.info(f"order_id: {order_id}")
+            
+            if not auth_url or not auth_token:
+                logger.warning("authUrl 또는 authToken이 없음")
+                return None
+            
+            # authToken을 사용하여 이니시스 API 호출
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            }
+            
+            # authToken 파싱 및 결제 승인 요청
+            data = {
+                'authToken': auth_token,
+                'mid': cls.MID,
+                'charset': 'UTF-8'
+            }
+            
+            logger.info(f"이니시스 API 호출: {auth_url}")
+            response = requests.post(auth_url, data=data, headers=headers, timeout=30)
+            
+            logger.info(f"이니시스 API 응답 상태: {response.status_code}")
+            logger.info(f"이니시스 API 응답 헤더: {dict(response.headers)}")
+            
+            if response.status_code == 200:
+                # 응답 처리 - 이니시스는 다양한 형식으로 응답할 수 있음
+                response_text = response.text.strip()
+                logger.info(f"이니시스 API 응답 내용: {response_text}")
+                
+                # JSON 파싱 시도
+                try:
+                    result = response.json()
+                    logger.info(f"JSON 파싱 성공: {result}")
+                    
+                    # 가상계좌 정보 추출
+                    if result.get('resultCode') == '00' or result.get('resultCode') == '0000':
+                        vbank_info = {
+                            'name': result.get('vactBankName', ''),
+                            'num': result.get('VACT_Num', '') or result.get('vactNum', ''),
+                            'date': result.get('VACT_Date', '') or result.get('vactDate', ''),
+                            'holder': result.get('VACT_Name', '') or result.get('vactName', ''),
+                            'code': result.get('vactBankCode', '')
+                        }
+                        
+                        if any(vbank_info.values()):
+                            logger.info(f"가상계좌 정보 추출 성공: {vbank_info}")
+                            return vbank_info
+                        else:
+                            logger.warning("가상계좌 정보가 응답에 없음")
+                    else:
+                        logger.warning(f"이니시스 API 오류: {result.get('resultMsg', 'Unknown error')}")
+                        
+                except json.JSONDecodeError:
+                    # 응답이 JSON이 아닌 경우 파싱 시도
+                    logger.info("JSON 파싱 실패, 텍스트 파싱 시도")
+                    if 'vactBankName' in response_text or 'VACT_' in response_text:
+                        # 간단한 텍스트 파싱으로 가상계좌 정보 추출
+                        import re
+                        vbank_name = re.search(r'vactBankName=([^&]+)', response_text)
+                        vbank_num = re.search(r'VACT_Num=([^&]+)', response_text)
+                        vbank_date = re.search(r'VACT_Date=([^&]+)', response_text)
+                        
+                        if vbank_name and vbank_num:
+                            vbank_info = {
+                                'name': vbank_name.group(1),
+                                'num': vbank_num.group(1),
+                                'date': vbank_date.group(1) if vbank_date else '',
+                                'holder': '둥지마켓',
+                                'code': ''
+                            }
+                            logger.info(f"텍스트 파싱으로 가상계좌 정보 추출: {vbank_info}")
+                            return vbank_info
+            else:
+                logger.error(f"이니시스 API 호출 실패: {response.status_code}")
+                
+        except requests.RequestException as e:
+            logger.error(f"이니시스 API 호출 중 네트워크 오류: {str(e)}")
+        except Exception as e:
+            logger.error(f"가상계좌 정보 조회 중 오류: {str(e)}")
+            
+        return None
     
     @classmethod
     def mobile_payment_approval(cls, auth_url, auth_token, order_id):
@@ -439,7 +532,7 @@ def verify_inicis_payment(request):
             if pay_method in ['VBank', 'VBANK', 'vbank']:
                 logger.info(f"가상계좌 결제 처리 시작: order_id={order_id}")
                 
-                # 가상계좌 정보 수집 - 다양한 필드명에서 시도
+                # 1단계: 프론트엔드에서 전달된 가상계좌 정보 확인
                 vbank_info = {
                     'name': vact_bank_name or all_params.get('vactBankName', ''),
                     'num': vact_num or all_params.get('VACT_Num', '') or all_params.get('vactNum', ''),
@@ -448,11 +541,27 @@ def verify_inicis_payment(request):
                     'code': data.get('vactBankCode', '') or all_params.get('vactBankCode', '')
                 }
                 
-                logger.info(f"가상계좌 정보: {vbank_info}")
+                logger.info(f"프론트엔드 가상계좌 정보: {vbank_info}")
                 
-                # 가상계좌 정보가 없어도 무통장 결제로 처리 (추후 웹훅으로 정보 업데이트)
+                # 2단계: 가상계좌 정보가 없으면 이니시스 API 호출로 조회
                 if not any(vbank_info.values()):
-                    logger.warning(f"가상계좌 정보가 없음 - 추후 웹훅에서 업데이트 예정")
+                    logger.info("가상계좌 정보가 없음 - 이니시스 API 호출로 조회 시도")
+                    auth_url = data.get('authUrl') or all_params.get('authUrl')
+                    
+                    if auth_url and auth_token:
+                        api_vbank_info = InicisPaymentService.get_vbank_info_from_auth(
+                            auth_url, auth_token, order_id
+                        )
+                        
+                        if api_vbank_info:
+                            vbank_info = api_vbank_info
+                            logger.info(f"이니시스 API에서 가상계좌 정보 조회 성공: {vbank_info}")
+                        else:
+                            logger.warning("이니시스 API에서도 가상계좌 정보를 가져올 수 없음")
+                
+                # 3단계: 여전히 정보가 없으면 기본값 설정 (웹훅 대기)
+                if not any(vbank_info.values()):
+                    logger.warning(f"가상계좌 정보가 없음 - 웹훅에서 업데이트 예정")
                     vbank_info = {
                         'name': '은행 정보 확인 중',
                         'num': '계좌번호 발급 중',
