@@ -51,11 +51,9 @@ class InicisPaymentService:
         try:
             import requests
             
-            # 승인 요청 파라미터
+            # 승인 요청 파라미터 - 이니시스 API 규격에 맞게 수정
             params = {
                 'authToken': auth_token,
-                'authUrl': auth_url,
-                'netCancelUrl': net_cancel_url,
                 'mid': cls.MID,
             }
             
@@ -73,14 +71,30 @@ class InicisPaymentService:
                 result_text = response.text
                 logger.info(f"이니시스 승인 응답: {result_text}")
                 
-                # 응답 파싱 (key=value&key=value 형식)
+                # 응답 파싱 - XML 또는 key=value 형식 모두 처리
                 result_params = {}
-                for pair in result_text.split('&'):
-                    if '=' in pair:
-                        key, value = pair.split('=', 1)
-                        # URL 디코딩
-                        import urllib.parse
-                        result_params[key] = urllib.parse.unquote(value)
+                
+                if result_text.strip().startswith('<?xml'):
+                    # XML 응답 처리
+                    try:
+                        import xml.etree.ElementTree as ET
+                        root = ET.fromstring(result_text)
+                        
+                        # XML의 모든 요소를 딕셔너리로 변환
+                        for elem in root:
+                            result_params[elem.tag] = elem.text
+                            
+                    except ET.ParseError as e:
+                        logger.error(f"XML 파싱 오류: {e}")
+                        return None
+                else:
+                    # key=value&key=value 형식 처리
+                    for pair in result_text.split('&'):
+                        if '=' in pair:
+                            key, value = pair.split('=', 1)
+                            # URL 디코딩
+                            import urllib.parse
+                            result_params[key] = urllib.parse.unquote(value)
                 
                 logger.info(f"이니시스 승인 파싱 결과: {result_params}")
                 return result_params
