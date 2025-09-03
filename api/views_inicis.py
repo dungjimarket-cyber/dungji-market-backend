@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 class InicisPaymentService:
     """이니시스 결제 서비스"""
     
-    # 상점 정보 (운영 환경)
-    MID = 'dungjima14'  # 실제 상점 아이디
+    # 상점 정보 - TID 디버깅을 위해 임시로 테스트 환경 사용
+    MID = 'INIpayTest'  # 테스트 상점 아이디 (TID 구조 확인용)
+    # MID = 'dungjima14'  # 실제 상점 아이디 (추후 복원)
     SIGNKEY = 'MzVBZ0hzWU5kOXpnQUczclRIR2dMdz09'  # 웹결제 사인키
     API_KEY = 'yT5fxdUqycph7JBJ'  # INIAPI key
     API_IV = 'KvDu7eNXGotbaV=='  # INIAPI iv
