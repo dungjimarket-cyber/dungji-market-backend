@@ -77,13 +77,13 @@ class InicisPaymentService:
             import time
             timestamp = str(int(time.time() * 1000))
             
-            # 이니시스 공식 규격에 따른 서명 생성
-            # signature = SHA256(authToken + timestamp)
-            signature_data = actual_auth_token + timestamp
+            # 이니시스 공식 샘플 코드에 따른 서명 생성 (쿼리 스트링 형태)
+            # signature = SHA256("authToken=" + authToken + "&timestamp=" + timestamp)
+            signature_data = f"authToken={actual_auth_token}&timestamp={timestamp}"
             signature = hashlib.sha256(signature_data.encode('utf-8')).hexdigest()
             
-            # verification = SHA256(authToken + signKey + timestamp)
-            verification_data = actual_auth_token + cls.SIGNKEY + timestamp
+            # verification = SHA256("authToken=" + authToken + "&signKey=" + signKey + "&timestamp=" + timestamp)
+            verification_data = f"authToken={actual_auth_token}&signKey={cls.SIGNKEY}&timestamp={timestamp}"
             verification = hashlib.sha256(verification_data.encode('utf-8')).hexdigest()
             
             # 승인 요청 파라미터 - 이니시스 공식 PC 표준결제 규격
