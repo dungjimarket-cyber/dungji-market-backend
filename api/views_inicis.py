@@ -6,7 +6,6 @@ KG이니시스 표준결제 연동
 import hashlib
 import json
 import logging
-import requests
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.conf import settings
@@ -26,9 +25,8 @@ logger = logging.getLogger(__name__)
 class InicisPaymentService:
     """이니시스 결제 서비스"""
     
-    # 상점 정보 - TID 디버깅을 위해 임시로 테스트 환경 사용
-    MID = 'INIpayTest'  # 테스트 상점 아이디 (TID 구조 확인용)
-    # MID = 'dungjima14'  # 실제 상점 아이디 (추후 복원)
+    # 상점 정보 (운영 환경)
+    MID = 'dungjima14'  # 실제 상점 아이디
     SIGNKEY = 'MzVBZ0hzWU5kOXpnQUczclRIR2dMdz09'  # 웹결제 사인키
     API_KEY = 'yT5fxdUqycph7JBJ'  # INIAPI key
     API_IV = 'KvDu7eNXGotbaV=='  # INIAPI iv
@@ -47,7 +45,7 @@ class InicisPaymentService:
     @classmethod
     def request_payment_approval(cls, order_id, auth_token, auth_url, net_cancel_url):
         """
-        이니시스 결제 승인 요청 (커밋 6859302 기반 복원)
+        이니시스 결제 승인 요청
         2단계 승인 처리
         """
         try:
@@ -92,264 +90,6 @@ class InicisPaymentService:
                 
         except Exception as e:
             logger.error(f"이니시스 승인 요청 실패: {str(e)}")
-            return None
-
-    @classmethod
-    def get_vbank_info_from_auth(cls, auth_url, auth_token, order_id):
-        """
-        이니시스 authToken을 사용하여 가상계좌 정보 조회
-        """
-        try:
-            logger.info(f"=== 가상계좌 정보 조회 시작 ===")
-            logger.info(f"authUrl: {auth_url}")
-            logger.info(f"authToken 길이: {len(auth_token) if auth_token else 0}")
-            logger.info(f"order_id: {order_id}")
-            
-            if not auth_url or not auth_token:
-                logger.warning("authUrl 또는 authToken이 없음")
-                return None
-            
-            # 이니시스 승인 요청 API 호출 (문서 기준으로 수정)
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=euc-kr',
-                'Accept': 'application/json, text/html, */*'
-            }
-            
-            # authToken을 기반으로 올바른 파라미터 구성
-            # authToken에는 hash 값이 포함되어 있으므로 이를 분리
-            auth_token_clean = auth_token.replace('\r\n', '').strip()
-            
-            # authToken에서 hash 부분 분리 (hAsH: 뒤의 값)
-            if 'hAsH:' in auth_token_clean:
-                main_token, hash_value = auth_token_clean.split('hAsH:', 1)
-                main_token = main_token.strip()
-                hash_value = hash_value.strip()
-                logger.info(f"authToken 분리: 메인토큰 길이={len(main_token)}, 해시={hash_value[:50]}...")
-            else:
-                main_token = auth_token_clean
-                hash_value = ""
-                logger.info("authToken에 hash 값 없음")
-            
-            # 로그에서 확인된 실제 MID 사용 (dungjima14)
-            actual_mid = 'dungjima14'  # 실제 운영 중인 MID
-            
-            # 이니시스 승인 요청 파라미터를 URL-encoded 형식으로 구성
-            # 문서에 따른 올바른 파라미터 구성
-            data = {
-                'P_MID': actual_mid,        # 상점 아이디
-                'P_TID': main_token,        # 거래 아이디 (authToken의 메인 부분)
-                'P_TYPE': '0',              # 거래 유형 (0: 승인)
-                'P_OID': order_id,          # 주문번호
-            }
-            
-            # hash 값이 있으면 추가 (signature나 checksum으로)
-            if hash_value:
-                data['P_HASH'] = hash_value
-            
-            # 추가적으로 authToken 전체도 포함 (백업용)
-            data['authToken'] = main_token
-            
-            logger.info(f"이니시스 API 호출: {auth_url}")
-            logger.info(f"전송 파라미터: {list(data.keys())}")
-            logger.info(f"P_MID: {data.get('P_MID')}")
-            logger.info(f"P_TID 길이: {len(data.get('P_TID', ''))}")
-            logger.info(f"P_OID: {data.get('P_OID')}")
-            
-            response = requests.post(auth_url, data=data, headers=headers, timeout=30)
-            
-            logger.info(f"이니시스 API 응답 상태: {response.status_code}")
-            logger.info(f"이니시스 API 응답 헤더: {dict(response.headers)}")
-            
-            if response.status_code == 200:
-                # 응답 처리 - 이니시스는 다양한 형식으로 응답할 수 있음
-                response_text = response.text.strip()
-                logger.info(f"이니시스 API 응답 내용: {response_text}")
-                
-                # XML 및 JSON 파싱 시도
-                try:
-                    # JSON 파싱 시도
-                    result = response.json()
-                    logger.info(f"JSON 파싱 성공: {result}")
-                    
-                    # 가상계좌 정보 추출 (이니시스 문서 기준 파라미터명)
-                    if result.get('resultCode') == '00' or result.get('resultCode') == '0000' or result.get('P_STATUS') == '00':
-                        vbank_info = {
-                            'name': result.get('P_FN_NM', '') or result.get('vactBankName', ''),
-                            'num': result.get('P_VACT_NUM', '') or result.get('VACT_Num', '') or result.get('vactNum', ''),
-                            'date': result.get('P_VACT_DATE', '') or result.get('VACT_Date', '') or result.get('vactDate', ''),
-                            'holder': result.get('P_VACT_NAME', '') or result.get('VACT_Name', '') or result.get('vactName', ''),
-                            'code': result.get('P_VACT_BANK_CODE', '') or result.get('vactBankCode', '')
-                        }
-                        
-                        if any(vbank_info.values()):
-                            logger.info(f"가상계좌 정보 추출 성공: {vbank_info}")
-                            return vbank_info
-                        else:
-                            logger.warning("가상계좌 정보가 응답에 없음")
-                    else:
-                        logger.warning(f"이니시스 API 오류: {result.get('resultMsg', 'Unknown error')}")
-                        
-                except json.JSONDecodeError:
-                    # XML 응답 파싱 시도
-                    logger.info("JSON 파싱 실패, XML/텍스트 파싱 시도")
-                    
-                    if '<?xml' in response_text:
-                        # XML 파싱
-                        import xml.etree.ElementTree as ET
-                        try:
-                            root = ET.fromstring(response_text)
-                            result_code = root.find('resultCode') or root.find('P_STATUS')
-                            result_msg = root.find('resultMsg') or root.find('P_MSG')
-                            
-                            if result_code is not None:
-                                logger.info(f"XML 파싱 성공 - resultCode: {result_code.text}, resultMsg: {result_msg.text if result_msg is not None else 'N/A'}")
-                                
-                                if result_code.text == '00' or result_code.text == '0000':
-                                    # 가상계좌 정보 XML에서 추출 (이니시스 문서 기준 파라미터명)
-                                    vbank_info = {
-                                        'name': (root.find('P_FN_NM') or root.find('vactBankName')).text if (root.find('P_FN_NM') or root.find('vactBankName')) is not None else '',
-                                        'num': (root.find('P_VACT_NUM') or root.find('VACT_Num')).text if (root.find('P_VACT_NUM') or root.find('VACT_Num')) is not None else '',
-                                        'date': (root.find('P_VACT_DATE') or root.find('VACT_Date')).text if (root.find('P_VACT_DATE') or root.find('VACT_Date')) is not None else '',
-                                        'holder': (root.find('P_VACT_NAME') or root.find('VACT_Name')).text if (root.find('P_VACT_NAME') or root.find('VACT_Name')) is not None else '둥지마켓',
-                                        'code': (root.find('P_VACT_BANK_CODE') or root.find('vactBankCode')).text if (root.find('P_VACT_BANK_CODE') or root.find('vactBankCode')) is not None else ''
-                                    }
-                                    
-                                    if any(vbank_info.values()):
-                                        logger.info(f"XML에서 가상계좌 정보 추출 성공: {vbank_info}")
-                                        return vbank_info
-                                else:
-                                    logger.warning(f"이니시스 XML API 오류: {result_msg.text if result_msg is not None else 'Unknown error'}")
-                        except ET.ParseError as e:
-                            logger.warning(f"XML 파싱 오류: {e}")
-                    
-                    # 텍스트 파싱 fallback
-                    elif 'vactBankName' in response_text or 'VACT_' in response_text:
-                        # 간단한 텍스트 파싱으로 가상계좌 정보 추출
-                        import re
-                        vbank_name = re.search(r'vactBankName=([^&]+)', response_text)
-                        vbank_num = re.search(r'VACT_Num=([^&]+)', response_text)
-                        vbank_date = re.search(r'VACT_Date=([^&]+)', response_text)
-                        
-                        if vbank_name and vbank_num:
-                            vbank_info = {
-                                'name': vbank_name.group(1),
-                                'num': vbank_num.group(1),
-                                'date': vbank_date.group(1) if vbank_date else '',
-                                'holder': '둥지마켓',
-                                'code': ''
-                            }
-                            logger.info(f"텍스트 파싱으로 가상계좌 정보 추출: {vbank_info}")
-                            return vbank_info
-            else:
-                logger.error(f"이니시스 API 호출 실패: {response.status_code}")
-                
-        except requests.RequestException as e:
-            logger.error(f"이니시스 API 호출 중 네트워크 오류: {str(e)}")
-        except Exception as e:
-            logger.error(f"가상계좌 정보 조회 중 오류: {str(e)}")
-            
-        return None
-    
-    @classmethod
-    def mobile_payment_approval(cls, auth_url, auth_token, order_id):
-        """
-        이니시스 모바일 결제 승인 요청
-        인증 후 실제 결제 승인 처리
-        order_id를 TID로 사용하여 승인 요청
-        """
-        try:
-            import requests
-            import urllib.parse
-            from datetime import datetime
-            
-            logger.info(f"=== 이니시스 모바일 승인 요청 시작 (v4.0 - oid를 TID로 사용) ===")
-            logger.info(f"파라미터 분석:")
-            logger.info(f"  - order_id (TID로 사용): {order_id}")
-            logger.info(f"  - authToken 길이: {len(auth_token) if auth_token else 0}")
-            logger.info(f"  - authUrl: {auth_url}")
-            
-            # **핵심 변경: order_id를 TID로 사용**
-            # authToken은 인증 토큰이지 거래 ID가 아님
-            P_TID = order_id  # oid를 P_TID로 직접 사용
-            logger.info(f"TID 설정: authToken 대신 order_id 사용 -> P_TID = {P_TID}")
-            
-            # P_MID는 직접 설정된 상점ID 사용 (order_id에는 상점ID가 포함되지 않음)
-            P_MID = cls.MID
-            
-            logger.info(f"승인 파라미터 설정:")
-            logger.info(f"  - P_TID (order_id): {P_TID}")
-            logger.info(f"  - P_MID (상점ID): {P_MID}")
-            
-            # 이니시스 승인 API 파라미터 - 간소화된 버전
-            approval_data = {
-                'P_TID': P_TID,  # order_id를 TID로 사용
-                'P_MID': P_MID   # 설정된 상점ID 사용
-            }
-            
-            logger.info(f"승인 요청 데이터: {approval_data}")
-            
-            # URL 인코딩
-            encoded_data = urllib.parse.urlencode(approval_data)
-            logger.info(f"URL 인코딩된 데이터: {encoded_data}")
-            
-            # 승인 API URL 정리
-            # auth_url을 그대로 사용하되, 필요시 수정
-            target_url = auth_url
-            if target_url and ('ksstdpay.inicis.com' in target_url or 'payAuth' in target_url):
-                # 잘못된 URL 패턴이면 표준 URL로 변경
-                target_url = "https://ksmobile.inicis.com/smart/payReq.ini"
-                logger.info(f"URL 수정: {auth_url} -> {target_url}")
-            
-            logger.info(f"승인 API 호출 시작: {target_url}")
-            
-            # 승인 API 호출
-            response = requests.post(
-                target_url,
-                data=encoded_data,
-                headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'charset': 'UTF-8'
-                },
-                timeout=30
-            )
-            
-            logger.info(f"승인 응답 상태: {response.status_code}")
-            logger.info(f"승인 응답 전체: {response.text}")
-            
-            # 응답 파싱
-            if response.status_code == 200:
-                try:
-                    result_params = {}
-                    for pair in response.text.split('&'):
-                        if '=' in pair:
-                            key, value = pair.split('=', 1)
-                            result_params[key] = urllib.parse.unquote(value)
-                    
-                    logger.info(f"승인 결과 파싱: {result_params}")
-                    
-                    # 표준 필드명 매핑
-                    if 'P_STATUS' in result_params:
-                        result_params['resultCode'] = result_params['P_STATUS']
-                    if 'P_RMESG1' in result_params:
-                        result_params['resultMsg'] = result_params['P_RMESG1']
-                    
-                    return result_params
-                        
-                except Exception as parse_error:
-                    logger.error(f"URL-encoded 파싱 오류: {parse_error}")
-                    logger.error(f"응답 내용: {response.text}")
-                    return {'error': 'parse_error', 'raw_response': response.text}
-            else:
-                logger.error(f"HTTP 오류: {response.status_code}")
-                return {'error': f'http_error_{response.status_code}', 'raw_response': response.text}
-                
-            logger.error(f"승인 요청 완전 실패")
-            return None
-                
-        except Exception as e:
-            logger.error(f"이니시스 모바일 승인 요청 실패: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
             return None
     
     @classmethod
@@ -515,53 +255,11 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v3.2 - 전체 파라미터 분석 ===")
-        logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
-        logger.info(f"요청 데이터: {data}")
-        
         # 결제 결과 파라미터
         order_id = data.get('orderId')
         auth_result_code = data.get('authResultCode')
         auth_token = data.get('authToken')
         tid = data.get('tid')
-        
-        # 추가 TID 관련 파라미터들
-        P_TID = data.get('P_TID')
-        transaction_id = data.get('transactionId')
-        payment_id = data.get('paymentId')
-        MOID = data.get('MOID')
-        TotPrice = data.get('TotPrice')
-        goodName = data.get('goodName')
-        all_params = data.get('allParams', {})
-        
-        logger.info(f"=== 모든 파라미터 분석 ===")
-        logger.info(f"프론트엔드에서 받은 모든 파라미터: {all_params}")
-        logger.info(f"TID 관련 파라미터들:")
-        logger.info(f"  - tid: {tid}")
-        logger.info(f"  - P_TID: {P_TID}")
-        logger.info(f"  - authToken: {'있음' if auth_token else '없음'} ({len(auth_token) if auth_token else 0}자)")
-        logger.info(f"  - transactionId: {transaction_id}")
-        logger.info(f"  - paymentId: {payment_id}")
-        logger.info(f"  - MOID: {MOID}")
-        logger.info(f"  - TotPrice: {TotPrice}")
-        logger.info(f"  - goodName: {goodName}")
-        
-        # 필수 파라미터 검증
-        if not order_id:
-            logger.error("필수 파라미터 누락: orderId")
-            return Response(
-                {'success': False, 'error': '주문번호가 누락되었습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if not auth_result_code:
-            logger.error("필수 파라미터 누락: authResultCode")
-            return Response(
-                {'success': False, 'error': '인증 결과 코드가 누락되었습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        logger.info(f"파싱된 파라미터: order_id={order_id}, auth_result_code={auth_result_code}, auth_token={'있음' if auth_token else '없음'}")
         
         # Payment 레코드 조회
         try:
@@ -605,330 +303,227 @@ def verify_inicis_payment(request):
                 'is_subscription': is_subscription
             })
         
-        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)  
+        # 결제 성공 여부 확인 (authResultCode가 '00' 또는 '0000'일 수 있음)
         if auth_result_code in ['00', '0000']:
-            pay_method = data.get('payMethod', '')
-            
-            # 가상계좌 결제 감지를 위한 추가 파라미터 확인
-            vact_bank_name = data.get('vactBankName')
-            vact_num = data.get('VACT_Num') or data.get('vactNum')
-            vact_date = data.get('VACT_Date') or data.get('vactDate')
-            vact_name = data.get('VACT_Name') or data.get('vactName')
-            
-            # all_params에서 가상계좌 관련 정보 확인
-            all_params = data.get('allParams', {})
-            has_vbank_info = any(key in all_params for key in ['vactBankName', 'VACT_Num', 'vactNum', 'VACT_Date', 'vactDate'])
-            
-            logger.info(f"결제 방법 확인: payMethod='{pay_method}'")
-            logger.info(f"가상계좌 정보 확인: vactBankName={vact_bank_name}, vactNum={vact_num}, vactDate={vact_date}")
-            logger.info(f"가상계좌 정보 존재 여부: {has_vbank_info}")
-            logger.info(f"결제 성공 처리 시작: order_id={order_id}")
-            
-            # 커밋 6859302 방식 복원: 실제 승인 API 호출하여 payMethod 획득
-            auth_url = data.get('authUrl') or all_params.get('authUrl')
-            net_cancel_url = data.get('netCancelUrl') or all_params.get('netCancelUrl')
+            # 실제 이니시스 서버에 승인 요청 (보안 강화)
+            auth_url = data.get('authUrl')
+            net_cancel_url = data.get('netCancelUrl')
             
             if auth_url and auth_token:
-                logger.info("이니시스 승인 API 호출하여 payMethod 확인")
+                logger.info(f"이니시스 승인 요청 시작: order_id={order_id}")
+                logger.info(f"승인 요청 파라미터: authUrl={auth_url}, authToken={auth_token[:50]}..., netCancelUrl={net_cancel_url}")
                 approval_result = InicisPaymentService.request_payment_approval(
                     order_id, auth_token, auth_url, net_cancel_url
                 )
                 
-                if approval_result:
-                    logger.info(f"이니시스 승인 성공: order_id={order_id}, result={approval_result}")
-                    # 승인 결과에서 결제 방법 확인
-                    pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
-                else:
-                    logger.warning(f"이니시스 승인 실패: order_id={order_id}")
-                    return Response(
-                        {'success': False, 'error': '결제 승인에 실패했습니다.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                if not approval_result:
+                    logger.error(f"이니시스 승인 실패 (응답 없음): order_id={order_id}")
+                    return Response({
+                        'success': False,
+                        'error': '결제 승인 요청에 실패했습니다. (응답 없음)'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # 승인 결과 확인
+                result_code = approval_result.get('resultCode', '')
+                result_msg = approval_result.get('resultMsg', '')
+                
+                # 다양한 필드명 체크 (이니시스 응답이 일관되지 않을 수 있음)
+                if not result_code:
+                    result_code = approval_result.get('ResultCode', '')
+                if not result_msg:
+                    result_msg = approval_result.get('ResultMsg', '')
+                
+                logger.info(f"승인 결과 코드: {result_code}, 메시지: {result_msg}")
+                
+                if result_code not in ['00', '0000']:  # '00' 또는 '0000' 모두 성공으로 처리
+                    logger.error(f"이니시스 승인 거부: order_id={order_id}, code={result_code}, msg={result_msg}")
+                    logger.error(f"전체 승인 결과: {approval_result}")
+                    
+                    # 더 자세한 오류 메시지 생성
+                    error_message = '결제가 승인되지 않았습니다'
+                    if result_msg:
+                        error_message = f'결제 승인 실패: {result_msg}'
+                    elif result_code:
+                        error_message = f'결제 승인 실패 (코드: {result_code})'
+                    
+                    return Response({
+                        'success': False,
+                        'error': error_message,
+                        'result_code': result_code,
+                        'result_msg': result_msg,
+                        'debug_info': approval_result
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                logger.info(f"이니시스 승인 성공: order_id={order_id}, result={approval_result}")
+                
+                # 승인 결과에서 결제 방법 확인
+                pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
             else:
                 logger.warning(f"authUrl 또는 authToken이 없음: order_id={order_id}")
                 pay_method = data.get('payMethod', '')
             
-            # payMethod가 여전히 없으면 추론 로직 사용
-            if not pay_method:
-                if vact_bank_name or vact_num or has_vbank_info:
-                    pay_method = 'VBank'
-                    logger.info(f"가상계좌 정보가 있어서 VBank로 설정: {pay_method}")
-                elif auth_token and len(auth_token) > 3000:
-                    logger.info(f"긴 authToken({len(auth_token)}자)으로 무통장 결제로 추정")
-                    pay_method = 'VBank'
-                    logger.info(f"authToken 길이 기반으로 VBank로 설정: {pay_method}")
-                else:
-                    pay_method = 'Card'  # 기본값
-                    logger.info(f"payMethod가 없고 판단 기준 없어서 기본값 설정: {pay_method}")
-            
-            logger.info(f"최종 결제 방법: {pay_method}")
-            
-            # 가상계좌(무통장입금)인 경우 별도 처리 (승인 불필요)
-            if pay_method in ['VBank', 'VBANK', 'vbank']:
-                logger.info(f"가상계좌 결제 처리 시작: order_id={order_id}")
-                
-                # 1단계: 프론트엔드에서 전달된 가상계좌 정보 확인
-                vbank_info = {
-                    'name': vact_bank_name or all_params.get('vactBankName', ''),
-                    'num': vact_num or all_params.get('VACT_Num', '') or all_params.get('vactNum', ''),
-                    'date': vact_date or all_params.get('VACT_Date', '') or all_params.get('vactDate', ''),
-                    'holder': vact_name or all_params.get('VACT_Name', '') or all_params.get('vactName', ''),
-                    'code': data.get('vactBankCode', '') or all_params.get('vactBankCode', '')
-                }
-                
-                logger.info(f"프론트엔드 가상계좌 정보: {vbank_info}")
-                
-                # 2단계: 가상계좌 정보가 없으면 이니시스 API 호출로 조회
-                if not any(vbank_info.values()):
-                    logger.info("가상계좌 정보가 없음 - 이니시스 API 호출로 조회 시도")
-                    auth_url = data.get('authUrl') or all_params.get('authUrl')
-                    
-                    # 이니시스 문서 기준으로 API 호출 방식 수정 완료
-                    # 문서에 따른 올바른 파라미터명과 인코딩으로 재시도
-                    if auth_url and auth_token:  # API 호출 재활성화
-                        api_vbank_info = InicisPaymentService.get_vbank_info_from_auth(
-                            auth_url, auth_token, order_id
-                        )
-                        
-                        if api_vbank_info:
-                            vbank_info = api_vbank_info
-                            logger.info(f"이니시스 API에서 가상계좌 정보 조회 성공: {vbank_info}")
-                        else:
-                            logger.warning("이니시스 API에서도 가상계좌 정보를 가져올 수 없음")
-                    else:
-                        logger.info("이니시스 API 호출 임시 비활성화 - 웹훅 대기")
-                
-                # 3단계: 여전히 정보가 없으면 기본값 설정 (웹훅 대기)
-                if not any(vbank_info.values()):
-                    logger.warning(f"가상계좌 정보가 없음 - 웹훅에서 업데이트 예정")
-                    vbank_info = {
-                        'name': '은행 정보 확인 중',
-                        'num': '계좌번호 발급 중',
-                        'date': '입금기한 확인 중',
-                        'holder': '둥지마켓',
-                        'code': ''
-                    }
-                
+            # 가상계좌(무통장입금)인 경우 별도 처리
+            if pay_method == 'VBank':
                 # 무통장입금은 입금대기 상태로 설정
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
                     payment.tid = order_id[:200]
-                    payment.vbank_name = vbank_info['name']
-                    payment.vbank_num = vbank_info['num']
-                    payment.vbank_date = vbank_info['date']
-                    payment.vbank_holder = vbank_info['holder']
+                    payment.vbank_name = data.get('vactBankName', '')
+                    payment.vbank_num = data.get('VACT_Num', '')
+                    payment.vbank_date = data.get('VACT_Date', '')
+                    payment.vbank_holder = data.get('VACT_Name', '')
                     payment.payment_data.update({
-                        'authToken': auth_token[:500] if auth_token else None,  # 너무 긴 토큰 일부만 저장
+                        'authToken': auth_token,
                         'authResultCode': auth_result_code,
-                        'originalTid': data.get('tid', ''),
+                        'originalTid': tid,
                         'payMethod': pay_method,
-                        'vactBankCode': vbank_info['code'],
-                        'allVbankParams': vbank_info,  # 디버깅용
-                        'processingType': 'vbank_by_authtoken_length',  # 감지 방법
-                        'fullAuthTokenLength': len(auth_token) if auth_token else 0
+                        'vactBankCode': data.get('vactBankCode'),
                     })
                     payment.save()
                     
-                    logger.info(f"무통장입금 대기 설정 완료: order_id={order_id}")
-                    logger.info(f"가상계좌: {payment.vbank_name} {payment.vbank_num} (만료: {payment.vbank_date})")
+                    logger.info(f"무통장입금 대기: order_id={order_id}, bank={payment.vbank_name}, account={payment.vbank_num}")
                     
                     # 무통장입금 안내 응답
-                    if vbank_info['name'] != '은행 정보 확인 중':
-                        message = f'무통장입금 계좌가 발급되었습니다. {payment.vbank_name} {payment.vbank_num}로 입금해주세요.'
-                        if payment.vbank_date and payment.vbank_date != '입금기한 확인 중':
-                            message += f' (입금기한: {payment.vbank_date})'
-                    else:
-                        message = '무통장입금이 처리되었습니다. 계좌 정보는 잠시 후 확인 가능합니다.'
-                    
                     return Response({
                         'success': True,
-                        'message': message,
+                        'message': f'무통장입금 계좌가 발급되었습니다. {payment.vbank_name} {payment.vbank_num}로 {payment.vbank_date}까지 입금해주세요.',
                         'is_vbank': True,
                         'vbank_name': payment.vbank_name,
                         'vbank_num': payment.vbank_num,
                         'vbank_date': payment.vbank_date,
                         'vbank_holder': payment.vbank_holder,
-                        'amount': int(payment.amount),
-                        'note': '가상계좌 상세 정보가 없는 경우 웹훅으로 업데이트됩니다.'
+                        'amount': payment.amount
                     })
             
-            # 실시간 결제(카드, 계좌이체, 휴대폰) 처리 - 승인 필요
-            # DirectBank = 계좌이체, Card = 카드, HPP = 휴대폰
-            else:
-                # 모바일 결제 승인 요청
-                auth_url = data.get('authUrl')
-                auth_token = data.get('authToken')
+            # 실시간 결제(카드, 계좌이체, 휴대폰) 처리
+            with transaction.atomic():
+                # Payment 업데이트
+                payment.status = 'completed'
+                # authToken이 너무 길므로 order_id를 tid로 사용
+                payment.tid = order_id[:200]  # 200자 제한
+                payment.completed_at = datetime.now()
+                payment.payment_data.update({
+                    'authToken': auth_token,  # 긴 토큰은 JSON 필드에 저장
+                    'authResultCode': auth_result_code,
+                    'originalTid': tid,
+                    'authUrl': data.get('authUrl'),
+                    'netCancelUrl': data.get('netCancelUrl'),
+                    'idc_name': data.get('idc_name'),
+                    'payMethod': pay_method,
+                })
+                payment.save()
                 
-                logger.info(f"이니시스 모바일 결제 승인 시작: order_id={order_id}, authResultCode={auth_result_code}")
-                logger.info(f"결제 방법: {pay_method}")
-                logger.info(f"authUrl: {auth_url}")
-                logger.info(f"authToken 길이: {len(auth_token) if auth_token else 0}")
+                # 입찰권 지급 - 상품 유형에 따라 처리
+                # productName에서 구독권 여부 확인
+                is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
                 
-                # 승인 요청 필요
-                if auth_url and auth_token:
-                    approval_result = InicisPaymentService.mobile_payment_approval(
-                        auth_url, auth_token, order_id
-                    )
-                    
-                    if not approval_result:
-                        logger.error(f"이니시스 승인 요청 실패: 응답 없음")
-                        return Response({
-                            'success': False,
-                            'error': '결제 승인 요청에 실패했습니다.'
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                    
-                    # 결과 코드 확인 (다양한 필드명 처리)
-                    result_code = approval_result.get('resultCode') or approval_result.get('ResultCode') or approval_result.get('result_code')
-                    result_msg = approval_result.get('resultMsg') or approval_result.get('ResultMsg') or approval_result.get('result_msg')
-                    
-                    if result_code not in ['00', '0000', '00000']:
-                        error_code = approval_result.get('errorCode') or approval_result.get('ErrorCode') or result_code
-                        logger.error(f"이니시스 승인 실패: code={error_code}, msg={result_msg}")
-                        logger.error(f"승인 실패 전체 응답: {approval_result}")
-                        
-                        # 계좌이체 특별 오류 처리
-                        if pay_method in ['DirectBank', 'DIRECTBANK']:
-                            error_msg = f'계좌이체 승인 실패: {result_msg} (code: {error_code})'
-                        else:
-                            error_msg = f'{result_msg} (code: {error_code})'
-                        
-                        return Response({
-                            'success': False,
-                            'error': error_msg,
-                            'error_code': error_code
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                    
-                    logger.info(f"이니시스 승인 성공: {approval_result}")
+                logger.info(f"상품명: {payment.product_name}, 구독권 여부: {is_subscription}, 금액: {payment.amount}")
                 
-                # 실시간 결제 처리
-                with transaction.atomic():
-                    # Payment 업데이트
-                    payment.status = 'completed'
-                    # authToken이 너무 길므로 order_id를 tid로 사용
-                    payment.tid = order_id[:200]  # 200자 제한
-                    payment.completed_at = datetime.now()
-                    payment.payment_data.update({
-                        'authToken': auth_token,  # 긴 토큰은 JSON 필드에 저장
-                        'authResultCode': auth_result_code,
-                        'originalTid': tid,
-                        'authUrl': data.get('authUrl'),  # 참고용 저장
-                        'netCancelUrl': data.get('netCancelUrl'),  # 취소 시 사용
-                        'idc_name': data.get('idc_name'),
-                        'payMethod': pay_method,
-                    })
-                    payment.save()
-                    
-                    # 입찰권 지급 - 상품 유형에 따라 처리
-                    # productName에서 구독권 여부 확인
-                    is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
-                    
-                    logger.info(f"상품명: {payment.product_name}, 구독권 여부: {is_subscription}, 금액: {payment.amount}")
-                    
-                    subscription_expires_at = None  # 초기화
-                    
-                    if is_subscription:
-                        # 무제한 구독권 (29,900원)
-                        if payment.amount >= 29900:
-                            # 기존 활성 구독권 확인
-                            existing_subscription = BidToken.objects.filter(
-                                seller=user,
-                                token_type='unlimited',
-                                status='active',
-                                expires_at__gt=datetime.now()  # 아직 만료되지 않은 구독권
-                            ).order_by('-expires_at').first()
-                            
-                            if existing_subscription:
-                                # 기존 구독권이 있으면 그 만료일 이후부터 시작
-                                start_date = existing_subscription.expires_at
-                                expires_at = start_date + timedelta(days=30)
-                                logger.info(f"구독권 추가: {start_date.strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')} (기존 구독 이후)")
-                            else:
-                                # 기존 구독권이 없으면 현재부터 30일
-                                expires_at = datetime.now() + timedelta(days=30)
-                                logger.info(f"구독권 신규 구매: {datetime.now().strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')}")
-                            
-                            new_subscription = BidToken.objects.create(
-                                seller=user,
-                                token_type='unlimited',
-                                expires_at=expires_at
-                            )
-                            token_count = 1
-                            # 응답에 포함할 구독권 정보 저장
-                            subscription_expires_at = expires_at
-                        else:
-                            token_count = 0
-                            logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
-                    else:
-                        # 단품 입찰권 (1,990원당 1개)
-                        token_count = int(payment.amount // 1990)
-                        if token_count > 0:
-                            # 단품 이용권은 생성일로부터 90일 후 만료
-                            expires_at = datetime.now() + timedelta(days=90)
-                            for _ in range(token_count):
-                                BidToken.objects.create(
-                                    seller=user,
-                                    token_type='single',
-                                    expires_at=expires_at  # 90일 만료
-                                )
-                            logger.info(f"견적이용권 {token_count}개 생성: 만료일 {expires_at.strftime('%Y-%m-%d')}")
-                    
-                    # BidTokenPurchase 레코드 생성 (구매 내역용)
-                    BidTokenPurchase.objects.create(
-                        seller=user,
-                        token_type='unlimited' if is_subscription else 'single',
-                        quantity=1 if is_subscription else token_count,
-                        total_price=payment.amount,
-                        payment_status='completed',
-                        payment_date=datetime.now(),
-                        order_id=order_id,
-                        payment_key=auth_token[:200] if auth_token else None
-                    )
-                    
-                    logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
-                
-                # 사용자의 현재 총 입찰권 개수 계산
-                # 단품 입찰권 개수
-                single_tokens = BidToken.objects.filter(
-                    seller=user, 
-                    token_type='single',
-                    status='active'
-                ).count()
-                
-                # 구독권 개수 (만료되지 않은 것만)
-                subscription_count = BidToken.objects.filter(
-                    seller=user,
-                    token_type='unlimited',
-                    status='active',
-                    expires_at__gt=datetime.now()
-                ).count()
-                
-                current_tokens = single_tokens  # 단품 개수를 기본으로 표시
-                
-                # 구매 완료 메시지 설정
-                response_data = {
-                    'success': True,
-                    'token_count': token_count,
-                    'total_tokens': current_tokens,
-                    'subscription_count': subscription_count,
-                    'is_subscription': is_subscription
-                }
+                subscription_expires_at = None  # 초기화
                 
                 if is_subscription:
-                    if subscription_count > 1:
-                        message = f'구독권이 추가되었습니다. (현재 {subscription_count}개 보유)'
+                    # 무제한 구독권 (29,900원)
+                    if payment.amount >= 29900:
+                        # 기존 활성 구독권 확인
+                        existing_subscription = BidToken.objects.filter(
+                            seller=user,
+                            token_type='unlimited',
+                            status='active',
+                            expires_at__gt=datetime.now()  # 아직 만료되지 않은 구독권
+                        ).order_by('-expires_at').first()
+                        
+                        if existing_subscription:
+                            # 기존 구독권이 있으면 그 만료일 이후부터 시작
+                            start_date = existing_subscription.expires_at
+                            expires_at = start_date + timedelta(days=30)
+                            logger.info(f"구독권 추가: {start_date.strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')} (기존 구독 이후)")
+                        else:
+                            # 기존 구독권이 없으면 현재부터 30일
+                            expires_at = datetime.now() + timedelta(days=30)
+                            logger.info(f"구독권 신규 구매: {datetime.now().strftime('%Y-%m-%d %H:%M')} ~ {expires_at.strftime('%Y-%m-%d %H:%M')}")
+                        
+                        new_subscription = BidToken.objects.create(
+                            seller=user,
+                            token_type='unlimited',
+                            expires_at=expires_at
+                        )
+                        token_count = 1
+                        # 응답에 포함할 구독권 정보 저장
+                        subscription_expires_at = expires_at
                     else:
-                        message = '구독권이 구매 완료되었습니다.'
-                    
-                    # 구독권 만료일 정보 추가
-                    if subscription_expires_at:
-                        response_data['subscription_expires_at'] = subscription_expires_at.isoformat()
-                        response_data['subscription_period'] = f"{(subscription_expires_at - timedelta(days=30)).strftime('%Y-%m-%d')} ~ {subscription_expires_at.strftime('%Y-%m-%d')}"
+                        token_count = 0
+                        logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
                 else:
-                    message = f'견적이용권 {token_count}개가 구매 완료되었습니다.'
+                    # 단품 입찰권 (1,990원당 1개)
+                    token_count = int(payment.amount // 1990)
+                    if token_count > 0:
+                        # 단품 이용권은 생성일로부터 90일 후 만료
+                        expires_at = datetime.now() + timedelta(days=90)
+                        for _ in range(token_count):
+                            BidToken.objects.create(
+                                seller=user,
+                                token_type='single',
+                                expires_at=expires_at  # 90일 만료
+                            )
+                        logger.info(f"견적이용권 {token_count}개 생성: 만료일 {expires_at.strftime('%Y-%m-%d')}")
                 
-                response_data['message'] = message
+                # BidTokenPurchase 레코드 생성 (구매 내역용)
+                BidTokenPurchase.objects.create(
+                    seller=user,
+                    token_type='unlimited' if is_subscription else 'single',
+                    quantity=1 if is_subscription else token_count,
+                    total_price=payment.amount,
+                    payment_status='completed',
+                    payment_date=datetime.now(),
+                    order_id=order_id,
+                    payment_key=auth_token[:200] if auth_token else None
+                )
                 
-                return Response(response_data)
+                logger.info(f"이니시스 결제 성공: user={user.id}, order_id={order_id}, amount={payment.amount}, tokens={token_count}")
+            
+            # 사용자의 현재 총 입찰권 개수 계산
+            # 단품 입찰권 개수
+            single_tokens = BidToken.objects.filter(
+                seller=user, 
+                token_type='single',
+                status='active'
+            ).count()
+            
+            # 구독권 개수 (만료되지 않은 것만)
+            subscription_count = BidToken.objects.filter(
+                seller=user,
+                token_type='unlimited',
+                status='active',
+                expires_at__gt=datetime.now()
+            ).count()
+            
+            current_tokens = single_tokens  # 단품 개수를 기본으로 표시
+            
+            # 구매 완료 메시지 설정
+            response_data = {
+                'success': True,
+                'token_count': token_count,
+                'total_tokens': current_tokens,
+                'subscription_count': subscription_count,
+                'is_subscription': is_subscription
+            }
+            
+            if is_subscription:
+                if subscription_count > 1:
+                    message = f'구독권이 추가되었습니다. (현재 {subscription_count}개 보유)'
+                else:
+                    message = '구독권이 구매 완료되었습니다.'
+                
+                # 구독권 만료일 정보 추가
+                if subscription_expires_at:
+                    response_data['subscription_expires_at'] = subscription_expires_at.isoformat()
+                    response_data['subscription_period'] = f"{(subscription_expires_at - timedelta(days=30)).strftime('%Y-%m-%d')} ~ {subscription_expires_at.strftime('%Y-%m-%d')}"
+            else:
+                message = f'견적이용권 {token_count}개가 구매 완료되었습니다.'
+            
+            response_data['message'] = message
+            
+            return Response(response_data)
         else:
             # 결제 실패 처리
             payment.status = 'failed'
@@ -952,20 +547,11 @@ def verify_inicis_payment(request):
     except Exception as e:
         logger.error(f"이니시스 결제 검증 중 오류: {str(e)}")
         logger.error(f"오류 타입: {type(e)}")
-        logger.error(f"요청 데이터: {request.data}")
         import traceback
         logger.error(f"스택 트레이스: {traceback.format_exc()}")
-        
-        # 구체적인 오류 메시지 생성
-        error_message = str(e) if str(e) and str(e) != 'None' else '결제 검증 중 오류가 발생했습니다.'
-        
         return Response(
-            {
-                'success': False,
-                'error': error_message,
-                'error_code': getattr(e, 'code', None)
-            },
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': '결제 검증 중 오류가 발생했습니다.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
