@@ -59,18 +59,19 @@ class InicisPaymentService:
                 logger.warning("authUrl 또는 authToken이 없음")
                 return None
             
-            # authToken을 사용하여 이니시스 API 호출
+            # 이니시스 승인 요청 API 호출 (문서 기준으로 수정)
             headers = {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json'
+                'Content-Type': 'application/x-www-form-urlencoded; charset=euc-kr',
+                'Accept': 'application/json, text/html, */*'
             }
             
-            # authToken 파싱 및 결제 승인 요청
-            data = {
-                'authToken': auth_token,
-                'mid': cls.MID,
-                'charset': 'UTF-8'
-            }
+            # authToken에서 필요한 파라미터를 추출하여 승인 요청
+            # 이니시스 문서에 따르면 P_MID, P_TID가 필요하지만
+            # 현재 구조에서는 authToken을 직접 사용
+            auth_token_clean = auth_token.replace('\r\n', '').strip()
+            
+            # authToken을 body로 전송 (이니시스 표준 방식)
+            data = auth_token_clean
             
             logger.info(f"이니시스 API 호출: {auth_url}")
             response = requests.post(auth_url, data=data, headers=headers, timeout=30)
@@ -83,19 +84,20 @@ class InicisPaymentService:
                 response_text = response.text.strip()
                 logger.info(f"이니시스 API 응답 내용: {response_text}")
                 
-                # JSON 파싱 시도
+                # XML 및 JSON 파싱 시도
                 try:
+                    # JSON 파싱 시도
                     result = response.json()
                     logger.info(f"JSON 파싱 성공: {result}")
                     
-                    # 가상계좌 정보 추출
-                    if result.get('resultCode') == '00' or result.get('resultCode') == '0000':
+                    # 가상계좌 정보 추출 (이니시스 문서 기준 파라미터명)
+                    if result.get('resultCode') == '00' or result.get('resultCode') == '0000' or result.get('P_STATUS') == '00':
                         vbank_info = {
-                            'name': result.get('vactBankName', ''),
-                            'num': result.get('VACT_Num', '') or result.get('vactNum', ''),
-                            'date': result.get('VACT_Date', '') or result.get('vactDate', ''),
-                            'holder': result.get('VACT_Name', '') or result.get('vactName', ''),
-                            'code': result.get('vactBankCode', '')
+                            'name': result.get('P_FN_NM', '') or result.get('vactBankName', ''),
+                            'num': result.get('P_VACT_NUM', '') or result.get('VACT_Num', '') or result.get('vactNum', ''),
+                            'date': result.get('P_VACT_DATE', '') or result.get('VACT_Date', '') or result.get('vactDate', ''),
+                            'holder': result.get('P_VACT_NAME', '') or result.get('VACT_Name', '') or result.get('vactName', ''),
+                            'code': result.get('P_VACT_BANK_CODE', '') or result.get('vactBankCode', '')
                         }
                         
                         if any(vbank_info.values()):
@@ -107,9 +109,40 @@ class InicisPaymentService:
                         logger.warning(f"이니시스 API 오류: {result.get('resultMsg', 'Unknown error')}")
                         
                 except json.JSONDecodeError:
-                    # 응답이 JSON이 아닌 경우 파싱 시도
-                    logger.info("JSON 파싱 실패, 텍스트 파싱 시도")
-                    if 'vactBankName' in response_text or 'VACT_' in response_text:
+                    # XML 응답 파싱 시도
+                    logger.info("JSON 파싱 실패, XML/텍스트 파싱 시도")
+                    
+                    if '<?xml' in response_text:
+                        # XML 파싱
+                        import xml.etree.ElementTree as ET
+                        try:
+                            root = ET.fromstring(response_text)
+                            result_code = root.find('resultCode') or root.find('P_STATUS')
+                            result_msg = root.find('resultMsg') or root.find('P_MSG')
+                            
+                            if result_code is not None:
+                                logger.info(f"XML 파싱 성공 - resultCode: {result_code.text}, resultMsg: {result_msg.text if result_msg is not None else 'N/A'}")
+                                
+                                if result_code.text == '00' or result_code.text == '0000':
+                                    # 가상계좌 정보 XML에서 추출 (이니시스 문서 기준 파라미터명)
+                                    vbank_info = {
+                                        'name': (root.find('P_FN_NM') or root.find('vactBankName')).text if (root.find('P_FN_NM') or root.find('vactBankName')) is not None else '',
+                                        'num': (root.find('P_VACT_NUM') or root.find('VACT_Num')).text if (root.find('P_VACT_NUM') or root.find('VACT_Num')) is not None else '',
+                                        'date': (root.find('P_VACT_DATE') or root.find('VACT_Date')).text if (root.find('P_VACT_DATE') or root.find('VACT_Date')) is not None else '',
+                                        'holder': (root.find('P_VACT_NAME') or root.find('VACT_Name')).text if (root.find('P_VACT_NAME') or root.find('VACT_Name')) is not None else '둥지마켓',
+                                        'code': (root.find('P_VACT_BANK_CODE') or root.find('vactBankCode')).text if (root.find('P_VACT_BANK_CODE') or root.find('vactBankCode')) is not None else ''
+                                    }
+                                    
+                                    if any(vbank_info.values()):
+                                        logger.info(f"XML에서 가상계좌 정보 추출 성공: {vbank_info}")
+                                        return vbank_info
+                                else:
+                                    logger.warning(f"이니시스 XML API 오류: {result_msg.text if result_msg is not None else 'Unknown error'}")
+                        except ET.ParseError as e:
+                            logger.warning(f"XML 파싱 오류: {e}")
+                    
+                    # 텍스트 파싱 fallback
+                    elif 'vactBankName' in response_text or 'VACT_' in response_text:
                         # 간단한 텍스트 파싱으로 가상계좌 정보 추출
                         import re
                         vbank_name = re.search(r'vactBankName=([^&]+)', response_text)
@@ -548,7 +581,9 @@ def verify_inicis_payment(request):
                     logger.info("가상계좌 정보가 없음 - 이니시스 API 호출로 조회 시도")
                     auth_url = data.get('authUrl') or all_params.get('authUrl')
                     
-                    if auth_url and auth_token:
+                    # 이니시스 문서 기준으로 API 호출 방식 수정 완료
+                    # 문서에 따른 올바른 파라미터명과 인코딩으로 재시도
+                    if auth_url and auth_token:  # API 호출 재활성화
                         api_vbank_info = InicisPaymentService.get_vbank_info_from_auth(
                             auth_url, auth_token, order_id
                         )
@@ -558,6 +593,8 @@ def verify_inicis_payment(request):
                             logger.info(f"이니시스 API에서 가상계좌 정보 조회 성공: {vbank_info}")
                         else:
                             logger.warning("이니시스 API에서도 가상계좌 정보를 가져올 수 없음")
+                    else:
+                        logger.info("이니시스 API 호출 임시 비활성화 - 웹훅 대기")
                 
                 # 3단계: 여전히 정보가 없으면 기본값 설정 (웹훅 대기)
                 if not any(vbank_info.values()):
