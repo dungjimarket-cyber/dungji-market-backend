@@ -55,36 +55,50 @@ class InicisPaymentService:
             
             logger.info(f"이니시스 모바일 승인 요청 시작")
             
-            # authToken 정리 (줄바꿈 제거 및 hAsH 부분 처리)
-            clean_auth_token = auth_token
-            if 'hAsH:' in auth_token:
-                # hAsH: 부분 제거 (이니시스 내부 해시값으로 추정)
-                clean_auth_token = auth_token.split('hAsH:')[0]
-                logger.info(f"authToken에서 hAsH 부분 제거: 원래 길이 {len(auth_token)} -> 정리 후 {len(clean_auth_token)}")
+            # 이니시스 공식 문서에 따른 승인 요청 파라미터
+            # P_TID는 authToken 그대로 사용, P_MID는 P_TID에서 추출
+            P_TID = auth_token
+            if 'hAsH:' in P_TID:
+                # hAsH 부분 제거
+                P_TID = P_TID.split('hAsH:')[0]
+                logger.info(f"P_TID에서 hAsH 부분 제거: 원래 길이 {len(auth_token)} -> 정리 후 {len(P_TID)}")
             
-            # 줄바꿈 문자 제거
-            clean_auth_token = clean_auth_token.replace('\r\n', '').replace('\r', '').replace('\n', '')
+            # 줄바꿈 제거
+            P_TID = P_TID.replace('\r\n', '').replace('\r', '').replace('\n', '')
             
-            logger.info(f"정리된 authToken 길이: {len(clean_auth_token)}")
-            logger.info(f"정리된 authToken 앞부분: {clean_auth_token[:50]}...")
+            # P_MID는 P_TID의 10-20번째 문자 (이니시스 공식 규격)
+            P_MID = P_TID[10:20] if len(P_TID) > 20 else cls.MID
             
-            # 승인 요청 데이터 (이니시스 API 스펙에 맞춤)
-            # 표준 승인 API에 필요한 최소 파라미터만 사용
+            logger.info(f"정리된 P_TID 길이: {len(P_TID)}")
+            logger.info(f"P_MID 추출: {P_MID}")
+            logger.info(f"P_TID 앞부분: {P_TID[:50]}...")
+            
+            # 이니시스 공식 승인 API 파라미터 (공식 문서 기준)
             approval_data = {
-                'mid': cls.MID,
-                'authToken': clean_auth_token
+                'P_TID': P_TID,
+                'P_MID': P_MID
             }
             
             # URL 인코딩
             encoded_data = urllib.parse.urlencode(approval_data)
             
-            logger.info(f"승인 요청 URL: {auth_url}")
+            # 이니시스 공식 승인 API URL 구성
+            # auth_url에서 호스트 부분 추출하여 올바른 엔드포인트로 변경
+            if 'ksstdpay.inicis.com' in auth_url:
+                # https://ksstdpay.inicis.com/api/payAuth -> https://ksmobile.inicis.com/smart/payReq.ini
+                correct_auth_url = "https://ksmobile.inicis.com/smart/payReq.ini"
+            else:
+                # 다른 센터인 경우 기본 구성
+                correct_auth_url = auth_url.replace('payAuth', 'payReq.ini').replace('ksstdpay', 'ksmobile').replace('/api/', '/smart/')
+            
+            logger.info(f"원래 승인 URL: {auth_url}")
+            logger.info(f"수정된 승인 URL: {correct_auth_url}")
             logger.info(f"승인 요청 데이터: {approval_data}")
             logger.info(f"URL 인코딩된 데이터: {encoded_data}")
             
             # 승인 API 호출
             response = requests.post(
-                auth_url,
+                correct_auth_url,
                 data=encoded_data,
                 headers={
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -97,39 +111,34 @@ class InicisPaymentService:
             logger.info(f"승인 응답 전체: {response.text}")
             
             if response.status_code == 200:
-                # 응답 파싱
+                # 응답 파싱 - 이니시스는 기본적으로 URL-encoded 형식으로 응답
                 result_params = {}
                 
-                # XML 응답인 경우 먼저 확인 (이니시스는 주로 XML 응답)
-                if response.text.strip().startswith('<?xml'):
-                    try:
-                        import xml.etree.ElementTree as ET
-                        root = ET.fromstring(response.text)
-                        
-                        # XML에서 필드 추출
-                        for elem in root:
-                            result_params[elem.tag] = elem.text
-                        
-                        logger.info(f"승인 결과 (XML): {result_params}")
-                    except Exception as xml_error:
-                        logger.error(f"XML 파싱 오류: {xml_error}")
-                        logger.error(f"XML 응답 내용: {response.text}")
-                        return None
-                else:
-                    # JSON 응답인 경우
-                    try:
-                        import json
-                        result_params = json.loads(response.text)
-                        logger.info(f"승인 결과 (JSON): {result_params}")
-                    except json.JSONDecodeError:
-                        # URL 인코딩된 응답인 경우
-                        for pair in response.text.split('&'):
-                            if '=' in pair:
-                                key, value = pair.split('=', 1)
-                                result_params[key] = urllib.parse.unquote(value)
-                        logger.info(f"승인 결과 (URL-encoded): {result_params}")
+                # 이니시스 공식 응답 형식: P_STATUS=00&P_RMESG1=정상처리&P_TID=...
+                logger.info(f"이니시스 승인 응답 파싱 시작")
                 
-                return result_params
+                try:
+                    # URL-encoded 형식 파싱 (이니시스 표준)
+                    for pair in response.text.split('&'):
+                        if '=' in pair:
+                            key, value = pair.split('=', 1)
+                            result_params[key] = urllib.parse.unquote(value)
+                    
+                    logger.info(f"승인 결과 (URL-encoded): {result_params}")
+                    
+                    # 결과 코드 확인을 위해 필드명 매핑
+                    # P_STATUS -> resultCode, P_RMESG1 -> resultMsg 등
+                    if 'P_STATUS' in result_params:
+                        result_params['resultCode'] = result_params['P_STATUS']
+                    if 'P_RMESG1' in result_params:
+                        result_params['resultMsg'] = result_params['P_RMESG1']
+                    
+                    return result_params
+                    
+                except Exception as parse_error:
+                    logger.error(f"URL-encoded 파싱 오류: {parse_error}")
+                    logger.error(f"응답 내용: {response.text}")
+                    return None
             else:
                 logger.error(f"승인 API 오류: {response.status_code}, {response.text}")
                 return None
@@ -303,10 +312,10 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v2.3 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v3.0 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
-        logger.info(f"최소 파라미터만 사용하는 승인 요청으로 수정...")
+        logger.info(f"이니시스 공식 문서 기준으로 완전 재구성 (P_TID/P_MID, payReq.ini, URL-encoded)")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
