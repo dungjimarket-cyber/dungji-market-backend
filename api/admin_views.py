@@ -195,7 +195,7 @@ class AdminViewSet(viewsets.ViewSet):
                 price_per_token = 1990  # 입찰권 단품 가격
             else:  # unlimited
                 expires_at = timezone.now() + timedelta(days=30)  # 무제한 구독권: 30일
-                price_per_token = 29900  # 무제한 구독권 가격
+                price_per_token = 59000  # 무제한 구독권 가격 (오픈기념 할인가)
             
             # 입찰권 구매 내역 생성 (관리자가 부여하는 경우 무료로 처리)
             purchase = BidTokenPurchase.objects.create(

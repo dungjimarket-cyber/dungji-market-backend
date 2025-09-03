@@ -338,7 +338,7 @@ def verify_inicis_payment(request):
             # 이미 처리된 결제의 토큰 정보 가져오기
             is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
             if is_subscription:
-                token_count = 1 if payment.amount >= 29900 else 0
+                token_count = 1 if payment.amount >= 59000 else 0
             else:
                 token_count = int(payment.amount // 1990)
             
@@ -484,8 +484,8 @@ def verify_inicis_payment(request):
                 subscription_expires_at = None  # 초기화
                 
                 if is_subscription:
-                    # 무제한 구독권 (29,900원)
-                    if payment.amount >= 29900:
+                    # 무제한 구독권 (59,000원)
+                    if payment.amount >= 59000:
                         # 기존 활성 구독권 확인
                         existing_subscription = BidToken.objects.filter(
                             seller=user,
@@ -514,7 +514,7 @@ def verify_inicis_payment(request):
                         subscription_expires_at = expires_at
                     else:
                         token_count = 0
-                        logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 29,900원")
+                        logger.warning(f"구독권 결제 금액 부족: {payment.amount}원 < 59,000원")
                 else:
                     # 단품 입찰권 (1,990원당 1개)
                     token_count = int(payment.amount // 1990)
@@ -752,8 +752,8 @@ def inicis_webhook(request):
                         is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
                         
                         if is_subscription:
-                            # 무제한 구독권 (29,900원)
-                            if payment.amount >= 29900:
+                            # 무제한 구독권 (59,000원)
+                            if payment.amount >= 59000:
                                 # 기존 활성 구독권 확인
                                 existing_subscription = BidToken.objects.filter(
                                     seller=user,

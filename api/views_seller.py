@@ -319,7 +319,7 @@ def purchase_bid_tokens(request):
     # 가격 계산
     price_map = {
         'single': 1990,   # 1,990원 (제안권 단품)
-        'unlimited': 29900 # 29,900원 (무제한 구독권 30일)
+        'unlimited': 59000 # 59,000원 (무제한 구독권 30일) - 오픈기념 할인가
     }
     unit_price = price_map.get(token_type)
     total_price = unit_price * quantity
