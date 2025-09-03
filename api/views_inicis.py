@@ -69,12 +69,10 @@ class InicisPaymentService:
             logger.info(f"정리된 authToken 앞부분: {clean_auth_token[:50]}...")
             
             # 승인 요청 데이터 (이니시스 API 스펙에 맞춤)
+            # 표준 승인 API에 필요한 최소 파라미터만 사용
             approval_data = {
                 'mid': cls.MID,
-                'authToken': clean_auth_token,
-                'timestamp': str(int(datetime.now().timestamp() * 1000)),
-                'charset': 'UTF-8',
-                'format': 'JSON'
+                'authToken': clean_auth_token
             }
             
             # URL 인코딩
@@ -305,10 +303,10 @@ def verify_inicis_payment(request):
         user = request.user
         data = request.data
         
-        logger.info(f"=== 이니시스 결제 검증 시작 v2.2 ===")
+        logger.info(f"=== 이니시스 결제 검증 시작 v2.3 ===")
         logger.info(f"요청 사용자: ID={user.id}, 역할={user.role}")
         logger.info(f"요청 데이터: {data}")
-        logger.info(f"authToken 정리 로직 추가된 코드 실행 중...")
+        logger.info(f"최소 파라미터만 사용하는 승인 요청으로 수정...")
         
         # 결제 결과 파라미터
         order_id = data.get('orderId')
