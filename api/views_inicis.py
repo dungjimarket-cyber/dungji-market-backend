@@ -64,6 +64,15 @@ class InicisPaymentService:
             actual_auth_token = actual_auth_token.replace('\r\n', '').replace('\n', '').replace('\r', '')
             logger.info(f"authToken 정리 완료: token_length={len(actual_auth_token)}")
             
+            # authURL 검증 로그 추가 (공식 문서: IDC 센터 코드와 일치 확인 필요)
+            logger.info(f"사용 중인 authUrl: {auth_url}")
+            if 'ksstdpay.inicis.com' in auth_url:
+                logger.info("IDC 센터: KS 센터 확인")
+            elif 'fcstdpay.inicis.com' in auth_url:
+                logger.info("IDC 센터: FC 센터 확인")  
+            else:
+                logger.warning(f"알 수 없는 IDC 센터: {auth_url}")
+            
             # 타임스탬프 생성
             import time
             timestamp = str(int(time.time() * 1000))
@@ -77,11 +86,13 @@ class InicisPaymentService:
             verification_data = actual_auth_token + cls.SIGNKEY + timestamp
             verification = hashlib.sha256(verification_data.encode('utf-8')).hexdigest()
             
-            # 승인 요청 파라미터 - 이니시스 INIAPI 규격 (대소문자 정확히 맞춤)
+            # 승인 요청 파라미터 - 이니시스 공식 PC 표준결제 규격
             params = {
                 'mid': cls.MID,
                 'authToken': actual_auth_token,
-                'hashData': hash_value if hash_value else '',
+                'timestamp': timestamp,
+                'signature': signature,
+                'verification': verification,
                 'charset': 'UTF-8',
                 'format': 'XML'
             }
