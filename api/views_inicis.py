@@ -54,22 +54,37 @@ class InicisPaymentService:
             # authToken에서 hash 분리 처리 (hAsH: 구분자가 있는 경우)
             actual_auth_token = auth_token
             hash_value = None
-            
             if 'hAsH:' in auth_token:
                 parts = auth_token.split('hAsH:', 1)
                 actual_auth_token = parts[0].strip()
                 hash_value = parts[1].strip() if len(parts) > 1 else None
                 logger.info(f"authToken 분리: token_length={len(actual_auth_token)}, hash={hash_value[:20]}..." if hash_value else "no hash")
             
-            # 승인 요청 파라미터 - 이니시스 API 규격에 맞게 수정
+            # 타임스탬프 생성
+            import time
+            timestamp = str(int(time.time() * 1000))
+            
+            # 이니시스 공식 규격에 따른 서명 생성
+            # signature = SHA256(authToken + timestamp)
+            signature_data = actual_auth_token + timestamp
+            signature = hashlib.sha256(signature_data.encode('utf-8')).hexdigest()
+            
+            # verification = SHA256(authToken + signKey + timestamp)
+            verification_data = actual_auth_token + cls.SIGNKEY + timestamp
+            verification = hashlib.sha256(verification_data.encode('utf-8')).hexdigest()
+            
+            # 승인 요청 파라미터 - 이니시스 공식 PC 결제 규격
             params = {
-                'authToken': actual_auth_token,
                 'mid': cls.MID,
+                'authToken': actual_auth_token,
+                'timestamp': timestamp,
+                'signature': signature,
+                'verification': verification,
+                'charset': 'UTF-8',
+                'format': 'XML'
             }
             
-            # hash가 있는 경우 추가 (이니시스 API 규격에 따라)
-            if hash_value:
-                params['hashData'] = hash_value
+            logger.info(f"승인요청 서명 생성: signature={signature[:20]}..., verification={verification[:20]}...")
             
             logger.info(f"이니시스 승인 요청: order_id={order_id}, params={params}")
             
@@ -839,17 +854,35 @@ def inicis_return(request):
 def generate_mobile_hash(request):
     """
     모바일 결제용 해시키 생성
+    공식 이니시스 모바일 해시 규격: BASE64_ENCODE(SHA512(P_AMT + P_OID + P_TIMESTAMP + HashKey))
     """
     try:
         data = request.data
         order_id = data.get('orderId')
         amount = data.get('amount')
+        timestamp = data.get('timestamp')  # 프론트엔드에서 타임스탬프 전달
         
-        # 모바일 해시 생성 (간단한 예시)
-        # 실제로는 이니시스 모바일 해시키 규격에 맞춰 생성
+        if not all([order_id, amount, timestamp]):
+            return Response(
+                {'error': '필수 파라미터가 누락되었습니다. (orderId, amount, timestamp)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 이니시스 공식 모바일 해시 생성
+        # 대상파라미터: P_AMT + P_OID + P_TIMESTAMP + HashKey
         import hashlib
-        hash_data = f"{InicisPaymentService.MID}_{order_id}_{amount}_{InicisPaymentService.MOBILE_HASHKEY}"
-        mobile_hash = hashlib.md5(hash_data.encode('utf-8')).hexdigest()
+        import base64
+        
+        hash_data = f"{amount}{order_id}{timestamp}{InicisPaymentService.MOBILE_HASHKEY}"
+        logger.info(f"모바일 해시 생성 데이터: amount={amount}, orderId={order_id}, timestamp={timestamp}")
+        
+        # SHA512 해시 생성
+        sha512_hash = hashlib.sha512(hash_data.encode('utf-8')).digest()
+        
+        # BASE64 인코딩
+        mobile_hash = base64.b64encode(sha512_hash).decode('utf-8')
+        
+        logger.info(f"모바일 해시 생성 완료: hash_length={len(mobile_hash)}")
         
         return Response({
             'success': True,
