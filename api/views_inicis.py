@@ -65,15 +65,46 @@ class InicisPaymentService:
                 'Accept': 'application/json, text/html, */*'
             }
             
-            # authToken에서 필요한 파라미터를 추출하여 승인 요청
-            # 이니시스 문서에 따르면 P_MID, P_TID가 필요하지만
-            # 현재 구조에서는 authToken을 직접 사용
+            # authToken을 기반으로 올바른 파라미터 구성
+            # authToken에는 hash 값이 포함되어 있으므로 이를 분리
             auth_token_clean = auth_token.replace('\r\n', '').strip()
             
-            # authToken을 body로 전송 (이니시스 표준 방식)
-            data = auth_token_clean
+            # authToken에서 hash 부분 분리 (hAsH: 뒤의 값)
+            if 'hAsH:' in auth_token_clean:
+                main_token, hash_value = auth_token_clean.split('hAsH:', 1)
+                main_token = main_token.strip()
+                hash_value = hash_value.strip()
+                logger.info(f"authToken 분리: 메인토큰 길이={len(main_token)}, 해시={hash_value[:50]}...")
+            else:
+                main_token = auth_token_clean
+                hash_value = ""
+                logger.info("authToken에 hash 값 없음")
+            
+            # 로그에서 확인된 실제 MID 사용 (dungjima14)
+            actual_mid = 'dungjima14'  # 실제 운영 중인 MID
+            
+            # 이니시스 승인 요청 파라미터를 URL-encoded 형식으로 구성
+            # 문서에 따른 올바른 파라미터 구성
+            data = {
+                'P_MID': actual_mid,        # 상점 아이디
+                'P_TID': main_token,        # 거래 아이디 (authToken의 메인 부분)
+                'P_TYPE': '0',              # 거래 유형 (0: 승인)
+                'P_OID': order_id,          # 주문번호
+            }
+            
+            # hash 값이 있으면 추가 (signature나 checksum으로)
+            if hash_value:
+                data['P_HASH'] = hash_value
+            
+            # 추가적으로 authToken 전체도 포함 (백업용)
+            data['authToken'] = main_token
             
             logger.info(f"이니시스 API 호출: {auth_url}")
+            logger.info(f"전송 파라미터: {list(data.keys())}")
+            logger.info(f"P_MID: {data.get('P_MID')}")
+            logger.info(f"P_TID 길이: {len(data.get('P_TID', ''))}")
+            logger.info(f"P_OID: {data.get('P_OID')}")
+            
             response = requests.post(auth_url, data=data, headers=headers, timeout=30)
             
             logger.info(f"이니시스 API 응답 상태: {response.status_code}")
