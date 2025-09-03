@@ -296,6 +296,9 @@ def verify_inicis_payment(request):
             logger.info(f"이니시스 승인 요청 시작: order_id={order_id}, authUrl={auth_url}")
             logger.info(f"승인 파라미터: mid={InicisPaymentService.MID}, timestamp={timestamp}")
             
+            # 승인 결과를 저장할 변수 초기화
+            approval_data = None
+            
             try:
                 # 이니시스 승인 API 호출
                 response = requests.post(auth_url, data=approval_params, timeout=30)
@@ -306,10 +309,12 @@ def verify_inicis_payment(request):
                     # JSON 응답 파싱
                     try:
                         approval_result = response.json()
+                        approval_data = approval_result  # 외부에서 사용할 수 있도록 저장
+                        
                         result_code = approval_result.get('resultCode', '')
                         result_msg = approval_result.get('resultMsg', '')
                         
-                        if result_code != '00':
+                        if result_code not in ['00', '0000']:  # 2자리와 4자리 모두 처리
                             logger.error(f"승인 실패: code={result_code}, msg={result_msg}")
                             return Response({
                                 'success': False,
@@ -347,10 +352,11 @@ def verify_inicis_payment(request):
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
                     payment.tid = order_id[:200]
-                    payment.vbank_name = data.get('vactBankName', '')
-                    payment.vbank_num = data.get('VACT_Num', '')
-                    payment.vbank_date = data.get('VACT_Date', '')
-                    payment.vbank_holder = data.get('VACT_Name', '')
+                    # 승인 응답에서 가상계좌 정보 추출
+                    payment.vbank_name = approval_data.get('vactBankName', data.get('vactBankName', ''))
+                    payment.vbank_num = approval_data.get('VACT_Num', data.get('VACT_Num', ''))
+                    payment.vbank_date = approval_data.get('VACT_Date', data.get('VACT_Date', ''))
+                    payment.vbank_holder = approval_data.get('VACT_Name', data.get('VACT_Name', ''))
                     payment.payment_data.update({
                         'authToken': auth_token,
                         'authResultCode': auth_result_code,
