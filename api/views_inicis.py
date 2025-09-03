@@ -60,7 +60,9 @@ class InicisPaymentService:
             logger.info(f"  - 앞 100자: {repr(auth_token[:100])}")
             logger.info(f"  - 뒤 100자: {repr(auth_token[-100:])}")
             logger.info(f"  - hAsH 포함여부: {'hAsH:' in auth_token}")
-            logger.info(f"  - 줄바꿈 포함여부: {'\\n' in auth_token or '\\r' in auth_token}")
+            # f-string에서 백슬래시 사용 불가로 인한 변수 사용
+            has_newlines = '\n' in auth_token or '\r' in auth_token
+            logger.info(f"  - 줄바꿈 포함여부: {has_newlines}")
             
             # 이니시스 공식 문서에 따른 승인 요청 파라미터
             # P_TID는 authToken 그대로 사용, P_MID는 P_TID에서 추출
