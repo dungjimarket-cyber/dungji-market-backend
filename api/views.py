@@ -3481,11 +3481,24 @@ class UserProfileView(APIView):
         # 활성 패널티 정보 추가
         from django.utils import timezone
         from .models import Penalty
+        
+        # 디버깅을 위한 로깅 추가
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 모든 패널티 조회 (디버깅용)
+        all_penalties = Penalty.objects.filter(user=user)
+        logger.info(f"사용자 {user.username}의 전체 패널티: {all_penalties.count()}개")
+        for p in all_penalties:
+            logger.info(f"  - ID: {p.id}, is_active: {p.is_active}, end_date: {p.end_date}, 현재시간: {timezone.now()}, 유효: {p.end_date > timezone.now()}")
+        
         active_penalty = Penalty.objects.filter(
             user=user,
             is_active=True,
             end_date__gt=timezone.now()
         ).first()
+        
+        logger.info(f"활성 패널티 조회 결과: {active_penalty}")
         
         if active_penalty:
             remaining = active_penalty.end_date - timezone.now()
