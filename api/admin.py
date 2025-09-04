@@ -7,9 +7,11 @@ from django.http import HttpResponseRedirect
 from django.utils.html import mark_safe
 from django.utils import timezone
 from django import forms
+from django.forms import DateTimeInput
 from django.conf import settings
 from django.db.models import Count, Q
 import logging
+import datetime
 
 from .models import (
     Category, Product, GroupBuy, Bid, Penalty, User, Badge,
@@ -83,13 +85,22 @@ class CustomDateTimeInput(DateTimeInput):
 class PenaltyAdminForm(forms.ModelForm):
     """패널티 관리 폼 - 시간 입력을 위한 커스텀 폼"""
     
+    # start_date를 위한 커스텀 필드 (초기값 처리)
+    start_date = forms.DateTimeField(
+        widget=CustomDateTimeInput(),
+        required=False,
+        label='시작일'
+    )
+    
+    end_date = forms.DateTimeField(
+        widget=CustomDateTimeInput(),
+        required=False,
+        label='종료일'
+    )
+    
     class Meta:
         model = Penalty
         fields = '__all__'
-        widgets = {
-            'start_date': CustomDateTimeInput(),
-            'end_date': CustomDateTimeInput(),
-        }
 
 @admin.register(Penalty)
 class PenaltyAdmin(admin.ModelAdmin):
