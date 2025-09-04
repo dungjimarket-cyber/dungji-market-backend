@@ -57,6 +57,29 @@ class CategoryAdmin(admin.ModelAdmin):
             perms[action] = perms[action]
         return perms
 
+from django.forms import DateTimeInput
+
+class CustomDateTimeInput(DateTimeInput):
+    """커스텀 DateTimeInput - datetime-local 타입 지원"""
+    input_type = 'datetime-local'
+    
+    def format_value(self, value):
+        if value:
+            from django.utils import timezone
+            import datetime
+            
+            if isinstance(value, str):
+                # 문자열인 경우 그대로 반환
+                return value
+            elif isinstance(value, datetime.datetime):
+                # datetime 객체인 경우 ISO 형식으로 변환
+                if timezone.is_aware(value):
+                    # timezone aware인 경우 로컬 시간으로 변환
+                    value = timezone.localtime(value)
+                return value.strftime('%Y-%m-%dT%H:%M')
+            
+        return ''
+
 class PenaltyAdminForm(forms.ModelForm):
     """패널티 관리 폼 - 시간 입력을 위한 커스텀 폼"""
     
@@ -64,8 +87,8 @@ class PenaltyAdminForm(forms.ModelForm):
         model = Penalty
         fields = '__all__'
         widgets = {
-            'start_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
-            'end_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'start_date': CustomDateTimeInput(),
+            'end_date': CustomDateTimeInput(),
         }
 
 @admin.register(Penalty)
