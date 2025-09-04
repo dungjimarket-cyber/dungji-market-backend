@@ -134,7 +134,8 @@ class PenaltyAdmin(admin.ModelAdmin):
     
     def get_user_display(self, obj):
         """사용자 정보 표시"""
-        return f"{obj.user.username} ({obj.user.name})"
+        nickname = obj.user.nickname if obj.user.nickname else obj.user.username
+        return f"{obj.user.username} ({nickname})"
     get_user_display.short_description = '사용자'
     get_user_display.admin_order_field = 'user__username'
     
