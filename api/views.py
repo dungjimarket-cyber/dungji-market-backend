@@ -3477,6 +3477,34 @@ class UserProfileView(APIView):
             }
         else:
             response_data['address_region'] = None
+        
+        # 활성 패널티 정보 추가
+        from django.utils import timezone
+        from .models import Penalty
+        active_penalty = Penalty.objects.filter(
+            user=user,
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).first()
+        
+        if active_penalty:
+            remaining = active_penalty.end_date - timezone.now()
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            
+            response_data['penalty_info'] = {
+                'is_active': True,
+                'type': active_penalty.penalty_type,
+                'reason': active_penalty.reason,
+                'count': active_penalty.count,
+                'start_date': active_penalty.start_date.isoformat(),
+                'end_date': active_penalty.end_date.isoformat(),
+                'remaining_hours': hours,
+                'remaining_minutes': minutes,
+                'remaining_text': f"{hours}시간 {minutes}분 남음"
+            }
+        else:
+            response_data['penalty_info'] = None
             
         return Response(response_data)
 

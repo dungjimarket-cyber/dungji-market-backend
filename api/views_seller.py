@@ -123,6 +123,33 @@ class SellerProfileView(APIView):
             "notificationEnabled": True  # 기본값
         }
         
+        # 활성 패널티 정보 추가
+        from .models import Penalty
+        active_penalty = Penalty.objects.filter(
+            user=user,
+            is_active=True,
+            end_date__gt=now
+        ).first()
+        
+        if active_penalty:
+            remaining = active_penalty.end_date - now
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            
+            data['penaltyInfo'] = {
+                'isActive': True,
+                'type': active_penalty.penalty_type,
+                'reason': active_penalty.reason,
+                'count': active_penalty.count,
+                'startDate': active_penalty.start_date.isoformat(),
+                'endDate': active_penalty.end_date.isoformat(),
+                'remainingHours': hours,
+                'remainingMinutes': minutes,
+                'remainingText': f"{hours}시간 {minutes}분 남음"
+            }
+        else:
+            data['penaltyInfo'] = None
+        
         return Response(data)
     
     def patch(self, request):
