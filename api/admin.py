@@ -59,6 +59,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 class PenaltyAdminForm(forms.ModelForm):
     """패널티 관리 폼 - 시간 입력을 위한 커스텀 폼"""
+    
     class Meta:
         model = Penalty
         fields = '__all__'
@@ -73,11 +74,13 @@ class PenaltyAdmin(admin.ModelAdmin):
     list_display = ['get_user_display', 'penalty_type', 'get_duration_display', 
                     'get_status_display', 'start_date', 'end_date', 'count', 'created_by']
     list_filter = ['is_active', 'penalty_type', 'created_at']
-    search_fields = ['user__username', 'user__email', 'reason']
+    search_fields = ['user__username', 'user__email', 'user__name', 'reason']
     readonly_fields = ['created_at', 'created_by']
+    autocomplete_fields = ['user']  # 사용자 필드 자동완성 활성화
     fieldsets = (
-        ('사용자 정보', {
-            'fields': ('user',)
+        ('사용자 선택', {
+            'fields': ('user',),
+            'description': '🔍 사용자 닉네임(username) 또는 이메일을 입력하여 검색하세요. 자동완성이 지원됩니다.'
         }),
         ('패널티 정보', {
             'fields': ('penalty_type', 'reason', 'count')
@@ -157,6 +160,9 @@ class PenaltyAdmin(admin.ModelAdmin):
     def __init__(self, model, admin_site):
         self.list_display_links = ('get_user_display',)
         super().__init__(model, admin_site)
+    
+    class Media:
+        js = ('admin/js/penalty_admin.js',)
 
 
 # BidToken 관련 인라인 Admin
