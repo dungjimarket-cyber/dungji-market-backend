@@ -39,6 +39,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
+                
+                // 중복 클릭 방지
+                if (this.disabled) return;
+                
                 const hours = this.dataset.hours;
                 const type = this.dataset.type;
                 

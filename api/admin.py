@@ -162,10 +162,24 @@ class PenaltyAdmin(admin.ModelAdmin):
         """모델 저장 시 created_by 자동 설정"""
         if not change:  # 새로 생성하는 경우
             obj.created_by = request.user
+            
+            # 중복 저장 방지 - 같은 사용자에게 1분 이내 동일한 패널티가 있는지 확인
+            from datetime import timedelta
+            one_minute_ago = timezone.now() - timedelta(minutes=1)
+            existing = Penalty.objects.filter(
+                user=obj.user,
+                penalty_type=obj.penalty_type,
+                created_at__gte=one_minute_ago
+            ).exists()
+            
+            if existing:
+                messages.warning(request, f"1분 이내에 동일한 패널티가 이미 등록되었습니다.")
+                return
+        
         super().save_model(request, obj, form, change)
         
         # 성공 메시지 표시
-        if not change:
+        if not change and obj.pk:  # 실제로 저장된 경우만
             messages.success(request, 
                 f"{obj.user.username}님에게 {obj.duration_hours}시간 패널티가 부여되었습니다. "
                 f"시작: {obj.start_date.strftime('%Y-%m-%d %H:%M')}, "
