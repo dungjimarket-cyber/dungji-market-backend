@@ -1038,39 +1038,40 @@ class Bid(models.Model):
 class Penalty(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자')
     reason = models.TextField(verbose_name='사유')
-    penalty_type = models.CharField(max_length=20, verbose_name='페널티 유형')
+    penalty_type = models.CharField(max_length=20, verbose_name='페널티 유형', 
+                                   help_text='예: 노쇼, 판매포기, 기타')
+    duration_hours = models.PositiveIntegerField(default=24, verbose_name='패널티 기간(시간)',
+                                                 help_text='시간 단위로 입력 (예: 24, 48, 72)')
     start_date = models.DateTimeField(default=timezone.now, verbose_name='시작일')
-    end_date = models.DateTimeField(verbose_name='종료일')
+    end_date = models.DateTimeField(verbose_name='종료일', blank=True, null=True)
     is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
     count = models.PositiveSmallIntegerField(default=1, verbose_name='누적 횟수')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='penalties_created', verbose_name='등록자')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='등록일')
     
     def __str__(self):
         active = "[활성]" if self.is_active else "[비활성]"
-        return f"{self.user.username} - {self.penalty_type} ({self.count}회) {active}"
+        return f"{self.user.username} - {self.penalty_type} ({self.count}회) - {self.duration_hours}시간 {active}"
 
     def get_penalty_duration(self):
-        duration_map = {
-            1: 48,    # 48 hours
-            2: 72,    # 72 hours
-            3: 168,   # 1 week
-            4: 720    # 1 month
-        }
-        return timezone.timedelta(hours=duration_map.get(self.count, 48))
+        return timezone.timedelta(hours=self.duration_hours)
 
     def save(self, *args, **kwargs):
-        if not self.pk:
-            self.end_date = timezone.now() + self.get_penalty_duration()
+        # end_date가 없으면 자동 계산
+        if not self.end_date:
+            self.end_date = self.start_date + timezone.timedelta(hours=self.duration_hours)
+        
+        # 종료일이 지났으면 비활성화
+        if self.end_date and timezone.now() > self.end_date:
+            self.is_active = False
+        
         super().save(*args, **kwargs)
 
     class Meta:
-        verbose_name = '페널티'
-        verbose_name_plural = '페널티 관리'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['user', 'penalty_type'],
-                name='unique_penalty'
-            )
-        ]
+        verbose_name = '노쇼 패널티'
+        verbose_name_plural = '노쇼 패널티 관리'
+        ordering = ['-created_at', '-start_date']
     
 class Badge(models.Model):
     def __str__(self):

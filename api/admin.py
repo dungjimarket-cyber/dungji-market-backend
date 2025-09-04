@@ -52,13 +52,107 @@ class CategoryAdmin(admin.ModelAdmin):
             perms[action] = perms[action]
         return perms
 
+from django.contrib import messages
+
+class PenaltyAdminForm(forms.ModelForm):
+    """패널티 관리 폼 - 시간 입력을 위한 커스텀 폼"""
+    class Meta:
+        model = Penalty
+        fields = '__all__'
+        widgets = {
+            'start_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'end_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+
 @admin.register(Penalty)
 class PenaltyAdmin(admin.ModelAdmin):
-    list_display = ['user', 'reason', 'start_date']
+    form = PenaltyAdminForm
+    list_display = ['get_user_display', 'penalty_type', 'get_duration_display', 
+                    'get_status_display', 'start_date', 'end_date', 'count', 'created_by']
+    list_filter = ['is_active', 'penalty_type', 'created_at']
+    search_fields = ['user__username', 'user__email', 'reason']
+    readonly_fields = ['created_at', 'created_by']
+    fieldsets = (
+        ('사용자 정보', {
+            'fields': ('user',)
+        }),
+        ('패널티 정보', {
+            'fields': ('penalty_type', 'reason', 'count')
+        }),
+        ('기간 설정', {
+            'fields': ('duration_hours', 'start_date', 'end_date'),
+            'description': '패널티 기간을 시간 단위로 입력하세요. end_date를 비워두면 자동 계산됩니다.'
+        }),
+        ('상태', {
+            'fields': ('is_active',)
+        }),
+        ('기록', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_user_display(self, obj):
+        """사용자 정보 표시"""
+        return f"{obj.user.username} ({obj.user.name})"
+    get_user_display.short_description = '사용자'
+    get_user_display.admin_order_field = 'user__username'
+    
+    def get_duration_display(self, obj):
+        """패널티 기간 표시"""
+        return f"{obj.duration_hours}시간"
+    get_duration_display.short_description = '패널티 기간'
+    get_duration_display.admin_order_field = 'duration_hours'
+    
+    def get_status_display(self, obj):
+        """상태 표시"""
+        if obj.is_active:
+            if obj.end_date and timezone.now() < obj.end_date:
+                remaining = obj.end_date - timezone.now()
+                hours = int(remaining.total_seconds() // 3600)
+                minutes = int((remaining.total_seconds() % 3600) // 60)
+                return f"✅ 활성 (남은시간: {hours}시간 {minutes}분)"
+            elif obj.end_date and timezone.now() >= obj.end_date:
+                return "⏰ 만료됨"
+        return "❌ 비활성"
+    get_status_display.short_description = '상태'
+    
+    def save_model(self, request, obj, form, change):
+        """모델 저장 시 created_by 자동 설정"""
+        if not change:  # 새로 생성하는 경우
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+        
+        # 성공 메시지 표시
+        if not change:
+            messages.success(request, 
+                f"{obj.user.username}님에게 {obj.duration_hours}시간 패널티가 부여되었습니다. "
+                f"시작: {obj.start_date.strftime('%Y-%m-%d %H:%M')}, "
+                f"종료: {obj.end_date.strftime('%Y-%m-%d %H:%M')}")
+    
+    actions = ['deactivate_penalties', 'activate_penalties']
+    
+    def deactivate_penalties(self, request, queryset):
+        """선택한 패널티 비활성화"""
+        queryset.update(is_active=False)
+        messages.success(request, f"{queryset.count()}개의 패널티를 비활성화했습니다.")
+    deactivate_penalties.short_description = '선택한 패널티 비활성화'
+    
+    def activate_penalties(self, request, queryset):
+        """선택한 패널티 활성화"""
+        # 만료되지 않은 것만 활성화
+        count = 0
+        for penalty in queryset:
+            if penalty.end_date and timezone.now() < penalty.end_date:
+                penalty.is_active = True
+                penalty.save()
+                count += 1
+        messages.success(request, f"{count}개의 패널티를 활성화했습니다.")
+    activate_penalties.short_description = '선택한 패널티 활성화'
     
     # 한글화
     def __init__(self, model, admin_site):
-        self.list_display_links = ('user',)
+        self.list_display_links = ('get_user_display',)
         super().__init__(model, admin_site)
 
 from .forms import UserCreationForm, UserChangeForm
