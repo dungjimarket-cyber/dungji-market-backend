@@ -1058,6 +1058,10 @@ class Penalty(models.Model):
         return timezone.timedelta(hours=self.duration_hours)
 
     def save(self, *args, **kwargs):
+        # start_date가 없으면 현재 시간으로 설정
+        if not self.start_date:
+            self.start_date = timezone.now()
+        
         # end_date가 없으면 자동 계산
         if not self.end_date:
             self.end_date = self.start_date + timezone.timedelta(hours=self.duration_hours)
