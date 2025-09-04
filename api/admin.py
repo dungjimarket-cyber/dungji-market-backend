@@ -1,5 +1,16 @@
 from django.contrib import admin
 from django.contrib.admin import AdminSite
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.urls import path
+from django.http import HttpResponseRedirect
+from django.utils.html import mark_safe
+from django.utils import timezone
+from django import forms
+from django.conf import settings
+from django.db.models import Count, Q
+import logging
+
 from .models import (
     Category, Product, GroupBuy, Bid, Penalty, User, Badge,
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
@@ -12,14 +23,8 @@ from .models_inquiry import Inquiry
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
 from .models_notice import Notice, NoticeImage, NoticeComment
 from .admin_notice import NoticeAdmin, NoticeCommentAdmin
-from django.utils.html import mark_safe
-from django.conf import settings
-import logging
 from .views_auth import kakao_unlink
-from django.contrib import messages
-from django.shortcuts import redirect
-from django.urls import path
-from django.http import HttpResponseRedirect
+from .forms import UserCreationForm, UserChangeForm
 
 # 추가 어드민 클래스들 import (RemoteSalesCertification 포함)
 from .admin_extra import *
@@ -51,8 +56,6 @@ class CategoryAdmin(admin.ModelAdmin):
         for action in perms:
             perms[action] = perms[action]
         return perms
-
-from django.contrib import messages
 
 class PenaltyAdminForm(forms.ModelForm):
     """패널티 관리 폼 - 시간 입력을 위한 커스텀 폼"""
@@ -155,10 +158,6 @@ class PenaltyAdmin(admin.ModelAdmin):
         self.list_display_links = ('get_user_display',)
         super().__init__(model, admin_site)
 
-from .forms import UserCreationForm, UserChangeForm
-from django.utils import timezone
-from django.db.models import Count, Q
-from django import forms
 
 # BidToken 관련 인라인 Admin
 class BidTokenInline(admin.TabularInline):
