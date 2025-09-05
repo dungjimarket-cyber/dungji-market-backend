@@ -266,22 +266,22 @@ def verify_inicis_payment(request):
             
             if not auth_url or not auth_token:
                 logger.error(f"승인에 필요한 파라미터 부족: authUrl={auth_url}, authToken={'있음' if auth_token else '없음'}")
-            else:
-                # authToken 정보 자세히 로깅 (디버깅용)
-                logger.info(f"authToken 상세: 길이={len(auth_token)}, 시작={auth_token[:20]}..., 끝=...{auth_token[-10:] if len(auth_token) > 10 else auth_token}")
-                logger.info(f"authUrl: {auth_url}")
-                
-                # allParams에서 중요한 정보 로깅
-                all_params = data.get('allParams', {})
-                if all_params:
-                    important_keys = ['P_TID', 'P_OID', 'P_AMT', 'P_STATUS', 'P_TYPE']
-                    for key in important_keys:
-                        if key in all_params:
-                            logger.info(f"{key}: {all_params[key]}")
                 return Response({
                     'success': False,
                     'error': '승인에 필요한 파라미터가 부족합니다.'
                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # authToken 정보 자세히 로깅 (디버깅용)
+            logger.info(f"authToken 상세: 길이={len(auth_token)}, 시작={auth_token[:20]}..., 끝=...{auth_token[-10:] if len(auth_token) > 10 else auth_token}")
+            logger.info(f"authUrl: {auth_url}")
+            
+            # allParams에서 중요한 정보 로깅
+            all_params = data.get('allParams', {})
+            if all_params:
+                important_keys = ['P_TID', 'P_OID', 'P_AMT', 'P_STATUS', 'P_TYPE']
+                for key in important_keys:
+                    if key in all_params:
+                        logger.info(f"{key}: {all_params[key]}")
             
             # 공식 샘플 코드와 동일한 승인 요청
             import requests
