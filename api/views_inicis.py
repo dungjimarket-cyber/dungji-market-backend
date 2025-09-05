@@ -278,10 +278,18 @@ def verify_inicis_payment(request):
             # allParams에서 중요한 정보 로깅
             all_params = data.get('allParams', {})
             if all_params:
-                important_keys = ['P_TID', 'P_OID', 'P_AMT', 'P_STATUS', 'P_TYPE']
+                important_keys = ['P_TID', 'P_OID', 'P_AMT', 'P_STATUS', 'P_TYPE', 'P_REQ_URL']
                 for key in important_keys:
                     if key in all_params:
                         logger.info(f"{key}: {all_params[key]}")
+            
+            # 모바일 결제의 경우 P_REQ_URL 사용 (공식 문서 권장)
+            req_url = all_params.get('P_REQ_URL') if all_params else None
+            if req_url:
+                logger.info(f"모바일 결제: P_REQ_URL 사용 - {req_url}")
+                auth_url = req_url  # P_REQ_URL로 승인 요청
+            else:
+                logger.info(f"PC 결제: authUrl 사용 - {auth_url}")
             
             # 공식 샘플 코드와 동일한 승인 요청
             import requests
@@ -308,37 +316,17 @@ def verify_inicis_payment(request):
                 'format': 'JSON'
             }
             
-            # 모바일 결제의 경우 추가 파라미터가 필요할 수 있음
-            if all_params:
-                added_mobile_params = []
-                
-                # P_TID, P_OID, P_AMT는 모바일 승인에 필요할 수 있음
-                if 'P_TID' in all_params and all_params['P_TID']:
-                    approval_params['tid'] = all_params['P_TID']
-                    added_mobile_params.append('tid')
-                if 'P_OID' in all_params and all_params['P_OID']:
-                    approval_params['oid'] = all_params['P_OID']
-                    added_mobile_params.append('oid')
-                if 'P_AMT' in all_params and all_params['P_AMT']:
-                    approval_params['price'] = all_params['P_AMT']
-                    added_mobile_params.append('price')
-                
-                # 기타 승인에 필요한 파라미터들
-                other_params = {
-                    'netCancelUrl': 'netCancelUrl',
-                    'merchantData': 'merchantData',
-                    'closeUrl': 'closeUrl'
+            # 모바일 결제의 경우 공식 문서에 따라 P_MID, P_TID만 필요
+            if req_url and all_params and 'P_TID' in all_params:
+                # 모바일 승인은 간단한 파라미터만 사용 (공식 문서 기준)
+                approval_params = {
+                    'P_MID': InicisPaymentService.MID,
+                    'P_TID': all_params['P_TID']
                 }
-                
-                for orig_key, new_key in other_params.items():
-                    if orig_key in all_params and all_params[orig_key]:
-                        approval_params[new_key] = all_params[orig_key]
-                        added_mobile_params.append(new_key)
-                
-                if added_mobile_params:
-                    logger.info(f"모바일 승인용 추가 파라미터: {added_mobile_params}")
-                else:
-                    logger.info("추가할 승인 파라미터 없음 (기본 승인 파라미터만 사용)")
+                logger.info(f"모바일 승인 파라미터: P_MID={InicisPaymentService.MID}, P_TID={all_params['P_TID']}")
+            else:
+                # PC 결제의 경우 기존 방식 유지
+                logger.info("PC 승인 파라미터 사용 (기본 파라미터)")
             
             logger.info(f"이니시스 승인 요청 시작: order_id={order_id}, authUrl={auth_url}")
             logger.info(f"전체 승인 파라미터: {list(approval_params.keys())}")
