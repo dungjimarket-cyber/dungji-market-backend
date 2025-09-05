@@ -174,3 +174,137 @@ class Payment(models.Model):
         """환불 가능 여부"""
         # 완료된 결제이고 아직 환불되지 않은 경우
         return self.status == 'completed' and not self.refund_amount
+
+
+class RefundRequest(models.Model):
+    """환불 요청 모델"""
+    
+    STATUS_CHOICES = [
+        ('pending', '검토중'),
+        ('approved', '승인'),
+        ('rejected', '거부'),
+        ('completed', '완료'),
+    ]
+    
+    # 기본 정보
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='refund_requests',
+        verbose_name='사용자'
+    )
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.CASCADE,
+        related_name='refund_requests',
+        verbose_name='결제 정보'
+    )
+    
+    # 환불 요청 정보
+    reason = models.TextField(
+        verbose_name='환불 사유'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='상태'
+    )
+    request_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        verbose_name='환불 요청 금액'
+    )
+    
+    # 관리자 처리 정보
+    admin_note = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='관리자 메모'
+    )
+    processed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_refunds',
+        verbose_name='처리자'
+    )
+    processed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='처리일시'
+    )
+    
+    # 환불 처리 정보
+    refund_method = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='환불 방법'
+    )
+    refund_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        null=True,
+        blank=True,
+        verbose_name='실제 환불금액'
+    )
+    refund_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='환불 처리 데이터'
+    )
+    
+    # 타임스탬프
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='생성일시'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='수정일시'
+    )
+    
+    class Meta:
+        db_table = 'refund_requests'
+        verbose_name = '환불 요청'
+        verbose_name_plural = '환불 요청 목록'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['payment', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.payment.product_name} 환불요청 ({self.request_amount}원)"
+    
+    @property
+    def is_pending(self):
+        """검토 중 여부"""
+        return self.status == 'pending'
+    
+    @property
+    def can_refund(self):
+        """환불 가능 여부 (정책에 따른 검증)"""
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+        
+        # 결제 완료 상태인지 확인
+        if self.payment.status != 'completed':
+            return False, "완료된 결제가 아닙니다"
+        
+        # 이미 환불 처리된 경우 확인
+        if self.payment.refund_amount:
+            return False, "이미 환불 처리된 결제입니다"
+        
+        # 7일 환불 기한 확인
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        if self.payment.completed_at and self.payment.completed_at < seven_days_ago:
+            return False, "환불 가능 기간(7일)이 지났습니다"
+        
+        # 견적이용권 사용 여부 확인 (추후 BidToken 사용 여부 확인 로직 추가)
+        # TODO: BidToken 사용 여부 확인 로직 구현
+        
+        return True, "환불 가능"
