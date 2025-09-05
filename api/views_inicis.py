@@ -195,14 +195,13 @@ def prepare_inicis_payment(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def verify_inicis_payment(request):
     """
     이니시스 결제 검증
     결제 완료 후 결과 검증 및 처리
     """
     try:
-        user = request.user
         data = request.data
         
         # 결제 결과 파라미터
@@ -211,11 +210,15 @@ def verify_inicis_payment(request):
         auth_token = data.get('authToken')
         tid = data.get('tid')
         
-        # Payment 레코드 조회
+        logger.info(f"결제 검증 요청: order_id={order_id}, auth_result_code={auth_result_code}")
+        
+        # Payment 레코드 조회 (order_id로만 조회)
         try:
-            payment = Payment.objects.get(order_id=order_id, user=user)
+            payment = Payment.objects.get(order_id=order_id)
+            user = payment.user
+            logger.info(f"결제 정보 찾음: payment_id={payment.id}, user_id={user.id}")
         except Payment.DoesNotExist:
-            logger.error(f"결제 정보를 찾을 수 없음: order_id={order_id}, user={user.id}")
+            logger.error(f"결제 정보를 찾을 수 없음: order_id={order_id}")
             return Response(
                 {'error': '결제 정보를 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
