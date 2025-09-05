@@ -750,6 +750,12 @@ def inicis_return(request):
     이니시스 결제 완료 후 리턴 URL
     """
     try:
+        logger.info(f"=== 이니시스 리턴 요청 수신 ===")
+        logger.info(f"Method: {request.method}")
+        logger.info(f"GET params: {dict(request.GET)}")
+        logger.info(f"POST data: {getattr(request, 'data', {})}")
+        logger.info(f"Headers: {dict(request.headers)}")
+        
         # GET/POST 파라미터 통합 처리
         params = request.GET.dict() if request.method == 'GET' else request.data
         
@@ -757,6 +763,70 @@ def inicis_return(request):
         result_code = params.get('resultCode')
         result_msg = params.get('resultMsg')
         order_id = params.get('merchantData', params.get('oid'))
+        
+        logger.info(f"결제 결과: resultCode={result_code}, resultMsg={result_msg}, orderId={order_id}")
+        logger.info(f"수신된 모든 파라미터: {params}")
+        
+        # 모바일 결제 성공 시 바로 토큰 발급 처리
+        if result_code == '00' and order_id:
+            try:
+                # Payment 레코드 조회
+                payment = Payment.objects.get(order_id=order_id)
+                user = payment.user
+                
+                logger.info(f"모바일 결제 성공 처리 시작: payment_id={payment.id}, user_id={user.id}")
+                
+                if payment.status != 'completed':
+                    # 결제 완료 처리
+                    payment.status = 'completed'
+                    payment.completed_at = datetime.now()
+                    payment.save()
+                    
+                    # 토큰 발급
+                    is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
+                    
+                    if is_subscription:
+                        # 구독권 (59,000원)
+                        if payment.amount >= 59000:
+                            expires_at = datetime.now() + timedelta(days=30)
+                            BidToken.objects.create(
+                                seller=user,
+                                token_type='unlimited',
+                                expires_at=expires_at
+                            )
+                            token_count = 1
+                        else:
+                            token_count = 0
+                    else:
+                        # 단품 입찰권 (1,990원당 1개)
+                        token_count = payment.amount // 1990
+                        if token_count > 0:
+                            expires_at = datetime.now() + timedelta(days=90)
+                            for _ in range(int(token_count)):
+                                BidToken.objects.create(
+                                    seller=user,
+                                    token_type='single',
+                                    expires_at=expires_at
+                                )
+                    
+                    # BidTokenPurchase 레코드 생성
+                    BidTokenPurchase.objects.create(
+                        seller=user,
+                        token_type='unlimited' if is_subscription else 'single',
+                        quantity=1 if is_subscription else int(token_count),
+                        total_price=payment.amount,
+                        payment_status='completed',
+                        payment_date=datetime.now(),
+                        order_id=order_id,
+                        payment_key=payment.tid or 'mobile_payment'
+                    )
+                    
+                    logger.info(f"모바일 결제 완료 및 토큰 발급: order_id={order_id}, tokens={token_count}")
+                
+            except Payment.DoesNotExist:
+                logger.error(f"결제 정보를 찾을 수 없음: order_id={order_id}")
+            except Exception as e:
+                logger.error(f"모바일 결제 처리 중 오류: {str(e)}")
         
         # 프론트엔드 리다이렉트 URL 생성
         frontend_url = settings.FRONTEND_URL or 'http://localhost:3000'
