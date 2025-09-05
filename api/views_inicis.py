@@ -296,6 +296,15 @@ def verify_inicis_payment(request):
                 'format': 'JSON'
             }
             
+            # allParams에서 추가 파라미터 추출 (모바일 결제에 필요할 수 있음)
+            all_params = data.get('allParams', {})
+            if all_params:
+                # 이니시스에서 필요로 하는 추가 파라미터들을 승인 요청에 포함
+                for key, value in all_params.items():
+                    if key not in approval_params and value:  # 기존 파라미터와 중복되지 않고 값이 있는 경우만
+                        approval_params[key] = value
+                logger.info(f"추가 파라미터 포함됨: {list(all_params.keys())}")
+            
             logger.info(f"이니시스 승인 요청 시작: order_id={order_id}, authUrl={auth_url}")
             logger.info(f"승인 파라미터: mid={InicisPaymentService.MID}, timestamp={timestamp}")
             
@@ -309,15 +318,40 @@ def verify_inicis_payment(request):
                 logger.info(f"승인 응답 내용: {response.text}")
                 
                 if response.status_code == 200:
-                    # JSON 응답 파싱
+                    # 응답 형태 확인 및 파싱
                     try:
-                        approval_result = response.json()
+                        # JSON 형태 응답 시도
+                        if response.headers.get('content-type', '').startswith('application/json'):
+                            approval_result = response.json()
+                            result_code = approval_result.get('resultCode', '')
+                            result_msg = approval_result.get('resultMsg', '')
+                            pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
+                        else:
+                            # URL-encoded 형태 응답 처리
+                            from urllib.parse import parse_qs
+                            parsed_response = parse_qs(response.text)
+                            
+                            # 이니시스 URL-encoded 응답에서 필요한 값 추출
+                            result_code = parsed_response.get('P_STATUS', [''])[0]
+                            result_msg = parsed_response.get('P_RMESG1', [''])[0]
+                            pay_method = parsed_response.get('P_TYPE', [data.get('payMethod', '')])[0]
+                            
+                            # URL-encoded 응답을 JSON 형태로 변환하여 저장
+                            approval_result = {
+                                'resultCode': result_code,
+                                'resultMsg': result_msg,
+                                'payMethod': pay_method,
+                                'tid': parsed_response.get('P_TID', [''])[0],
+                                'authNo': parsed_response.get('P_AUTH_NO', [''])[0],
+                                'authDate': parsed_response.get('P_AUTH_DT', [''])[0],
+                                'amt': parsed_response.get('P_AMT', [''])[0]
+                            }
+                            logger.info(f"URL-encoded 응답 파싱 완료: {approval_result}")
+                        
                         approval_data = approval_result  # 외부에서 사용할 수 있도록 저장
                         
-                        result_code = approval_result.get('resultCode', '')
-                        result_msg = approval_result.get('resultMsg', '')
-                        
-                        if result_code not in ['00', '0000']:  # 2자리와 4자리 모두 처리
+                        # 결과 코드 확인 (이니시스는 성공 시 00 또는 0000)
+                        if result_code not in ['00', '0000']:
                             logger.error(f"승인 실패: code={result_code}, msg={result_msg}")
                             return Response({
                                 'success': False,
@@ -325,12 +359,10 @@ def verify_inicis_payment(request):
                                 'result_code': result_code
                             }, status=status.HTTP_400_BAD_REQUEST)
                         
-                        # 승인 성공 - 결제 수단 확인
-                        pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
                         logger.info(f"승인 성공: payMethod={pay_method}")
                         
-                    except ValueError as e:
-                        logger.error(f"승인 응답 JSON 파싱 실패: {e}, 응답: {response.text}")
+                    except (ValueError, KeyError) as e:
+                        logger.error(f"승인 응답 파싱 실패: {e}, 응답: {response.text}")
                         return Response({
                             'success': False,
                             'error': '승인 응답 형식 오류'
