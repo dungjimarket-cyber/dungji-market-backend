@@ -266,6 +266,18 @@ def verify_inicis_payment(request):
             
             if not auth_url or not auth_token:
                 logger.error(f"승인에 필요한 파라미터 부족: authUrl={auth_url}, authToken={'있음' if auth_token else '없음'}")
+            else:
+                # authToken 정보 자세히 로깅 (디버깅용)
+                logger.info(f"authToken 상세: 길이={len(auth_token)}, 시작={auth_token[:20]}..., 끝=...{auth_token[-10:] if len(auth_token) > 10 else auth_token}")
+                logger.info(f"authUrl: {auth_url}")
+                
+                # allParams에서 중요한 정보 로깅
+                all_params = data.get('allParams', {})
+                if all_params:
+                    important_keys = ['P_TID', 'P_OID', 'P_AMT', 'P_STATUS', 'P_TYPE']
+                    for key in important_keys:
+                        if key in all_params:
+                            logger.info(f"{key}: {all_params[key]}")
                 return Response({
                     'success': False,
                     'error': '승인에 필요한 파라미터가 부족합니다.'
@@ -296,17 +308,30 @@ def verify_inicis_payment(request):
                 'format': 'JSON'
             }
             
-            # allParams에서 추가 파라미터 추출 (모바일 결제에 필요할 수 있음)
+            # allParams에서 승인에 필요한 특정 파라미터만 추출 (모바일 결제용)
             all_params = data.get('allParams', {})
             if all_params:
-                # 이니시스에서 필요로 하는 추가 파라미터들을 승인 요청에 포함
-                for key, value in all_params.items():
-                    if key not in approval_params and value:  # 기존 파라미터와 중복되지 않고 값이 있는 경우만
-                        approval_params[key] = value
-                logger.info(f"추가 파라미터 포함됨: {list(all_params.keys())}")
+                # 이니시스 승인 API에서 실제로 필요한 파라미터만 선별
+                allowed_params = {
+                    'netCancelUrl': 'netCancelUrl',  # 네트워크 취소 URL
+                    'merchantData': 'merchantData',   # 가맹점 데이터
+                    'closeUrl': 'closeUrl'            # 결제창 종료 URL
+                }
+                
+                added_params = []
+                for orig_key, new_key in allowed_params.items():
+                    if orig_key in all_params and all_params[orig_key]:
+                        approval_params[new_key] = all_params[orig_key]
+                        added_params.append(orig_key)
+                
+                if added_params:
+                    logger.info(f"승인 요청용 파라미터 추가: {added_params}")
+                else:
+                    logger.info("추가할 승인 파라미터 없음 (기본 승인 파라미터만 사용)")
             
             logger.info(f"이니시스 승인 요청 시작: order_id={order_id}, authUrl={auth_url}")
-            logger.info(f"승인 파라미터: mid={InicisPaymentService.MID}, timestamp={timestamp}")
+            logger.info(f"전체 승인 파라미터: {list(approval_params.keys())}")
+            logger.info(f"authToken 길이: {len(auth_token) if auth_token else 0}자")
             
             # 승인 결과를 저장할 변수 초기화
             approval_data = None
