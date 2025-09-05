@@ -308,24 +308,35 @@ def verify_inicis_payment(request):
                 'format': 'JSON'
             }
             
-            # allParams에서 승인에 필요한 특정 파라미터만 추출 (모바일 결제용)
-            all_params = data.get('allParams', {})
+            # 모바일 결제의 경우 추가 파라미터가 필요할 수 있음
             if all_params:
-                # 이니시스 승인 API에서 실제로 필요한 파라미터만 선별
-                allowed_params = {
-                    'netCancelUrl': 'netCancelUrl',  # 네트워크 취소 URL
-                    'merchantData': 'merchantData',   # 가맹점 데이터
-                    'closeUrl': 'closeUrl'            # 결제창 종료 URL
+                added_mobile_params = []
+                
+                # P_TID, P_OID, P_AMT는 모바일 승인에 필요할 수 있음
+                if 'P_TID' in all_params and all_params['P_TID']:
+                    approval_params['tid'] = all_params['P_TID']
+                    added_mobile_params.append('tid')
+                if 'P_OID' in all_params and all_params['P_OID']:
+                    approval_params['oid'] = all_params['P_OID']
+                    added_mobile_params.append('oid')
+                if 'P_AMT' in all_params and all_params['P_AMT']:
+                    approval_params['price'] = all_params['P_AMT']
+                    added_mobile_params.append('price')
+                
+                # 기타 승인에 필요한 파라미터들
+                other_params = {
+                    'netCancelUrl': 'netCancelUrl',
+                    'merchantData': 'merchantData',
+                    'closeUrl': 'closeUrl'
                 }
                 
-                added_params = []
-                for orig_key, new_key in allowed_params.items():
+                for orig_key, new_key in other_params.items():
                     if orig_key in all_params and all_params[orig_key]:
                         approval_params[new_key] = all_params[orig_key]
-                        added_params.append(orig_key)
+                        added_mobile_params.append(new_key)
                 
-                if added_params:
-                    logger.info(f"승인 요청용 파라미터 추가: {added_params}")
+                if added_mobile_params:
+                    logger.info(f"모바일 승인용 추가 파라미터: {added_mobile_params}")
                 else:
                     logger.info("추가할 승인 파라미터 없음 (기본 승인 파라미터만 사용)")
             
