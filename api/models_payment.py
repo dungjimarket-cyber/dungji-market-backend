@@ -150,7 +150,7 @@ class Payment(models.Model):
     )
     
     class Meta:
-        db_table = 'payments'
+        db_table = 'api_payments'
         verbose_name = '결제'
         verbose_name_plural = '결제 목록'
         ordering = ['-created_at']
@@ -267,7 +267,7 @@ class RefundRequest(models.Model):
     )
     
     class Meta:
-        db_table = 'refund_requests'
+        db_table = 'api_refund_requests'
         verbose_name = '환불 요청'
         verbose_name_plural = '환불 요청 목록'
         ordering = ['-created_at']
