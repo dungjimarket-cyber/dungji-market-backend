@@ -484,7 +484,7 @@ def verify_inicis_payment(request):
                     'authUrl': data.get('authUrl'),
                     'netCancelUrl': data.get('netCancelUrl'),
                     'idc_name': data.get('idc_name'),
-                    'payMethod': pay_method,
+                    'payMethod': current_pay_method,
                 })
                 payment.save()
                 
