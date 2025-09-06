@@ -316,14 +316,16 @@ def verify_inicis_payment(request):
                 'format': 'JSON'
             }
             
-            # 모바일 결제의 경우 공식 문서에 따라 P_MID, P_TID만 필요
+            # 모바일 결제의 경우 P_MID, P_TID, P_OID, P_AMT 필요 (3090 오류 해결)
             if req_url and all_params and 'P_TID' in all_params:
-                # 모바일 승인은 간단한 파라미터만 사용 (공식 문서 기준)
+                # 모바일 승인에 필요한 모든 파라미터 포함 (정보 조회 오류 방지)
                 approval_params = {
                     'P_MID': InicisPaymentService.MID,
-                    'P_TID': all_params['P_TID']
+                    'P_TID': all_params['P_TID'],
+                    'P_OID': all_params.get('P_OID', order_id),  # 주문번호
+                    'P_AMT': all_params.get('P_AMT', payment.amount)  # 결제금액
                 }
-                logger.info(f"모바일 승인 파라미터: P_MID={InicisPaymentService.MID}, P_TID={all_params['P_TID']}")
+                logger.info(f"모바일 승인 파라미터: P_MID={InicisPaymentService.MID}, P_TID={all_params['P_TID']}, P_OID={approval_params['P_OID']}, P_AMT={approval_params['P_AMT']}")
             else:
                 # PC 결제의 경우 기존 방식 유지
                 logger.info("PC 승인 파라미터 사용 (기본 파라미터)")
