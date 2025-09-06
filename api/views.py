@@ -466,11 +466,22 @@ class ProductViewSet(ModelViewSet):
         if ordering:
             queryset = queryset.order_by(ordering)
         else:
-            # 기본 정렬: 이름순(대소문자 구분없이), 그 다음 출시일 최신순 (브랜드별 그룹핑)
-            from django.db.models import F
+            # 기본 정렬: 브랜드 우선순위(Galaxy > iPhone > 기타), 그 다음 출시일 최신순
+            from django.db.models import F, Case, When, IntegerField
             from django.db.models.functions import Lower
-            queryset = queryset.order_by(
-                Lower('name'),  # 이름순 (대소문자 구분없이 - Galaxy가 iPhone보다 앞)
+            
+            # 브랜드 우선순위 설정
+            queryset = queryset.annotate(
+                brand_priority=Case(
+                    When(name__icontains='galaxy', then=1),
+                    When(name__icontains='갤럭시', then=1),
+                    When(name__icontains='iphone', then=2),
+                    When(name__icontains='아이폰', then=2),
+                    default=3,
+                    output_field=IntegerField()
+                )
+            ).order_by(
+                'brand_priority',  # 브랜드 우선순위 (Galaxy=1, iPhone=2, 기타=3)
                 F('release_date').desc(nulls_last=True)  # 같은 브랜드 내에서 최신 출시일 우선
             )
             
