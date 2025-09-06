@@ -393,7 +393,7 @@ def verify_inicis_payment(request):
                                 approval_result = {
                                     'resultCode': result_code,
                                     'resultMsg': result_msg,
-                                    'payMethod': pay_method,
+                                    'payMethod': current_pay_method,
                                     'tid': parsed_response.get('P_TID', [''])[0],
                                     'authNo': parsed_response.get('P_AUTH_NO', [''])[0],
                                     'authDate': parsed_response.get('P_AUTH_DT', [''])[0],
@@ -434,8 +434,10 @@ def verify_inicis_payment(request):
                         'error': '승인 요청 네트워크 오류'
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # 가상계좌(무통장입금)인 경우 별도 처리
-            if pay_method == 'VBank':
+            # 가상계좌(무통장입금)인 경우 별도 처리 
+            # mobile_payment의 경우 approval_data에서 payMethod 추출
+            current_pay_method = approval_data.get('payMethod', 'CARD') if approval_data else 'CARD'
+            if current_pay_method == 'VBank':
                 # 무통장입금은 입금대기 상태로 설정
                 with transaction.atomic():
                     payment.status = 'waiting_deposit'
@@ -449,7 +451,7 @@ def verify_inicis_payment(request):
                         'authToken': auth_token,
                         'authResultCode': auth_result_code,
                         'originalTid': tid,
-                        'payMethod': pay_method,
+                        'payMethod': current_pay_method,
                         'vactBankCode': data.get('vactBankCode'),
                     })
                     payment.save()
