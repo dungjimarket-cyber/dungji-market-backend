@@ -76,6 +76,11 @@ from api.views_auth_email import (
     request_password_reset, verify_reset_token, reset_password as reset_password_with_token,
     send_verification_email, verify_email_code, change_email
 )
+from api.views_refund import (
+    RefundRequestListView, RefundRequestDetailView, AdminRefundRequestListView,
+    AdminRefundRequestDetailView, approve_refund_request, reject_refund_request,
+    get_user_payments
+)
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -161,6 +166,15 @@ urlpatterns = [
     path('api/payments/inicis/close/', inicis_close, name='inicis_close'),
     path('api/payments/inicis/mobile-hash/', generate_mobile_hash, name='generate_mobile_hash'),
     path('api/payments/pending/', get_pending_payments, name='get_pending_payments'),
+    # 환불 관련 API
+    path('api/payments/user-payments/', get_user_payments, name='get_user_payments'),
+    path('api/payments/refund-requests/', RefundRequestListView.as_view(), name='refund_request_list'),
+    path('api/payments/refund-requests/<int:pk>/', RefundRequestDetailView.as_view(), name='refund_request_detail'),
+    # 관리자 환불 관련 API
+    path('api/admin/refund-requests/', AdminRefundRequestListView.as_view(), name='admin_refund_request_list'),
+    path('api/admin/refund-requests/<int:pk>/', AdminRefundRequestDetailView.as_view(), name='admin_refund_request_detail'),
+    path('api/admin/refund-requests/<int:refund_id>/approve/', approve_refund_request, name='approve_refund_request'),
+    path('api/admin/refund-requests/<int:refund_id>/reject/', reject_refund_request, name='reject_refund_request'),
     # 비대면 판매인증 상태 조회 API
     path('api/users/me/remote-sales-status/', get_remote_sales_status, name='get_remote_sales_status'),
     

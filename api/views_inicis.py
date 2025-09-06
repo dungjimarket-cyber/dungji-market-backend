@@ -195,14 +195,13 @@ def prepare_inicis_payment(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def verify_inicis_payment(request):
     """
     이니시스 결제 검증
     결제 완료 후 결과 검증 및 처리
     """
     try:
-        user = request.user
         data = request.data
         
         # 결제 결과 파라미터
@@ -211,11 +210,15 @@ def verify_inicis_payment(request):
         auth_token = data.get('authToken')
         tid = data.get('tid')
         
-        # Payment 레코드 조회
+        logger.info(f"결제 검증 요청: order_id={order_id}, auth_result_code={auth_result_code}")
+        
+        # Payment 레코드 조회 (order_id로만 조회)
         try:
-            payment = Payment.objects.get(order_id=order_id, user=user)
+            payment = Payment.objects.get(order_id=order_id)
+            user = payment.user
+            logger.info(f"결제 정보 찾음: payment_id={payment.id}, user_id={user.id}")
         except Payment.DoesNotExist:
-            logger.error(f"결제 정보를 찾을 수 없음: order_id={order_id}, user={user.id}")
+            logger.error(f"결제 정보를 찾을 수 없음: order_id={order_id}")
             return Response(
                 {'error': '결제 정보를 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
@@ -268,6 +271,26 @@ def verify_inicis_payment(request):
                     'error': '승인에 필요한 파라미터가 부족합니다.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
+            # authToken 정보 자세히 로깅 (디버깅용)
+            logger.info(f"authToken 상세: 길이={len(auth_token)}, 시작={auth_token[:20]}..., 끝=...{auth_token[-10:] if len(auth_token) > 10 else auth_token}")
+            logger.info(f"authUrl: {auth_url}")
+            
+            # allParams에서 중요한 정보 로깅
+            all_params = data.get('allParams', {})
+            if all_params:
+                important_keys = ['P_TID', 'P_OID', 'P_AMT', 'P_STATUS', 'P_TYPE', 'P_REQ_URL']
+                for key in important_keys:
+                    if key in all_params:
+                        logger.info(f"{key}: {all_params[key]}")
+            
+            # 모바일 결제의 경우 P_REQ_URL 사용 (공식 문서 권장)
+            req_url = all_params.get('P_REQ_URL') if all_params else None
+            if req_url:
+                logger.info(f"모바일 결제: P_REQ_URL 사용 - {req_url}")
+                auth_url = req_url  # P_REQ_URL로 승인 요청
+            else:
+                logger.info(f"PC 결제: authUrl 사용 - {auth_url}")
+            
             # 공식 샘플 코드와 동일한 승인 요청
             import requests
             import time
@@ -293,8 +316,21 @@ def verify_inicis_payment(request):
                 'format': 'JSON'
             }
             
+            # 모바일 결제의 경우 공식 문서에 따라 P_MID, P_TID만 필요
+            if req_url and all_params and 'P_TID' in all_params:
+                # 모바일 승인은 간단한 파라미터만 사용 (공식 문서 기준)
+                approval_params = {
+                    'P_MID': InicisPaymentService.MID,
+                    'P_TID': all_params['P_TID']
+                }
+                logger.info(f"모바일 승인 파라미터: P_MID={InicisPaymentService.MID}, P_TID={all_params['P_TID']}")
+            else:
+                # PC 결제의 경우 기존 방식 유지
+                logger.info("PC 승인 파라미터 사용 (기본 파라미터)")
+            
             logger.info(f"이니시스 승인 요청 시작: order_id={order_id}, authUrl={auth_url}")
-            logger.info(f"승인 파라미터: mid={InicisPaymentService.MID}, timestamp={timestamp}")
+            logger.info(f"전체 승인 파라미터: {list(approval_params.keys())}")
+            logger.info(f"authToken 길이: {len(auth_token) if auth_token else 0}자")
             
             # 승인 결과를 저장할 변수 초기화
             approval_data = None
@@ -306,15 +342,40 @@ def verify_inicis_payment(request):
                 logger.info(f"승인 응답 내용: {response.text}")
                 
                 if response.status_code == 200:
-                    # JSON 응답 파싱
+                    # 응답 형태 확인 및 파싱
                     try:
-                        approval_result = response.json()
+                        # JSON 형태 응답 시도
+                        if response.headers.get('content-type', '').startswith('application/json'):
+                            approval_result = response.json()
+                            result_code = approval_result.get('resultCode', '')
+                            result_msg = approval_result.get('resultMsg', '')
+                            pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
+                        else:
+                            # URL-encoded 형태 응답 처리
+                            from urllib.parse import parse_qs
+                            parsed_response = parse_qs(response.text)
+                            
+                            # 이니시스 URL-encoded 응답에서 필요한 값 추출
+                            result_code = parsed_response.get('P_STATUS', [''])[0]
+                            result_msg = parsed_response.get('P_RMESG1', [''])[0]
+                            pay_method = parsed_response.get('P_TYPE', [data.get('payMethod', '')])[0]
+                            
+                            # URL-encoded 응답을 JSON 형태로 변환하여 저장
+                            approval_result = {
+                                'resultCode': result_code,
+                                'resultMsg': result_msg,
+                                'payMethod': pay_method,
+                                'tid': parsed_response.get('P_TID', [''])[0],
+                                'authNo': parsed_response.get('P_AUTH_NO', [''])[0],
+                                'authDate': parsed_response.get('P_AUTH_DT', [''])[0],
+                                'amt': parsed_response.get('P_AMT', [''])[0]
+                            }
+                            logger.info(f"URL-encoded 응답 파싱 완료: {approval_result}")
+                        
                         approval_data = approval_result  # 외부에서 사용할 수 있도록 저장
                         
-                        result_code = approval_result.get('resultCode', '')
-                        result_msg = approval_result.get('resultMsg', '')
-                        
-                        if result_code not in ['00', '0000']:  # 2자리와 4자리 모두 처리
+                        # 결과 코드 확인 (이니시스는 성공 시 00 또는 0000)
+                        if result_code not in ['00', '0000']:
                             logger.error(f"승인 실패: code={result_code}, msg={result_msg}")
                             return Response({
                                 'success': False,
@@ -322,12 +383,10 @@ def verify_inicis_payment(request):
                                 'result_code': result_code
                             }, status=status.HTTP_400_BAD_REQUEST)
                         
-                        # 승인 성공 - 결제 수단 확인
-                        pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
                         logger.info(f"승인 성공: payMethod={pay_method}")
                         
-                    except ValueError as e:
-                        logger.error(f"승인 응답 JSON 파싱 실패: {e}, 응답: {response.text}")
+                    except (ValueError, KeyError) as e:
+                        logger.error(f"승인 응답 파싱 실패: {e}, 응답: {response.text}")
                         return Response({
                             'success': False,
                             'error': '승인 응답 형식 오류'
@@ -747,6 +806,12 @@ def inicis_return(request):
     이니시스 결제 완료 후 리턴 URL
     """
     try:
+        logger.info(f"=== 이니시스 리턴 요청 수신 ===")
+        logger.info(f"Method: {request.method}")
+        logger.info(f"GET params: {dict(request.GET)}")
+        logger.info(f"POST data: {getattr(request, 'data', {})}")
+        logger.info(f"Headers: {dict(request.headers)}")
+        
         # GET/POST 파라미터 통합 처리
         params = request.GET.dict() if request.method == 'GET' else request.data
         
@@ -754,6 +819,70 @@ def inicis_return(request):
         result_code = params.get('resultCode')
         result_msg = params.get('resultMsg')
         order_id = params.get('merchantData', params.get('oid'))
+        
+        logger.info(f"결제 결과: resultCode={result_code}, resultMsg={result_msg}, orderId={order_id}")
+        logger.info(f"수신된 모든 파라미터: {params}")
+        
+        # 모바일 결제 성공 시 바로 토큰 발급 처리
+        if result_code == '00' and order_id:
+            try:
+                # Payment 레코드 조회
+                payment = Payment.objects.get(order_id=order_id)
+                user = payment.user
+                
+                logger.info(f"모바일 결제 성공 처리 시작: payment_id={payment.id}, user_id={user.id}")
+                
+                if payment.status != 'completed':
+                    # 결제 완료 처리
+                    payment.status = 'completed'
+                    payment.completed_at = datetime.now()
+                    payment.save()
+                    
+                    # 토큰 발급
+                    is_subscription = '구독' in payment.product_name or 'unlimited' in payment.product_name.lower() or '무제한' in payment.product_name
+                    
+                    if is_subscription:
+                        # 구독권 (59,000원)
+                        if payment.amount >= 59000:
+                            expires_at = datetime.now() + timedelta(days=30)
+                            BidToken.objects.create(
+                                seller=user,
+                                token_type='unlimited',
+                                expires_at=expires_at
+                            )
+                            token_count = 1
+                        else:
+                            token_count = 0
+                    else:
+                        # 단품 입찰권 (1,990원당 1개)
+                        token_count = payment.amount // 1990
+                        if token_count > 0:
+                            expires_at = datetime.now() + timedelta(days=90)
+                            for _ in range(int(token_count)):
+                                BidToken.objects.create(
+                                    seller=user,
+                                    token_type='single',
+                                    expires_at=expires_at
+                                )
+                    
+                    # BidTokenPurchase 레코드 생성
+                    BidTokenPurchase.objects.create(
+                        seller=user,
+                        token_type='unlimited' if is_subscription else 'single',
+                        quantity=1 if is_subscription else int(token_count),
+                        total_price=payment.amount,
+                        payment_status='completed',
+                        payment_date=datetime.now(),
+                        order_id=order_id,
+                        payment_key=payment.tid or 'mobile_payment'
+                    )
+                    
+                    logger.info(f"모바일 결제 완료 및 토큰 발급: order_id={order_id}, tokens={token_count}")
+                
+            except Payment.DoesNotExist:
+                logger.error(f"결제 정보를 찾을 수 없음: order_id={order_id}")
+            except Exception as e:
+                logger.error(f"모바일 결제 처리 중 오류: {str(e)}")
         
         # 프론트엔드 리다이렉트 URL 생성
         frontend_url = settings.FRONTEND_URL or 'http://localhost:3000'

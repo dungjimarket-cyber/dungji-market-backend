@@ -20,6 +20,7 @@ from .models import (
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
     Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog
 )
+from .models_payment import Payment, RefundRequest
 from .models_verification import BusinessNumberVerification
 from .models_inquiry import Inquiry
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
@@ -1998,4 +1999,171 @@ class BidTokenPurchaseAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         """수정 불가 - 구매 내역은 읽기 전용"""
         return False
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    """결제 관리"""
+    list_display = [
+        'order_id', 'user', 'product_name', 'amount', 'payment_method', 
+        'status', 'created_at', 'vbank_info_display'
+    ]
+    # list_filter는 PendingDepositFilter 클래스 정의 후에 다시 설정됩니다
+    search_fields = [
+        'order_id', 'user__username', 'user__email', 'user__nickname',
+        'product_name', 'vbank_num', 'buyer_name'
+    ]
+    readonly_fields = [
+        'order_id', 'tid', 'payment_data', 'created_at', 'updated_at', 'completed_at'
+    ]
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('기본 정보', {
+            'fields': ('order_id', 'user', 'payment_method', 'status')
+        }),
+        ('결제 정보', {
+            'fields': ('amount', 'product_name', 'tid')
+        }),
+        ('구매자 정보', {
+            'fields': ('buyer_name', 'buyer_tel', 'buyer_email')
+        }),
+        ('가상계좌 정보', {
+            'fields': ('vbank_name', 'vbank_num', 'vbank_date', 'vbank_holder'),
+            'classes': ('collapse',)
+        }),
+        ('취소/환불 정보', {
+            'fields': ('cancel_reason', 'cancelled_at', 'refund_amount'),
+            'classes': ('collapse',)
+        }),
+        ('타임스탬프', {
+            'fields': ('created_at', 'completed_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def vbank_info_display(self, obj):
+        """가상계좌 정보 표시"""
+        if obj.status == 'waiting_deposit' and obj.vbank_name and obj.vbank_num:
+            return f"{obj.vbank_name} {obj.vbank_num} ({obj.vbank_date}까지)"
+        return "-"
+    vbank_info_display.short_description = "가상계좌 정보"
+    
+    def get_queryset(self, request):
+        """관련 객체 최적화"""
+        return super().get_queryset(request).select_related('user')
+    
+    class PendingDepositFilter(admin.SimpleListFilter):
+        """무통장입금 대기 필터"""
+        title = '입금 상태'
+        parameter_name = 'deposit_status'
+        
+        def lookups(self, request, model_admin):
+            return (
+                ('waiting_deposit', '입금 대기중'),
+                ('completed', '입금 완료'),
+                ('pending', '결제 대기'),
+            )
+        
+        def queryset(self, request, queryset):
+            if self.value() == 'waiting_deposit':
+                return queryset.filter(status='waiting_deposit')
+            elif self.value() == 'completed':
+                return queryset.filter(status='completed')
+            elif self.value() == 'pending':
+                return queryset.filter(status='pending')
+            return queryset
+    
+    list_filter = [
+        PendingDepositFilter, 'payment_method', 'created_at'
+    ]
+    
+    actions = ['mark_as_completed', 'mark_as_failed']
+    
+    def mark_as_completed(self, request, queryset):
+        """입금 완료 처리"""
+        updated = queryset.filter(status='waiting_deposit').update(
+            status='completed', 
+            completed_at=timezone.now()
+        )
+        self.message_user(request, f'{updated}건의 결제를 완료 처리했습니다.')
+    mark_as_completed.short_description = "선택된 결제를 완료 처리"
+    
+    def mark_as_failed(self, request, queryset):
+        """결제 실패 처리"""
+        updated = queryset.filter(status__in=['pending', 'waiting_deposit']).update(
+            status='failed'
+        )
+        self.message_user(request, f'{updated}건의 결제를 실패 처리했습니다.')
+    mark_as_failed.short_description = "선택된 결제를 실패 처리"
+
+
+@admin.register(RefundRequest)
+class RefundRequestAdmin(admin.ModelAdmin):
+    """환불 요청 관리"""
+    list_display = [
+        'id', 'user', 'payment_product_name', 'request_amount', 
+        'status', 'created_at', 'processed_at', 'processed_by'
+    ]
+    list_filter = [
+        'status', 'created_at', 'processed_at'
+    ]
+    search_fields = [
+        'user__username', 'user__email', 'user__nickname',
+        'payment__product_name', 'payment__order_id', 'reason'
+    ]
+    readonly_fields = [
+        'user', 'payment', 'request_amount', 'reason', 'created_at', 'updated_at'
+    ]
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('환불 요청 정보', {
+            'fields': ('user', 'payment', 'request_amount', 'reason')
+        }),
+        ('처리 정보', {
+            'fields': ('status', 'admin_note', 'processed_by', 'processed_at')
+        }),
+        ('환불 처리', {
+            'fields': ('refund_method', 'refund_amount', 'refund_data'),
+            'classes': ('collapse',)
+        }),
+        ('타임스탬프', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def payment_product_name(self, obj):
+        """결제 상품명 표시"""
+        return obj.payment.product_name
+    payment_product_name.short_description = "상품명"
+    
+    def get_queryset(self, request):
+        """관련 객체 최적화"""
+        return super().get_queryset(request).select_related('user', 'payment', 'processed_by')
+    
+    actions = ['approve_refund', 'reject_refund']
+    
+    def approve_refund(self, request, queryset):
+        """환불 승인"""
+        updated = queryset.filter(status='pending').update(
+            status='approved',
+            processed_by=request.user,
+            processed_at=timezone.now()
+        )
+        self.message_user(request, f'{updated}건의 환불 요청을 승인했습니다.')
+    approve_refund.short_description = "선택된 환불 요청 승인"
+    
+    def reject_refund(self, request, queryset):
+        """환불 거부"""
+        updated = queryset.filter(status='pending').update(
+            status='rejected',
+            processed_by=request.user,
+            processed_at=timezone.now()
+        )
+        self.message_user(request, f'{updated}건의 환불 요청을 거부했습니다.')
+    reject_refund.short_description = "선택된 환불 요청 거부"
 
