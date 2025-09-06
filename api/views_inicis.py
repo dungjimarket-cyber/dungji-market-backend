@@ -371,68 +371,68 @@ def verify_inicis_payment(request):
                     logger.info(f"승인 응답 내용: {response.text}")
                     
                     if response.status_code == 200:
-                    # 응답 형태 확인 및 파싱
-                    try:
-                        # JSON 형태 응답 시도
-                        if response.headers.get('content-type', '').startswith('application/json'):
-                            approval_result = response.json()
-                            result_code = approval_result.get('resultCode', '')
-                            result_msg = approval_result.get('resultMsg', '')
-                            pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
-                        else:
-                            # URL-encoded 형태 응답 처리
-                            from urllib.parse import parse_qs
-                            parsed_response = parse_qs(response.text)
+                        # 응답 형태 확인 및 파싱
+                        try:
+                            # JSON 형태 응답 시도
+                            if response.headers.get('content-type', '').startswith('application/json'):
+                                approval_result = response.json()
+                                result_code = approval_result.get('resultCode', '')
+                                result_msg = approval_result.get('resultMsg', '')
+                                pay_method = approval_result.get('payMethod', data.get('payMethod', ''))
+                            else:
+                                # URL-encoded 형태 응답 처리
+                                from urllib.parse import parse_qs
+                                parsed_response = parse_qs(response.text)
+                                
+                                # 이니시스 URL-encoded 응답에서 필요한 값 추출
+                                result_code = parsed_response.get('P_STATUS', [''])[0]
+                                result_msg = parsed_response.get('P_RMESG1', [''])[0]
+                                pay_method = parsed_response.get('P_TYPE', [data.get('payMethod', '')])[0]
+                                
+                                # URL-encoded 응답을 JSON 형태로 변환하여 저장
+                                approval_result = {
+                                    'resultCode': result_code,
+                                    'resultMsg': result_msg,
+                                    'payMethod': pay_method,
+                                    'tid': parsed_response.get('P_TID', [''])[0],
+                                    'authNo': parsed_response.get('P_AUTH_NO', [''])[0],
+                                    'authDate': parsed_response.get('P_AUTH_DT', [''])[0],
+                                    'amt': parsed_response.get('P_AMT', [''])[0]
+                                }
+                                logger.info(f"URL-encoded 응답 파싱 완료: {approval_result}")
                             
-                            # 이니시스 URL-encoded 응답에서 필요한 값 추출
-                            result_code = parsed_response.get('P_STATUS', [''])[0]
-                            result_msg = parsed_response.get('P_RMESG1', [''])[0]
-                            pay_method = parsed_response.get('P_TYPE', [data.get('payMethod', '')])[0]
+                            approval_data = approval_result  # 외부에서 사용할 수 있도록 저장
                             
-                            # URL-encoded 응답을 JSON 형태로 변환하여 저장
-                            approval_result = {
-                                'resultCode': result_code,
-                                'resultMsg': result_msg,
-                                'payMethod': pay_method,
-                                'tid': parsed_response.get('P_TID', [''])[0],
-                                'authNo': parsed_response.get('P_AUTH_NO', [''])[0],
-                                'authDate': parsed_response.get('P_AUTH_DT', [''])[0],
-                                'amt': parsed_response.get('P_AMT', [''])[0]
-                            }
-                            logger.info(f"URL-encoded 응답 파싱 완료: {approval_result}")
+                            # 결과 코드 확인 (이니시스는 성공 시 00 또는 0000)
+                            if result_code not in ['00', '0000']:
+                                logger.error(f"승인 실패: code={result_code}, msg={result_msg}")
+                                return Response({
+                                    'success': False,
+                                    'error': f'결제 승인 실패: {result_msg}',
+                                    'result_code': result_code
+                                }, status=status.HTTP_400_BAD_REQUEST)
                         
-                        approval_data = approval_result  # 외부에서 사용할 수 있도록 저장
-                        
-                        # 결과 코드 확인 (이니시스는 성공 시 00 또는 0000)
-                        if result_code not in ['00', '0000']:
-                            logger.error(f"승인 실패: code={result_code}, msg={result_msg}")
+                            logger.info(f"승인 성공: payMethod={pay_method}")
+                            
+                        except (ValueError, KeyError) as e:
+                            logger.error(f"승인 응답 파싱 실패: {e}, 응답: {response.text}")
                             return Response({
                                 'success': False,
-                                'error': f'결제 승인 실패: {result_msg}',
-                                'result_code': result_code
-                            }, status=status.HTTP_400_BAD_REQUEST)
-                        
-                        logger.info(f"승인 성공: payMethod={pay_method}")
-                        
-                    except (ValueError, KeyError) as e:
-                        logger.error(f"승인 응답 파싱 실패: {e}, 응답: {response.text}")
+                                'error': '승인 응답 형식 오류'
+                            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    else:
+                        logger.error(f"승인 요청 HTTP 오류: {response.status_code}")
                         return Response({
                             'success': False,
-                            'error': '승인 응답 형식 오류'
+                            'error': '승인 요청 실패'
                         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                else:
-                    logger.error(f"승인 요청 HTTP 오류: {response.status_code}")
+                        
+                except requests.RequestException as e:
+                    logger.error(f"승인 요청 네트워크 오류: {e}")
                     return Response({
                         'success': False,
-                        'error': '승인 요청 실패'
+                        'error': '승인 요청 네트워크 오류'
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                    
-            except requests.RequestException as e:
-                logger.error(f"승인 요청 네트워크 오류: {e}")
-                return Response({
-                    'success': False,
-                    'error': '승인 요청 네트워크 오류'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # 가상계좌(무통장입금)인 경우 별도 처리
             if pay_method == 'VBank':
