@@ -136,18 +136,22 @@ class PopupViewSet(viewsets.ModelViewSet):
     def record_view(self, request, pk=None):
         """팝업 조회수 증가"""
         try:
-            popup = self.get_object()
+            popup = Popup.objects.get(pk=pk)
             popup.increment_view_count()
             return Response({'status': 'view recorded', 'view_count': popup.view_count})
+        except Popup.DoesNotExist:
+            return Response({'error': 'Popup not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
     def record_click(self, request, pk=None):
         """팝업 클릭수 증가"""
         try:
-            popup = self.get_object()
+            popup = Popup.objects.get(pk=pk)
             popup.increment_click_count()
             return Response({'status': 'click recorded', 'click_count': popup.click_count})
+        except Popup.DoesNotExist:
+            return Response({'error': 'Popup not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
