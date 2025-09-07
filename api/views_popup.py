@@ -14,7 +14,7 @@ from .serializers_popup import (
     PopupCreateSerializer,
     PopupUpdateSerializer
 )
-from .permissions import IsAdminUser
+from .permissions import IsAdminRole
 
 
 class PopupViewSet(viewsets.ModelViewSet):
@@ -36,7 +36,7 @@ class PopupViewSet(viewsets.ModelViewSet):
         """액션에 따른 권한 설정"""
         if self.action in ['list', 'retrieve', 'active_popups', 'record_view', 'record_click']:
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [IsAdminRole()]
     
     def get_queryset(self):
         """쿼리셋 반환"""
