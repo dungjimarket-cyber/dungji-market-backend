@@ -72,6 +72,7 @@ from api.views_partner_bank import (
 )
 from api.views_inquiry import InquiryViewSet
 from api.views_notice import NoticeViewSet
+from api.views_popup import PopupViewSet
 from api.views_auth_email import (
     request_password_reset, verify_reset_token, reset_password as reset_password_with_token,
     send_verification_email, verify_email_code, change_email
@@ -100,6 +101,7 @@ router.register(r'noshow-reports', NoShowReportViewSet, basename='noshow-report'
 router.register(r'noshow-objections', NoShowObjectionViewSet, basename='noshow-objection')
 router.register(r'inquiries', InquiryViewSet, basename='inquiry')
 router.register(r'notices', NoticeViewSet, basename='notice')
+router.register(r'popups', PopupViewSet, basename='popup')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -26,6 +26,8 @@ from .models_inquiry import Inquiry
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
 from .models_notice import Notice, NoticeImage, NoticeComment
 from .admin_notice import NoticeAdmin, NoticeCommentAdmin
+from .models_popup import Popup
+from .admin_popup import PopupAdmin
 from .views_auth import kakao_unlink
 from .forms import UserCreationForm, UserChangeForm
 

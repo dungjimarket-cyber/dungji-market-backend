@@ -14,6 +14,8 @@ import logging
 from .models_region import Region
 # 문의사항 모델 import
 from .models_inquiry import Inquiry
+# 팝업 모델 import
+from .models_popup import Popup
 
 logger = logging.getLogger(__name__)
 
