@@ -135,13 +135,19 @@ class PopupViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def record_view(self, request, pk=None):
         """팝업 조회수 증가"""
-        popup = self.get_object()
-        popup.increment_view_count()
-        return Response({'status': 'view recorded'})
+        try:
+            popup = self.get_object()
+            popup.increment_view_count()
+            return Response({'status': 'view recorded', 'view_count': popup.view_count})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
     
     @action(detail=True, methods=['post'])
     def record_click(self, request, pk=None):
         """팝업 클릭수 증가"""
-        popup = self.get_object()
-        popup.increment_click_count()
-        return Response({'status': 'click recorded'})
+        try:
+            popup = self.get_object()
+            popup.increment_click_count()
+            return Response({'status': 'click recorded', 'click_count': popup.click_count})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
