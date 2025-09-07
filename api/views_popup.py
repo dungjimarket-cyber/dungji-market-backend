@@ -76,10 +76,21 @@ class PopupViewSet(viewsets.ModelViewSet):
         """활성 팝업 목록 (메인 페이지용)"""
         now = timezone.now()
         
-        # 메인 페이지에 표시할 팝업
-        popups = self.get_queryset().filter(
-            show_on_main=True
-        )
+        # 디버그 로그
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 메인 페이지에 표시할 팝업 - 더 간단한 쿼리로 시작
+        popups = Popup.objects.filter(
+            is_active=True,
+            show_on_main=True,
+            start_date__lte=now
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=now)
+        ).order_by('-priority', '-created_at')
+        
+        logger.info(f"Active popups query count: {popups.count()}")
+        logger.info(f"Active popups: {list(popups.values('id', 'title', 'is_active', 'show_on_main'))}")
         
         # 쿠키에서 오늘/일주일 숨김 팝업 확인
         hidden_today = request.COOKIES.get('hidden_popups_today', '').split(',')
@@ -93,6 +104,33 @@ class PopupViewSet(viewsets.ModelViewSet):
         
         serializer = PopupListSerializer(popups, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def debug_popups(self, request):
+        """디버그용 - 모든 팝업 확인"""
+        from django.utils import timezone
+        now = timezone.now()
+        
+        all_popups = Popup.objects.all()
+        active_popups = Popup.objects.filter(is_active=True)
+        main_popups = Popup.objects.filter(is_active=True, show_on_main=True)
+        valid_popups = Popup.objects.filter(
+            is_active=True,
+            show_on_main=True,
+            start_date__lte=now
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=now)
+        )
+        
+        return Response({
+            'current_time': now,
+            'all_popups_count': all_popups.count(),
+            'active_popups_count': active_popups.count(),
+            'main_popups_count': main_popups.count(),
+            'valid_popups_count': valid_popups.count(),
+            'all_popups': list(all_popups.values('id', 'title', 'is_active', 'show_on_main', 'start_date', 'end_date')),
+            'valid_popups': list(valid_popups.values('id', 'title', 'is_active', 'show_on_main', 'start_date', 'end_date'))
+        })
     
     @action(detail=True, methods=['post'])
     def record_view(self, request, pk=None):
