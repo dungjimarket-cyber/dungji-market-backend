@@ -2,11 +2,9 @@
 팝업 관련 모델
 """
 from django.db import models
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
-
-User = get_user_model()
+from django.conf import settings
 
 
 class Popup(models.Model):
@@ -191,7 +189,7 @@ class Popup(models.Model):
     
     # 메타 정보
     author = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
