@@ -163,10 +163,10 @@ class PopupAdmin(admin.ModelAdmin):
             
         return format_html(
             '👁 {}<br/>👆 {}<br/>'
-            '<small>CTR: {:.1f}%</small>',
+            '<small>CTR: {}%</small>',
             obj.view_count,
             obj.click_count,
-            ctr
+            f'{ctr:.1f}'
         )
     statistics_display.short_description = '통계'
     
@@ -188,7 +188,7 @@ class PopupAdmin(admin.ModelAdmin):
                 '<div style="background: #f0f0f0; padding: 10px; border-radius: 5px;">'
                 '<div>조회수: <strong>{}</strong></div>'
                 '<div>클릭수: <strong>{}</strong></div>'
-                '<div>클릭률: <strong>{:.1f}%</strong></div>'
+                '<div>클릭률: <strong>{}%</strong></div>'
                 '<div style="margin-top: 10px;">'
                 '<div style="background: #ddd; height: 20px; border-radius: 3px;">'
                 '<div style="background: #4CAF50; height: 100%; width: {}%; border-radius: 3px;"></div>'
@@ -197,7 +197,7 @@ class PopupAdmin(admin.ModelAdmin):
                 '</div>',
                 obj.view_count,
                 obj.click_count,
-                ctr,
+                f'{ctr:.1f}',
                 min(ctr, 100)
             )
         return '통계 없음'
