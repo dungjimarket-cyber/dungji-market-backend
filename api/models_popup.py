@@ -110,14 +110,14 @@ class Popup(models.Model):
         default=500,
         validators=[MinValueValidator(200), MaxValueValidator(1200)],
         verbose_name='팝업 너비',
-        help_text='팝업 창 너비 (픽셀, 200-1200)'
+        help_text='팝업 창 최대 너비 (픽셀, 200-1200) - 화면 크기에 따라 자동 조절됨'
     )
     
     height = models.IntegerField(
         default=600,
         validators=[MinValueValidator(200), MaxValueValidator(900)],
         verbose_name='팝업 높이',
-        help_text='팝업 창 높이 (픽셀, 200-900, 이미지 팝업은 자동 조정)'
+        help_text='팝업 창 최대 높이 (픽셀, 200-900) - 이미지는 화면의 70%까지만 표시, 비율 유지됨'
     )
     
     # 표시 조건
