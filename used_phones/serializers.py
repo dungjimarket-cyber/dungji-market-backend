@@ -10,11 +10,31 @@ User = get_user_model()
 
 class UsedPhoneImageSerializer(serializers.ModelSerializer):
     """중고폰 이미지 시리얼라이저"""
+    imageUrl = serializers.SerializerMethodField()
+    thumbnailUrl = serializers.SerializerMethodField()
     
     class Meta:
         model = UsedPhoneImage
-        fields = ['id', 'image', 'thumbnail', 'is_main', 'order']
-        read_only_fields = ['id']
+        fields = ['id', 'image', 'image_url', 'imageUrl', 'thumbnail', 'thumbnail_url', 'thumbnailUrl', 
+                 'is_main', 'order', 'width', 'height', 'file_size']
+        read_only_fields = ['id', 'image_url', 'thumbnail_url', 'width', 'height', 'file_size']
+    
+    def get_imageUrl(self, obj):
+        """프론트엔드 호환성을 위한 imageUrl 필드"""
+        if obj.image_url:
+            return obj.image_url
+        elif obj.image:
+            return obj.image.url if hasattr(obj.image, 'url') else None
+        return None
+    
+    def get_thumbnailUrl(self, obj):
+        """프론트엔드 호환성을 위한 thumbnailUrl 필드"""
+        if obj.thumbnail_url:
+            return obj.thumbnail_url
+        elif obj.thumbnail:
+            return obj.thumbnail.url if hasattr(obj.thumbnail, 'url') else None
+        # 썸네일이 없으면 원본 이미지 URL 반환
+        return self.get_imageUrl(obj)
 
 
 class SellerSerializer(serializers.ModelSerializer):
@@ -73,7 +93,9 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
     images = serializers.ListField(
         child=serializers.ImageField(),
         write_only=True,
-        required=False
+        required=False,
+        max_length=5,  # 최대 5개 이미지
+        help_text="최대 5개의 이미지를 업로드할 수 있습니다."
     )
     
     class Meta:
@@ -81,18 +103,49 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         exclude = ['seller', 'view_count', 'favorite_count', 'offer_count', 
                   'status', 'sold_at']
     
+    def validate_images(self, value):
+        """이미지 유효성 검사"""
+        if len(value) > 5:
+            raise serializers.ValidationError("최대 5개의 이미지만 업로드할 수 있습니다.")
+        
+        # 이미지 크기 및 형식 검사
+        for image in value:
+            # 파일 크기 검사 (3MB 제한)
+            if image.size > 3 * 1024 * 1024:
+                raise serializers.ValidationError(f"이미지 파일 크기는 3MB를 초과할 수 없습니다. ({image.name})")
+            
+            # 파일 형식 검사
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            if hasattr(image, 'content_type') and image.content_type not in allowed_types:
+                raise serializers.ValidationError(f"지원하지 않는 이미지 형식입니다. JPEG, PNG, WebP만 지원됩니다. ({image.name})")
+        
+        return value
+    
     def create(self, validated_data):
+        """중고폰 생성 및 이미지 처리"""
         images_data = validated_data.pop('images', [])
         phone = UsedPhone.objects.create(**validated_data)
         
         # 이미지 처리
         for index, image in enumerate(images_data):
-            UsedPhoneImage.objects.create(
-                phone=phone,
-                image=image,
-                is_main=(index == 0),
-                order=index
-            )
+            try:
+                phone_image = UsedPhoneImage.objects.create(
+                    phone=phone,
+                    image=image,
+                    is_main=(index == 0),  # 첫 번째 이미지를 대표 이미지로 설정
+                    order=index
+                )
+                
+                # 로깅
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"이미지 업로드 완료: {phone_image.id}, 순서: {index}")
+                
+            except Exception as e:
+                # 이미지 업로드 실패 시 로그 기록하지만 전체 생성은 계속
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"이미지 업로드 실패: {e}")
         
         return phone
 
