@@ -246,6 +246,9 @@ urlpatterns = [
     path('api/admin/bid-tokens/grant-subscription/', grant_subscription, name='admin_grant_subscription'),
     path('api/admin/users/search/', search_users, name='admin_search_users'),
     
+    # 중고폰 직거래 API
+    path('api/used/', include('used_phones.urls')),
+    
     # 이메일 인증 관련 API
     path('api/auth/email/request-reset/', request_password_reset, name='request_password_reset'),
     path('api/auth/email/verify-token/', verify_reset_token, name='verify_reset_token'),

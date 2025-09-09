@@ -106,10 +106,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "api",
+    "used_phones",  # 중고폰 직거래 앱 추가
     "rest_framework",
     "rest_framework.authtoken",  # Token 인증을 위해 추가
     "rest_framework_simplejwt",
     "corsheaders",
+    "django_filters",  # 필터링을 위해 추가
 ]
 AUTH_USER_MODEL = 'api.User'
 REST_FRAMEWORK = {
