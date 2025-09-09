@@ -1,5 +1,5 @@
 """
-중고폰 직거래 시리얼라이저
+Used Phones Serializers
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model

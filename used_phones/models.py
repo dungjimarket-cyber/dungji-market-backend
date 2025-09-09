@@ -1,5 +1,5 @@
 """
-중고폰 직거래 모델
+Used Phones Models
 """
 from django.db import models
 from django.contrib.auth import get_user_model
