@@ -200,13 +200,14 @@ def create_sample_phones():
                 **phone_data
             )
             
-            # 가상의 이미지 정보 추가 (실제 이미지는 없음)
-            # UsedPhoneImage.objects.create(
-            #     phone=phone,
-            #     image_url=f'https://via.placeholder.com/400x400?text={phone.model}',
-            #     is_main=True,
-            #     order=0
-            # )
+            # 가상의 이미지 정보 추가 (placeholder 이미지 사용)
+            UsedPhoneImage.objects.create(
+                phone=phone,
+                image_url=f'https://via.placeholder.com/400x400?text={phone.model.replace(" ", "+")}',
+                thumbnail_url=f'https://via.placeholder.com/200x200?text={phone.model.replace(" ", "+")}',
+                is_main=True,
+                order=0
+            )
             
             created_count += 1
             print(f"생성됨: {phone.model} - {phone.price:,}원")

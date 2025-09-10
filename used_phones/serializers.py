@@ -65,7 +65,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     def get_region_name(self, obj):
         """지역 이름 반환 - 안전하게 처리"""
         if hasattr(obj, 'region') and obj.region:
-            return obj.region.full_address
+            return obj.region.full_name
         return None
     
     def get_is_favorite(self, obj):
@@ -92,7 +92,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     def get_region_name(self, obj):
         """지역 이름 반환 - 안전하게 처리"""
         if hasattr(obj, 'region') and obj.region:
-            return obj.region.full_address
+            return obj.region.full_name
         return None
     
     def get_regions(self, obj):
