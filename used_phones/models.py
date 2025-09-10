@@ -43,9 +43,10 @@ class UsedPhone(models.Model):
     ]
     
     CONDITION_CHOICES = [
-        ('A', 'A급 (미사용/리퍼)'),
-        ('B', 'B급 (사용감 적음)'),
-        ('C', 'C급 (사용감 있음)'),
+        ('S', 'S급'),
+        ('A', 'A급'),
+        ('B', 'B급'),
+        ('C', 'C급'),
     ]
     
     BATTERY_CHOICES = [
@@ -102,6 +103,7 @@ class UsedPhone(models.Model):
     view_count = models.IntegerField(default=0, verbose_name='조회수')
     favorite_count = models.IntegerField(default=0, verbose_name='찜개수')
     offer_count = models.IntegerField(default=0, verbose_name='제안수')
+    is_modified = models.BooleanField(default=False, verbose_name='수정됨 표시')  # 견적 후 수정 시 True
     
     # 타임스탬프
     created_at = models.DateTimeField(auto_now_add=True)
@@ -202,7 +204,7 @@ class UsedPhoneOffer(models.Model):
     
     phone = models.ForeignKey(UsedPhone, on_delete=models.CASCADE, related_name='offers')
     buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_offers')
-    amount = models.IntegerField(validators=[MinValueValidator(0)], verbose_name='제안금액')
+    amount = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9900000)], verbose_name='제안금액')  # 최대 990만원
     message = models.TextField(null=True, blank=True, verbose_name='메시지')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     seller_message = models.TextField(null=True, blank=True, verbose_name='판매자메시지')
@@ -214,3 +216,23 @@ class UsedPhoneOffer(models.Model):
         ordering = ['-created_at']
         verbose_name = '가격 제안'
         verbose_name_plural = '가격 제안'
+
+
+class UsedPhoneDeletePenalty(models.Model):
+    """중고폰 삭제 패널티"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_penalties')
+    phone_model = models.CharField(max_length=100, verbose_name='삭제된 상품명')
+    had_offers = models.BooleanField(default=False, verbose_name='견적 존재 여부')
+    penalty_end = models.DateTimeField(verbose_name='패널티 종료 시간')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'used_phone_delete_penalties'
+        ordering = ['-created_at']
+        verbose_name = '삭제 패널티'
+        verbose_name_plural = '삭제 패널티'
+        
+    def is_active(self):
+        """패널티가 현재 활성 상태인지 확인"""
+        from django.utils import timezone
+        return timezone.now() < self.penalty_end

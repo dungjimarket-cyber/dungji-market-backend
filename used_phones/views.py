@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, F
 from django_filters.rest_framework import DjangoFilterBackend
 import logging
-from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer
+from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer, UsedPhoneDeletePenalty
 
 logger = logging.getLogger(__name__)
 from .serializers import (
@@ -246,3 +246,194 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         phone.save(update_fields=['favorite_count'])
         phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
         return Response({'status': 'favorited', 'favorite_count': phone.favorite_count})
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def offer(self, request, pk=None):
+        """가격 제안하기"""
+        phone = self.get_object()
+        
+        # 본인 상품에는 제안 불가
+        if phone.seller == request.user:
+            return Response(
+                {'error': '본인 상품에는 제안할 수 없습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 제안 횟수 체크 (상품당 5회)
+        offer_count = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            buyer=request.user
+        ).count()
+        
+        if offer_count >= 5:
+            return Response(
+                {'error': '해당 상품에 최대 5회까지만 제안 가능합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 제안 금액 검증
+        amount = request.data.get('amount')
+        if not amount:
+            return Response(
+                {'error': '제안 금액을 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            amount = int(amount)
+        except ValueError:
+            return Response(
+                {'error': '올바른 금액을 입력해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 최소 제안가 체크
+        if phone.min_offer_price and amount < phone.min_offer_price:
+            return Response(
+                {'error': f'최소 제안 금액은 {phone.min_offer_price}원입니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 최대 990만원 제한
+        if amount > 9900000:
+            return Response(
+                {'error': '최대 제안 가능 금액은 990만원입니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 제안 생성
+        offer = UsedPhoneOffer.objects.create(
+            phone=phone,
+            buyer=request.user,
+            amount=amount,
+            message=request.data.get('message', '')
+        )
+        
+        # 제안 수 업데이트
+        phone.offer_count = F('offer_count') + 1
+        phone.save(update_fields=['offer_count'])
+        
+        serializer = UsedPhoneOfferSerializer(offer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def offer_count(self, request, pk=None):
+        """사용자의 제안 횟수 조회"""
+        phone = self.get_object()
+        count = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            buyer=request.user
+        ).count()
+        
+        return Response({'count': count})
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def check_limit(self, request):
+        """등록 제한 체크 (활성 상품 5개 및 패널티)"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # 활성 상품 개수
+        active_count = UsedPhone.objects.filter(
+            seller=request.user,
+            status='active'
+        ).count()
+        
+        # 패널티 체크
+        active_penalty = UsedPhoneDeletePenalty.objects.filter(
+            user=request.user,
+            penalty_end__gt=timezone.now()
+        ).first()
+        
+        can_register = active_count < 5 and not active_penalty
+        
+        response_data = {
+            'active_count': active_count,
+            'can_register': can_register,
+            'penalty_end': active_penalty.penalty_end.isoformat() if active_penalty else None
+        }
+        
+        return Response(response_data)
+    
+    def destroy(self, request, *args, **kwargs):
+        """삭제 처리 (패널티 적용)"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        instance = self.get_object()
+        
+        # 권한 체크
+        if instance.seller != request.user:
+            return Response(
+                {'error': '삭제 권한이 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 견적 제안 여부 체크
+        has_offers = instance.offers.exists()
+        
+        if has_offers:
+            # 6시간 패널티 적용
+            penalty_end = timezone.now() + timedelta(hours=6)
+            UsedPhoneDeletePenalty.objects.create(
+                user=request.user,
+                phone_model=instance.model,
+                had_offers=True,
+                penalty_end=penalty_end
+            )
+            
+            # 모든 제안을 취소 상태로 변경
+            instance.offers.update(status='cancelled')
+        
+        # 상태를 deleted로 변경 (실제 삭제하지 않음)
+        instance.status = 'deleted'
+        instance.save(update_fields=['status'])
+        
+        return Response({
+            'message': '상품이 삭제되었습니다.',
+            'penalty_applied': has_offers,
+            'penalty_end': penalty_end.isoformat() if has_offers else None
+        })
+    
+    def update(self, request, *args, **kwargs):
+        """수정 처리 (견적 후 제한 적용)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # 권한 체크
+        if instance.seller != request.user:
+            return Response(
+                {'error': '수정 권한이 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 견적이 있는 경우 수정 가능 필드 제한
+        has_offers = instance.offers.exists()
+        
+        if has_offers:
+            # 수정 가능한 필드만 허용
+            allowed_fields = ['price', 'description', 'meeting_place']
+            
+            # 수정 불가능한 필드 체크
+            restricted_fields = []
+            for field in request.data.keys():
+                if field not in allowed_fields and field not in ['existing_images', 'new_images']:
+                    restricted_fields.append(field)
+            
+            if restricted_fields:
+                return Response(
+                    {'error': f'견적 제안 후에는 다음 필드를 수정할 수 없습니다: {", ".join(restricted_fields)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 수정됨 플래그 설정
+            instance.is_modified = True
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        
+        return Response(serializer.data)
