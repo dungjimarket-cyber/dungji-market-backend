@@ -750,10 +750,12 @@ class GroupBuyViewSet(ModelViewSet):
     def get_queryset(self):
         queryset = GroupBuy.objects.select_related(
             'product', 
-            'product__category'
+            'product__category',
+            'region'
         ).prefetch_related(
             'product__custom_values',
-            'product__custom_values__field'
+            'product__custom_values__field',
+            'regions__region'  # 다중 지역 정보 prefetch
         ).all()
         status_param = self.request.query_params.get('status', None)
         category_id = self.request.query_params.get('category', None)
