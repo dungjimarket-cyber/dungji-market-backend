@@ -51,6 +51,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     images = UsedPhoneImageSerializer(many=True, read_only=True)
     is_favorite = serializers.SerializerMethodField()
     region_name = serializers.SerializerMethodField()
+    regions = serializers.SerializerMethodField()
     
     class Meta:
         model = UsedPhone
@@ -58,8 +59,8 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             'id', 'brand', 'model', 'storage', 'color', 'price', 
             'min_offer_price', 'accept_offers', 'condition_grade',
             'battery_status', 'status', 'view_count', 'favorite_count',
-            'offer_count', 'region_name', 'images', 'is_favorite',
-            'created_at', 'body_only'
+            'offer_count', 'region_name', 'regions', 'images', 'is_favorite',
+            'created_at', 'body_only', 'is_modified'
         ]
     
     def get_region_name(self, obj):
@@ -67,6 +68,20 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
         if hasattr(obj, 'region') and obj.region:
             return obj.region.full_name
         return None
+    
+    def get_regions(self, obj):
+        """다중 지역 정보 반환"""
+        phone_regions = obj.regions.select_related('region').all()
+        return [
+            {
+                'id': pr.id,
+                'name': pr.region.name if pr.region else None,
+                'full_name': pr.region.full_name if pr.region else None,
+                'province': pr.region.province if pr.region else None,
+                'city': pr.region.city if pr.region else None,
+            }
+            for pr in phone_regions
+        ]
     
     def get_is_favorite(self, obj):
         request = self.context.get('request')
