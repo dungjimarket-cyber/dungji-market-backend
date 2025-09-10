@@ -5,6 +5,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, F
 from django_filters.rest_framework import DjangoFilterBackend
@@ -360,7 +361,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'user_offer_count': user_offer_count
         })
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='check-limit')
     def check_limit(self, request):
         """등록 제한 체크 (활성 상품 5개 및 패널티)"""
         from django.utils import timezone
@@ -470,3 +471,39 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             instance._prefetched_objects_cache = {}
         
         return Response(serializer.data)
+
+
+
+class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
+    """중고폰 제안 ViewSet"""
+    queryset = UsedPhoneOffer.objects.all()
+    serializer_class = UsedPhoneOfferSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel_offer(self, request, pk=None):
+        """제안 취소"""
+        offer = self.get_object()
+        
+        # 본인 제안인지 확인
+        if offer.buyer != request.user:
+            return Response(
+                {"error": "본인의 제안만 취소할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 이미 취소된 제안인지 확인
+        if offer.status == "cancelled":
+            return Response(
+                {"error": "이미 취소된 제안입니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 제안 취소
+        offer.status = "cancelled"
+        offer.save(update_fields=["status"])
+        
+        return Response({
+            "message": "제안이 취소되었습니다.",
+            "status": offer.status
+        })
