@@ -43,6 +43,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         instance.view_count = F('view_count') + 1
         instance.save(update_fields=['view_count'])
         
+        # F() expression 사용 후 객체 다시 로드
+        instance.refresh_from_db()
+        
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
@@ -59,8 +62,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             favorite.delete()
             phone.favorite_count = F('favorite_count') - 1
             phone.save(update_fields=['favorite_count'])
-            return Response({'status': 'unfavorited'})
+            phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
+            return Response({'status': 'unfavorited', 'favorite_count': phone.favorite_count})
         
         phone.favorite_count = F('favorite_count') + 1
         phone.save(update_fields=['favorite_count'])
-        return Response({'status': 'favorited'})
+        phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
+        return Response({'status': 'favorited', 'favorite_count': phone.favorite_count})
