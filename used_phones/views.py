@@ -331,6 +331,35 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         
         return Response({'count': count})
     
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='my-offer')
+    def my_offer(self, request, pk=None):
+        """내가 제안한 금액 조회"""
+        phone = self.get_object()
+        
+        # 내가 제안한 최신 제안 조회
+        my_offer = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            buyer=request.user
+        ).order_by('-created_at').first()
+        
+        if not my_offer:
+            return Response({'message': 'No offer found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # 사용자의 총 제안 횟수 조회
+        user_offer_count = UsedPhoneOffer.objects.filter(
+            buyer=request.user,
+            status='pending'
+        ).count()
+        
+        return Response({
+            'id': my_offer.id,
+            'amount': my_offer.amount,
+            'message': my_offer.message,
+            'status': my_offer.status,
+            'created_at': my_offer.created_at,
+            'user_offer_count': user_offer_count
+        })
+    
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def check_limit(self, request):
         """등록 제한 체크 (활성 상품 5개 및 패널티)"""
