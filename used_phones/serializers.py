@@ -157,16 +157,19 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """중고폰 생성 및 이미지 처리"""
         images_data = validated_data.pop('images', [])
-        # regions는 일단 무시 (추후 처리)
-        validated_data.pop('regions', None)
+        regions_data = validated_data.pop('regions', [])
         
-        # region 필드도 일단 제거
+        # region 필드 제거 (regions로 대체)
         validated_data.pop('region', None)
         
         # body_only 기본값 설정
         if 'body_only' not in validated_data:
             validated_data['body_only'] = False
         
+        # 필수 필드가 없는 경우 기본값 설정
+        if 'battery_status' not in validated_data:
+            validated_data['battery_status'] = 'unknown'
+            
         phone = UsedPhone.objects.create(**validated_data)
         
         # 이미지 처리
@@ -190,7 +193,26 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
                 logger = logging.getLogger(__name__)
                 logger.error(f"이미지 업로드 실패: {e}")
         
-        # 지역 처리는 일단 보류 (추후 수정)
+        # 지역 처리
+        if regions_data:
+            for region_str in regions_data[:3]:  # 최대 3개까지만
+                try:
+                    # "서울특별시 강남구" 형태의 문자열 파싱
+                    parts = region_str.split()
+                    if len(parts) >= 2:
+                        # 시도와 시군구로 지역 찾기
+                        region = Region.objects.filter(
+                            full_name__icontains=parts[-1]  # 마지막 부분(시군구)으로 검색
+                        ).first()
+                        
+                        if region:
+                            UsedPhoneRegion.objects.create(
+                                used_phone=phone,
+                                region=region
+                            )
+                            logger.info(f"지역 추가: {region.full_name}")
+                except Exception as e:
+                    logger.error(f"지역 처리 실패: {e}")
         
         return phone
 
