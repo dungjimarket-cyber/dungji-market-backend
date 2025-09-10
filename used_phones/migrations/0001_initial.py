@@ -84,7 +84,9 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('image', models.ImageField(upload_to='used_phones/%Y/%m/%d/')),
+                ('image_url', models.URLField(max_length=500, blank=True)),
                 ('thumbnail', models.ImageField(blank=True, null=True, upload_to='used_phones/thumbnails/%Y/%m/%d/')),
+                ('thumbnail_url', models.URLField(max_length=500, blank=True, null=True)),
                 ('is_main', models.BooleanField(default=False)),
                 ('order', models.PositiveIntegerField(default=0)),
                 ('file_size', models.PositiveIntegerField(blank=True, null=True)),
