@@ -14,7 +14,7 @@ import logging
 import datetime
 
 from .models import (
-    Category, Product, GroupBuy, Bid, Penalty, User, Badge,
+    Category, Product, GroupBuy, GroupBuyRegion, Bid, Penalty, User, Badge,
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
@@ -1157,18 +1157,42 @@ class StandardProductDetailAdmin(admin.ModelAdmin):
     list_filter = ['brand']
     search_fields = ['product__name']
 
+class GroupBuyRegionInline(admin.TabularInline):
+    """공구 지역 인라인 관리"""
+    model = GroupBuyRegion
+    extra = 1
+    max_num = 3  # 최대 3개 지역까지만
+    verbose_name = '공구 지역'
+    verbose_name_plural = '공구 지역 (최대 3개)'
+
 @admin.register(GroupBuy)
 class GroupBuyAdmin(admin.ModelAdmin):
-    list_display = ('product', 'creator', 'status', 'current_participants', 'end_time')
+    list_display = ('product', 'creator', 'status', 'current_participants', 'get_regions', 'end_time')
     raw_id_fields = ('participants',)
-    readonly_fields = ('current_participants',)
+    readonly_fields = ('current_participants', 'get_regions_display')
+    inlines = [GroupBuyRegionInline]
     actions = ['force_complete_groupbuy']
+    exclude = ['region']  # 기존 단일 region 필드는 제외
     
     # 한글화
     def __init__(self, model, admin_site):
         self.list_display_links = ('product',)
         super().__init__(model, admin_site)
         
+    def get_regions(self, obj):
+        """목록에서 지역 표시"""
+        regions = obj.regions.select_related('region').all()
+        return ', '.join([r.region.full_name for r in regions]) if regions else '-'
+    get_regions.short_description = '공구 지역'
+    
+    def get_regions_display(self, obj):
+        """상세페이지에서 지역 표시"""
+        regions = obj.regions.select_related('region').all()
+        if regions:
+            return ' / '.join([r.region.full_name for r in regions])
+        return '지역 정보 없음'
+    get_regions_display.short_description = '공구 가능 지역'
+    
     def force_complete_groupbuy(self, request, queryset):
         for groupbuy in queryset:
             groupbuy.status = 'completed'
