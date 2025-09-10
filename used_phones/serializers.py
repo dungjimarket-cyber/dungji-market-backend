@@ -50,7 +50,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     """중고폰 목록 시리얼라이저"""
     images = UsedPhoneImageSerializer(many=True, read_only=True)
     is_favorite = serializers.SerializerMethodField()
-    region_name = serializers.CharField(source='region.full_address', read_only=True)
+    region_name = serializers.SerializerMethodField()
     
     class Meta:
         model = UsedPhone
@@ -59,8 +59,14 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             'min_offer_price', 'accept_offers', 'condition_grade',
             'battery_status', 'status', 'view_count', 'favorite_count',
             'offer_count', 'region_name', 'images', 'is_favorite',
-            'created_at'
+            'created_at', 'body_only'
         ]
+    
+    def get_region_name(self, obj):
+        """지역 이름 반환 - 안전하게 처리"""
+        if hasattr(obj, 'region') and obj.region:
+            return obj.region.full_address
+        return None
     
     def get_is_favorite(self, obj):
         request = self.context.get('request')
@@ -74,13 +80,32 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     seller = SellerSerializer(read_only=True)
     images = UsedPhoneImageSerializer(many=True, read_only=True)
     is_favorite = serializers.SerializerMethodField()
-    region_name = serializers.CharField(source='region.full_address', read_only=True)
+    region_name = serializers.SerializerMethodField()
+    regions = serializers.SerializerMethodField()
     
     class Meta:
         model = UsedPhone
         fields = '__all__'
         read_only_fields = ['id', 'seller', 'view_count', 'favorite_count', 
                            'offer_count', 'created_at', 'updated_at']
+    
+    def get_region_name(self, obj):
+        """지역 이름 반환 - 안전하게 처리"""
+        if hasattr(obj, 'region') and obj.region:
+            return obj.region.full_address
+        return None
+    
+    def get_regions(self, obj):
+        """다중 지역 정보 반환"""
+        phone_regions = obj.regions.select_related('region').all()
+        return [
+            {
+                'code': pr.region.code,
+                'name': pr.region.name,
+                'full_address': pr.region.full_address
+            }
+            for pr in phone_regions
+        ]
     
     def get_is_favorite(self, obj):
         request = self.context.get('request')
