@@ -29,6 +29,56 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     ordering_fields = ['price', 'created_at', 'view_count']
     ordering = ['-created_at']
     
+    def get_queryset(self):
+        """지역 필터링 추가"""
+        queryset = super().get_queryset()
+        
+        # 지역 필터링
+        region = self.request.query_params.get('region')
+        if region:
+            # 상위 지역(시/도)인 경우 하위 지역도 포함
+            from api.models import Region
+            
+            # 입력된 지역이 상위 지역인지 확인
+            parent_region = Region.objects.filter(
+                name=region,
+                parent_id__isnull=True  # parent_id가 null이면 상위 지역
+            ).first()
+            
+            if parent_region:
+                # 상위 지역인 경우: 해당 지역과 모든 하위 지역 포함
+                sub_regions = Region.objects.filter(parent_id=parent_region.pk)
+                region_ids = [parent_region.pk] + list(sub_regions.values_list('pk', flat=True))
+                
+                queryset = queryset.filter(
+                    Q(regions__region_id__in=region_ids) |  # UsedPhoneRegion을 통한 다중 지역
+                    Q(region_id__in=region_ids)  # 메인 region 필드
+                ).distinct()
+            else:
+                # 하위 지역이거나 정확한 매칭
+                queryset = queryset.filter(
+                    Q(regions__region__name__icontains=region) |  # UsedPhoneRegion을 통한 다중 지역
+                    Q(region__name__icontains=region)  # 메인 region 필드
+                ).distinct()
+        
+        # 가격 범위 필터링
+        min_price = self.request.query_params.get('min_price')
+        max_price = self.request.query_params.get('max_price')
+        
+        if min_price:
+            try:
+                queryset = queryset.filter(price__gte=int(min_price))
+            except ValueError:
+                pass
+        
+        if max_price:
+            try:
+                queryset = queryset.filter(price__lte=int(max_price))
+            except ValueError:
+                pass
+        
+        return queryset
+    
     def get_serializer_class(self):
         if self.action == 'create' or self.action == 'update':
             return UsedPhoneCreateSerializer

@@ -102,7 +102,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
             {
                 'code': pr.region.code,
                 'name': pr.region.name,
-                'full_address': pr.region.full_address
+                'full_name': pr.region.full_name
             }
             for pr in phone_regions
         ]
@@ -242,24 +242,46 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         
         # 지역 처리
         if regions_data:
+            logger.info(f"Processing regions_data: {regions_data}")
             for region_str in regions_data[:3]:  # 최대 3개까지만
                 try:
                     # "서울특별시 강남구" 형태의 문자열 파싱
                     parts = region_str.split()
                     if len(parts) >= 2:
-                        # 시도와 시군구로 지역 찾기
+                        # 더 정확한 검색: 시도와 시군구 모두 포함
+                        province = parts[0]  # 시도
+                        city = parts[1] if len(parts) > 1 else ""  # 시군구
+                        
+                        # 먼저 정확한 full_name 매칭 시도
                         region = Region.objects.filter(
-                            full_name__icontains=parts[-1]  # 마지막 부분(시군구)으로 검색
+                            full_name=region_str
                         ).first()
+                        
+                        # 없으면 시도와 시군구 모두 포함하는 것 검색
+                        if not region:
+                            region = Region.objects.filter(
+                                full_name__contains=province,
+                                full_name__contains=city
+                            ).first()
+                        
+                        # 그래도 없으면 시군구만으로 검색
+                        if not region and city:
+                            region = Region.objects.filter(
+                                name=city
+                            ).first()
                         
                         if region:
                             UsedPhoneRegion.objects.create(
                                 used_phone=phone,
                                 region=region
                             )
-                            logger.info(f"지역 추가: {region.full_name}")
+                            logger.info(f"지역 추가 성공: {region.full_name} (요청: {region_str})")
+                        else:
+                            logger.warning(f"지역을 찾을 수 없음: {region_str}")
+                    else:
+                        logger.warning(f"잘못된 지역 형식: {region_str}")
                 except Exception as e:
-                    logger.error(f"지역 처리 실패: {e}")
+                    logger.error(f"지역 처리 실패 ({region_str}): {e}")
         
         return phone
 
