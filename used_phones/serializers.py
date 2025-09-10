@@ -40,10 +40,30 @@ class UsedPhoneImageSerializer(serializers.ModelSerializer):
 
 class SellerSerializer(serializers.ModelSerializer):
     """판매자 정보 시리얼라이저"""
+    sell_count = serializers.SerializerMethodField()
+    buy_count = serializers.SerializerMethodField()
+    total_trade_count = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email']
+        fields = ['id', 'username', 'email', 'sell_count', 'buy_count', 'total_trade_count']
+    
+    def get_sell_count(self, obj):
+        """판매 완료 횟수"""
+        from .models import UsedPhone
+        return UsedPhone.objects.filter(seller=obj, status='sold').count()
+    
+    def get_buy_count(self, obj):
+        """구매 완료 횟수 (수락된 제안)"""
+        from .models import UsedPhoneOffer
+        # 사용자가 제안했고 수락된 건수
+        return UsedPhoneOffer.objects.filter(buyer=obj, status='accepted').count()
+    
+    def get_total_trade_count(self, obj):
+        """총 거래 횟수"""
+        sell_count = self.get_sell_count(obj)
+        buy_count = self.get_buy_count(obj)
+        return sell_count + buy_count
 
 
 class UsedPhoneListSerializer(serializers.ModelSerializer):
