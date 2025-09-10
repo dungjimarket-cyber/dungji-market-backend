@@ -259,9 +259,9 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
                         
                         # 없으면 시도와 시군구 모두 포함하는 것 검색
                         if not region:
+                            from django.db.models import Q
                             region = Region.objects.filter(
-                                full_name__contains=province,
-                                full_name__contains=city
+                                Q(full_name__contains=province) & Q(full_name__contains=city)
                             ).first()
                         
                         # 그래도 없으면 시군구만으로 검색
