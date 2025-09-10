@@ -10,7 +10,7 @@ def create_sample_phones(apps, schema_editor):
     UsedPhone = apps.get_model('used_phones', 'UsedPhone')
     UsedPhoneRegion = apps.get_model('used_phones', 'UsedPhoneRegion')
     Region = apps.get_model('api', 'Region')
-    User = apps.get_model('auth', 'User')
+    User = apps.get_model('api', 'User')  # Custom User model
     
     # 사용자 가져오기
     user = User.objects.first()
