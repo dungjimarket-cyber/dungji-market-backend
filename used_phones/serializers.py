@@ -157,6 +157,7 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """중고폰 생성 및 이미지 처리"""
         import logging
+        from api.models import Region
         logger = logging.getLogger(__name__)
         
         logger.info("===== UsedPhone Create Start =====")
@@ -168,8 +169,38 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         logger.info(f"Images count: {len(images_data)}")
         logger.info(f"Regions count: {len(regions_data)}")
         
-        # region 필드 제거 (regions로 대체)
-        validated_data.pop('region', None)
+        # region 필드 처리
+        region_code = validated_data.get('region')
+        if region_code:
+            try:
+                # 지역 코드로 Region 객체 찾기
+                region_obj = Region.objects.get(code=region_code)
+                validated_data['region'] = region_obj
+                logger.info(f"Region found: {region_obj.full_name} (code: {region_code})")
+            except Region.DoesNotExist:
+                logger.warning(f"Region not found with code: {region_code}, using default")
+                # 기본 지역 설정
+                default_region = Region.objects.filter(level=0).first()
+                if default_region:
+                    validated_data['region'] = default_region
+                    logger.info(f"Default region set to: {default_region}")
+                else:
+                    validated_data.pop('region', None)
+            except Exception as e:
+                logger.error(f"Failed to process region: {e}")
+                validated_data.pop('region', None)
+        else:
+            # region이 없는 경우 기본값 설정
+            try:
+                default_region = Region.objects.filter(level=0).first()
+                if default_region:
+                    validated_data['region'] = default_region
+                    logger.info(f"No region provided, default set to: {default_region}")
+                else:
+                    validated_data.pop('region', None)
+            except Exception as e:
+                logger.error(f"Failed to set default region: {e}")
+                validated_data.pop('region', None)
         
         # body_only 기본값 설정
         if 'body_only' not in validated_data:
