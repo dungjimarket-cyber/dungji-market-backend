@@ -153,7 +153,7 @@ def reverse_sample_phones(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('used_phones', '0001_initial'),
+        ('used_phones', '0004_fix_accessories_field'),
     ]
 
     operations = [
