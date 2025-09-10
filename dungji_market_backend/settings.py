@@ -338,3 +338,33 @@ SMS_API_KEY = os.getenv('SMS_API_KEY', '')
 ALIGO_USER_ID = os.getenv('ALIGO_USER_ID', '')
 SMS_SENDER_NUMBER = os.getenv('SMS_SENDER_NUMBER', '010-1234-5678')
 USE_REAL_SMS = os.getenv('USE_REAL_SMS', 'False').lower() == 'true'
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'used_phones': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

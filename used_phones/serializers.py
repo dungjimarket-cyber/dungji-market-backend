@@ -156,8 +156,17 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """중고폰 생성 및 이미지 처리"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("===== UsedPhone Create Start =====")
+        logger.info(f"Received data keys: {validated_data.keys()}")
+        
         images_data = validated_data.pop('images', [])
         regions_data = validated_data.pop('regions', [])
+        
+        logger.info(f"Images count: {len(images_data)}")
+        logger.info(f"Regions count: {len(regions_data)}")
         
         # region 필드 제거 (regions로 대체)
         validated_data.pop('region', None)
@@ -170,7 +179,14 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         if 'battery_status' not in validated_data:
             validated_data['battery_status'] = 'unknown'
             
-        phone = UsedPhone.objects.create(**validated_data)
+        logger.info(f"Creating UsedPhone with data: {validated_data}")
+        
+        try:
+            phone = UsedPhone.objects.create(**validated_data)
+            logger.info(f"UsedPhone created successfully with ID: {phone.id}")
+        except Exception as e:
+            logger.error(f"Failed to create UsedPhone: {e}")
+            raise
         
         # 이미지 처리
         for index, image in enumerate(images_data):

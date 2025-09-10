@@ -8,7 +8,10 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, F
 from django_filters.rest_framework import DjangoFilterBackend
+import logging
 from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer
+
+logger = logging.getLogger(__name__)
 from .serializers import (
     UsedPhoneListSerializer, UsedPhoneDetailSerializer, 
     UsedPhoneCreateSerializer, UsedPhoneOfferSerializer,
@@ -35,6 +38,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Set seller automatically when creating"""
+        logger.info(f"perform_create called by user: {self.request.user}")
+        logger.info(f"Request method: {self.request.method}")
+        logger.info(f"Request data: {self.request.data}")
+        logger.info(f"Request FILES: {self.request.FILES}")
         serializer.save(seller=self.request.user)
     
     def retrieve(self, request, *args, **kwargs):
