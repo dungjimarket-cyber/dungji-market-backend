@@ -361,6 +361,42 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'user_offer_count': user_offer_count
         })
     
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def offers(self, request, pk=None):
+        """상품에 대한 제안 목록 조회 (판매자만 가능)"""
+        phone = self.get_object()
+        
+        # 판매자 본인만 조회 가능
+        if phone.seller != request.user:
+            return Response(
+                {'error': '판매자만 제안 목록을 조회할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 제안 목록 조회
+        offers = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='pending'  # 대기중인 제안만
+        ).select_related('buyer').order_by('-created_at')
+        
+        # 직렬화
+        offers_data = []
+        for offer in offers:
+            offers_data.append({
+                'id': offer.id,
+                'buyer': {
+                    'id': offer.buyer.id,
+                    'username': offer.buyer.username,
+                    'name': offer.buyer.name
+                },
+                'amount': offer.amount,
+                'message': offer.message,
+                'status': offer.status,
+                'created_at': offer.created_at
+            })
+        
+        return Response(offers_data)
+    
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='check-limit')
     def check_limit(self, request):
         """등록 제한 체크 (활성 상품 5개 및 패널티)"""
