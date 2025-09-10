@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('used_phones', '0002_usedphone_meeting_place_usedphoneregion'),
+        ('used_phones', '0006_add_region_fields'),
     ]
 
     operations = [
