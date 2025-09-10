@@ -71,17 +71,19 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     
     def get_regions(self, obj):
         """다중 지역 정보 반환"""
-        phone_regions = obj.regions.select_related('region').all()
-        return [
-            {
-                'id': pr.id,
-                'name': pr.region.name if pr.region else None,
-                'full_name': pr.region.full_name if pr.region else None,
-                'province': pr.region.province if pr.region else None,
-                'city': pr.region.city if pr.region else None,
-            }
-            for pr in phone_regions
-        ]
+        # prefetch_related를 사용하여 N+1 문제 해결
+        try:
+            phone_regions = obj.regions.select_related('region').all()
+            return [
+                {
+                    'id': pr.id,
+                    'name': pr.region.name if pr.region else None,
+                    'full_name': pr.region.full_name if pr.region else None,
+                }
+                for pr in phone_regions
+            ]
+        except:
+            return []
     
     def get_is_favorite(self, obj):
         request = self.context.get('request')

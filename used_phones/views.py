@@ -21,7 +21,11 @@ from .serializers import (
 
 class UsedPhoneViewSet(viewsets.ModelViewSet):
     """Used Phone ViewSet"""
-    queryset = UsedPhone.objects.filter(status='active')
+    queryset = UsedPhone.objects.filter(status='active').prefetch_related(
+        'regions__region',  # prefetch regions to avoid N+1 queries
+        'images',
+        'favorites'
+    ).select_related('seller', 'region')
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['brand', 'condition_grade', 'accept_offers']
