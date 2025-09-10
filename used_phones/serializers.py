@@ -134,13 +134,8 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         images_data = validated_data.pop('images', [])
         regions_data = validated_data.pop('regions', [])
         
-        # 기존 region 필드 유지 (첫 번째 지역을 기본값으로)
-        if regions_data and not validated_data.get('region'):
-            try:
-                first_region = Region.objects.get(code=regions_data[0])
-                validated_data['region'] = first_region
-            except Region.DoesNotExist:
-                pass
+        # 기존 region 필드는 일단 제외 (다중 지역 사용)
+        validated_data.pop('region', None)
         
         phone = UsedPhone.objects.create(**validated_data)
         
@@ -165,53 +160,49 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
                 logger = logging.getLogger(__name__)
                 logger.error(f"이미지 업로드 실패: {e}")
         
-        # 지역 처리
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        for region_str in regions_data[:3]:  # 최대 3개 지역만 처리
+        # 지역 처리 (선택사항)
+        if regions_data:
+            import logging
+            logger = logging.getLogger(__name__)
+            
             try:
-                # 지역명 형식: "서울특별시 강남구" 처리
-                parts = region_str.split()
-                if len(parts) >= 2:
-                    # 시/도와 시/군/구로 분리
-                    province = parts[0]
-                    city = ' '.join(parts[1:])
-                    
-                    # 지역 검색 (시/군/구 레벨)
-                    from django.db.models import Q
-                    region = Region.objects.filter(
-                        Q(name__icontains=city) & Q(parent__name__icontains=province)
-                    ).first()
-                    
-                    if not region:
-                        # 정확한 이름으로 재시도
-                        region = Region.objects.filter(
-                            name=city,
-                            parent__name=province
-                        ).first()
-                    
-                    if region:
-                        UsedPhoneRegion.objects.create(
-                            used_phone=phone,
-                            region=region
-                        )
-                        logger.info(f"지역 추가: {region.name}")
-                    else:
-                        logger.warning(f"지역을 찾을 수 없음: {region_str}")
-                else:
-                    # 코드로 시도
-                    region = Region.objects.filter(code=region_str).first()
-                    if region:
-                        UsedPhoneRegion.objects.create(
-                            used_phone=phone,
-                            region=region
-                        )
-                        logger.info(f"지역 추가 (코드): {region.name}")
-                    else:
-                        logger.warning(f"지역 코드를 찾을 수 없음: {region_str}")
+                from django.db.models import Q
+                
+                for region_str in regions_data[:3]:  # 최대 3개 지역만 처리
+                    if not region_str:
+                        continue
+                        
+                    try:
+                        # 지역명 형식: "서울특별시 강남구" 처리
+                        parts = region_str.split()
+                        if len(parts) >= 2:
+                            # 시/도와 시/군/구로 분리
+                            province = parts[0]
+                            city = ' '.join(parts[1:])
+                            
+                            # 지역 검색 (시/군/구 레벨)
+                            region = Region.objects.filter(
+                                Q(name__icontains=city) & 
+                                Q(parent__name__icontains=province) &
+                                Q(level=2)  # 시/군/구 레벨만
+                            ).first()
+                            
+                            if region:
+                                UsedPhoneRegion.objects.create(
+                                    used_phone=phone,
+                                    region=region
+                                )
+                                logger.info(f"지역 추가: {region.name}")
+                            else:
+                                logger.warning(f"지역을 찾을 수 없음: {region_str}")
+                        else:
+                            logger.warning(f"잘못된 지역 형식: {region_str}")
+                    except Exception as e:
+                        logger.error(f"개별 지역 추가 실패 ({region_str}): {str(e)}")
+                        continue
+                        
             except Exception as e:
-                logger.error(f"지역 추가 실패 ({region_str}): {e}")
+                logger.error(f"지역 처리 전체 실패: {str(e)}")
         
         return phone
 
