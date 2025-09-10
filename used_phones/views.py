@@ -104,53 +104,115 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def perform_create(self, serializer):
-        """Set seller automatically when creating"""
+        """Set seller automatically when creating - 공구와 동일한 지역 처리 로직"""
         logger.info(f"perform_create called by user: {self.request.user}")
         
         # 중고폰 생성
         instance = serializer.save(seller=self.request.user)
         
-        # regions 데이터 처리
-        regions = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
+        # 다중 지역 처리 (공구와 동일한 로직)
+        regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
         
-        if regions:
+        if regions_data:
             from api.models import Region
             from used_phones.models import UsedPhoneRegion
-            from django.db.models import Q
             
-            logger.info(f"Processing {len(regions)} regions")
+            logger.info(f"[다중 지역 처리 시작] {len(regions_data)}개 지역 데이터 처리")
             
-            for region_str in regions[:3]:  # 최대 3개까지
+            for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
                 try:
-                    # "서울특별시 강남구" 형태의 문자열 파싱
-                    parts = region_str.split()
-                    if len(parts) >= 2:
-                        province = parts[0]
-                        city = parts[1] if len(parts) > 1 else ""
+                    # 프론트엔드에서 전달된 데이터 파싱
+                    if isinstance(region_data, str):
+                        # "서울특별시 강남구" 형식
+                        parts = region_data.split()
+                        province = parts[0] if len(parts) > 0 else None
+                        city = parts[1] if len(parts) > 1 else None
+                        region_code = None
+                        region_name = None
+                    else:
+                        # 딕셔너리 형식
+                        region_code = region_data.get('code')
+                        region_name = region_data.get('name')
+                        province = region_data.get('province')
+                        city = region_data.get('city')
+                    
+                    logger.info(f"[지역 {idx+1}] 처리 시작 - code: {region_code}, name: {region_name}, province: {province}, city: {city}")
+                    
+                    region = None
+                    
+                    if region_code:
+                        # 1. 코드로 검색
+                        region = Region.objects.filter(code=region_code).first()
+                        if region:
+                            logger.info(f"[지역 검색 성공 - 코드 매칭] {region.name} (코드: {region.code})")
+                    
+                    # 2. province/city로 검색
+                    if not region and province and city:
+                        # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
+                        province_mapping = {
+                            '전북특별자치도': '전라북도',
+                            '제주특별자치도': '제주도',
+                            '강원특별자치도': '강원도'
+                        }
+                        city_mapping = {
+                            '서귀포': '서귀포시',
+                            '제주': '제주시'
+                        }
                         
-                        # 정확한 full_name 매칭 시도
-                        region = Region.objects.filter(full_name=region_str).first()
+                        mapped_province = province_mapping.get(province, province)
+                        mapped_city = city_mapping.get(city, city)
                         
-                        # 없으면 시도와 시군구 모두 포함하는 것 검색
+                        logger.info(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
+                        
+                        # 세종특별자치시 처리
+                        if mapped_province == '세종특별자치시' and mapped_city == '세종시':
+                            region = Region.objects.filter(
+                                name='세종특별자치시',
+                                level=1
+                            ).first()
+                            if region:
+                                logger.info(f"[지역 검색 성공 - 특별자치시] {region.name} (코드: {region.code})")
+                        
+                        # 일반 지역 검색
                         if not region:
                             region = Region.objects.filter(
-                                Q(full_name__contains=province) & Q(full_name__contains=city)
+                                name=mapped_city,
+                                parent__name=mapped_province,
+                                level__in=[1, 2]
                             ).first()
+                            
+                            if region:
+                                logger.info(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
+                            else:
+                                # full_name으로 검색
+                                full_name_search = f"{mapped_province} {mapped_city}"
+                                region = Region.objects.filter(full_name=full_name_search).first()
+                                if region:
+                                    logger.info(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                                else:
+                                    logger.warning(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
+                    
+                    if region:
+                        # UsedPhoneRegion 생성
+                        UsedPhoneRegion.objects.create(
+                            used_phone=instance,
+                            region=region
+                        )
+                        logger.info(f"[지역 추가 완료] {region.name} (코드: {region.code})")
                         
-                        # 그래도 없으면 시군구만으로 검색
-                        if not region and city:
-                            region = Region.objects.filter(name=city).first()
+                        # 첫 번째 지역을 메인 지역으로 설정
+                        if idx == 0:
+                            instance.region = region
+                            instance.region_name = region.name
+                            instance.save(update_fields=['region', 'region_name'])
+                            logger.info(f"[기본 지역 설정] {region.name}")
+                    else:
+                        logger.warning(f"[지역 추가 실패] 지역을 찾을 수 없습니다: {region_data}")
                         
-                        if region:
-                            UsedPhoneRegion.objects.create(
-                                used_phone=instance,
-                                region=region
-                            )
-                            logger.info(f"지역 추가 성공: {region.full_name}")
-                        else:
-                            logger.warning(f"지역을 찾을 수 없음: {region_str}")
                 except Exception as e:
-                    logger.error(f"지역 처리 실패 ({region_str}): {e}")
+                    logger.error(f"[지역 처리 오류] {e}")
+            
+            logger.info(f"[다중 지역 처리 완료] 총 {UsedPhoneRegion.objects.filter(used_phone=instance).count()}개 지역 저장됨")
     
     def retrieve(self, request, *args, **kwargs):
         """Increment view count on detail view"""

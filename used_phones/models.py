@@ -91,8 +91,10 @@ class UsedPhone(models.Model):
     # 상품 설명
     description = models.TextField(null=True, blank=True, verbose_name='상품설명')
     
-    # 거래 위치
+    # 거래 위치 (공구와 동일한 구조)
+    region_type = models.CharField(max_length=20, default='local', verbose_name='지역 유형')  # local only for used phones
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='거래지역')
+    region_name = models.CharField(max_length=200, blank=True, null=True, verbose_name='지역명 백업')  # 지역명 백업
     meeting_place = models.CharField(max_length=200, null=True, blank=True, verbose_name='거래장소')
     
     # 상태 및 통계
