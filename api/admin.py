@@ -28,6 +28,7 @@ from .models_notice import Notice, NoticeImage, NoticeComment
 from .admin_notice import NoticeAdmin, NoticeCommentAdmin
 from .models_popup import Popup
 from .admin_popup import PopupAdmin
+from .models_region import Region
 from .views_auth import kakao_unlink
 from .forms import UserCreationForm, UserChangeForm
 
@@ -44,6 +45,16 @@ logger.info(f"Admin 로드 시 DEFAULT_FILE_STORAGE: {getattr(settings, 'DEFAULT
 AdminSite.site_header = '둥지마켓 관리자'
 AdminSite.site_title = '둥지마켓 관리자 포털'
 AdminSite.index_title = '둥지마켓 관리자 대시보드'
+
+@admin.register(Region)
+class RegionAdmin(admin.ModelAdmin):
+    list_display = ['code', 'name', 'full_name', 'parent', 'level']
+    list_filter = ['level']
+    search_fields = ['name', 'full_name', 'code']
+    ordering = ['code']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('parent')
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):

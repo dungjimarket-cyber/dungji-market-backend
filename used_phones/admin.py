@@ -12,7 +12,7 @@ class UsedPhoneRegionInline(admin.TabularInline):
     model = UsedPhoneRegion
     extra = 1
     max_num = 3  # 최대 3개 지역까지만
-    autocomplete_fields = ['region']
+    autocomplete_fields = ['region']  # 자동완성 필드
     verbose_name = '거래 가능 지역'
     verbose_name_plural = '거래 가능 지역 (최대 3개)'
 
