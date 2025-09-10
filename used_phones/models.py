@@ -11,6 +11,26 @@ import logging
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+
+class UsedPhoneRegion(models.Model):
+    """
+    중고폰과 지역 간의 다대다 관계를 관리하는 모델
+    한 중고폰은 최대 3개까지의 지역을 가질 수 있음
+    """
+    used_phone = models.ForeignKey('UsedPhone', on_delete=models.CASCADE, related_name='regions', verbose_name='중고폰')
+    region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name='used_phone_regions', verbose_name='지역')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    
+    class Meta:
+        db_table = 'used_phone_regions'
+        verbose_name = '중고폰 지역'
+        verbose_name_plural = '중고폰 지역 관리'
+        unique_together = ('used_phone', 'region')
+        
+    def __str__(self):
+        return f"{self.used_phone.model} - {self.region.name}"
+
+
 class UsedPhone(models.Model):
     """중고폰 상품"""
     
@@ -63,6 +83,7 @@ class UsedPhone(models.Model):
     battery_status = models.CharField(max_length=20, choices=BATTERY_CHOICES, default='unknown', verbose_name='배터리상태')
     
     # 구성품
+    body_only = models.BooleanField(default=False, verbose_name='본체만')
     has_box = models.BooleanField(default=False, verbose_name='박스포함')
     has_charger = models.BooleanField(default=False, verbose_name='충전기포함')
     has_earphones = models.BooleanField(default=False, verbose_name='이어폰포함')

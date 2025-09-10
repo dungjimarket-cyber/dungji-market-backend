@@ -3,7 +3,8 @@ Used Phones Serializers
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer
+from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer, UsedPhoneRegion
+from api.models import Region
 
 User = get_user_model()
 
@@ -97,6 +98,13 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         max_length=5,  # 최대 5개 이미지
         help_text="최대 5개의 이미지를 업로드할 수 있습니다."
     )
+    regions = serializers.ListField(
+        child=serializers.CharField(),
+        write_only=True,
+        required=False,
+        max_length=3,  # 최대 3개 지역
+        help_text="최대 3개의 지역을 선택할 수 있습니다."
+    )
     
     class Meta:
         model = UsedPhone
@@ -122,8 +130,18 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
-        """중고폰 생성 및 이미지 처리"""
+        """중고폰 생성 및 이미지, 지역 처리"""
         images_data = validated_data.pop('images', [])
+        regions_data = validated_data.pop('regions', [])
+        
+        # 기존 region 필드 유지 (첫 번째 지역을 기본값으로)
+        if regions_data and not validated_data.get('region'):
+            try:
+                first_region = Region.objects.get(code=regions_data[0])
+                validated_data['region'] = first_region
+            except Region.DoesNotExist:
+                pass
+        
         phone = UsedPhone.objects.create(**validated_data)
         
         # 이미지 처리
@@ -146,6 +164,20 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.error(f"이미지 업로드 실패: {e}")
+        
+        # 지역 처리
+        for region_code in regions_data[:3]:  # 최대 3개 지역만 처리
+            try:
+                region = Region.objects.get(code=region_code)
+                UsedPhoneRegion.objects.create(
+                    used_phone=phone,
+                    region=region
+                )
+                logger.info(f"지역 추가: {region.name}")
+            except Region.DoesNotExist:
+                logger.warning(f"지역 코드를 찾을 수 없음: {region_code}")
+            except Exception as e:
+                logger.error(f"지역 추가 실패: {e}")
         
         return phone
 
