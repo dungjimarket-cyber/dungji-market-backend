@@ -375,8 +375,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         
         # 제안 목록 조회
         offers = UsedPhoneOffer.objects.filter(
-            phone=phone,
-            status='pending'  # 대기중인 제안만
+            phone=phone
         ).select_related('buyer').order_by('-created_at')
         
         # 직렬화
@@ -386,16 +385,39 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 'id': offer.id,
                 'buyer': {
                     'id': offer.buyer.id,
-                    'username': offer.buyer.username,
-                    'name': offer.buyer.name
+                    'nickname': offer.buyer.nickname if hasattr(offer.buyer, 'nickname') else offer.buyer.username,
+                    'profile_image': offer.buyer.profile_image if hasattr(offer.buyer, 'profile_image') else None
                 },
-                'amount': offer.amount,
+                'offered_price': offer.amount,
                 'message': offer.message,
                 'status': offer.status,
                 'created_at': offer.created_at
             })
         
         return Response(offers_data)
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='my-listings')
+    def my_listings(self, request):
+        """내 판매 상품 목록 조회 (MyPage용)"""
+        status_filter = request.query_params.get('status')
+        
+        queryset = UsedPhone.objects.filter(
+            seller=request.user
+        ).exclude(status='deleted').prefetch_related('images', 'offers').select_related('region')
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        queryset = queryset.order_by('-created_at')
+        
+        # 페이지네이션 적용
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = UsedPhoneListSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = UsedPhoneListSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='check-limit')
     def check_limit(self, request):
@@ -516,6 +538,128 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
     serializer_class = UsedPhoneOfferSerializer
     permission_classes = [IsAuthenticated]
     
+    @action(detail=False, methods=['get'], url_path='sent')
+    def sent_offers(self, request):
+        """내가 보낸 제안 목록 (구매자 MyPage용)"""
+        status_filter = request.query_params.get('status')
+        
+        queryset = UsedPhoneOffer.objects.filter(
+            buyer=request.user
+        ).select_related('phone', 'phone__seller').prefetch_related('phone__images')
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        queryset = queryset.order_by('-created_at')
+        
+        # 제안 데이터 직렬화
+        offers_data = []
+        for offer in queryset:
+            phone = offer.phone
+            main_image = phone.images.filter(is_main=True).first() or phone.images.first()
+            
+            offers_data.append({
+                'id': offer.id,
+                'phone': {
+                    'id': phone.id,
+                    'title': f"{phone.brand} {phone.model}",
+                    'brand': phone.brand,
+                    'model': phone.model,
+                    'price': phone.price,
+                    'images': [{
+                        'image_url': main_image.image_url if main_image else None,
+                        'is_main': True
+                    }] if main_image else [],
+                    'seller': {
+                        'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
+                    }
+                },
+                'offered_price': offer.amount,
+                'message': offer.message,
+                'status': offer.status,
+                'created_at': offer.created_at
+            })
+        
+        return Response({'results': offers_data})
+    
+    @action(detail=False, methods=['get'], url_path='received')
+    def received_offers(self, request):
+        """받은 제안 목록 (판매자 MyPage용)"""
+        phone_id = request.query_params.get('phone_id')
+        
+        # 내 상품에 대한 제안만 조회
+        my_phones = UsedPhone.objects.filter(seller=request.user).values_list('id', flat=True)
+        queryset = UsedPhoneOffer.objects.filter(
+            phone__id__in=my_phones
+        ).select_related('buyer', 'phone').prefetch_related('phone__images')
+        
+        if phone_id:
+            queryset = queryset.filter(phone__id=phone_id)
+        
+        queryset = queryset.order_by('-created_at')
+        
+        # 제안 데이터 직렬화
+        offers_data = []
+        for offer in queryset:
+            offers_data.append({
+                'id': offer.id,
+                'buyer': {
+                    'id': offer.buyer.id,
+                    'nickname': offer.buyer.nickname if hasattr(offer.buyer, 'nickname') else offer.buyer.username,
+                    'profile_image': offer.buyer.profile_image if hasattr(offer.buyer, 'profile_image') else None
+                },
+                'offered_price': offer.amount,
+                'message': offer.message,
+                'status': offer.status,
+                'created_at': offer.created_at,
+                'phone_id': offer.phone.id
+            })
+        
+        return Response({'results': offers_data})
+    
+    @action(detail=True, methods=['post'], url_path='respond')
+    def respond_to_offer(self, request, pk=None):
+        """제안 응답 (수락/거절)"""
+        offer = self.get_object()
+        action = request.data.get('action')  # 'accept' or 'reject'
+        message = request.data.get('message', '')
+        
+        # 판매자 본인만 응답 가능
+        if offer.phone.seller != request.user:
+            return Response(
+                {'error': '판매자만 제안에 응답할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 이미 응답한 제안인지 확인
+        if offer.status != 'pending':
+            return Response(
+                {'error': '이미 응답한 제안입니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 제안 응답 처리
+        if action == 'accept':
+            offer.status = 'accepted'
+            # 상품 상태를 예약중으로 변경
+            offer.phone.status = 'reserved'
+            offer.phone.save(update_fields=['status'])
+        elif action == 'reject':
+            offer.status = 'rejected'
+        else:
+            return Response(
+                {'error': '올바른 응답 유형을 선택해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        offer.seller_message = message
+        offer.save(update_fields=['status', 'seller_message'])
+        
+        return Response({
+            'message': f"제안이 {'수락' if action == 'accept' else '거절'}되었습니다.",
+            'status': offer.status
+        })
+    
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel_offer(self, request, pk=None):
         """제안 취소"""
@@ -539,7 +683,56 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         offer.status = "cancelled"
         offer.save(update_fields=["status"])
         
+        # 제안 수 감소
+        phone = offer.phone
+        phone.offer_count = F('offer_count') - 1
+        phone.save(update_fields=['offer_count'])
+        
         return Response({
             "message": "제안이 취소되었습니다.",
             "status": offer.status
         })
+
+
+class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
+    """중고폰 찜 ViewSet"""
+    queryset = UsedPhoneFavorite.objects.all()
+    serializer_class = UsedPhoneFavoriteSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """현재 사용자의 찜 목록만 반환"""
+        return UsedPhoneFavorite.objects.filter(
+            user=self.request.user
+        ).select_related('phone', 'phone__seller').prefetch_related('phone__images')
+    
+    def list(self, request):
+        """찜 목록 조회 (MyPage용)"""
+        queryset = self.get_queryset().order_by('-created_at')
+        
+        # 찜 데이터 직렬화
+        favorites_data = []
+        for favorite in queryset:
+            phone = favorite.phone
+            main_image = phone.images.filter(is_main=True).first() or phone.images.first()
+            
+            favorites_data.append({
+                'id': favorite.id,
+                'phone': {
+                    'id': phone.id,
+                    'title': f"{phone.brand} {phone.model}",
+                    'brand': phone.brand,
+                    'model': phone.model,
+                    'price': phone.price,
+                    'images': [{
+                        'image_url': main_image.image_url if main_image else None,
+                        'is_main': True
+                    }] if main_image else [],
+                    'seller': {
+                        'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
+                    }
+                },
+                'created_at': favorite.created_at
+            })
+        
+        return Response({'results': favorites_data})

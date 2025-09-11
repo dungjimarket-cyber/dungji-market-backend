@@ -82,6 +82,10 @@ from api.views_refund import (
     AdminRefundRequestDetailView, approve_refund_request, reject_refund_request,
     get_user_payments
 )
+from api.views_mypage import (
+    mypage_profile, mypage_update_profile, mypage_stats,
+    mypage_reviews_received, mypage_reviews_pending, mypage_create_review
+)
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -248,6 +252,14 @@ urlpatterns = [
     
     # 중고폰 직거래 API
     path('api/used/', include('used_phones.urls')),
+    
+    # 마이페이지 API
+    path('api/mypage/profile/', mypage_profile, name='mypage_profile'),
+    path('api/mypage/profile/update/', mypage_update_profile, name='mypage_update_profile'),
+    path('api/mypage/stats/', mypage_stats, name='mypage_stats'),
+    path('api/mypage/reviews/received/', mypage_reviews_received, name='mypage_reviews_received'),
+    path('api/mypage/reviews/pending/', mypage_reviews_pending, name='mypage_reviews_pending'),
+    path('api/mypage/reviews/', mypage_create_review, name='mypage_create_review'),
     
     # 이메일 인증 관련 API
     path('api/auth/email/request-reset/', request_password_reset, name='request_password_reset'),
