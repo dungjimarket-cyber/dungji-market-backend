@@ -198,7 +198,6 @@ class UsedPhoneOffer(models.Model):
     STATUS_CHOICES = [
         ('pending', '대기중'),
         ('accepted', '수락'),
-        ('rejected', '거절'),
         ('cancelled', '취소'),
     ]
     

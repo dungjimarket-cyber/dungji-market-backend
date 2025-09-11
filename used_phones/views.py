@@ -868,17 +868,17 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 제안 응답 처리
+        # 제안 응답 처리 (거절 제거, 수락만 처리)
         if action == 'accept':
+            # 제안 수락 = 즉시 거래중으로 전환
             offer.status = 'accepted'
-            # 상품 상태는 아직 변경하지 않음 (판매중 유지)
-            # 거래 진행 버튼을 누를 때 trading으로 변경
-            offer.phone.save()
-        elif action == 'reject':
-            offer.status = 'rejected'
+            offer.phone.status = 'trading'
+            offer.phone.save(update_fields=['status'])
+            
+            # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
         else:
             return Response(
-                {'error': '올바른 응답 유형을 선택해주세요.'},
+                {'error': '올바른 응답 유형을 선택해주세요. (accept만 가능)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -886,49 +886,10 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         offer.save(update_fields=['status', 'seller_message'])
         
         return Response({
-            'message': f"제안이 {'수락' if action == 'accept' else '거절'}되었습니다.",
-            'status': offer.status
-        })
-    
-    @action(detail=True, methods=['post'], url_path='proceed-trade')
-    def proceed_trade(self, request, pk=None):
-        """거래 진행 (수락된 제안을 거래중으로 전환)"""
-        offer = self.get_object()
-        
-        # 판매자 본인만 가능
-        if offer.phone.seller != request.user:
-            return Response(
-                {'error': '판매자만 거래를 진행할 수 있습니다.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # 수락된 제안인지 확인
-        if offer.status != 'accepted':
-            return Response(
-                {'error': '수락된 제안만 거래 진행이 가능합니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 상품 상태를 거래중으로 변경
-        offer.phone.status = 'trading'
-        offer.phone.save(update_fields=['status'])
-        
-        # 다른 accepted 제안들은 pending으로 되돌림 (거래중에는 대기 상태 유지)
-        other_accepted_offers = UsedPhoneOffer.objects.filter(
-            phone=offer.phone,
-            status='accepted'
-        ).exclude(id=offer.id)
-        
-        other_accepted_offers.update(
-            status='pending',
-            seller_message='거래 진행중으로 대기 상태로 변경되었습니다.'
-        )
-        
-        return Response({
-            'message': '거래가 진행중으로 변경되었습니다.',
+            'message': '제안이 수락되어 거래가 시작되었습니다.',
+            'status': offer.status,
             'phone_status': offer.phone.status
         })
-    
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel_offer(self, request, pk=None):
         """제안 취소"""
@@ -1071,17 +1032,17 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 
                 message = '거래가 취소되었습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
             else:
-                # 판매 중단
-                phone.status = 'sold'
+                # 상품 삭제
+                phone.status = 'deleted'
                 phone.save(update_fields=['status'])
                 
-                # 모든 제안 거절
+                # 모든 제안을 취소 상태로 변경
                 UsedPhoneOffer.objects.filter(
                     phone=phone,
                     status__in=['pending', 'accepted']
-                ).update(status='rejected')
+                ).update(status='cancelled')
                 
-                message = '거래가 취소되었습니다. 상품 판매가 종료되었습니다.'
+                message = '거래가 취소되고 상품이 삭제되었습니다.'
         
         return Response({
             'message': message,
