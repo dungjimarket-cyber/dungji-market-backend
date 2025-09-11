@@ -1013,9 +1013,12 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             status='accepted'
         ).select_related('phone', 'phone__seller').prefetch_related('phone__images')
         
+        print(f"[DEBUG] my_trading - User: {request.user.username}, Accepted offers count: {accepted_offers.count()}")
+        
         trading_items = []
         for offer in accepted_offers:
             phone = offer.phone
+            print(f"[DEBUG] Offer ID: {offer.id}, Phone ID: {phone.id}, Phone status: {phone.status}")
             # 거래중 상태인 상품만 포함
             if phone.status == 'trading':
                 main_image = phone.images.filter(is_main=True).first() or phone.images.first()
