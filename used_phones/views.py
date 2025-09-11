@@ -629,9 +629,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                         'seller': {
                             'id': phone.seller.id,
                             'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username,
-                            'phone': phone.seller.phone if hasattr(phone.seller, 'phone') else None,
+                            'phone': phone.seller.phone_number if hasattr(phone.seller, 'phone_number') else None,
                             'email': phone.seller.email,
-                            'region': phone.seller.activity_region if hasattr(phone.seller, 'activity_region') else None,
+                            'region': phone.seller.address_region.full_name if hasattr(phone.seller, 'address_region') and phone.seller.address_region else None,
                         }
                     },
                     'offered_price': offer.amount,
@@ -672,9 +672,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         return Response({
             'id': seller.id,
             'nickname': seller.nickname if hasattr(seller, 'nickname') else seller.username,
-            'phone': seller.phone if hasattr(seller, 'phone') else None,
+            'phone': seller.phone_number if hasattr(seller, 'phone_number') else None,
             'email': seller.email,
-            'region': seller.activity_region if hasattr(seller, 'activity_region') else None,
+            'region': seller.address_region.full_name if hasattr(seller, 'address_region') and seller.address_region else None,
             'profile_image': seller.profile_image if hasattr(seller, 'profile_image') else None,
             'accepted_price': accepted_offer.amount
         })
@@ -716,9 +716,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         return Response({
             'id': buyer.id,
             'nickname': buyer.nickname if hasattr(buyer, 'nickname') else buyer.username,
-            'phone': buyer.phone if hasattr(buyer, 'phone') else None,
+            'phone': buyer.phone_number if hasattr(buyer, 'phone_number') else None,
             'email': buyer.email,
-            'region': buyer.activity_region if hasattr(buyer, 'activity_region') else None,
+            'region': buyer.address_region.full_name if hasattr(buyer, 'address_region') and buyer.address_region else None,
             'profile_image': buyer.profile_image if hasattr(buyer, 'profile_image') else None,
             'offered_price': accepted_offer.amount,
             'message': accepted_offer.message
