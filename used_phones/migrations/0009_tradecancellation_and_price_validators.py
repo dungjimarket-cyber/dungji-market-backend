@@ -3,11 +3,13 @@
 from django.db import migrations, models
 import django.db.models.deletion
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.conf import settings
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('used_phones', '0008_update_offer_count'),
     ]
 
@@ -30,7 +32,7 @@ class Migration(migrations.Migration):
                 ], max_length=50)),
                 ('custom_reason', models.TextField(blank=True, null=True, verbose_name='기타 사유')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('canceller', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='trade_cancellations', to='auth.user')),
+                ('canceller', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='trade_cancellations', to=settings.AUTH_USER_MODEL)),
                 ('offer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='cancellations', to='used_phones.usedphoneoffer')),
                 ('phone', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='cancellations', to='used_phones.usedphone')),
             ],
