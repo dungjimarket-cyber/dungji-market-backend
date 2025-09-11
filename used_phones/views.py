@@ -665,6 +665,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                     'brand': phone.brand,
                     'model': phone.model,
                     'price': phone.price,
+                    'status': phone.status,  # 상품 상태 추가
                     'images': [{
                         'image_url': main_image.image_url if main_image else None,
                         'is_main': True
@@ -1116,6 +1117,7 @@ class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
                     'brand': phone.brand,
                     'model': phone.model,
                     'price': phone.price,
+                    'status': phone.status,  # 상품 상태 추가
                     'images': [{
                         'image_url': main_image.image_url if main_image else None,
                         'is_main': True
