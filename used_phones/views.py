@@ -358,10 +358,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             phone.status = 'trading'
             phone.save(update_fields=['status'])
             
-            # 다른 제안들 자동 거절
+            # 다른 모든 제안들 자동 거절 (pending과 accepted 모두)
             UsedPhoneOffer.objects.filter(
-                phone=phone,
-                status='pending'
+                phone=phone
             ).exclude(id=offer.id).update(
                 status='rejected',
                 seller_message='즉시구매가 완료되어 자동 거절되었습니다.'
@@ -754,15 +753,14 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         offer.phone.status = 'trading'
         offer.phone.save(update_fields=['status'])
         
-        # 다른 pending 제안들을 모두 거절 처리
+        # 다른 모든 제안들을 거절 처리 (pending과 accepted 모두)
         other_offers = UsedPhoneOffer.objects.filter(
-            phone=offer.phone,
-            status='pending'
+            phone=offer.phone
         ).exclude(id=offer.id)
         
         other_offers.update(
             status='rejected',
-            seller_message='다른 제안이 수락되어 자동 거절되었습니다.'
+            seller_message='다른 제안이 거래 진행되어 자동 거절되었습니다.'
         )
         
         return Response({
