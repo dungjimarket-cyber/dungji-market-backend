@@ -74,8 +74,8 @@ class UsedPhone(models.Model):
     color = models.CharField(max_length=50, null=True, blank=True, verbose_name='색상')
     
     # 가격 정보
-    price = models.IntegerField(validators=[MinValueValidator(0)], verbose_name='판매가격')
-    min_offer_price = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(0)], verbose_name='최소제안가격')
+    price = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9900000)], verbose_name='판매가격')  # 최대 990만원
+    min_offer_price = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(9900000)], verbose_name='최소제안가격')  # 최대 990만원
     accept_offers = models.BooleanField(default=False, verbose_name='가격제안허용')
     
     # 상태 정보

@@ -1,16 +1,18 @@
-# Generated manually for TradeCancellation model
+# Generated manually for TradeCancellation model and price validators
 
 from django.db import migrations, models
 import django.db.models.deletion
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('used_phones', '0002_auto_20241210_1200'),
+        ('used_phones', '0008_update_offer_count'),
     ]
 
     operations = [
+        # TradeCancellation 모델 생성
         migrations.CreateModel(
             name='TradeCancellation',
             fields=[
@@ -38,5 +40,31 @@ class Migration(migrations.Migration):
                 'db_table': 'trade_cancellations',
                 'ordering': ['-created_at'],
             },
+        ),
+        
+        # 가격 필드에 최대값 검증 추가
+        migrations.AlterField(
+            model_name='usedphone',
+            name='price',
+            field=models.IntegerField(
+                validators=[
+                    MinValueValidator(0),
+                    MaxValueValidator(9900000)
+                ],
+                verbose_name='판매가격'
+            ),
+        ),
+        migrations.AlterField(
+            model_name='usedphone',
+            name='min_offer_price',
+            field=models.IntegerField(
+                blank=True,
+                null=True,
+                validators=[
+                    MinValueValidator(0),
+                    MaxValueValidator(9900000)
+                ],
+                verbose_name='최소제안가격'
+            ),
         ),
     ]
