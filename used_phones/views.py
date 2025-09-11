@@ -313,6 +313,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             status='pending'
         ).first()
         
+        # 즉시구매 여부 확인 (즉시판매가와 동일한 금액 제안)
+        is_instant_purchase = (amount == phone.price)
+        
         if existing_offer:
             # 기존 제안 업데이트
             existing_offer.amount = amount
@@ -336,6 +339,36 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             
             phone.offer_count = unique_buyers_count
             phone.save(update_fields=['offer_count'])
+        
+        # 즉시구매인 경우 자동으로 거래중 상태로 전환
+        if is_instant_purchase:
+            # 제안 자동 수락
+            offer.status = 'accepted'
+            offer.save()
+            
+            # 상품 상태를 거래중으로 변경
+            phone.status = 'trading'
+            phone.save(update_fields=['status'])
+            
+            # 다른 제안들 자동 거절
+            UsedPhoneOffer.objects.filter(
+                phone=phone,
+                status='pending'
+            ).exclude(id=offer.id).update(
+                status='rejected',
+                seller_message='즉시구매가 완료되어 자동 거절되었습니다.'
+            )
+            
+            # 즉시구매 응답
+            return Response({
+                'message': '즉시구매가 완료되었습니다. 판매자와 연락처가 공개됩니다.',
+                'type': 'instant_purchase',
+                'offer': UsedPhoneOfferSerializer(offer).data,
+                'seller_contact': {
+                    'phone': phone.seller.phone if hasattr(phone.seller, 'phone') else None,
+                    'email': phone.seller.email
+                }
+            }, status=status.HTTP_201_CREATED)
         
         serializer = UsedPhoneOfferSerializer(offer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
