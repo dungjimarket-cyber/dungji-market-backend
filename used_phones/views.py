@@ -602,6 +602,41 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
     serializer_class = UsedPhoneOfferSerializer
     permission_classes = [IsAuthenticated]
     
+    def destroy(self, request, *args, **kwargs):
+        """제안 취소 (구매자 본인만 가능)"""
+        offer = self.get_object()
+        
+        # 본인의 제안만 취소 가능
+        if offer.buyer != request.user:
+            return Response(
+                {'error': '본인의 제안만 취소할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # pending 상태만 취소 가능
+        if offer.status != 'pending':
+            return Response(
+                {'error': '대기중인 제안만 취소할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 제안 삭제
+        offer.delete()
+        
+        # offer_count 업데이트
+        phone = offer.phone
+        unique_buyers_count = UsedPhoneOffer.objects.filter(
+            phone=phone
+        ).values('buyer').distinct().count()
+        
+        phone.offer_count = unique_buyers_count
+        phone.save(update_fields=['offer_count'])
+        
+        return Response(
+            {'message': '제안이 취소되었습니다.'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+    
     @action(detail=False, methods=['get'], url_path='sent')
     def sent_offers(self, request):
         """내가 보낸 제안 목록 (구매자 MyPage용)"""
