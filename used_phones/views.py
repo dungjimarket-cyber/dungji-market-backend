@@ -306,17 +306,36 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 제안 생성
-        offer = UsedPhoneOffer.objects.create(
+        # 이전 제안이 있는지 확인
+        existing_offer = UsedPhoneOffer.objects.filter(
             phone=phone,
             buyer=request.user,
-            amount=amount,
-            message=request.data.get('message', '')
-        )
+            status='pending'
+        ).first()
         
-        # 제안 수 업데이트
-        phone.offer_count = F('offer_count') + 1
-        phone.save(update_fields=['offer_count'])
+        if existing_offer:
+            # 기존 제안 업데이트
+            existing_offer.amount = amount
+            existing_offer.message = request.data.get('message', '')
+            existing_offer.save()
+            offer = existing_offer
+        else:
+            # 새 제안 생성
+            offer = UsedPhoneOffer.objects.create(
+                phone=phone,
+                buyer=request.user,
+                amount=amount,
+                message=request.data.get('message', '')
+            )
+            
+            # 유니크한 구매자 수로 offer_count 업데이트
+            unique_buyers_count = UsedPhoneOffer.objects.filter(
+                phone=phone,
+                status='pending'
+            ).values('buyer').distinct().count()
+            
+            phone.offer_count = unique_buyers_count
+            phone.save(update_fields=['offer_count'])
         
         serializer = UsedPhoneOfferSerializer(offer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -373,9 +392,20 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 제안 목록 조회
+        # 각 구매자별 최신 제안만 가져오기
+        from django.db.models import Max, OuterRef, Subquery
+        
+        # 각 구매자의 최신 제안 ID를 가져옴
+        latest_offer_ids = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='pending'  # pending 상태만 표시
+        ).values('buyer').annotate(
+            latest_id=Max('id')
+        ).values('latest_id')
+        
+        # 최신 제안들만 조회
         offers = UsedPhoneOffer.objects.filter(
-            phone=phone
+            id__in=latest_offer_ids
         ).select_related('buyer').order_by('-created_at')
         
         # 직렬화
@@ -722,9 +752,14 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         offer.status = "cancelled"
         offer.save(update_fields=["status"])
         
-        # 제안 수 감소
+        # 유니크한 구매자 수로 offer_count 업데이트
         phone = offer.phone
-        phone.offer_count = F('offer_count') - 1
+        unique_buyers_count = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='pending'
+        ).values('buyer').distinct().count()
+        
+        phone.offer_count = unique_buyers_count
         phone.save(update_fields=['offer_count'])
         
         return Response({
