@@ -59,7 +59,7 @@ class UsedPhone(models.Model):
     
     STATUS_CHOICES = [
         ('active', '판매중'),
-        ('reserved', '예약중'),
+        ('trading', '거래중'),
         ('sold', '판매완료'),
         ('deleted', '삭제됨'),
     ]
