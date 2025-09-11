@@ -952,10 +952,18 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # 이미 판매 완료한 경우
+        if phone.seller_completed_at:
+            return Response(
+                {'error': '이미 판매 완료 처리하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # 판매자 완료 시간 기록 및 상태를 판매완료로 변경
+        phone.seller_completed_at = timezone.now()
         phone.status = 'sold'
         phone.sold_at = timezone.now()
-        phone.save(update_fields=['status', 'sold_at'])
+        phone.save(update_fields=['seller_completed_at', 'status', 'sold_at'])
         
         return Response({
             'message': '판매가 완료되었습니다.',
@@ -988,8 +996,16 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 구매자 완료 처리 (현재는 로그만 남김)
-        # 향후 buyer_completed_at 필드 추가 후 활성화 예정
+        # 이미 구매 완료한 경우
+        if phone.buyer_completed_at:
+            return Response(
+                {'error': '이미 구매 완료 처리하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 구매자 완료 시간 기록
+        phone.buyer_completed_at = timezone.now()
+        phone.save(update_fields=['buyer_completed_at'])
         
         return Response({
             'message': '구매가 완료되었습니다.',
