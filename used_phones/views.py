@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, F
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 import logging
 from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer, UsedPhoneDeletePenalty
@@ -798,6 +799,114 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         return Response({
             "message": "제안이 취소되었습니다.",
             "status": offer.status
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def complete(self, request, pk=None):
+        """거래 완료 처리"""
+        phone = self.get_object()
+        
+        # 판매자만 거래 완료 가능
+        if phone.seller != request.user:
+            return Response(
+                {'error': '판매자만 거래를 완료할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 거래중 상태가 아니면 완료 불가
+        if phone.status != 'trading':
+            return Response(
+                {'error': '거래중인 상품만 완료 처리할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 상태를 판매완료로 변경
+        phone.status = 'sold'
+        phone.sold_at = timezone.now()
+        phone.save(update_fields=['status', 'sold_at'])
+        
+        return Response({
+            'message': '거래가 완료되었습니다.',
+            'status': phone.status
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='cancel-trade')
+    def cancel_trade(self, request, pk=None):
+        """거래 취소 처리"""
+        phone = self.get_object()
+        
+        # 판매자만 거래 취소 가능
+        if phone.seller != request.user:
+            return Response(
+                {'error': '판매자만 거래를 취소할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 거래중 상태가 아니면 취소 불가
+        if phone.status != 'trading':
+            return Response(
+                {'error': '거래중인 상품만 취소할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 상태를 판매중으로 되돌리기
+        phone.status = 'active'
+        phone.save(update_fields=['status'])
+        
+        # 수락된 제안을 다시 pending으로 변경
+        UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='accepted'
+        ).update(status='pending')
+        
+        return Response({
+            'message': '거래가 취소되었습니다. 상품이 다시 판매중 상태로 변경되었습니다.',
+            'status': phone.status
+        })
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='buyer-info')
+    def buyer_info(self, request, pk=None):
+        """거래중인 구매자 정보 조회"""
+        phone = self.get_object()
+        
+        # 판매자만 조회 가능
+        if phone.seller != request.user:
+            return Response(
+                {'error': '판매자만 구매자 정보를 조회할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 거래중 상태가 아니면 조회 불가
+        if phone.status != 'trading':
+            return Response(
+                {'error': '거래중인 상품만 구매자 정보를 조회할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 수락된 제안 찾기
+        accepted_offer = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='accepted'
+        ).select_related('buyer').first()
+        
+        if not accepted_offer:
+            return Response(
+                {'error': '거래 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        buyer = accepted_offer.buyer
+        
+        # 구매자 정보 반환
+        return Response({
+            'id': buyer.id,
+            'nickname': buyer.nickname if hasattr(buyer, 'nickname') else buyer.username,
+            'phone': buyer.phone if hasattr(buyer, 'phone') else None,
+            'email': buyer.email,
+            'region': buyer.activity_region if hasattr(buyer, 'activity_region') else None,
+            'profile_image': buyer.profile_image if hasattr(buyer, 'profile_image') else None,
+            'offered_price': accepted_offer.amount,
+            'message': accepted_offer.message
         })
 
 
