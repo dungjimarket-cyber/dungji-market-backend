@@ -358,13 +358,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             phone.status = 'trading'
             phone.save(update_fields=['status'])
             
-            # 다른 모든 제안들 자동 거절 (pending과 accepted 모두)
-            UsedPhoneOffer.objects.filter(
-                phone=phone
-            ).exclude(id=offer.id).update(
-                status='rejected',
-                seller_message='즉시구매가 완료되어 자동 거절되었습니다.'
-            )
+            # 다른 제안들은 그대로 pending 상태 유지 (거절하지 않음)
             
             # 즉시구매 응답
             return Response({
@@ -753,14 +747,15 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         offer.phone.status = 'trading'
         offer.phone.save(update_fields=['status'])
         
-        # 다른 모든 제안들을 거절 처리 (pending과 accepted 모두)
-        other_offers = UsedPhoneOffer.objects.filter(
-            phone=offer.phone
+        # 다른 accepted 제안들은 pending으로 되돌림 (거래중에는 대기 상태 유지)
+        other_accepted_offers = UsedPhoneOffer.objects.filter(
+            phone=offer.phone,
+            status='accepted'
         ).exclude(id=offer.id)
         
-        other_offers.update(
-            status='rejected',
-            seller_message='다른 제안이 거래 진행되어 자동 거절되었습니다.'
+        other_accepted_offers.update(
+            status='pending',
+            seller_message='거래 진행중으로 대기 상태로 변경되었습니다.'
         )
         
         return Response({
