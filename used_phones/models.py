@@ -105,6 +105,10 @@ class UsedPhone(models.Model):
     offer_count = models.IntegerField(default=0, verbose_name='제안수')
     is_modified = models.BooleanField(default=False, verbose_name='수정됨 표시')  # 견적 후 수정 시 True
     
+    # 거래 완료 관련 필드
+    seller_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='판매자 완료 시간')
+    buyer_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='구매자 완료 시간')
+    
     # 타임스탬프
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

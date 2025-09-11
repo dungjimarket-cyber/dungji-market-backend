@@ -933,15 +933,15 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             "status": offer.status
         })
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def complete(self, request, pk=None):
-        """거래 완료 처리"""
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='seller-complete')
+    def seller_complete(self, request, pk=None):
+        """판매자 거래 완료 처리"""
         phone = self.get_object()
         
-        # 판매자만 거래 완료 가능
+        # 판매자만 가능
         if phone.seller != request.user:
             return Response(
-                {'error': '판매자만 거래를 완료할 수 있습니다.'},
+                {'error': '판매자만 판매 완료할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -952,14 +952,64 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 상태를 판매완료로 변경
+        # 이미 판매 완료한 경우
+        if phone.seller_completed_at:
+            return Response(
+                {'error': '이미 판매 완료 처리하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 판매자 완료 시간 기록 및 상태를 판매완료로 변경
+        phone.seller_completed_at = timezone.now()
         phone.status = 'sold'
         phone.sold_at = timezone.now()
-        phone.save(update_fields=['status', 'sold_at'])
+        phone.save(update_fields=['seller_completed_at', 'status', 'sold_at'])
         
         return Response({
-            'message': '거래가 완료되었습니다.',
-            'status': phone.status
+            'message': '판매가 완료되었습니다.',
+            'status': phone.status,
+            'seller_completed': True
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='buyer-complete')
+    def buyer_complete(self, request, pk=None):
+        """구매자 거래 완료 처리"""
+        phone = self.get_object()
+        
+        # 거래중 상태가 아니면 완료 불가
+        if phone.status != 'trading' and phone.status != 'sold':
+            return Response(
+                {'error': '거래중이거나 판매완료된 상품만 구매 완료할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 구매자 확인 - 수락된 제안의 구매자인지 확인
+        accepted_offer = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            buyer=request.user,
+            status='accepted'
+        ).first()
+        
+        if not accepted_offer:
+            return Response(
+                {'error': '구매자만 구매 완료할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 이미 구매 완료한 경우
+        if phone.buyer_completed_at:
+            return Response(
+                {'error': '이미 구매 완료 처리하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 구매자 완료 시간 기록
+        phone.buyer_completed_at = timezone.now()
+        phone.save(update_fields=['buyer_completed_at'])
+        
+        return Response({
+            'message': '구매가 완료되었습니다.',
+            'buyer_completed': True
         })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='cancel-trade')
