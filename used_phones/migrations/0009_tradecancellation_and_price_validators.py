@@ -21,12 +21,23 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('cancelled_by', models.CharField(choices=[('seller', '판매자'), ('buyer', '구매자')], max_length=10)),
                 ('reason', models.CharField(choices=[
+                    # 구매자 취소 사유
                     ('change_mind', '단순 변심'),
-                    ('found_better', '더 나은 조건 발견'),
-                    ('no_response', '상대방 연락 두절'),
-                    ('condition_mismatch', '상품 상태 불일치'),
-                    ('price_disagreement', '가격 재협상 실패'),
-                    ('schedule_conflict', '일정 조율 실패'),
+                    ('found_better', '다른 상품 구매 결정'),
+                    ('seller_no_response', '판매자 연락 두절'),
+                    ('condition_mismatch', '상품 상태가 설명과 다름'),
+                    ('price_disagreement', '추가 비용 요구'),
+                    ('seller_cancel_request', '판매자 취소 요청'),
+                    # 판매자 취소 사유
+                    ('product_sold', '다른 경로로 판매됨'),
+                    ('buyer_no_response', '구매자 연락 두절'),
+                    ('buyer_no_show', '구매자 약속 불이행'),
+                    ('payment_issue', '결제 문제 발생'),
+                    ('buyer_unreasonable', '구매자 무리한 요구'),
+                    ('buyer_cancel_request', '구매자 취소 요청'),
+                    ('personal_reason', '개인 사정으로 판매 불가'),
+                    # 공통
+                    ('schedule_conflict', '거래 일정 조율 실패'),
                     ('location_issue', '거래 장소 문제'),
                     ('other', '기타'),
                 ], max_length=50)),
