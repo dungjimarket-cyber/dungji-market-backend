@@ -974,6 +974,88 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             'offered_price': accepted_offer.amount,
             'message': accepted_offer.message
         })
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='my-trading')
+    def my_trading(self, request):
+        """구매자의 거래중 목록 조회"""
+        # 현재 사용자가 구매자이고 accepted 상태인 제안들 찾기
+        accepted_offers = UsedPhoneOffer.objects.filter(
+            buyer=request.user,
+            status='accepted'
+        ).select_related('phone', 'phone__seller').prefetch_related('phone__images')
+        
+        trading_items = []
+        for offer in accepted_offers:
+            phone = offer.phone
+            # 거래중 상태인 상품만 포함
+            if phone.status == 'trading':
+                main_image = phone.images.filter(is_main=True).first() or phone.images.first()
+                
+                trading_items.append({
+                    'id': offer.id,
+                    'phone': {
+                        'id': phone.id,
+                        'title': f"{phone.brand} {phone.model}",
+                        'brand': phone.brand,
+                        'model': phone.model,
+                        'price': phone.price,
+                        'images': [{
+                            'image_url': main_image.image_url if main_image else None,
+                            'is_main': True
+                        }] if main_image else [],
+                        'status': phone.status,
+                        'seller': {
+                            'id': phone.seller.id,
+                            'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username,
+                            'phone': phone.seller.phone if hasattr(phone.seller, 'phone') else None,
+                            'email': phone.seller.email,
+                            'region': phone.seller.activity_region if hasattr(phone.seller, 'activity_region') else None,
+                        }
+                    },
+                    'offered_price': offer.amount,
+                    'status': offer.status,
+                    'created_at': offer.created_at.isoformat()
+                })
+        
+        return Response(trading_items)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='seller-info')
+    def seller_info(self, request, pk=None):
+        """거래중인 판매자 정보 조회 (구매자용)"""
+        phone = self.get_object()
+        
+        # 거래중 상태가 아니면 조회 불가
+        if phone.status != 'trading':
+            return Response(
+                {'error': '거래중인 상품만 판매자 정보를 조회할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 수락된 제안이 현재 사용자의 것인지 확인
+        accepted_offer = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            buyer=request.user,
+            status='accepted'
+        ).first()
+        
+        if not accepted_offer:
+            return Response(
+                {'error': '거래 권한이 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        seller = phone.seller
+        
+        # 판매자 정보 반환
+        return Response({
+            'id': seller.id,
+            'nickname': seller.nickname if hasattr(seller, 'nickname') else seller.username,
+            'phone': seller.phone if hasattr(seller, 'phone') else None,
+            'email': seller.email,
+            'region': seller.activity_region if hasattr(seller, 'activity_region') else None,
+            'profile_image': seller.profile_image if hasattr(seller, 'profile_image') else None,
+            'accepted_price': accepted_offer.amount
+        })
 
 
 class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
