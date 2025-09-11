@@ -218,6 +218,40 @@ class UsedPhoneOffer(models.Model):
         verbose_name_plural = '가격 제안'
 
 
+class TradeCancellation(models.Model):
+    """거래 취소 기록"""
+    
+    CANCELLATION_REASONS = [
+        ('change_mind', '단순 변심'),
+        ('found_better', '더 나은 조건 발견'),
+        ('no_response', '상대방 연락 두절'),
+        ('condition_mismatch', '상품 상태 불일치'),
+        ('price_disagreement', '가격 재협상 실패'),
+        ('schedule_conflict', '일정 조율 실패'),
+        ('location_issue', '거래 장소 문제'),
+        ('other', '기타'),
+    ]
+    
+    CANCELLED_BY_CHOICES = [
+        ('seller', '판매자'),
+        ('buyer', '구매자'),
+    ]
+    
+    phone = models.ForeignKey('UsedPhone', on_delete=models.CASCADE, related_name='cancellations')
+    offer = models.ForeignKey('UsedPhoneOffer', on_delete=models.CASCADE, related_name='cancellations')
+    cancelled_by = models.CharField(max_length=10, choices=CANCELLED_BY_CHOICES)
+    canceller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trade_cancellations')
+    reason = models.CharField(max_length=50, choices=CANCELLATION_REASONS)
+    custom_reason = models.TextField(null=True, blank=True, verbose_name='기타 사유')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'trade_cancellations'
+        ordering = ['-created_at']
+        verbose_name = '거래 취소 기록'
+        verbose_name_plural = '거래 취소 기록'
+
+
 class UsedPhoneDeletePenalty(models.Model):
     """중고폰 삭제 패널티"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_penalties')
