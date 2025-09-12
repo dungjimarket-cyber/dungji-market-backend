@@ -72,11 +72,12 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     is_favorite = serializers.SerializerMethodField()
     region_name = serializers.SerializerMethodField()
     regions = serializers.SerializerMethodField()
+    final_price = serializers.SerializerMethodField()
     
     class Meta:
         model = UsedPhone
         fields = [
-            'id', 'brand', 'model', 'storage', 'color', 'price', 
+            'id', 'brand', 'model', 'storage', 'color', 'price', 'final_price',
             'min_offer_price', 'accept_offers', 'condition_grade',
             'battery_status', 'status', 'view_count', 'favorite_count',
             'offer_count', 'region_name', 'regions', 'images', 'is_favorite',
@@ -110,6 +111,15 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.favorites.filter(user=request.user).exists()
         return False
+    
+    def get_final_price(self, obj):
+        """거래완료된 경우 실제 거래 금액 반환"""
+        if obj.status == 'sold':
+            # 수락된 제안의 금액을 찾기
+            accepted_offer = obj.offers.filter(status='accepted').first()
+            if accepted_offer:
+                return accepted_offer.amount
+        return None
 
 
 class UsedPhoneDetailSerializer(serializers.ModelSerializer):
