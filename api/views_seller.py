@@ -210,10 +210,27 @@ class SellerProfileView(APIView):
         
         # 비대면 판매 인증서 삭제 요청 처리
         if request.data.get('delete_remote_sales_certification') == 'true':
-            user.remote_sales_certification = None
-            user.remote_sales_verified = False
-            user.remote_sales_verification_date = None
-            logger.info(f"사용자 {user.id}의 비대면 판매 인증서 삭제")
+            try:
+                from .models_remote_sales import RemoteSalesCertification
+                
+                # User 모델 필드 초기화
+                user.remote_sales_certification = None
+                user.remote_sales_verified = False
+                user.remote_sales_verification_date = None
+                user.remote_sales_expiry_date = None
+                user.remote_sales_status = None
+                
+                # RemoteSalesCertification 레코드들 삭제 (모든 상태의 인증 기록)
+                deleted_count, _ = RemoteSalesCertification.objects.filter(seller=user).delete()
+                
+                logger.info(f"사용자 {user.id}의 비대면 판매 인증서 삭제 완료: {deleted_count}개 레코드 삭제")
+                
+            except Exception as e:
+                logger.error(f"비대면 인증 삭제 오류 (사용자 {user.id}): {e}")
+                # 오류가 있어도 User 필드는 초기화
+                user.remote_sales_certification = None
+                user.remote_sales_verified = False
+                user.remote_sales_verification_date = None
         
         # 업데이트 가능한 필드들
         allowed_fields = [
