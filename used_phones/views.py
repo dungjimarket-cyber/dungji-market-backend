@@ -614,8 +614,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         for offer in accepted_offers:
             phone = offer.phone
             print(f"[DEBUG] Offer ID: {offer.id}, Phone ID: {phone.id}, Phone status: {phone.status}")
-            # 거래중 상태인 상품만 포함
-            if phone.status == 'trading':
+            # 거래중이거나 판매완료된 상품 포함 (구매자가 완료하지 않은 경우)
+            if phone.status == 'trading' or (phone.status == 'sold' and not phone.buyer_completed_at):
                 main_image = phone.images.filter(is_main=True).first() or phone.images.first()
                 
                 trading_items.append({
@@ -631,6 +631,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                             'is_main': True
                         }] if main_image else [],
                         'status': phone.status,
+                        'seller_completed': bool(phone.seller_completed_at),
+                        'buyer_completed': bool(phone.buyer_completed_at),
                         'seller': {
                             'id': phone.seller.id,
                             'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username,
@@ -976,10 +978,10 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         """구매자 거래 완료 처리"""
         phone = self.get_object()
         
-        # 거래중 상태가 아니면 완료 불가
-        if phone.status != 'trading' and phone.status != 'sold':
+        # 판매자가 먼저 완료해야 구매자가 완료할 수 있음
+        if phone.status != 'sold' or not phone.seller_completed_at:
             return Response(
-                {'error': '거래중이거나 판매완료된 상품만 구매 완료할 수 있습니다.'},
+                {'error': '판매자가 판매 완료한 후에 구매 완료할 수 있습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1023,6 +1025,13 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         if phone.status != 'trading':
             return Response(
                 {'error': '거래중인 상품만 취소할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 판매자가 이미 완료한 경우 취소 불가 (당근마켓 방식)
+        if phone.seller_completed_at:
+            return Response(
+                {'error': '판매자가 거래를 확정한 후에는 취소할 수 없습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
