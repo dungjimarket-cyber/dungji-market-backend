@@ -16,6 +16,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Region, GroupBuy, Participation, Partner
 from .models_verification import EmailVerification, PhoneVerification
+from .models_nickname import NicknameChangeHistory
 from .utils.s3_utils import upload_file_to_s3
 from .utils.resend_sender import ResendSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
@@ -1373,13 +1374,42 @@ def user_profile(request):
                         {'error': '닉네임을 입력해주세요.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-                # 닉네임 중복 확인 (선택사항 - 닉네임은 중복 허용할 수도 있음)
-                user.nickname = nickname
                 
-                # 닉네임 변경시 생성한 모든 공구의 creator_nickname 업데이트
-                from .models import GroupBuy
-                GroupBuy.objects.filter(creator=user).update(creator_nickname=nickname)
-                logger.info(f"User {user.id} changed nickname to {nickname}, updated {GroupBuy.objects.filter(creator=user).count()} GroupBuy records")
+                # 현재 닉네임과 다른 경우에만 변경 제한 확인
+                if nickname != user.nickname:
+                    # 닉네임 변경 가능 여부 확인 (30일에 2회 제한)
+                    if not NicknameChangeHistory.can_change_nickname(user):
+                        next_available = NicknameChangeHistory.get_next_available_date(user)
+                        remaining_changes = NicknameChangeHistory.get_remaining_changes(user)
+                        
+                        return Response({
+                            'error': '닉네임 변경 제한',
+                            'message': '30일 이내에 2회까지만 변경 가능합니다.',
+                            'remaining_changes': remaining_changes,
+                            'next_available_date': next_available.isoformat() if next_available else None
+                        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+                    
+                    # 닉네임 중복 확인
+                    if User.objects.filter(nickname=nickname).exclude(id=user.id).exists():
+                        return Response(
+                            {'error': '이미 사용 중인 닉네임입니다.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # 닉네임 변경 이력 저장
+                    NicknameChangeHistory.objects.create(
+                        user=user,
+                        old_nickname=user.nickname,
+                        new_nickname=nickname,
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    user.nickname = nickname
+                    
+                    # 닉네임 변경시 생성한 모든 공구의 creator_nickname 업데이트
+                    from .models import GroupBuy
+                    GroupBuy.objects.filter(creator=user).update(creator_nickname=nickname)
+                    logger.info(f"User {user.id} changed nickname from {user.nickname} to {nickname}, updated {GroupBuy.objects.filter(creator=user).count()} GroupBuy records")
             
             if 'phone_number' in data:
                 # 휴대폰 번호 중복 확인

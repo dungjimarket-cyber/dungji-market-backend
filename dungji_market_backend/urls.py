@@ -46,6 +46,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, check_phone_duplicate, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status, verify_user_phone, reset_password_phone, find_id_by_phone
+from api.views_nickname import nickname_change_status, nickname_change_history
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_social import social_login_dispatch, kakao_callback, check_kakao_user_exists
 from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
@@ -116,6 +117,8 @@ urlpatterns = [
         path('register-old/', register_user, name='register_old'),  # 기존 API 보존
         path('check-username/', check_username, name='check_username'),
         path('check-nickname/', check_nickname, name='check_nickname'),
+        path('nickname-change-status/', nickname_change_status, name='nickname_change_status'),
+        path('nickname-change-history/', nickname_change_history, name='nickname_change_history'),
         path('check-email/', check_email, name='check_email'),
         path('check-phone/', check_phone_duplicate, name='check_phone_duplicate'),
         path('find-username/', find_username, name='find_username'),

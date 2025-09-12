@@ -16,6 +16,8 @@ from .models_region import Region
 from .models_inquiry import Inquiry
 # 팝업 모델 import
 from .models_popup import Popup
+# 닉네임 변경 이력 모델 import
+from .models_nickname import NicknameChangeHistory
 
 logger = logging.getLogger(__name__)
 
