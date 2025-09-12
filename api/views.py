@@ -3594,21 +3594,21 @@ class UserProfileView(APIView):
             if recent_changes >= 2:
                 return Response({'error': '30일 동안 닉네임은 2회까지만 변경 가능합니다.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             
-            # username 중복 체크 (username은 unique해야 함)
-            if User.objects.filter(username=nickname).exclude(id=user.id).exists():
+            # nickname 중복 체크
+            if User.objects.filter(nickname=nickname).exclude(id=user.id).exists():
                 return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
             # 닉네임 변경 기록 저장
-            if user.username != nickname:  # 실제로 변경되는 경우만
+            # 주의: nickname 필드만 변경, username(아이디)은 변경하지 않음
+            if user.nickname != nickname:  # 실제로 변경되는 경우만
                 NicknameChangeHistory.objects.create(
                     user=user,
-                    old_nickname=user.username,
+                    old_nickname=user.nickname or user.username,  # 기존 닉네임
                     new_nickname=nickname,
                     ip_address=request.META.get('REMOTE_ADDR', '')
                 )
             
-            user.username = nickname  # username 필드 업데이트
-            user.nickname = nickname  # nickname 필드도 함께 업데이트
+            user.nickname = nickname  # nickname 필드만 업데이트 (username은 절대 변경하지 않음!)
             changed = True
         elif username is not None:  # 호환성을 위해 username만 전달된 경우도 처리
             # 닉네임 변경 횟수 체크
@@ -3625,20 +3625,20 @@ class UserProfileView(APIView):
             if recent_changes >= 2:
                 return Response({'error': '30일 동안 닉네임은 2회까지만 변경 가능합니다.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             
-            if User.objects.filter(username=username).exclude(id=user.id).exists():
+            if User.objects.filter(nickname=username).exclude(id=user.id).exists():
                 return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
             # 닉네임 변경 기록 저장
-            if user.username != username:
+            # 주의: nickname 필드만 변경, username(아이디)은 변경하지 않음
+            if user.nickname != username:
                 NicknameChangeHistory.objects.create(
                     user=user,
-                    old_nickname=user.username,
+                    old_nickname=user.nickname or user.username,  # 기존 닉네임
                     new_nickname=username,
                     ip_address=request.META.get('REMOTE_ADDR', '')
                 )
             
-            user.username = username
-            user.nickname = username  # nickname도 함께 업데이트
+            user.nickname = username  # nickname 필드만 업데이트 (username은 절대 변경하지 않음!)
             changed = True
         
         # 휴대폰 번호 업데이트 처리

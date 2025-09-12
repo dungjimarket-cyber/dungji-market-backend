@@ -313,24 +313,23 @@ class SellerProfileView(APIView):
                 # 일반회원 API와 동일한 에러 메시지와 상태 코드
                 return Response({'error': '30일 동안 닉네임은 2회까지만 변경 가능합니다.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
             
-            # username 중복 체크 (username은 unique해야 함)
-            if User.objects.filter(username=nickname_value).exclude(id=user.id).exists():
+            # nickname 중복 체크
+            if User.objects.filter(nickname=nickname_value).exclude(id=user.id).exists():
                 return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
             # 닉네임 변경 기록 저장 (실제로 변경되는 경우만)
-            if user.username != nickname_value:
+            # 주의: 판매회원도 nickname 필드만 변경, username(아이디)은 변경하지 않음
+            if user.nickname != nickname_value:
                 NicknameChangeHistory.objects.create(
                     user=user,
-                    old_nickname=user.username,
+                    old_nickname=user.nickname or user.username,  # 기존 닉네임
                     new_nickname=nickname_value,
                     ip_address=request.META.get('REMOTE_ADDR', '')
                 )
             
-            # username과 nickname 필드 모두 업데이트
-            update_data['username'] = nickname_value
-            update_data['nickname'] = nickname_value  # nickname 필드도 함께 업데이트
-            # update_data에서 'nickname' 키 제거 (이미 username으로 처리됨)
-            del update_data['nickname']
+            # nickname 필드만 업데이트 (username은 절대 변경하지 않음!)
+            update_data['nickname'] = nickname_value
+            # update_data에서 'nickname' 키는 유지
         
         # 사용자 정보 업데이트
         for field, value in update_data.items():
