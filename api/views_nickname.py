@@ -72,6 +72,53 @@ def nickname_change_status(request):
         })
 
 
+@api_view(['GET']) 
+@permission_classes([IsAuthenticated])
+def nickname_change_test_status(request):
+    """
+    닉네임 변경 테스트용 상태 확인 API
+    디버깅용으로 상세 정보 제공
+    """
+    try:
+        user = request.user
+        from datetime import timedelta
+        
+        # 전체 변경 이력
+        all_changes = NicknameChangeHistory.objects.filter(user=user).count()
+        
+        # 30일 이내 변경 이력
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        recent_changes = NicknameChangeHistory.objects.filter(
+            user=user,
+            changed_at__gte=thirty_days_ago
+        )
+        recent_count = recent_changes.count()
+        
+        # 최근 변경 이력 (최대 5개)
+        recent_history = list(recent_changes.values(
+            'old_nickname', 'new_nickname', 'changed_at', 'ip_address'
+        ).order_by('-changed_at')[:5])
+        
+        return Response({
+            'user_id': user.id,
+            'current_nickname': user.nickname,
+            'total_changes': all_changes,
+            'recent_30days_count': recent_count,
+            'can_change': recent_count < 2,
+            'remaining_changes': max(0, 2 - recent_count),
+            'recent_history': recent_history,
+            'thirty_days_ago': thirty_days_ago.isoformat(),
+            'now': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"닉네임 변경 테스트 상태 확인 오류: {str(e)}")
+        return Response(
+            {'error': f'테스트 상태 확인 오류: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def nickname_change_history(request):
