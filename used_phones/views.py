@@ -39,10 +39,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         """지역 필터링 추가"""
         queryset = super().get_queryset()
         
-        # list 액션일 때는 active 상태만 보여주기
-        # detail 액션이나 다른 action들은 trading 상태도 포함
+        # list 액션일 때는 active와 trading 상태 모두 보여주기 (거래중 배지 표시용)
+        # deleted 상태만 제외
         if self.action == 'list':
-            queryset = queryset.filter(status='active')
+            queryset = queryset.filter(status__in=['active', 'trading'])
         
         # 지역 필터링
         region = self.request.query_params.get('region')
