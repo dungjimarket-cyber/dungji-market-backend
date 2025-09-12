@@ -1829,7 +1829,33 @@ class GroupBuyViewSet(ModelViewSet):
         return [IsAuthenticated()]
 
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # 페이징 적용
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            data = serializer.data
+            now = timezone.now()
+            for item, instance in zip(data, page):
+                # 계산된 상태 추가
+                end_time = instance.end_time
+                if instance.status == 'recruiting' and now > end_time:
+                    if instance.current_participants >= instance.min_participants:
+                        item['calculated_status'] = 'completed'
+                    else:
+                        item['calculated_status'] = 'cancelled'
+                else:
+                    item['calculated_status'] = instance.status
+                # 남은 시간 계산 (초 단위)
+                if now < end_time:
+                    remaining_seconds = int((end_time - now).total_seconds())
+                    item['remaining_seconds'] = remaining_seconds
+                else:
+                    item['remaining_seconds'] = 0
+            return self.get_paginated_response(data)
+        
+        # 페이징이 없는 경우 (기존 로직 유지)
         serializer = self.get_serializer(queryset, many=True)
         data = serializer.data
         now = timezone.now()
