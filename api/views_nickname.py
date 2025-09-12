@@ -83,31 +83,44 @@ def nickname_change_test_status(request):
         user = request.user
         from datetime import timedelta
         
-        # 전체 변경 이력
-        all_changes = NicknameChangeHistory.objects.filter(user=user).count()
-        
-        # 30일 이내 변경 이력
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        recent_changes = NicknameChangeHistory.objects.filter(
-            user=user,
-            changed_at__gte=thirty_days_ago
-        )
-        recent_count = recent_changes.count()
-        
-        # 최근 변경 이력 (최대 5개)
-        recent_history = list(recent_changes.values(
-            'old_nickname', 'new_nickname', 'changed_at', 'ip_address'
-        ).order_by('-changed_at')[:5])
+        # 테이블 존재 확인
+        try:
+            # 전체 변경 이력
+            all_changes = NicknameChangeHistory.objects.filter(user=user).count()
+            
+            # 30일 이내 변경 이력
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_changes = NicknameChangeHistory.objects.filter(
+                user=user,
+                changed_at__gte=thirty_days_ago
+            )
+            recent_count = recent_changes.count()
+            
+            # 최근 변경 이력 (최대 5개)
+            recent_history = list(recent_changes.values(
+                'old_nickname', 'new_nickname', 'changed_at', 'ip_address'
+            ).order_by('-changed_at')[:5])
+            
+            table_exists = True
+            table_error = None
+        except Exception as table_e:
+            table_exists = False
+            table_error = str(table_e)
+            all_changes = 0
+            recent_count = 0
+            recent_history = []
         
         return Response({
             'user_id': user.id,
             'current_nickname': user.nickname,
+            'table_exists': table_exists,
+            'table_error': table_error,
             'total_changes': all_changes,
             'recent_30days_count': recent_count,
             'can_change': recent_count < 2,
             'remaining_changes': max(0, 2 - recent_count),
             'recent_history': recent_history,
-            'thirty_days_ago': thirty_days_ago.isoformat(),
+            'thirty_days_ago': timezone.now() - timedelta(days=30),
             'now': timezone.now().isoformat()
         })
         
