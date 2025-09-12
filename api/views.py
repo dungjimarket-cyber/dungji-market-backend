@@ -3563,7 +3563,8 @@ class UserProfileView(APIView):
     def patch(self, request):
         user = request.user
         email = request.data.get('email')
-        username = request.data.get('username')
+        nickname = request.data.get('nickname')  # nickname 필드로 변경
+        username = request.data.get('username')  # username도 유지 (호환성)
         phone_number = request.data.get('phone_number')
         address_region_id = request.data.get('address_region_id')
         address_detail = request.data.get('address_detail')
@@ -3577,11 +3578,67 @@ class UserProfileView(APIView):
             user.email = email
             changed = True
         
-        # 닉네임(사용자명) 업데이트 처리
-        if username is not None:
+        # 닉네임 업데이트 처리 (nickname 필드와 username 필드 모두 처리)
+        if nickname is not None:
+            # 닉네임 변경 횟수 체크 (30일 동안 2회 제한)
+            from datetime import datetime, timedelta
+            from django.utils import timezone
+            from .models import NicknameChangeHistory
+            
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_changes = NicknameChangeHistory.objects.filter(
+                user=user,
+                changed_at__gte=thirty_days_ago
+            ).count()
+            
+            if recent_changes >= 2:
+                return Response({'error': '30일 동안 닉네임은 2회까지만 변경 가능합니다.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
+            # username 중복 체크 (username은 unique해야 함)
+            if User.objects.filter(username=nickname).exclude(id=user.id).exists():
+                return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 닉네임 변경 기록 저장
+            if user.username != nickname:  # 실제로 변경되는 경우만
+                NicknameChangeHistory.objects.create(
+                    user=user,
+                    old_nickname=user.username,
+                    new_nickname=nickname,
+                    ip_address=request.META.get('REMOTE_ADDR', '')
+                )
+            
+            user.username = nickname  # username 필드 업데이트
+            user.nickname = nickname  # nickname 필드도 함께 업데이트
+            changed = True
+        elif username is not None:  # 호환성을 위해 username만 전달된 경우도 처리
+            # 닉네임 변경 횟수 체크
+            from datetime import datetime, timedelta
+            from django.utils import timezone
+            from .models import NicknameChangeHistory
+            
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_changes = NicknameChangeHistory.objects.filter(
+                user=user,
+                changed_at__gte=thirty_days_ago
+            ).count()
+            
+            if recent_changes >= 2:
+                return Response({'error': '30일 동안 닉네임은 2회까지만 변경 가능합니다.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
             if User.objects.filter(username=username).exclude(id=user.id).exists():
                 return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 닉네임 변경 기록 저장
+            if user.username != username:
+                NicknameChangeHistory.objects.create(
+                    user=user,
+                    old_nickname=user.username,
+                    new_nickname=username,
+                    ip_address=request.META.get('REMOTE_ADDR', '')
+                )
+            
             user.username = username
+            user.nickname = username  # nickname도 함께 업데이트
             changed = True
         
         # 휴대폰 번호 업데이트 처리

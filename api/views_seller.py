@@ -294,13 +294,43 @@ class SellerProfileView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        # 닉네임 중복 확인
+        # 닉네임 중복 확인 및 변경 횟수 제한 (일반회원 API와 동일한 로직)
         if 'nickname' in update_data:
-            if User.objects.filter(nickname=update_data['nickname']).exclude(id=user.id).exists():
-                return Response(
-                    {"detail": "이미 사용 중인 닉네임입니다."},
-                    status=status.HTTP_400_BAD_REQUEST
+            nickname_value = update_data['nickname']
+            
+            # 닉네임 변경 횟수 체크 (30일 동안 2회 제한)
+            from datetime import timedelta
+            from django.utils import timezone
+            from .models import NicknameChangeHistory
+            
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_changes = NicknameChangeHistory.objects.filter(
+                user=user,
+                changed_at__gte=thirty_days_ago
+            ).count()
+            
+            if recent_changes >= 2:
+                # 일반회원 API와 동일한 에러 메시지와 상태 코드
+                return Response({'error': '30일 동안 닉네임은 2회까지만 변경 가능합니다.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
+            # username 중복 체크 (username은 unique해야 함)
+            if User.objects.filter(username=nickname_value).exclude(id=user.id).exists():
+                return Response({'error': '이미 사용 중인 닉네임입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 닉네임 변경 기록 저장 (실제로 변경되는 경우만)
+            if user.username != nickname_value:
+                NicknameChangeHistory.objects.create(
+                    user=user,
+                    old_nickname=user.username,
+                    new_nickname=nickname_value,
+                    ip_address=request.META.get('REMOTE_ADDR', '')
                 )
+            
+            # username과 nickname 필드 모두 업데이트
+            update_data['username'] = nickname_value
+            update_data['nickname'] = nickname_value  # nickname 필드도 함께 업데이트
+            # update_data에서 'nickname' 키 제거 (이미 username으로 처리됨)
+            del update_data['nickname']
         
         # 사용자 정보 업데이트
         for field, value in update_data.items():
