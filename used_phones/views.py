@@ -820,6 +820,69 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='transaction-info')
+    def transaction_info(self, request, pk=None):
+        """거래 정보 조회 (후기 작성용)"""
+        from .models import UsedPhoneTransaction
+
+        phone = self.get_object()
+
+        # 거래중이거나 완료된 상태가 아니면 조회 불가
+        if phone.status not in ['trading', 'sold']:
+            return Response(
+                {'error': '거래 정보가 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 현재 진행중인 거래 찾기
+        transaction = UsedPhoneTransaction.objects.filter(
+            phone=phone,
+            status__in=['completed', 'in_progress']
+        ).select_related('buyer', 'seller').first()
+
+        if not transaction:
+            # 거래 내역이 없으면 accepted offer에서 정보 가져오기
+            accepted_offer = UsedPhoneOffer.objects.filter(
+                phone=phone,
+                status='accepted'
+            ).select_related('buyer').first()
+
+            if not accepted_offer:
+                return Response(
+                    {'error': '거래 정보를 찾을 수 없습니다.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # 임시 거래 정보 반환
+            return Response({
+                'id': accepted_offer.id,  # offer id를 transaction id로 사용
+                'buyer': {
+                    'id': accepted_offer.buyer.id,
+                    'nickname': accepted_offer.buyer.nickname if hasattr(accepted_offer.buyer, 'nickname') else accepted_offer.buyer.username
+                },
+                'seller': {
+                    'id': phone.seller.id,
+                    'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
+                },
+                'final_price': accepted_offer.offered_price,
+                'status': 'in_progress' if phone.status == 'trading' else 'completed'
+            })
+
+        # 거래 정보 반환
+        return Response({
+            'id': transaction.id,
+            'buyer': {
+                'id': transaction.buyer.id,
+                'nickname': transaction.buyer.nickname if hasattr(transaction.buyer, 'nickname') else transaction.buyer.username
+            },
+            'seller': {
+                'id': transaction.seller.id,
+                'nickname': transaction.seller.nickname if hasattr(transaction.seller, 'nickname') else transaction.seller.username
+            },
+            'final_price': transaction.final_price,
+            'status': transaction.status
+        })
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='cancel-trade')
     def cancel_trade(self, request, pk=None):
         """거래 취소 처리 (판매자/구매자 모두 가능)"""
