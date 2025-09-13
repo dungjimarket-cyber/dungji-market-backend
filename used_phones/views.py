@@ -406,7 +406,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at').first()
         
         if not my_offer:
-            return Response({'message': 'No offer found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'message': 'No offer found', 'offer': None}, status=status.HTTP_200_OK)
         
         # 사용자의 총 제안 횟수 조회
         user_offer_count = UsedPhoneOffer.objects.filter(
