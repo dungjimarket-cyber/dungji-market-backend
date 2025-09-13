@@ -782,7 +782,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             defaults={
                 'seller': phone.seller,
                 'buyer': accepted_offer.buyer,
-                'final_price': accepted_offer.amount,
+                'final_price': accepted_offer.offered_price,
                 'status': 'reserved'
             }
         )
@@ -837,11 +837,11 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         # 현재 진행중인 거래 찾기
         transaction = UsedPhoneTransaction.objects.filter(
             phone=phone,
-            status__in=['completed', 'in_progress']
+            status__in=['completed', 'in_progress', 'reserved']
         ).select_related('buyer', 'seller').first()
 
         if not transaction:
-            # 거래 내역이 없으면 accepted offer에서 정보 가져오기
+            # 거래 내역이 없으면 accepted offer에서 정보 가져와서 transaction 생성
             accepted_offer = UsedPhoneOffer.objects.filter(
                 phone=phone,
                 status='accepted'
@@ -853,20 +853,19 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # 임시 거래 정보 반환
-            return Response({
-                'id': accepted_offer.id,  # offer id를 transaction id로 사용
-                'buyer': {
-                    'id': accepted_offer.buyer.id,
-                    'nickname': accepted_offer.buyer.nickname if hasattr(accepted_offer.buyer, 'nickname') else accepted_offer.buyer.username
-                },
-                'seller': {
-                    'id': phone.seller.id,
-                    'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
-                },
-                'final_price': accepted_offer.offered_price,
-                'status': 'in_progress' if phone.status == 'trading' else 'completed'
-            })
+            # 거래중/판매완료 상태에서는 반드시 transaction이 있어야 함 - 생성
+            transaction = UsedPhoneTransaction.objects.create(
+                phone=phone,
+                offer=accepted_offer,
+                seller=phone.seller,
+                buyer=accepted_offer.buyer,
+                final_price=accepted_offer.offered_price,
+                status='completed' if phone.status == 'sold' else 'reserved',
+                seller_confirmed=True if phone.status == 'sold' else False,
+                buyer_confirmed=True if phone.status == 'sold' else False,
+                seller_confirmed_at=timezone.now() if phone.status == 'sold' else None,
+                buyer_confirmed_at=timezone.now() if phone.status == 'sold' else None
+            )
 
         # 거래 정보 반환
         return Response({
