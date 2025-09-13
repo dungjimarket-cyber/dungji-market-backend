@@ -5,7 +5,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
-    UsedPhoneRegion, UsedPhoneTransaction, UsedPhoneReview
+    UsedPhoneRegion, UsedPhoneTransaction, UsedPhoneReview,
+    UsedPhoneReport, UsedPhonePenalty
 )
 from api.models import Region
 
@@ -417,3 +418,137 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("해당 거래의 당사자만 리뷰를 작성할 수 있습니다.")
 
         return data
+
+
+class UsedPhoneReportSerializer(serializers.ModelSerializer):
+    """중고폰 신고 시리얼라이저"""
+    reporter_username = serializers.CharField(source='reporter.username', read_only=True)
+    reported_user_username = serializers.CharField(source='reported_user.username', read_only=True)
+    reported_phone_model = serializers.CharField(source='reported_phone.model', read_only=True)
+    processed_by_username = serializers.CharField(source='processed_by.username', read_only=True)
+    report_type_display = serializers.CharField(source='get_report_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = UsedPhoneReport
+        fields = [
+            'id', 'reported_user', 'reported_user_username',
+            'reported_phone', 'reported_phone_model', 'reporter', 'reporter_username',
+            'report_type', 'report_type_display', 'description', 'status', 'status_display',
+            'admin_note', 'processed_by', 'processed_by_username', 'processed_at',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'reporter', 'processed_by', 'processed_at', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        """신고 유효성 검증"""
+        request_user = self.context['request'].user
+        reported_user = data.get('reported_user')
+
+        # 자신을 신고할 수 없음
+        if reported_user == request_user:
+            raise serializers.ValidationError("자신을 신고할 수 없습니다.")
+
+        # 같은 사용자를 24시간 내에 중복 신고 방지
+        from django.utils import timezone
+        from datetime import timedelta
+
+        recent_report = UsedPhoneReport.objects.filter(
+            reporter=request_user,
+            reported_user=reported_user,
+            created_at__gte=timezone.now() - timedelta(hours=24)
+        ).exists()
+
+        if recent_report:
+            raise serializers.ValidationError("24시간 내에 같은 사용자를 중복 신고할 수 없습니다.")
+
+        return data
+
+
+class UsedPhonePenaltySerializer(serializers.ModelSerializer):
+    """중고폰 패널티 시리얼라이저"""
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    issued_by_username = serializers.CharField(source='issued_by.username', read_only=True)
+    revoked_by_username = serializers.CharField(source='revoked_by.username', read_only=True)
+    penalty_type_display = serializers.CharField(source='get_penalty_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    is_currently_active = serializers.SerializerMethodField()
+    related_reports_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UsedPhonePenalty
+        fields = [
+            'id', 'user', 'user_username', 'penalty_type', 'penalty_type_display',
+            'reason', 'duration_days', 'start_date', 'end_date', 'status', 'status_display',
+            'issued_by', 'issued_by_username', 'revoked_by', 'revoked_by_username',
+            'revoked_at', 'is_currently_active', 'related_reports_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'user', 'start_date', 'issued_by', 'revoked_by', 'revoked_at',
+            'created_at', 'updated_at'
+        ]
+
+    def get_is_currently_active(self, obj):
+        """현재 패널티가 활성 상태인지 반환"""
+        return obj.is_active()
+
+    def get_related_reports_count(self, obj):
+        """관련 신고 수 반환"""
+        return obj.related_reports.count()
+
+
+class UserRatingSerializer(serializers.ModelSerializer):
+    """사용자 평점 정보 시리얼라이저"""
+    average_rating = serializers.SerializerMethodField()
+    total_reviews = serializers.SerializerMethodField()
+    recent_reviews = serializers.SerializerMethodField()
+    penalty_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'nickname', 'average_rating', 'total_reviews',
+            'recent_reviews', 'penalty_status'
+        ]
+
+    def get_average_rating(self, obj):
+        """평균 평점 계산"""
+        from django.db.models import Avg
+        avg = obj.received_used_phone_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating']
+        return round(avg, 1) if avg else None
+
+    def get_total_reviews(self, obj):
+        """총 리뷰 개수"""
+        return obj.received_used_phone_reviews.count()
+
+    def get_recent_reviews(self, obj):
+        """최근 리뷰 3개"""
+        recent_reviews = obj.received_used_phone_reviews.select_related(
+            'reviewer', 'transaction__phone'
+        ).order_by('-created_at')[:3]
+
+        return [{
+            'id': review.id,
+            'rating': review.rating,
+            'comment': review.comment,
+            'reviewer_username': review.reviewer.username,
+            'phone_model': review.transaction.phone.model,
+            'created_at': review.created_at,
+            'is_punctual': review.is_punctual,
+            'is_friendly': review.is_friendly,
+            'is_honest': review.is_honest,
+            'is_fast_response': review.is_fast_response,
+        } for review in recent_reviews]
+
+    def get_penalty_status(self, obj):
+        """현재 패널티 상태"""
+        active_penalty = obj.used_phone_penalties.filter(status='active').first()
+        if active_penalty and active_penalty.is_active():
+            return {
+                'has_penalty': True,
+                'penalty_type': active_penalty.get_penalty_type_display(),
+                'end_date': active_penalty.end_date,
+                'reason': active_penalty.reason
+            }
+        return {'has_penalty': False}

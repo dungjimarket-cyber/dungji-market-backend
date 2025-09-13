@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer, UsedPhoneRegion, TradeCancellation
+from .models import (UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
+                     UsedPhoneRegion, TradeCancellation, UsedPhoneReview,
+                     UsedPhoneReport, UsedPhonePenalty, UsedPhoneTransaction)
 
 
 class UsedPhoneImageInline(admin.TabularInline):
@@ -101,3 +103,89 @@ class TradeCancellationAdmin(admin.ModelAdmin):
         """상품 정보 표시"""
         return f"{obj.phone.brand} {obj.phone.model}"
     get_phone_info.short_description = '상품'
+
+
+@admin.register(UsedPhoneTransaction)
+class UsedPhoneTransactionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_phone_info', 'seller', 'buyer', 'final_price', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['phone__model', 'seller__username', 'buyer__username']
+    readonly_fields = ['phone', 'offer', 'seller', 'buyer', 'final_price', 'created_at', 'updated_at', 'completed_at']
+
+    def get_phone_info(self, obj):
+        """상품 정보 표시"""
+        return f"{obj.phone.brand} {obj.phone.model}"
+    get_phone_info.short_description = '상품'
+
+
+@admin.register(UsedPhoneReview)
+class UsedPhoneReviewAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_transaction_info', 'reviewer', 'reviewee', 'rating', 'created_at']
+    list_filter = ['rating', 'created_at']
+    search_fields = ['reviewer__username', 'reviewee__username', 'transaction__phone__model']
+    readonly_fields = ['transaction', 'reviewer', 'reviewee', 'created_at', 'updated_at']
+
+    def get_transaction_info(self, obj):
+        """거래 정보 표시"""
+        return f"{obj.transaction.phone.brand} {obj.transaction.phone.model}"
+    get_transaction_info.short_description = '거래 상품'
+
+
+@admin.register(UsedPhoneReport)
+class UsedPhoneReportAdmin(admin.ModelAdmin):
+    list_display = ['id', 'reported_user', 'reporter', 'report_type', 'status', 'created_at']
+    list_filter = ['report_type', 'status', 'created_at']
+    search_fields = ['reported_user__username', 'reporter__username', 'description']
+    readonly_fields = ['reporter', 'created_at', 'updated_at']
+    actions = ['mark_as_resolved', 'mark_as_processing']
+
+    def mark_as_resolved(self, request, queryset):
+        """신고를 해결됨으로 처리"""
+        from django.utils import timezone
+        updated_count = queryset.update(
+            status='resolved',
+            processed_by=request.user,
+            processed_at=timezone.now()
+        )
+        self.message_user(request, f'{updated_count}개의 신고가 해결됨으로 처리되었습니다.')
+    mark_as_resolved.short_description = '선택된 신고를 해결됨으로 처리'
+
+    def mark_as_processing(self, request, queryset):
+        """신고를 처리중으로 변경"""
+        from django.utils import timezone
+        updated_count = queryset.update(
+            status='processing',
+            processed_by=request.user,
+            processed_at=timezone.now()
+        )
+        self.message_user(request, f'{updated_count}개의 신고가 처리중으로 변경되었습니다.')
+    mark_as_processing.short_description = '선택된 신고를 처리중으로 변경'
+
+
+@admin.register(UsedPhonePenalty)
+class UsedPhonePenaltyAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'penalty_type', 'duration_days', 'status', 'is_active_display', 'start_date', 'end_date']
+    list_filter = ['penalty_type', 'status', 'start_date']
+    search_fields = ['user__username', 'reason']
+    readonly_fields = ['user', 'start_date', 'created_at', 'updated_at']
+    actions = ['revoke_penalty']
+
+    def is_active_display(self, obj):
+        """현재 패널티 활성 상태 표시"""
+        return obj.is_active()
+    is_active_display.short_description = '현재 활성'
+    is_active_display.boolean = True
+
+    def revoke_penalty(self, request, queryset):
+        """패널티 해제"""
+        from django.utils import timezone
+        updated_count = 0
+        for penalty in queryset.filter(status='active'):
+            penalty.status = 'revoked'
+            penalty.revoked_by = request.user
+            penalty.revoked_at = timezone.now()
+            penalty.save()
+            updated_count += 1
+
+        self.message_user(request, f'{updated_count}개의 패널티가 해제되었습니다.')
+    revoke_penalty.short_description = '선택된 패널티 해제'

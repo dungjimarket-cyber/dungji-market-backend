@@ -13,7 +13,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 import logging
 from .models import (
     UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
-    UsedPhoneDeletePenalty, UsedPhoneTransaction, UsedPhoneReview, TradeCancellation
+    UsedPhoneDeletePenalty, UsedPhoneTransaction, UsedPhoneReview, TradeCancellation,
+    UsedPhoneReport, UsedPhonePenalty
 )
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,8 @@ from .serializers import (
     UsedPhoneListSerializer, UsedPhoneDetailSerializer,
     UsedPhoneCreateSerializer, UsedPhoneOfferSerializer,
     UsedPhoneFavoriteSerializer, UsedPhoneTransactionSerializer,
-    UsedPhoneReviewSerializer
+    UsedPhoneReviewSerializer, UsedPhoneReportSerializer,
+    UsedPhonePenaltySerializer, UserRatingSerializer
 )
 
 
@@ -1342,3 +1344,174 @@ class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
             })
         
         return Response({'results': favorites_data})
+
+
+class UsedPhoneReportViewSet(viewsets.ModelViewSet):
+    """중고폰 신고 ViewSet"""
+    queryset = UsedPhoneReport.objects.all()
+    serializer_class = UsedPhoneReportSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['report_type', 'status']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """권한에 따른 쿼리셋 필터링"""
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            # 관리자는 모든 신고 조회 가능
+            return UsedPhoneReport.objects.select_related(
+                'reported_user', 'reporter', 'processed_by'
+            ).prefetch_related('penalties')
+        else:
+            # 일반 사용자는 자신이 제출한 신고만 조회 가능
+            return UsedPhoneReport.objects.filter(
+                reporter=user
+            ).select_related('reported_user', 'processed_by')
+
+    def perform_create(self, serializer):
+        """신고 생성"""
+        # 신고자를 현재 사용자로 설정
+        serializer.save(reporter=self.request.user)
+
+        # 자동 패널티 처리 로직
+        reported_user = serializer.validated_data['reported_user']
+        self._check_auto_penalty(reported_user, serializer.instance)
+
+    def _check_auto_penalty(self, reported_user, current_report):
+        """신고 누적에 따른 자동 패널티 처리"""
+        # 최근 30일 내 해당 사용자에 대한 신고 수 확인
+        from datetime import timedelta
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+
+        recent_reports = UsedPhoneReport.objects.filter(
+            reported_user=reported_user,
+            created_at__gte=thirty_days_ago,
+            status__in=['pending', 'processing', 'resolved']
+        )
+
+        report_count = recent_reports.count()
+
+        # 3건 이상 신고 시 자동 7일 패널티
+        if report_count >= 3:
+            # 이미 활성 패널티가 있는지 확인
+            active_penalty = reported_user.used_phone_penalties.filter(
+                status='active'
+            ).first()
+
+            if not active_penalty or not active_penalty.is_active():
+                penalty = UsedPhonePenalty.objects.create(
+                    user=reported_user,
+                    penalty_type='auto_report',
+                    reason=f'신고 누적 {report_count}건으로 인한 자동 패널티',
+                    duration_days=7,
+                    issued_by=None  # 시스템 자동 발령
+                )
+
+                # 관련 신고들을 패널티에 연결
+                penalty.related_reports.set(recent_reports)
+
+                logger.info(f"사용자 {reported_user.username}에게 자동 패널티 부여 (신고 {report_count}건)")
+
+    @action(detail=False, methods=['get'])
+    def my_reports(self, request):
+        """내가 제출한 신고 목록"""
+        reports = self.get_queryset().filter(reporter=request.user)
+        serializer = self.get_serializer(reports, many=True)
+        return Response(serializer.data)
+
+
+class UsedPhonePenaltyViewSet(viewsets.ModelViewSet):
+    """중고폰 패널티 ViewSet"""
+    queryset = UsedPhonePenalty.objects.all()
+    serializer_class = UsedPhonePenaltySerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['penalty_type', 'status', 'user']
+    ordering_fields = ['created_at', 'start_date', 'end_date']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """권한에 따른 쿼리셋 필터링"""
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            # 관리자는 모든 패널티 조회 가능
+            return UsedPhonePenalty.objects.select_related(
+                'user', 'issued_by', 'revoked_by'
+            ).prefetch_related('related_reports')
+        else:
+            # 일반 사용자는 자신의 패널티만 조회 가능
+            return UsedPhonePenalty.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        """패널티 생성 (관리자만)"""
+        if not (self.request.user.is_staff or self.request.user.is_superuser):
+            raise PermissionError("관리자만 패널티를 생성할 수 있습니다.")
+
+        serializer.save(issued_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def revoke(self, request, pk=None):
+        """패널티 해제 (관리자만)"""
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {"error": "관리자만 패널티를 해제할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        penalty = self.get_object()
+        if penalty.status == 'active':
+            penalty.status = 'revoked'
+            penalty.revoked_by = request.user
+            penalty.revoked_at = timezone.now()
+            penalty.save()
+
+            return Response({"message": "패널티가 해제되었습니다."})
+        else:
+            return Response(
+                {"error": "이미 만료되거나 해제된 패널티입니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['get'])
+    def my_penalties(self, request):
+        """내 패널티 목록"""
+        penalties = self.get_queryset().filter(user=request.user)
+        serializer = self.get_serializer(penalties, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def check_active(self, request):
+        """현재 활성 패널티 확인"""
+        user = request.user
+        active_penalty = user.used_phone_penalties.filter(status='active').first()
+
+        if active_penalty and active_penalty.is_active():
+            serializer = self.get_serializer(active_penalty)
+            return Response({
+                'has_active_penalty': True,
+                'penalty': serializer.data
+            })
+        else:
+            return Response({'has_active_penalty': False})
+
+
+class UserRatingView(APIView):
+    """사용자 평점 정보 API"""
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, user_id):
+        """특정 사용자의 평점 정보 조회"""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        try:
+            user = User.objects.get(id=user_id)
+            serializer = UserRatingSerializer(user)
+            return Response(serializer.data)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "사용자를 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )

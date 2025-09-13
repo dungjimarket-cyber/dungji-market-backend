@@ -382,3 +382,124 @@ class UsedPhoneReview(models.Model):
 
     def __str__(self):
         return f"{self.reviewer.username} → {self.reviewee.username} ({self.rating}★)"
+
+
+class UsedPhoneReport(models.Model):
+    """중고폰 신고 시스템"""
+
+    REPORT_TYPE_CHOICES = [
+        ('fake_listing', '허위매물'),
+        ('fraud', '사기'),
+        ('abusive_language', '욕설'),
+        ('inappropriate_behavior', '부적절한 행동'),
+        ('spam', '스팸/광고'),
+        ('other', '기타'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', '대기중'),
+        ('processing', '처리중'),
+        ('resolved', '해결됨'),
+        ('rejected', '거부됨'),
+    ]
+
+    # 신고 대상
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_used_phone_reports', verbose_name='신고대상')
+    reported_phone = models.ForeignKey('UsedPhone', on_delete=models.SET_NULL, null=True, blank=True, related_name='reports', verbose_name='신고상품')
+
+    # 신고자 정보
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submitted_used_phone_reports', verbose_name='신고자')
+
+    # 신고 내용
+    report_type = models.CharField(max_length=30, choices=REPORT_TYPE_CHOICES, verbose_name='신고유형')
+    description = models.TextField(verbose_name='신고내용')
+
+    # 처리 상태
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='처리상태')
+    admin_note = models.TextField(null=True, blank=True, verbose_name='관리자메모')
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_used_phone_reports', verbose_name='처리자')
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일시')
+
+    # 타임스탬프
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'used_phone_reports'
+        ordering = ['-created_at']
+        verbose_name = '중고폰 신고'
+        verbose_name_plural = '중고폰 신고'
+
+    def __str__(self):
+        return f"{self.reporter.username} → {self.reported_user.username} ({self.get_report_type_display()})"
+
+
+class UsedPhonePenalty(models.Model):
+    """중고폰 사용자 패널티 시스템"""
+
+    PENALTY_TYPE_CHOICES = [
+        ('auto_report', '신고 누적'),
+        ('manual_admin', '관리자 수동'),
+        ('trade_violation', '거래 위반'),
+        ('fake_listing', '허위매물'),
+        ('abusive_behavior', '악성 행위'),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', '활성'),
+        ('expired', '만료'),
+        ('revoked', '해제'),
+    ]
+
+    # 패널티 대상자
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_penalties', verbose_name='패널티대상')
+
+    # 패널티 정보
+    penalty_type = models.CharField(max_length=20, choices=PENALTY_TYPE_CHOICES, verbose_name='패널티유형')
+    reason = models.TextField(verbose_name='패널티사유')
+    duration_days = models.IntegerField(verbose_name='패널티일수')
+
+    # 관련 신고들
+    related_reports = models.ManyToManyField('UsedPhoneReport', blank=True, related_name='penalties', verbose_name='관련신고')
+
+    # 패널티 기간
+    start_date = models.DateTimeField(auto_now_add=True, verbose_name='시작일')
+    end_date = models.DateTimeField(verbose_name='종료일')
+
+    # 상태
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name='상태')
+
+    # 처리자 정보
+    issued_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='issued_used_phone_penalties', verbose_name='발령자')
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='revoked_used_phone_penalties', verbose_name='해제자')
+    revoked_at = models.DateTimeField(null=True, blank=True, verbose_name='해제일시')
+
+    # 타임스탬프
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'used_phone_penalties'
+        ordering = ['-created_at']
+        verbose_name = '중고폰 패널티'
+        verbose_name_plural = '중고폰 패널티'
+
+    def save(self, *args, **kwargs):
+        """패널티 저장 시 종료일 자동 계산"""
+        if not self.end_date and self.duration_days:
+            from django.utils import timezone
+            from datetime import timedelta
+            self.end_date = timezone.now() + timedelta(days=self.duration_days)
+        super().save(*args, **kwargs)
+
+    def is_active(self):
+        """현재 패널티가 활성 상태인지 확인"""
+        from django.utils import timezone
+        return (
+            self.status == 'active' and
+            self.end_date and
+            timezone.now() < self.end_date
+        )
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_penalty_type_display()} ({self.duration_days}일)"
