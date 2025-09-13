@@ -27,11 +27,17 @@ crontab -l
 
 # Django migrations 실행
 echo "Running Django migrations..."
-python manage.py migrate --noinput
+echo "================================================"
+python manage.py migrate --noinput || echo "Migration failed, but continuing..."
 
 # used_phones 앱 migration 명시적 실행
-echo "Running used_phones migrations..."
-python manage.py migrate used_phones --noinput
+echo "Running used_phones migrations specifically..."
+python manage.py migrate used_phones --noinput || echo "Used phones migration failed, but continuing..."
+
+# Migration 상태 확인
+echo "Current migration status:"
+python manage.py showmigrations used_phones | tail -10 || echo "Could not show migrations"
+echo "================================================"
 
 # Static files 수집 (이미 Dockerfile에서 했지만 안전을 위해)
 echo "Collecting static files..."
