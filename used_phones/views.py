@@ -438,6 +438,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         # 각 구매자별 최신 제안만 가져오기
         from django.db.models import Max, OuterRef, Subquery
         
+        # 디버깅: 모든 제안 상태 확인
+        all_offers = UsedPhoneOffer.objects.filter(phone=phone)
+        print(f"[DEBUG] Phone {phone.id} offers: {[(o.id, o.buyer.username, o.status) for o in all_offers]}")
+
         # 각 구매자의 최신 제안 ID를 가져옴
         latest_offer_ids = UsedPhoneOffer.objects.filter(
             phone=phone,
