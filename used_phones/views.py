@@ -735,6 +735,185 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'message': accepted_offer.message
         })
 
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='complete-trade')
+    def complete_trade(self, request, pk=None):
+        """거래 완료 처리 (판매자/구매자 양방향 확인)"""
+        phone = self.get_object()
+
+        # 거래중 상태 확인
+        if phone.status != 'trading':
+            return Response(
+                {'error': '거래중인 상품만 완료 처리할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 현재 거래 확인
+        accepted_offer = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='accepted'
+        ).first()
+
+        if not accepted_offer:
+            return Response(
+                {'error': '거래 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 거래 당사자 확인
+        is_seller = phone.seller == request.user
+        is_buyer = accepted_offer.buyer == request.user
+
+        if not is_seller and not is_buyer:
+            return Response(
+                {'error': '거래 당사자만 완료 처리할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 거래 레코드 찾기 또는 생성
+        transaction, created = UsedPhoneTransaction.objects.get_or_create(
+            phone=phone,
+            offer=accepted_offer,
+            defaults={
+                'seller': phone.seller,
+                'buyer': accepted_offer.buyer,
+                'final_price': accepted_offer.amount,
+                'status': 'reserved'
+            }
+        )
+
+        # 당근마켓 방식: 판매자만 거래완료 처리
+        if is_seller:
+            if not transaction.seller_confirmed:
+                # 판매자 확인 시 자동으로 구매자도 확인 처리
+                transaction.seller_confirmed = True
+                transaction.buyer_confirmed = True  # 자동 설정
+                transaction.seller_confirmed_at = timezone.now()
+                transaction.buyer_confirmed_at = timezone.now()
+                transaction.status = 'completed'
+                transaction.save()
+
+                # 상품 상태를 sold로 변경
+                phone.status = 'sold'
+                phone.sold_at = timezone.now()
+                phone.save(update_fields=['status', 'sold_at'])
+
+                return Response({
+                    'message': '거래가 완료되었습니다.',
+                    'status': 'completed',
+                    'transaction_id': transaction.id
+                })
+            else:
+                return Response({
+                    'message': '이미 거래가 완료되었습니다.',
+                    'status': 'already_completed'
+                })
+        elif is_buyer:
+            # 구매자는 거래완료 버튼 없음
+            return Response(
+                {'error': '구매자는 거래완료를 처리할 수 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='cancel-trade')
+    def cancel_trade(self, request, pk=None):
+        """거래 취소 처리 (판매자/구매자 모두 가능)"""
+        from .models import TradeCancellation
+
+        phone = self.get_object()
+
+        # 거래중 상태가 아니면 취소 불가
+        if phone.status != 'trading':
+            return Response(
+                {'error': '거래중인 상품만 취소할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 판매자가 이미 완료한 경우 취소 불가 (당근마켓 방식)
+        if phone.seller_completed_at:
+            return Response(
+                {'error': '판매자가 거래를 확정한 후에는 취소할 수 없습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 현재 수락된 제안 찾기
+        accepted_offer = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='accepted'
+        ).first()
+
+        if not accepted_offer:
+            return Response(
+                {'error': '거래 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 판매자 또는 구매자만 취소 가능
+        is_seller = phone.seller == request.user
+        is_buyer = accepted_offer.buyer == request.user
+
+        if not is_seller and not is_buyer:
+            return Response(
+                {'error': '거래 당사자만 취소할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 취소 사유 받기
+        reason = request.data.get('reason', 'other')
+        custom_reason = request.data.get('custom_reason', '')
+        return_to_sale = request.data.get('return_to_sale', True)  # 판매자의 경우 판매중으로 전환 여부
+
+        # 취소 기록 저장
+        TradeCancellation.objects.create(
+            phone=phone,
+            offer=accepted_offer,
+            cancelled_by='seller' if is_seller else 'buyer',
+            canceller=request.user,
+            reason=reason,
+            custom_reason=custom_reason if reason == 'other' else None
+        )
+
+        # 취소 처리
+        if is_buyer:
+            # 구매자가 취소 - 상품은 자동으로 판매중으로
+            phone.status = 'active'
+            phone.save(update_fields=['status'])
+
+            # 해당 제안만 취소 상태로
+            accepted_offer.status = 'cancelled'
+            accepted_offer.save()
+
+            message = '구매자가 거래를 취소했습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
+        else:
+            # 판매자가 취소
+            if return_to_sale:
+                # 판매중으로 전환
+                phone.status = 'active'
+                phone.save(update_fields=['status'])
+
+                # 제안을 취소 상태로 (다른 제안들은 pending 유지)
+                accepted_offer.status = 'cancelled'
+                accepted_offer.save()
+
+                message = '거래가 취소되었습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
+            else:
+                # 상품 삭제
+                phone.status = 'deleted'
+                phone.save(update_fields=['status'])
+
+                # 모든 제안을 취소 상태로 변경
+                UsedPhoneOffer.objects.filter(
+                    phone=phone,
+                    status__in=['pending', 'accepted']
+                ).update(status='cancelled')
+
+                message = '거래가 취소되고 상품이 삭제되었습니다.'
+
+        return Response({
+            'message': message,
+            'status': phone.status,
+            'cancelled_by': 'buyer' if is_buyer else 'seller'
+        })
+
 
 
 class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
@@ -937,185 +1116,6 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         return Response({
             "message": "제안이 취소되었습니다.",
             "status": offer.status
-        })
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='complete-trade')
-    def complete_trade(self, request, pk=None):
-        """거래 완료 처리 (판매자/구매자 양방향 확인)"""
-        phone = self.get_object()
-
-        # 거래중 상태 확인
-        if phone.status != 'trading':
-            return Response(
-                {'error': '거래중인 상품만 완료 처리할 수 있습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 현재 거래 확인
-        accepted_offer = UsedPhoneOffer.objects.filter(
-            phone=phone,
-            status='accepted'
-        ).first()
-
-        if not accepted_offer:
-            return Response(
-                {'error': '거래 정보를 찾을 수 없습니다.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # 거래 당사자 확인
-        is_seller = phone.seller == request.user
-        is_buyer = accepted_offer.buyer == request.user
-
-        if not is_seller and not is_buyer:
-            return Response(
-                {'error': '거래 당사자만 완료 처리할 수 있습니다.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # 거래 레코드 찾기 또는 생성
-        transaction, created = UsedPhoneTransaction.objects.get_or_create(
-            phone=phone,
-            offer=accepted_offer,
-            defaults={
-                'seller': phone.seller,
-                'buyer': accepted_offer.buyer,
-                'final_price': accepted_offer.amount,
-                'status': 'reserved'
-            }
-        )
-
-        # 당근마켓 방식: 판매자만 거래완료 처리
-        if is_seller:
-            if not transaction.seller_confirmed:
-                # 판매자 확인 시 자동으로 구매자도 확인 처리
-                transaction.seller_confirmed = True
-                transaction.buyer_confirmed = True  # 자동 설정
-                transaction.seller_confirmed_at = timezone.now()
-                transaction.buyer_confirmed_at = timezone.now()
-                transaction.status = 'completed'
-                transaction.save()
-
-                # 상품 상태를 sold로 변경
-                phone.status = 'sold'
-                phone.sold_at = timezone.now()
-                phone.save(update_fields=['status', 'sold_at'])
-
-                return Response({
-                    'message': '거래가 완료되었습니다.',
-                    'status': 'completed',
-                    'transaction_id': transaction.id
-                })
-            else:
-                return Response({
-                    'message': '이미 거래가 완료되었습니다.',
-                    'status': 'already_completed'
-                })
-        elif is_buyer:
-            # 구매자는 거래완료 버튼 없음
-            return Response(
-                {'error': '구매자는 거래완료를 처리할 수 없습니다.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='cancel-trade')
-    def cancel_trade(self, request, pk=None):
-        """거래 취소 처리 (판매자/구매자 모두 가능)"""
-        from .models import TradeCancellation
-        
-        phone = self.get_object()
-        
-        # 거래중 상태가 아니면 취소 불가
-        if phone.status != 'trading':
-            return Response(
-                {'error': '거래중인 상품만 취소할 수 있습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 판매자가 이미 완료한 경우 취소 불가 (당근마켓 방식)
-        if phone.seller_completed_at:
-            return Response(
-                {'error': '판매자가 거래를 확정한 후에는 취소할 수 없습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 현재 수락된 제안 찾기
-        accepted_offer = UsedPhoneOffer.objects.filter(
-            phone=phone,
-            status='accepted'
-        ).first()
-        
-        if not accepted_offer:
-            return Response(
-                {'error': '거래 정보를 찾을 수 없습니다.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # 판매자 또는 구매자만 취소 가능
-        is_seller = phone.seller == request.user
-        is_buyer = accepted_offer.buyer == request.user
-        
-        if not is_seller and not is_buyer:
-            return Response(
-                {'error': '거래 당사자만 취소할 수 있습니다.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # 취소 사유 받기
-        reason = request.data.get('reason', 'other')
-        custom_reason = request.data.get('custom_reason', '')
-        return_to_sale = request.data.get('return_to_sale', True)  # 판매자의 경우 판매중으로 전환 여부
-        
-        # 취소 기록 저장
-        TradeCancellation.objects.create(
-            phone=phone,
-            offer=accepted_offer,
-            cancelled_by='seller' if is_seller else 'buyer',
-            canceller=request.user,
-            reason=reason,
-            custom_reason=custom_reason if reason == 'other' else None
-        )
-        
-        # 취소 처리
-        if is_buyer:
-            # 구매자가 취소 - 상품은 자동으로 판매중으로
-            phone.status = 'active'
-            phone.save(update_fields=['status'])
-            
-            # 해당 제안만 취소 상태로
-            accepted_offer.status = 'cancelled'
-            accepted_offer.save()
-            
-            message = '구매자가 거래를 취소했습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
-        else:
-            # 판매자가 취소
-            if return_to_sale:
-                # 판매중으로 전환
-                phone.status = 'active'
-                phone.save(update_fields=['status'])
-                
-                # 제안을 취소 상태로 (다른 제안들은 pending 유지)
-                accepted_offer.status = 'cancelled'
-                accepted_offer.save()
-                
-                message = '거래가 취소되었습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
-            else:
-                # 상품 삭제
-                phone.status = 'deleted'
-                phone.save(update_fields=['status'])
-                
-                # 모든 제안을 취소 상태로 변경
-                UsedPhoneOffer.objects.filter(
-                    phone=phone,
-                    status__in=['pending', 'accepted']
-                ).update(status='cancelled')
-                
-                message = '거래가 취소되고 상품이 삭제되었습니다.'
-        
-        return Response({
-            'message': message,
-            'status': phone.status,
-            'cancelled_by': 'buyer' if is_buyer else 'seller'
         })
 
 
