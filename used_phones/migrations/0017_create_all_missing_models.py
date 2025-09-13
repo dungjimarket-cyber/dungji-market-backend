@@ -38,24 +38,4 @@ class Migration(migrations.Migration):
                 'ordering': ['-created_at'],
             },
         ),
-        
-        # TradeCancellation - 거래 취소 기록
-        migrations.CreateModel(
-            name='TradeCancellation',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('reason', models.CharField(choices=[('change_mind', '단순 변심'), ('found_better', '더 나은 조건 발견'), ('no_response', '상대방 응답 없음'), ('condition_mismatch', '상품 상태 불일치'), ('price_disagreement', '가격 협의 실패'), ('other', '기타')], max_length=50, verbose_name='취소 사유')),
-                ('detail', models.TextField(blank=True, null=True, verbose_name='상세 사유')),
-                ('cancelled_by', models.CharField(choices=[('buyer', '구매자'), ('seller', '판매자')], max_length=10, verbose_name='취소 요청자')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='취소일시')),
-                ('transaction', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='cancellation', to='used_phones.usedphonetransaction', verbose_name='거래')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='trade_cancellations', to=settings.AUTH_USER_MODEL, verbose_name='취소 요청자')),
-            ],
-            options={
-                'verbose_name': '거래 취소 기록',
-                'verbose_name_plural': '거래 취소 기록',
-                'db_table': 'trade_cancellations',
-                'ordering': ['-created_at'],
-            },
-        ),
     ]
