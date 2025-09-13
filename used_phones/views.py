@@ -886,6 +886,14 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             accepted_offer.status = 'cancelled'
             accepted_offer.save()
 
+            # offer_count 업데이트 (pending 상태만 카운트)
+            unique_buyers_count = UsedPhoneOffer.objects.filter(
+                phone=phone,
+                status='pending'
+            ).values('buyer').distinct().count()
+            phone.offer_count = unique_buyers_count
+            phone.save(update_fields=['offer_count'])
+
             message = '구매자가 거래를 취소했습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
         else:
             # 판매자가 취소
@@ -897,6 +905,14 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 # 제안을 취소 상태로 (다른 제안들은 pending 유지)
                 accepted_offer.status = 'cancelled'
                 accepted_offer.save()
+
+                # offer_count 업데이트 (pending 상태만 카운트)
+                unique_buyers_count = UsedPhoneOffer.objects.filter(
+                    phone=phone,
+                    status='pending'
+                ).values('buyer').distinct().count()
+                phone.offer_count = unique_buyers_count
+                phone.save(update_fields=['offer_count'])
 
                 message = '거래가 취소되었습니다. 상품이 다시 판매중 상태로 변경되었습니다.'
             else:
@@ -947,12 +963,13 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         # 제안 삭제
         offer.delete()
         
-        # offer_count 업데이트
+        # offer_count 업데이트 (pending 상태만 카운트)
         phone = offer.phone
         unique_buyers_count = UsedPhoneOffer.objects.filter(
-            phone=phone
+            phone=phone,
+            status='pending'  # pending 상태만 카운트
         ).values('buyer').distinct().count()
-        
+
         phone.offer_count = unique_buyers_count
         phone.save(update_fields=['offer_count'])
         
