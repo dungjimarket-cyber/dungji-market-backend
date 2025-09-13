@@ -268,7 +268,7 @@ class TradeCancellation(models.Model):
 
 class UsedPhoneDeletePenalty(models.Model):
     """중고폰 삭제 패널티"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_penalties')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_delete_penalties')
     phone_model = models.CharField(max_length=100, verbose_name='삭제된 상품명')
     had_offers = models.BooleanField(default=False, verbose_name='견적 존재 여부')
     penalty_end = models.DateTimeField(verbose_name='패널티 종료 시간')
@@ -452,7 +452,7 @@ class UsedPhonePenalty(models.Model):
     ]
 
     # 패널티 대상자
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_penalties', verbose_name='패널티대상')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_report_penalties', verbose_name='패널티대상')
 
     # 패널티 정보
     penalty_type = models.CharField(max_length=20, choices=PENALTY_TYPE_CHOICES, verbose_name='패널티유형')
