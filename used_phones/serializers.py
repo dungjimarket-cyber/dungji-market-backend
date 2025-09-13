@@ -3,7 +3,10 @@ Used Phones Serializers
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer, UsedPhoneRegion
+from .models import (
+    UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
+    UsedPhoneRegion, UsedPhoneTransaction, UsedPhoneReview
+)
 from api.models import Region
 
 User = get_user_model()
@@ -183,23 +186,56 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         exclude = ['seller', 'view_count', 'favorite_count', 'offer_count', 
                   'status', 'sold_at']
     
+    def validate_price(self, value):
+        """가격 유효성 검사 - 천원 단위"""
+        if value % 1000 != 0:
+            raise serializers.ValidationError("가격은 천원 단위로 입력해주세요.")
+        if value < 1000:
+            raise serializers.ValidationError("최소 가격은 1,000원입니다.")
+        if value > 9900000:
+            raise serializers.ValidationError("최대 가격은 990만원입니다.")
+        return value
+
+    def validate_min_offer_price(self, value):
+        """최소 제안가 유효성 검사 - 천원 단위"""
+        if value is not None:
+            if value % 1000 != 0:
+                raise serializers.ValidationError("가격은 천원 단위로 입력해주세요.")
+            if value < 1000:
+                raise serializers.ValidationError("최소 가격은 1,000원입니다.")
+            if value > 9900000:
+                raise serializers.ValidationError("최대 가격은 990만원입니다.")
+        return value
+
     def validate_images(self, value):
         """이미지 유효성 검사"""
         if len(value) > 5:
             raise serializers.ValidationError("최대 5개의 이미지만 업로드할 수 있습니다.")
-        
+
         # 이미지 크기 및 형식 검사
         for image in value:
             # 파일 크기 검사 (3MB 제한)
             if image.size > 3 * 1024 * 1024:
                 raise serializers.ValidationError(f"이미지 파일 크기는 3MB를 초과할 수 없습니다. ({image.name})")
-            
+
             # 파일 형식 검사
             allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
             if hasattr(image, 'content_type') and image.content_type not in allowed_types:
                 raise serializers.ValidationError(f"지원하지 않는 이미지 형식입니다. JPEG, PNG, WebP만 지원됩니다. ({image.name})")
-        
+
         return value
+
+    def validate(self, data):
+        """전체 유효성 검사"""
+        price = data.get('price')
+        min_offer_price = data.get('min_offer_price')
+
+        if min_offer_price is not None and price and min_offer_price >= price:
+            raise serializers.ValidationError({
+                'min_offer_price': '최소 제안가는 즉시 판매가보다 낮아야 합니다.'
+            })
+
+        return data
     
     def create(self, validated_data):
         """중고폰 생성 및 이미지 처리"""
@@ -306,6 +342,10 @@ class UsedPhoneOfferSerializer(serializers.ModelSerializer):
                            'created_at', 'updated_at']
     
     def validate_amount(self, value):
+        # 천원 단위 검증
+        if value % 1000 != 0:
+            raise serializers.ValidationError("가격은 천원 단위로 입력해주세요.")
+
         phone = self.context.get('phone')
         if phone and phone.min_offer_price and value < phone.min_offer_price:
             raise serializers.ValidationError(
@@ -317,8 +357,54 @@ class UsedPhoneOfferSerializer(serializers.ModelSerializer):
 class UsedPhoneFavoriteSerializer(serializers.ModelSerializer):
     """찜 시리얼라이저"""
     phone = UsedPhoneListSerializer(read_only=True)
-    
+
     class Meta:
         model = UsedPhoneFavorite
         fields = ['id', 'phone', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class UsedPhoneTransactionSerializer(serializers.ModelSerializer):
+    """거래 시리얼라이저"""
+    phone_model = serializers.CharField(source='phone.model', read_only=True)
+    seller_username = serializers.CharField(source='seller.username', read_only=True)
+    buyer_username = serializers.CharField(source='buyer.username', read_only=True)
+
+    class Meta:
+        model = UsedPhoneTransaction
+        fields = [
+            'id', 'phone', 'phone_model', 'offer', 'seller', 'seller_username',
+            'buyer', 'buyer_username', 'status', 'seller_confirmed', 'buyer_confirmed',
+            'seller_confirmed_at', 'buyer_confirmed_at', 'final_price',
+            'meeting_date', 'meeting_location', 'created_at', 'updated_at', 'completed_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'completed_at']
+
+
+class UsedPhoneReviewSerializer(serializers.ModelSerializer):
+    """거래 후기 시리얼라이저"""
+    reviewer_username = serializers.CharField(source='reviewer.username', read_only=True)
+    reviewee_username = serializers.CharField(source='reviewee.username', read_only=True)
+
+    class Meta:
+        model = UsedPhoneReview
+        fields = [
+            'id', 'transaction', 'reviewer', 'reviewer_username',
+            'reviewee', 'reviewee_username', 'rating', 'comment',
+            'is_punctual', 'is_friendly', 'is_honest', 'is_fast_response',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'reviewer', 'reviewee', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        """거래 완료 후에만 리뷰 작성 가능"""
+        transaction = data.get('transaction')
+        if transaction and transaction.status != 'completed':
+            raise serializers.ValidationError("거래가 완료된 후에만 리뷰를 작성할 수 있습니다.")
+
+        # 리뷰어가 거래 당사자인지 확인
+        request_user = self.context['request'].user
+        if transaction.seller != request_user and transaction.buyer != request_user:
+            raise serializers.ValidationError("해당 거래의 당사자만 리뷰를 작성할 수 있습니다.")
+
+        return data

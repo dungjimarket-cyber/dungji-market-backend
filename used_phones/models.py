@@ -50,11 +50,11 @@ class UsedPhone(models.Model):
     ]
     
     BATTERY_CHOICES = [
-        ('excellent', '90% 이상'),
-        ('good', '80~89%'),
-        ('fair', '70~79%'),
-        ('poor', '70% 미만'),
-        ('unknown', '확인불가'),
+        ('excellent', '최상'),
+        ('good', '좋음'),
+        ('fair', '보통'),
+        ('poor', '나쁨'),
+        ('defective', '불량'),
     ]
     
     STATUS_CHOICES = [
@@ -81,7 +81,7 @@ class UsedPhone(models.Model):
     # 상태 정보
     condition_grade = models.CharField(max_length=1, choices=CONDITION_CHOICES, verbose_name='상태등급')
     condition_description = models.TextField(null=True, blank=True, verbose_name='상태설명')
-    battery_status = models.CharField(max_length=20, choices=BATTERY_CHOICES, default='unknown', verbose_name='배터리상태')
+    battery_status = models.CharField(max_length=20, choices=BATTERY_CHOICES, default='good', verbose_name='배터리상태')
     
     # 구성품
     body_only = models.BooleanField(default=False, verbose_name='본체만')
@@ -273,14 +273,112 @@ class UsedPhoneDeletePenalty(models.Model):
     had_offers = models.BooleanField(default=False, verbose_name='견적 존재 여부')
     penalty_end = models.DateTimeField(verbose_name='패널티 종료 시간')
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'used_phone_delete_penalties'
         ordering = ['-created_at']
         verbose_name = '삭제 패널티'
         verbose_name_plural = '삭제 패널티'
-        
+
     def is_active(self):
         """패널티가 현재 활성 상태인지 확인"""
         from django.utils import timezone
         return timezone.now() < self.penalty_end
+
+
+class UsedPhoneTransaction(models.Model):
+    """중고폰 거래 기록"""
+
+    STATUS_CHOICES = [
+        ('reserved', '예약중'),
+        ('completed', '거래완료'),
+        ('cancelled', '거래취소'),
+    ]
+
+    phone = models.ForeignKey('UsedPhone', on_delete=models.CASCADE, related_name='transactions')
+    offer = models.ForeignKey('UsedPhoneOffer', on_delete=models.CASCADE, related_name='transaction')
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sold_transactions')
+    buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bought_transactions')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='reserved')
+
+    # 거래 완료 확인
+    seller_confirmed = models.BooleanField(default=False, verbose_name='판매자 확인')
+    buyer_confirmed = models.BooleanField(default=False, verbose_name='구매자 확인')
+    seller_confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name='판매자 확인 시간')
+    buyer_confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name='구매자 확인 시간')
+
+    # 거래 정보
+    final_price = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9900000)], verbose_name='최종거래가격')
+    meeting_date = models.DateTimeField(null=True, blank=True, verbose_name='거래일시')
+    meeting_location = models.CharField(max_length=200, null=True, blank=True, verbose_name='거래장소')
+
+    # 타임스탬프
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='거래완료일')
+
+    class Meta:
+        db_table = 'used_phone_transactions'
+        ordering = ['-created_at']
+        verbose_name = '중고폰 거래'
+        verbose_name_plural = '중고폰 거래'
+
+    def complete_trade(self):
+        """양방향 확인 시 거래 완료 처리"""
+        if self.seller_confirmed and self.buyer_confirmed:
+            from django.utils import timezone
+            self.status = 'completed'
+            self.completed_at = timezone.now()
+            self.save()
+
+            # 상품 상태 업데이트
+            self.phone.status = 'sold'
+            self.phone.sold_at = timezone.now()
+            self.phone.save()
+
+            # 제안 상태 업데이트
+            self.offer.status = 'accepted'
+            self.offer.save()
+
+            return True
+        return False
+
+
+class UsedPhoneReview(models.Model):
+    """중고폰 거래 후기"""
+
+    RATING_CHOICES = [
+        (5, '매우 만족'),
+        (4, '만족'),
+        (3, '보통'),
+        (2, '불만족'),
+        (1, '매우 불만족'),
+    ]
+
+    transaction = models.ForeignKey('UsedPhoneTransaction', on_delete=models.CASCADE, related_name='reviews')
+    reviewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='written_used_phone_reviews')
+    reviewee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_used_phone_reviews')
+
+    # 평가 내용
+    rating = models.IntegerField(choices=RATING_CHOICES, verbose_name='평점')
+    comment = models.TextField(null=True, blank=True, verbose_name='후기내용')
+
+    # 평가 항목 (선택적)
+    is_punctual = models.BooleanField(null=True, blank=True, verbose_name='시간약속준수')
+    is_friendly = models.BooleanField(null=True, blank=True, verbose_name='친절함')
+    is_honest = models.BooleanField(null=True, blank=True, verbose_name='정직한거래')
+    is_fast_response = models.BooleanField(null=True, blank=True, verbose_name='빠른응답')
+
+    # 타임스탬프
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'used_phone_reviews'
+        ordering = ['-created_at']
+        verbose_name = '중고폰 거래 후기'
+        verbose_name_plural = '중고폰 거래 후기'
+        unique_together = ('transaction', 'reviewer')  # 한 거래당 한 번만 평가 가능
+
+    def __str__(self):
+        return f"{self.reviewer.username} → {self.reviewee.username} ({self.rating}★)"

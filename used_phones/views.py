@@ -7,17 +7,21 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, F
+from django.db.models import Q, F, Avg, Count
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 import logging
-from .models import UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer, UsedPhoneDeletePenalty
+from .models import (
+    UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
+    UsedPhoneDeletePenalty, UsedPhoneTransaction, UsedPhoneReview, TradeCancellation
+)
 
 logger = logging.getLogger(__name__)
 from .serializers import (
-    UsedPhoneListSerializer, UsedPhoneDetailSerializer, 
+    UsedPhoneListSerializer, UsedPhoneDetailSerializer,
     UsedPhoneCreateSerializer, UsedPhoneOfferSerializer,
-    UsedPhoneFavoriteSerializer
+    UsedPhoneFavoriteSerializer, UsedPhoneTransactionSerializer,
+    UsedPhoneReviewSerializer
 )
 
 
@@ -935,84 +939,84 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             "status": offer.status
         })
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='seller-complete')
-    def seller_complete(self, request, pk=None):
-        """판매자 거래 완료 처리"""
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='complete-trade')
+    def complete_trade(self, request, pk=None):
+        """거래 완료 처리 (판매자/구매자 양방향 확인)"""
         phone = self.get_object()
-        
-        # 판매자만 가능
-        if phone.seller != request.user:
-            return Response(
-                {'error': '판매자만 판매 완료할 수 있습니다.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # 거래중 상태가 아니면 완료 불가
+
+        # 거래중 상태 확인
         if phone.status != 'trading':
             return Response(
                 {'error': '거래중인 상품만 완료 처리할 수 있습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # 이미 판매 완료한 경우
-        if phone.seller_completed_at:
-            return Response(
-                {'error': '이미 판매 완료 처리하셨습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 판매자 완료 시간 기록 및 상태를 판매완료로 변경
-        phone.seller_completed_at = timezone.now()
-        phone.status = 'sold'
-        phone.sold_at = timezone.now()
-        phone.save(update_fields=['seller_completed_at', 'status', 'sold_at'])
-        
-        return Response({
-            'message': '판매가 완료되었습니다.',
-            'status': phone.status,
-            'seller_completed': True
-        })
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='buyer-complete')
-    def buyer_complete(self, request, pk=None):
-        """구매자 거래 완료 처리"""
-        phone = self.get_object()
-        
-        # 판매자가 먼저 완료해야 구매자가 완료할 수 있음
-        if phone.status != 'sold' or not phone.seller_completed_at:
-            return Response(
-                {'error': '판매자가 판매 완료한 후에 구매 완료할 수 있습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # 구매자 확인 - 수락된 제안의 구매자인지 확인
+
+        # 현재 거래 확인
         accepted_offer = UsedPhoneOffer.objects.filter(
             phone=phone,
-            buyer=request.user,
             status='accepted'
         ).first()
-        
+
         if not accepted_offer:
             return Response(
-                {'error': '구매자만 구매 완료할 수 있습니다.'},
+                {'error': '거래 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 거래 당사자 확인
+        is_seller = phone.seller == request.user
+        is_buyer = accepted_offer.buyer == request.user
+
+        if not is_seller and not is_buyer:
+            return Response(
+                {'error': '거래 당사자만 완료 처리할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
-        # 이미 구매 완료한 경우
-        if phone.buyer_completed_at:
+
+        # 거래 레코드 찾기 또는 생성
+        transaction, created = UsedPhoneTransaction.objects.get_or_create(
+            phone=phone,
+            offer=accepted_offer,
+            defaults={
+                'seller': phone.seller,
+                'buyer': accepted_offer.buyer,
+                'final_price': accepted_offer.amount,
+                'status': 'reserved'
+            }
+        )
+
+        # 당근마켓 방식: 판매자만 거래완료 처리
+        if is_seller:
+            if not transaction.seller_confirmed:
+                # 판매자 확인 시 자동으로 구매자도 확인 처리
+                transaction.seller_confirmed = True
+                transaction.buyer_confirmed = True  # 자동 설정
+                transaction.seller_confirmed_at = timezone.now()
+                transaction.buyer_confirmed_at = timezone.now()
+                transaction.status = 'completed'
+                transaction.save()
+
+                # 상품 상태를 sold로 변경
+                phone.status = 'sold'
+                phone.sold_at = timezone.now()
+                phone.save(update_fields=['status', 'sold_at'])
+
+                return Response({
+                    'message': '거래가 완료되었습니다.',
+                    'status': 'completed',
+                    'transaction_id': transaction.id
+                })
+            else:
+                return Response({
+                    'message': '이미 거래가 완료되었습니다.',
+                    'status': 'already_completed'
+                })
+        elif is_buyer:
+            # 구매자는 거래완료 버튼 없음
             return Response(
-                {'error': '이미 구매 완료 처리하셨습니다.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': '구매자는 거래완료를 처리할 수 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
             )
-        
-        # 구매자 완료 시간 기록
-        phone.buyer_completed_at = timezone.now()
-        phone.save(update_fields=['buyer_completed_at'])
-        
-        return Response({
-            'message': '구매가 완료되었습니다.',
-            'buyer_completed': True
-        })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], url_path='cancel-trade')
     def cancel_trade(self, request, pk=None):
@@ -1113,6 +1117,165 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             'status': phone.status,
             'cancelled_by': 'buyer' if is_buyer else 'seller'
         })
+
+
+class UsedPhoneTransactionViewSet(viewsets.ModelViewSet):
+    """중고폰 거래 ViewSet"""
+    queryset = UsedPhoneTransaction.objects.all()
+    serializer_class = UsedPhoneTransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """현재 사용자의 거래만 반환"""
+        user = self.request.user
+        return UsedPhoneTransaction.objects.filter(
+            Q(seller=user) | Q(buyer=user)
+        ).select_related('phone', 'offer', 'seller', 'buyer')
+
+    @action(detail=False, methods=['get'], url_path='my-transactions')
+    def my_transactions(self, request):
+        """내 거래 목록"""
+        queryset = self.get_queryset().order_by('-created_at')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='confirm')
+    def confirm(self, request, pk=None):
+        """거래 확인"""
+        transaction = self.get_object()
+
+        # 거래 당사자 확인
+        is_seller = transaction.seller == request.user
+        is_buyer = transaction.buyer == request.user
+
+        if not is_seller and not is_buyer:
+            return Response(
+                {'error': '거래 당사자만 확인할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 확인 처리
+        if is_seller:
+            transaction.seller_confirmed = True
+            transaction.seller_confirmed_at = timezone.now()
+        else:
+            transaction.buyer_confirmed = True
+            transaction.buyer_confirmed_at = timezone.now()
+
+        transaction.save()
+
+        # 양방향 확인 시 거래 완료
+        if transaction.complete_trade():
+            return Response({
+                'message': '거래가 완료되었습니다.',
+                'status': 'completed'
+            })
+
+        return Response({
+            'message': '거래 확인이 등록되었습니다.',
+            'seller_confirmed': transaction.seller_confirmed,
+            'buyer_confirmed': transaction.buyer_confirmed
+        })
+
+
+class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
+    """중고폰 거래 후기 ViewSet"""
+    queryset = UsedPhoneReview.objects.all()
+    serializer_class = UsedPhoneReviewSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """현재 사용자 관련 리뷰만 반환"""
+        user = self.request.user
+        return UsedPhoneReview.objects.filter(
+            Q(reviewer=user) | Q(reviewee=user)
+        ).select_related('transaction', 'reviewer', 'reviewee')
+
+    def create(self, request, *args, **kwargs):
+        """리뷰 작성"""
+        transaction_id = request.data.get('transaction')
+
+        try:
+            transaction = UsedPhoneTransaction.objects.get(id=transaction_id)
+        except UsedPhoneTransaction.DoesNotExist:
+            return Response(
+                {'error': '거래를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 거래 완료 확인
+        if transaction.status != 'completed':
+            return Response(
+                {'error': '거래가 완료된 후에만 리뷰를 작성할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 리뷰어와 리뷰이 결정
+        if transaction.seller == request.user:
+            reviewee = transaction.buyer
+        elif transaction.buyer == request.user:
+            reviewee = transaction.seller
+        else:
+            return Response(
+                {'error': '거래 당사자만 리뷰를 작성할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 이미 리뷰를 작성했는지 확인
+        existing_review = UsedPhoneReview.objects.filter(
+            transaction=transaction,
+            reviewer=request.user
+        ).first()
+
+        if existing_review:
+            return Response(
+                {'error': '이미 리뷰를 작성하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 리뷰 생성
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(
+            transaction=transaction,
+            reviewer=request.user,
+            reviewee=reviewee
+        )
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='user-stats')
+    def user_stats(self, request):
+        """사용자 평가 통계"""
+        user_id = request.query_params.get('user_id', request.user.id)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': '사용자를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 받은 리뷰 통계
+        reviews = UsedPhoneReview.objects.filter(reviewee=user)
+        stats = reviews.aggregate(
+            avg_rating=Avg('rating'),
+            total_reviews=Count('id'),
+            five_star=Count('id', filter=Q(rating=5)),
+            four_star=Count('id', filter=Q(rating=4)),
+            three_star=Count('id', filter=Q(rating=3)),
+            two_star=Count('id', filter=Q(rating=2)),
+            one_star=Count('id', filter=Q(rating=1))
+        )
+
+        # 평가 항목 통계
+        stats['is_punctual_count'] = reviews.filter(is_punctual=True).count()
+        stats['is_friendly_count'] = reviews.filter(is_friendly=True).count()
+        stats['is_honest_count'] = reviews.filter(is_honest=True).count()
+        stats['is_fast_response_count'] = reviews.filter(is_fast_response=True).count()
+
+        return Response(stats)
 
 
 class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
