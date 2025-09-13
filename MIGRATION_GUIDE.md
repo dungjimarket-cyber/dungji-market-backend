@@ -1,5 +1,24 @@
 # 마이그레이션 가이드
 
+## ⚠️ 긴급: 2025년 9월 14일 - Database Migration 필요
+**오류**: `relation "used_phone_reviews" does not exist`
+
+### 즉시 실행 필요한 명령어:
+```bash
+# 1. Docker 컨테이너 접속
+docker exec -it dungjimarket-backend-1 bash
+
+# 2. Migration 실행
+python manage.py migrate used_phones
+python manage.py migrate
+
+# 3. 컨테이너 나가기
+exit
+
+# 4. 서버 재시작
+docker-compose restart backend
+```
+
 ## 2025년 9월 11일 - 중고폰 거래 시스템 업데이트
 
 ### 1. 서버 접속
