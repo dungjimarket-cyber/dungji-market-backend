@@ -76,6 +76,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     region_name = serializers.SerializerMethodField()
     regions = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
+    offer_count = serializers.SerializerMethodField()  # offer_count를 동적으로 계산
     
     class Meta:
         model = UsedPhone
@@ -123,6 +124,14 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             if accepted_offer:
                 return accepted_offer.amount
         return None
+
+    def get_offer_count(self, obj):
+        """실시간으로 pending 상태의 유니크한 구매자 수 계산"""
+        from .models import UsedPhoneOffer
+        return UsedPhoneOffer.objects.filter(
+            phone=obj,
+            status='pending'
+        ).values('buyer').distinct().count()
 
 
 class UsedPhoneDetailSerializer(serializers.ModelSerializer):
