@@ -806,7 +806,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             defaults={
                 'seller': phone.seller,
                 'buyer': accepted_offer.buyer,
-                'final_price': accepted_offer.offered_price,
+                'final_price': accepted_offer.amount,  # amount로 수정
                 'status': 'trading'
             }
         )
@@ -883,7 +883,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 offer=accepted_offer,
                 seller=phone.seller,
                 buyer=accepted_offer.buyer,
-                final_price=accepted_offer.offered_price,
+                final_price=accepted_offer.amount,
                 status='completed' if phone.status == 'sold' else 'trading',
                 seller_confirmed=True if phone.status == 'sold' else False,
                 buyer_confirmed=True if phone.status == 'sold' else False,
@@ -1203,7 +1203,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                     offer=offer,
                     seller=offer.phone.seller,
                     buyer=offer.buyer,
-                    final_price=offer.offered_price,
+                    final_price=offer.amount,
                     status='trading'
                 )
 
