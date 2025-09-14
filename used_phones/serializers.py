@@ -145,10 +145,16 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     buyer_id = serializers.SerializerMethodField()
     buyer = serializers.SerializerMethodField()
     transaction_id = serializers.SerializerMethodField()
+    final_price = serializers.SerializerMethodField()
 
     class Meta:
         model = UsedPhone
-        fields = '__all__'
+        fields = ['id', 'seller', 'brand', 'model_name', 'storage', 'condition',
+                  'battery_status', 'price', 'accept_offers', 'description',
+                  'status', 'view_count', 'favorite_count', 'offer_count',
+                  'sold_at', 'created_at', 'updated_at', 'images', 'is_favorite',
+                  'region_name', 'regions', 'buyer_id', 'buyer', 'transaction_id',
+                  'final_price']
         read_only_fields = ['id', 'seller', 'view_count', 'favorite_count',
                            'offer_count', 'created_at', 'updated_at']
     
@@ -218,6 +224,19 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
             ).exclude(status='cancelled').order_by('-created_at').first()
             if transaction:
                 return transaction.id
+        return None
+
+    def get_final_price(self, obj):
+        """거래완료된 경우 실제 거래 금액 반환"""
+        if obj.status == 'sold':
+            # 수락된 제안의 금액을 찾기
+            from .models import UsedPhoneOffer
+            accepted_offer = UsedPhoneOffer.objects.filter(
+                phone=obj,
+                status='accepted'
+            ).first()
+            if accepted_offer:
+                return accepted_offer.offered_price
         return None
 
 
