@@ -6,7 +6,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UsedPhoneViewSet, UsedPhoneOfferViewSet, UsedPhoneFavoriteViewSet,
     UsedPhoneTransactionViewSet, UsedPhoneReviewViewSet, UsedPhoneReportViewSet,
-    UsedPhonePenaltyViewSet, UserRatingView
+    UsedPhonePenaltyViewSet, UserRatingView, create_simple_review
 )
 
 router = DefaultRouter()
@@ -23,4 +23,5 @@ app_name = 'used_phones'
 urlpatterns = [
     path('', include(router.urls)),
     path('users/<int:user_id>/rating/', UserRatingView.as_view(), name='user-rating'),
+    path('reviews/simple/', create_simple_review, name='simple-review'),  # 새로운 간단한 리뷰 API
 ]

@@ -1686,3 +1686,108 @@ class UserRatingView(APIView):
                 {"error": "사용자를 찾을 수 없습니다."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+# 간단한 리뷰 작성 API - 기존 ViewSet과 별도로 작동
+from rest_framework.decorators import api_view, permission_classes
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_simple_review(request):
+    """
+    간단한 리뷰 작성 API
+    기존 ViewSet이 작동하지 않을 때 대체용
+    """
+    print(f"[SIMPLE REVIEW] Request data: {request.data}")
+    print(f"[SIMPLE REVIEW] User: {request.user}")
+
+    try:
+        transaction_id = request.data.get('transaction')
+        rating = request.data.get('rating', 5)
+        comment = request.data.get('comment', '')
+
+        # transaction_id 검증
+        if not transaction_id:
+            return Response(
+                {'error': 'transaction_id가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Transaction 찾기
+        try:
+            transaction = UsedPhoneTransaction.objects.get(id=transaction_id)
+        except UsedPhoneTransaction.DoesNotExist:
+            # Transaction이 없으면 Phone의 가장 최근 거래를 찾아보기
+            try:
+                phone = UsedPhone.objects.get(id=transaction_id)  # ID를 phone_id로 시도
+                transaction = UsedPhoneTransaction.objects.filter(
+                    phone=phone,
+                    status='completed'
+                ).first()
+                if not transaction:
+                    return Response(
+                        {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            except:
+                return Response(
+                    {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        # 거래 당사자 확인
+        if transaction.seller == request.user:
+            reviewer = transaction.seller
+            reviewee = transaction.buyer
+        elif transaction.buyer == request.user:
+            reviewer = transaction.buyer
+            reviewee = transaction.seller
+        else:
+            return Response(
+                {'error': '거래 당사자만 리뷰를 작성할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 이미 리뷰를 작성했는지 확인
+        existing_review = UsedPhoneReview.objects.filter(
+            transaction=transaction,
+            reviewer=reviewer
+        ).first()
+
+        if existing_review:
+            return Response(
+                {'error': '이미 리뷰를 작성하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 리뷰 생성
+        review = UsedPhoneReview.objects.create(
+            transaction=transaction,
+            reviewer=reviewer,
+            reviewee=reviewee,
+            rating=rating,
+            comment=comment,
+            # 평가 태그들 (선택사항)
+            is_punctual=request.data.get('is_punctual', False),
+            is_friendly=request.data.get('is_friendly', False),
+            is_honest=request.data.get('is_honest', False),
+            is_fast_response=request.data.get('is_fast_response', False),
+        )
+
+        print(f"[SIMPLE REVIEW] Created review: {review.id}")
+
+        return Response({
+            'id': review.id,
+            'message': '리뷰가 성공적으로 작성되었습니다.',
+            'rating': review.rating,
+            'comment': review.comment
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        print(f"[SIMPLE REVIEW] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'리뷰 작성 중 오류가 발생했습니다: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
