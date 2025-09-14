@@ -1714,12 +1714,54 @@ def create_simple_review(request):
         rating = request.data.get('rating', 5)
         comment = request.data.get('comment', '')
 
-        # transaction_id 검증
-        if not transaction_id:
-            return Response(
-                {'error': 'transaction_id가 필요합니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # transaction_id 검증 (0이거나 없으면 에러)
+        if not transaction_id or transaction_id == 0:
+            # phone_id로 시도해보기
+            phone_id = request.data.get('phone_id')
+            if phone_id:
+                print(f"[SIMPLE REVIEW] No transaction_id, trying with phone_id: {phone_id}")
+                try:
+                    phone = UsedPhone.objects.get(id=phone_id)
+                    # 해당 폰의 가장 최근 트랜잭션 찾기
+                    transaction = UsedPhoneTransaction.objects.filter(
+                        phone=phone
+                    ).exclude(status='cancelled').order_by('-created_at').first()
+
+                    if transaction:
+                        transaction_id = transaction.id
+                        print(f"[SIMPLE REVIEW] Found transaction {transaction_id} for phone {phone_id}")
+                    else:
+                        # 트랜잭션이 없으면 accepted offer로 생성
+                        accepted_offer = UsedPhoneOffer.objects.filter(
+                            phone=phone,
+                            status='accepted'
+                        ).first()
+
+                        if accepted_offer:
+                            transaction = UsedPhoneTransaction.objects.create(
+                                phone=phone,
+                                seller=phone.seller,
+                                buyer=accepted_offer.buyer,
+                                price=accepted_offer.offered_price,
+                                status='completed'
+                            )
+                            transaction_id = transaction.id
+                            print(f"[SIMPLE REVIEW] Created transaction {transaction_id} for phone {phone_id}")
+                        else:
+                            return Response(
+                                {'error': f'폰 {phone_id}에 대한 거래 정보를 찾을 수 없습니다.'},
+                                status=status.HTTP_404_NOT_FOUND
+                            )
+                except UsedPhone.DoesNotExist:
+                    return Response(
+                        {'error': f'폰 {phone_id}를 찾을 수 없습니다.'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                return Response(
+                    {'error': 'transaction_id 또는 phone_id가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         # Transaction 찾기
         try:

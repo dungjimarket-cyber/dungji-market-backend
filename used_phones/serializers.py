@@ -78,7 +78,9 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     regions = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
     offer_count = serializers.SerializerMethodField()  # offer_count를 동적으로 계산
-    
+    buyer = serializers.SerializerMethodField()  # 구매자 정보 추가
+    transaction_id = serializers.SerializerMethodField()  # 거래 ID 추가
+
     class Meta:
         model = UsedPhone
         fields = [
@@ -86,7 +88,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             'min_offer_price', 'accept_offers', 'condition_grade',
             'battery_status', 'status', 'view_count', 'favorite_count',
             'offer_count', 'region_name', 'regions', 'images', 'is_favorite',
-            'created_at', 'body_only', 'is_modified'
+            'created_at', 'body_only', 'is_modified', 'buyer', 'transaction_id'
         ]
     
     def get_region_name(self, obj):
@@ -133,6 +135,33 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             phone=obj,
             status='pending'
         ).values('buyer').distinct().count()
+
+    def get_buyer(self, obj):
+        """거래 완료된 경우 구매자 정보 반환"""
+        if obj.status == 'sold':
+            from .models import UsedPhoneTransaction
+            transaction = UsedPhoneTransaction.objects.filter(
+                phone=obj,
+                status='completed'
+            ).select_related('buyer').first()
+            if transaction and transaction.buyer:
+                return {
+                    'id': transaction.buyer.id,
+                    'nickname': transaction.buyer.nickname if hasattr(transaction.buyer, 'nickname') else transaction.buyer.username
+                }
+        return None
+
+    def get_transaction_id(self, obj):
+        """거래 완료된 경우 거래 ID 반환"""
+        if obj.status == 'sold':
+            from .models import UsedPhoneTransaction
+            transaction = UsedPhoneTransaction.objects.filter(
+                phone=obj,
+                status='completed'
+            ).first()
+            if transaction:
+                return transaction.id
+        return None
 
 
 class UsedPhoneDetailSerializer(serializers.ModelSerializer):
