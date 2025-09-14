@@ -190,12 +190,13 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
 
     def get_transaction_id(self, obj):
         """거래 완료된 경우 트랜잭션 ID 반환"""
-        if obj.status in ['completed', 'trading']:
-            # 완료된 거래의 트랜잭션 찾기
+        # sold, trading 상태일 때 트랜잭션 ID 반환
+        if obj.status in ['sold', 'trading']:
+            # 가장 최근의 트랜잭션 찾기 (취소된 것 제외)
             from .models import UsedPhoneTransaction
             transaction = UsedPhoneTransaction.objects.filter(
                 phone=obj
-            ).order_by('-created_at').first()
+            ).exclude(status='cancelled').order_by('-created_at').first()
             if transaction:
                 return transaction.id
         return None

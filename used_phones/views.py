@@ -1335,9 +1335,28 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """리뷰 작성"""
+        # 디버깅을 위한 로깅 추가
+        print(f"[DEBUG] Review creation request data: {request.data}")
+
         transaction_id = request.data.get('transaction')
+        print(f"[DEBUG] Extracted transaction_id: {transaction_id}, type: {type(transaction_id)}")
+
+        # transaction_id가 없거나 잘못된 형식인 경우 체크
+        if not transaction_id:
+            return Response(
+                {'error': 'transaction_id가 제공되지 않았습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
+            # transaction_id를 정수로 변환 시도
+            transaction_id = int(transaction_id)
+            print(f"[DEBUG] Converted transaction_id to int: {transaction_id}")
+
+            # 모든 트랜잭션 확인 (디버깅용)
+            all_transactions = UsedPhoneTransaction.objects.all()
+            print(f"[DEBUG] All transaction IDs in DB: {list(all_transactions.values_list('id', flat=True))}")
+
             transaction = UsedPhoneTransaction.objects.get(id=transaction_id)
         except UsedPhoneTransaction.DoesNotExist:
             return Response(
