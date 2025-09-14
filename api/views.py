@@ -467,12 +467,14 @@ class ProductViewSet(ModelViewSet):
         if ordering:
             queryset = queryset.order_by(ordering)
         else:
-            # 기본 정렬: 브랜드 우선순위(Galaxy > iPhone > 기타), 그 다음 출시일 최신순
-            from django.db.models import F, Case, When, IntegerField
+            # 카테고리별 다른 정렬 적용
+            from django.db.models import F, Case, When, IntegerField, Q
             from django.db.models.functions import Lower
-            
-            # 브랜드 우선순위 설정
-            queryset = queryset.annotate(
+
+            # 휴대폰: 브랜드 우선순위(Galaxy > iPhone > 기타)
+            phone_queryset = queryset.filter(
+                Q(category__name='휴대폰') | Q(category__detail_type='telecom')
+            ).annotate(
                 brand_priority=Case(
                     When(name__icontains='galaxy', then=1),
                     When(name__icontains='갤럭시', then=1),
@@ -482,9 +484,44 @@ class ProductViewSet(ModelViewSet):
                     output_field=IntegerField()
                 )
             ).order_by(
-                'brand_priority',  # 브랜드 우선순위 (Galaxy=1, iPhone=2, 기타=3)
-                F('release_date').desc(nulls_last=True)  # 같은 브랜드 내에서 최신 출시일 우선
+                'brand_priority',
+                F('release_date').desc(nulls_last=True)
             )
+
+            # 인터넷/인터넷+TV: 통신사 우선순위(SK > KT > LG U+)
+            internet_queryset = queryset.filter(
+                Q(category__detail_type='internet') | Q(category__detail_type='internet_tv')
+            ).annotate(
+                carrier_priority=Case(
+                    When(name__icontains='SK', then=1),
+                    When(name__icontains='KT', then=2),
+                    When(name__icontains='LG', then=3),
+                    When(name__icontains='LGU', then=3),
+                    default=4,
+                    output_field=IntegerField()
+                )
+            ).order_by(
+                'carrier_priority',
+                'name'
+            )
+
+            # 기타 카테고리: 이름순
+            other_queryset = queryset.exclude(
+                Q(category__name='휴대폰') |
+                Q(category__detail_type='telecom') |
+                Q(category__detail_type='internet') |
+                Q(category__detail_type='internet_tv')
+            ).order_by('name')
+
+            # 쿼리셋 합치기 (휴대폰 먼저, 인터넷/인터넷+TV, 기타 순)
+            from itertools import chain
+            result_list = list(chain(phone_queryset, internet_queryset, other_queryset))
+            queryset = queryset.filter(id__in=[obj.id for obj in result_list])
+
+            # ID 순서 유지
+            if result_list:
+                preserved = Case(*[When(id=obj.id, then=pos) for pos, obj in enumerate(result_list)])
+                queryset = queryset.order_by(preserved)
             
         return queryset
     
