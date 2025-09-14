@@ -447,6 +447,7 @@ class ProductViewSet(ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [AllowAny]
+    pagination_class = None  # 상품 목록은 페이징 없이 전체 반환
 
     def get_queryset(self):
         queryset = Product.objects.all()
