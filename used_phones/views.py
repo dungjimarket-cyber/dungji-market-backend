@@ -312,14 +312,14 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             )
         
         # 최소 제안가 체크
-        if phone.min_offer_price and amount < phone.min_offer_price:
+        if phone.min_offer_price and offered_price < phone.min_offer_price:
             return Response(
                 {'error': f'최소 제안 금액은 {phone.min_offer_price}원입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 최대 990만원 제한
-        if amount > 9900000:
+        if offered_price > 9900000:
             return Response(
                 {'error': '최대 제안 가능 금액은 990만원입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
