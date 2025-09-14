@@ -1,2 +1,2 @@
-# Redeployment trigger 20250114_120000
-# Trigger deployment to include UsedPhoneReviewViewSet
+# Redeployment trigger 20250114_190000
+# Deploy new simple review API endpoint at /api/used/reviews/simple/

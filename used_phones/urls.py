@@ -21,7 +21,7 @@ router.register(r'penalties', UsedPhonePenaltyViewSet, basename='usedphonepenalt
 app_name = 'used_phones'
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('reviews/simple/', create_simple_review, name='simple-review'),  # 새로운 간단한 리뷰 API - router보다 먼저!
     path('users/<int:user_id>/rating/', UserRatingView.as_view(), name='user-rating'),
-    path('reviews/simple/', create_simple_review, name='simple-review'),  # 새로운 간단한 리뷰 API
+    path('', include(router.urls)),  # router.urls는 마지막에
 ]
