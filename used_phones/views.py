@@ -1389,35 +1389,68 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='user-stats')
     def user_stats(self, request):
         """사용자 평가 통계"""
-        user_id = request.query_params.get('user_id', request.user.id)
-
         try:
-            user = User.objects.get(id=user_id)
+            # 사용자 ID 가져오기 (쿼리 파라미터 또는 현재 로그인 사용자)
+            user_id = request.query_params.get('user_id')
+            if user_id:
+                user = User.objects.get(id=user_id)
+            else:
+                user = request.user
+                if not user.is_authenticated:
+                    return Response(
+                        {'error': '로그인이 필요합니다.'},
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
+
+            # 받은 리뷰 통계
+            reviews = UsedPhoneReview.objects.filter(reviewee=user)
+
+            # 기본 통계값 설정
+            stats = {
+                'avg_rating': 0.0,
+                'total_reviews': 0,
+                'five_star': 0,
+                'four_star': 0,
+                'three_star': 0,
+                'two_star': 0,
+                'one_star': 0,
+                'is_punctual_count': 0,
+                'is_friendly_count': 0,
+                'is_honest_count': 0,
+                'is_fast_response_count': 0
+            }
+
+            if reviews.exists():
+                # 집계 통계
+                aggregated = reviews.aggregate(
+                    avg_rating=Avg('rating'),
+                    total_reviews=Count('id'),
+                    five_star=Count('id', filter=Q(rating=5)),
+                    four_star=Count('id', filter=Q(rating=4)),
+                    three_star=Count('id', filter=Q(rating=3)),
+                    two_star=Count('id', filter=Q(rating=2)),
+                    one_star=Count('id', filter=Q(rating=1))
+                )
+                stats.update(aggregated)
+
+                # 평가 항목 통계
+                stats['is_punctual_count'] = reviews.filter(is_punctual=True).count()
+                stats['is_friendly_count'] = reviews.filter(is_friendly=True).count()
+                stats['is_honest_count'] = reviews.filter(is_honest=True).count()
+                stats['is_fast_response_count'] = reviews.filter(is_fast_response=True).count()
+
+            return Response(stats)
+
         except User.DoesNotExist:
             return Response(
                 {'error': '사용자를 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-
-        # 받은 리뷰 통계
-        reviews = UsedPhoneReview.objects.filter(reviewee=user)
-        stats = reviews.aggregate(
-            avg_rating=Avg('rating'),
-            total_reviews=Count('id'),
-            five_star=Count('id', filter=Q(rating=5)),
-            four_star=Count('id', filter=Q(rating=4)),
-            three_star=Count('id', filter=Q(rating=3)),
-            two_star=Count('id', filter=Q(rating=2)),
-            one_star=Count('id', filter=Q(rating=1))
-        )
-
-        # 평가 항목 통계
-        stats['is_punctual_count'] = reviews.filter(is_punctual=True).count()
-        stats['is_friendly_count'] = reviews.filter(is_friendly=True).count()
-        stats['is_honest_count'] = reviews.filter(is_honest=True).count()
-        stats['is_fast_response_count'] = reviews.filter(is_fast_response=True).count()
-
-        return Response(stats)
+        except Exception as e:
+            return Response(
+                {'error': f'통계 조회 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
