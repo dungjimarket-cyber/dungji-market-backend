@@ -418,7 +418,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             phone=phone,
             buyer=request.user
         ).count()
-        
+
         return Response({'count': count})
     
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='my-offer')
@@ -435,12 +435,12 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         if not my_offer:
             return Response({'message': 'No offer found', 'offer': None}, status=status.HTTP_200_OK)
         
-        # 사용자의 총 제안 횟수 조회
+        # 해당 상품에 대한 사용자의 제안 횟수 조회
         user_offer_count = UsedPhoneOffer.objects.filter(
-            buyer=request.user,
-            status='pending'
+            phone=phone,
+            buyer=request.user
         ).count()
-        
+
         return Response({
             'id': my_offer.id,
             'offered_price': my_offer.offered_price,
