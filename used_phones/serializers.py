@@ -123,7 +123,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             # 수락된 제안의 금액을 찾기
             accepted_offer = obj.offers.filter(status='accepted').first()
             if accepted_offer:
-                return accepted_offer.amount
+                return accepted_offer.offered_price
         return None
 
     def get_offer_count(self, obj):
