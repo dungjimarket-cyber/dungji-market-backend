@@ -139,20 +139,31 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     def get_buyer(self, obj):
         """거래 완료된 경우 구매자 정보 반환"""
         try:
-            if obj.status == 'sold':
-                from .models import UsedPhoneTransaction
-                transaction = UsedPhoneTransaction.objects.filter(
-                    phone=obj,
-                    status='completed'
-                ).select_related('buyer').first()
-                if transaction and transaction.buyer:
+            if obj.status != 'sold':
+                return None
+
+            # prefetch된 transactions 사용
+            transactions = obj.transactions.all() if hasattr(obj, 'transactions') else []
+            for transaction in transactions:
+                if transaction.status == 'completed' and transaction.buyer:
                     return {
                         'id': transaction.buyer.id,
-                        'nickname': transaction.buyer.nickname if hasattr(transaction.buyer, 'nickname') else transaction.buyer.username
+                        'nickname': getattr(transaction.buyer, 'nickname', transaction.buyer.username)
                     }
-        except Exception as e:
-            # 오류 발생 시 None 반환
-            return None
+
+            # prefetch가 안된 경우 직접 쿼리 (fallback)
+            from .models import UsedPhoneTransaction
+            transaction = UsedPhoneTransaction.objects.filter(
+                phone=obj,
+                status='completed'
+            ).select_related('buyer').first()
+            if transaction and transaction.buyer:
+                return {
+                    'id': transaction.buyer.id,
+                    'nickname': getattr(transaction.buyer, 'nickname', transaction.buyer.username)
+                }
+        except Exception:
+            pass
         return None
 
     def get_transaction_id(self, obj):
@@ -221,46 +232,55 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
 
     def get_buyer_id(self, obj):
         """거래중일 때 구매자 ID 반환"""
-        if obj.status == 'trading':
-            # 수락된 제안 찾기
-            from .models import UsedPhoneOffer
-            accepted_offer = UsedPhoneOffer.objects.filter(
-                phone=obj,
-                status='accepted'
-            ).first()
-            if accepted_offer:
-                return accepted_offer.buyer.id
+        try:
+            if obj.status == 'trading':
+                # 수락된 제안 찾기
+                from .models import UsedPhoneOffer
+                accepted_offer = UsedPhoneOffer.objects.filter(
+                    phone=obj,
+                    status='accepted'
+                ).first()
+                if accepted_offer and accepted_offer.buyer:
+                    return accepted_offer.buyer.id
+        except Exception:
+            pass
         return None
 
     def get_buyer(self, obj):
         """거래중/판매완료 시 구매자 정보 반환"""
-        if obj.status in ['trading', 'sold']:
-            # 수락된 제안 찾기
-            from .models import UsedPhoneOffer
-            accepted_offer = UsedPhoneOffer.objects.filter(
-                phone=obj,
-                status='accepted'
-            ).select_related('buyer').first()
-            if accepted_offer and accepted_offer.buyer:
-                return {
-                    'id': accepted_offer.buyer.id,
-                    'username': accepted_offer.buyer.username,
-                    'nickname': getattr(accepted_offer.buyer, 'nickname', None),
-                    'email': accepted_offer.buyer.email,
-                }
+        try:
+            if obj.status in ['trading', 'sold']:
+                # 수락된 제안 찾기
+                from .models import UsedPhoneOffer
+                accepted_offer = UsedPhoneOffer.objects.filter(
+                    phone=obj,
+                    status='accepted'
+                ).select_related('buyer').first()
+                if accepted_offer and accepted_offer.buyer:
+                    return {
+                        'id': accepted_offer.buyer.id,
+                        'username': accepted_offer.buyer.username,
+                        'nickname': getattr(accepted_offer.buyer, 'nickname', None),
+                        'email': accepted_offer.buyer.email,
+                    }
+        except Exception:
+            pass
         return None
 
     def get_transaction_id(self, obj):
         """거래 완료된 경우 트랜잭션 ID 반환"""
-        # sold, trading 상태일 때 트랜잭션 ID 반환
-        if obj.status in ['sold', 'trading']:
-            # 가장 최근의 트랜잭션 찾기 (취소된 것 제외)
-            from .models import UsedPhoneTransaction
-            transaction = UsedPhoneTransaction.objects.filter(
-                phone=obj
-            ).exclude(status='cancelled').order_by('-created_at').first()
-            if transaction:
-                return transaction.id
+        try:
+            # sold, trading 상태일 때 트랜잭션 ID 반환
+            if obj.status in ['sold', 'trading']:
+                # 가장 최근의 트랜잭션 찾기 (취소된 것 제외)
+                from .models import UsedPhoneTransaction
+                transaction = UsedPhoneTransaction.objects.filter(
+                    phone=obj
+                ).exclude(status='cancelled').order_by('-created_at').first()
+                if transaction:
+                    return transaction.id
+        except Exception:
+            pass
         return None
 
     def get_final_price(self, obj):
