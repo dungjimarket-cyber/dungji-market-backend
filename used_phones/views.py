@@ -760,6 +760,19 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         ).first()
 
         if not accepted_offer:
+            # 취소된 제안이 있는지 확인
+            cancelled_offer = UsedPhoneOffer.objects.filter(
+                phone=phone,
+                status='cancelled'
+            ).order_by('-updated_at').first()
+
+            if cancelled_offer:
+                return Response(
+                    {'error': '거래가 이미 취소되었습니다. 목록을 새로고침해주세요.',
+                     'code': 'transaction_already_cancelled'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             return Response(
                 {'error': '거래 정보를 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
