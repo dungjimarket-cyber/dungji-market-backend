@@ -296,15 +296,15 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             )
         
         # 제안 금액 검증
-        amount = request.data.get('amount')
-        if not amount:
+        offered_price = request.data.get('offered_price')
+        if not offered_price:
             return Response(
                 {'error': '제안 금액을 입력해주세요.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            amount = int(amount)
+            offered_price = int(offered_price)
         except ValueError:
             return Response(
                 {'error': '올바른 금액을 입력해주세요.'},
@@ -333,11 +333,11 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         ).first()
         
         # 즉시구매 여부 확인 (즉시판매가와 동일한 금액 제안)
-        is_instant_purchase = (amount == phone.price)
+        is_instant_purchase = (offered_price == phone.price)
         
         if existing_offer:
             # 기존 제안 업데이트
-            existing_offer.amount = amount
+            existing_offer.offered_price = offered_price
             existing_offer.message = request.data.get('message', '')
             existing_offer.save()
             offer = existing_offer
@@ -346,7 +346,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             offer = UsedPhoneOffer.objects.create(
                 phone=phone,
                 buyer=request.user,
-                amount=amount,
+                offered_price=offered_price,
                 message=request.data.get('message', '')
             )
             
@@ -376,7 +376,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 offer=offer,
                 seller=phone.seller,
                 buyer=request.user,
-                final_price=offer.amount,
+                final_price=offer.offered_price,
                 status='trading'
             )
 
@@ -429,7 +429,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         
         return Response({
             'id': my_offer.id,
-            'amount': my_offer.amount,
+            'amount': my_offer.offered_price,
             'message': my_offer.message,
             'status': my_offer.status,
             'created_at': my_offer.created_at,
@@ -478,7 +478,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     'nickname': offer.buyer.nickname if hasattr(offer.buyer, 'nickname') else offer.buyer.username,
                     'profile_image': offer.buyer.profile_image if hasattr(offer.buyer, 'profile_image') else None
                 },
-                'offered_price': offer.amount,
+                'offered_price': offer.offered_price,
                 'message': offer.message,
                 'status': offer.status,
                 'created_at': offer.created_at
@@ -662,7 +662,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                             'region': phone.seller.address_region.full_name if hasattr(phone.seller, 'address_region') and phone.seller.address_region else None,
                         }
                     },
-                    'offered_price': offer.amount,
+                    'offered_price': offer.offered_price,
                     'status': offer.status,
                     'created_at': offer.created_at.isoformat()
                 })
@@ -704,7 +704,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'email': seller.email,
             'region': seller.address_region.full_name if hasattr(seller, 'address_region') and seller.address_region else None,
             'profile_image': seller.profile_image if hasattr(seller, 'profile_image') else None,
-            'accepted_price': accepted_offer.amount
+            'accepted_price': accepted_offer.offered_price
         })
     
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='buyer-info')
@@ -748,7 +748,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'email': buyer.email,
             'region': buyer.address_region.full_name if hasattr(buyer, 'address_region') and buyer.address_region else None,
             'profile_image': buyer.profile_image if hasattr(buyer, 'profile_image') else None,
-            'offered_price': accepted_offer.amount,  # amount로 수정
+            'offered_price': accepted_offer.offered_price,  # API 응답 일관성을 위해 offered_price 사용
             'message': accepted_offer.message
         })
 
@@ -806,7 +806,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             defaults={
                 'seller': phone.seller,
                 'buyer': accepted_offer.buyer,
-                'final_price': accepted_offer.amount,  # amount로 수정
+                'final_price': accepted_offer.offered_price,  # amount로 수정
                 'status': 'trading'
             }
         )
@@ -883,7 +883,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 offer=accepted_offer,
                 seller=phone.seller,
                 buyer=accepted_offer.buyer,
-                final_price=accepted_offer.amount,
+                final_price=accepted_offer.offered_price,
                 status='completed' if phone.status == 'sold' else 'trading',
                 seller_confirmed=True if phone.status == 'sold' else False,
                 buyer_confirmed=True if phone.status == 'sold' else False,
@@ -1115,7 +1115,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                         'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
                     }
                 },
-                'offered_price': offer.amount,
+                'offered_price': offer.offered_price,
                 'message': offer.message,
                 'status': offer.status,
                 'created_at': offer.created_at
@@ -1149,7 +1149,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                     'nickname': offer.buyer.nickname if hasattr(offer.buyer, 'nickname') else offer.buyer.username,
                     'profile_image': offer.buyer.profile_image if hasattr(offer.buyer, 'profile_image') else None
                 },
-                'offered_price': offer.amount,
+                'offered_price': offer.offered_price,
                 'message': offer.message,
                 'status': offer.status,
                 'created_at': offer.created_at,
@@ -1203,7 +1203,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                     offer=offer,
                     seller=offer.phone.seller,
                     buyer=offer.buyer,
-                    final_price=offer.amount,
+                    final_price=offer.offered_price,
                     status='trading'
                 )
 

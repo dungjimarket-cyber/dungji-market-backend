@@ -207,7 +207,7 @@ class UsedPhoneOffer(models.Model):
     
     phone = models.ForeignKey(UsedPhone, on_delete=models.CASCADE, related_name='offers')
     buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_offers')
-    amount = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9900000)], verbose_name='제안금액')  # 최대 990만원
+    offered_price = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9900000)], verbose_name='제안금액')  # 최대 990만원
     message = models.TextField(null=True, blank=True, verbose_name='메시지')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     seller_message = models.TextField(null=True, blank=True, verbose_name='판매자메시지')

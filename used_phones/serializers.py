@@ -358,14 +358,14 @@ class UsedPhoneOfferSerializer(serializers.ModelSerializer):
     """가격 제안 시리얼라이저"""
     buyer = SellerSerializer(read_only=True)
     phone_model = serializers.CharField(source='phone.model', read_only=True)
-    
+
     class Meta:
         model = UsedPhoneOffer
         fields = '__all__'
-        read_only_fields = ['id', 'buyer', 'status', 'seller_message', 
+        read_only_fields = ['id', 'buyer', 'status', 'seller_message',
                            'created_at', 'updated_at']
-    
-    def validate_amount(self, value):
+
+    def validate_offered_price(self, value):
         # 천원 단위 검증
         if value % 1000 != 0:
             raise serializers.ValidationError("가격은 천원 단위로 입력해주세요.")
