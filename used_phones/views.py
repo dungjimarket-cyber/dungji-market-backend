@@ -748,7 +748,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'email': buyer.email,
             'region': buyer.address_region.full_name if hasattr(buyer, 'address_region') and buyer.address_region else None,
             'profile_image': buyer.profile_image if hasattr(buyer, 'profile_image') else None,
-            'offered_price': accepted_offer.offered_price,
+            'offered_price': accepted_offer.amount,  # amount로 수정
             'message': accepted_offer.message
         })
 
