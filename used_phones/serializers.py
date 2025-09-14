@@ -143,6 +143,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     region_name = serializers.SerializerMethodField()
     regions = serializers.SerializerMethodField()
     buyer_id = serializers.SerializerMethodField()
+    buyer = serializers.SerializerMethodField()
     transaction_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -186,6 +187,24 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
             ).first()
             if accepted_offer:
                 return accepted_offer.buyer.id
+        return None
+
+    def get_buyer(self, obj):
+        """거래중/판매완료 시 구매자 정보 반환"""
+        if obj.status in ['trading', 'sold']:
+            # 수락된 제안 찾기
+            from .models import UsedPhoneOffer
+            accepted_offer = UsedPhoneOffer.objects.filter(
+                phone=obj,
+                status='accepted'
+            ).select_related('buyer').first()
+            if accepted_offer and accepted_offer.buyer:
+                return {
+                    'id': accepted_offer.buyer.id,
+                    'username': accepted_offer.buyer.username,
+                    'nickname': getattr(accepted_offer.buyer, 'nickname', None),
+                    'email': accepted_offer.buyer.email,
+                }
         return None
 
     def get_transaction_id(self, obj):
