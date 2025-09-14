@@ -1175,18 +1175,26 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             offer.phone.status = 'trading'
             offer.phone.save(update_fields=['status'])
 
-            # UsedPhoneTransaction 생성
+            # UsedPhoneTransaction 생성 (취소된 거래가 있어도 새로 생성)
             from .models import UsedPhoneTransaction
-            UsedPhoneTransaction.objects.get_or_create(
+
+            # 기존 trading 상태 트랜잭션이 있는지 확인
+            existing_trading = UsedPhoneTransaction.objects.filter(
                 phone=offer.phone,
                 offer=offer,
-                defaults={
-                    'seller': offer.phone.seller,
-                    'buyer': offer.buyer,
-                    'final_price': offer.offered_price,
-                    'status': 'trading'
-                }
-            )
+                status='trading'
+            ).first()
+
+            if not existing_trading:
+                # 취소된 트랜잭션이 있더라도 새로운 트랜잭션 생성
+                UsedPhoneTransaction.objects.create(
+                    phone=offer.phone,
+                    offer=offer,
+                    seller=offer.phone.seller,
+                    buyer=offer.buyer,
+                    final_price=offer.offered_price,
+                    status='trading'
+                )
 
             # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
         else:
