@@ -142,11 +142,12 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     is_favorite = serializers.SerializerMethodField()
     region_name = serializers.SerializerMethodField()
     regions = serializers.SerializerMethodField()
-    
+    buyer_id = serializers.SerializerMethodField()
+
     class Meta:
         model = UsedPhone
         fields = '__all__'
-        read_only_fields = ['id', 'seller', 'view_count', 'favorite_count', 
+        read_only_fields = ['id', 'seller', 'view_count', 'favorite_count',
                            'offer_count', 'created_at', 'updated_at']
     
     def get_region_name(self, obj):
@@ -172,6 +173,19 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.favorites.filter(user=request.user).exists()
         return False
+
+    def get_buyer_id(self, obj):
+        """거래중일 때 구매자 ID 반환"""
+        if obj.status == 'trading':
+            # 수락된 제안 찾기
+            from .models import UsedPhoneOffer
+            accepted_offer = UsedPhoneOffer.objects.filter(
+                phone=obj,
+                status='accepted'
+            ).first()
+            if accepted_offer:
+                return accepted_offer.buyer.id
+        return None
 
 
 class UsedPhoneCreateSerializer(serializers.ModelSerializer):
