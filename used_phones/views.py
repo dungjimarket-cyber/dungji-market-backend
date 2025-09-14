@@ -234,13 +234,26 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         """Increment view count on detail view"""
-        instance = self.get_object()
+        # prefetch_related를 사용하여 관련 데이터 미리 로드
+        queryset = self.get_queryset()
+        instance = get_object_or_404(
+            queryset.prefetch_related(
+                'regions__region',
+                'images',
+                'favorites',
+                'offers__buyer',
+                'transactions__buyer'
+            ).select_related('seller', 'region'),
+            pk=kwargs.get('pk')
+        )
+
+        # 조회수 증가
         instance.view_count = F('view_count') + 1
         instance.save(update_fields=['view_count'])
-        
+
         # F() expression 사용 후 객체 다시 로드
         instance.refresh_from_db()
-        
+
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     

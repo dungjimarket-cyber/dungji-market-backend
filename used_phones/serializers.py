@@ -214,15 +214,19 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     
     def get_regions(self, obj):
         """다중 지역 정보 반환"""
-        phone_regions = obj.regions.select_related('region').all()
-        return [
-            {
-                'code': pr.region.code,
-                'name': pr.region.name,
-                'full_name': pr.region.full_name
-            }
-            for pr in phone_regions
-        ]
+        try:
+            phone_regions = obj.regions.select_related('region').all()
+            return [
+                {
+                    'code': pr.region.code,
+                    'name': pr.region.name,
+                    'full_name': pr.region.full_name
+                }
+                for pr in phone_regions
+            ]
+        except Exception as e:
+            logger.error(f"Error getting regions for phone {obj.id}: {e}")
+            return []
     
     def get_is_favorite(self, obj):
         request = self.context.get('request')
