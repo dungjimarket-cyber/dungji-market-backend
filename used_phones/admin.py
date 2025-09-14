@@ -48,7 +48,7 @@ class UsedPhoneAdmin(admin.ModelAdmin):
             # 수락된 제안 찾기
             accepted_offer = obj.offers.filter(status='accepted').first()
             if accepted_offer:
-                return f"{accepted_offer.buyer.username} ({accepted_offer.amount:,}원)"
+                return f"{accepted_offer.buyer.username} ({accepted_offer.offered_price:,}원)"
         return '-'
     get_buyer_info.short_description = '구매자 정보'
     
@@ -60,7 +60,7 @@ class UsedPhoneAdmin(admin.ModelAdmin):
             if accepted_offer:
                 buyer = accepted_offer.buyer
                 info = f"구매자: {buyer.username}\n"
-                info += f"제안 금액: {accepted_offer.amount:,}원\n"
+                info += f"제안 금액: {accepted_offer.offered_price:,}원\n"
                 if hasattr(buyer, 'phone') and buyer.phone:
                     info += f"연락처: {buyer.phone}\n"
                 if hasattr(buyer, 'email') and buyer.email:
@@ -74,10 +74,10 @@ class UsedPhoneAdmin(admin.ModelAdmin):
 
 @admin.register(UsedPhoneOffer)
 class UsedPhoneOfferAdmin(admin.ModelAdmin):
-    list_display = ['id', 'get_phone_info', 'buyer', 'amount', 'status', 'created_at']
+    list_display = ['id', 'get_phone_info', 'buyer', 'offered_price', 'status', 'created_at']
     list_filter = ['status', 'phone__status']
     search_fields = ['phone__model', 'buyer__username']
-    readonly_fields = ['phone', 'buyer', 'amount', 'message', 'status', 'seller_message', 'created_at']
+    readonly_fields = ['phone', 'buyer', 'offered_price', 'message', 'status', 'seller_message', 'created_at']
     
     def get_phone_info(self, obj):
         """상품 정보 표시"""
