@@ -429,7 +429,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         
         return Response({
             'id': my_offer.id,
-            'amount': my_offer.offered_price,
+            'offered_price': my_offer.offered_price,
             'message': my_offer.message,
             'status': my_offer.status,
             'created_at': my_offer.created_at,
