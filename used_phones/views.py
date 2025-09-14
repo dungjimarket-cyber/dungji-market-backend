@@ -297,12 +297,12 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 제안 횟수 체크 (상품당 5회)
+        # 제안 횟수 체크 (상품당 5회) - 모든 제안 카운트 (cancelled 포함)
         offer_count = UsedPhoneOffer.objects.filter(
             phone=phone,
             buyer=request.user
         ).count()
-        
+
         if offer_count >= 5:
             return Response(
                 {'error': '해당 상품에 최대 5회까지만 제안 가능합니다.'},
@@ -345,24 +345,22 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             buyer=request.user,
             status='pending'
         ).first()
-        
+
         # 즉시구매 여부 확인 (즉시판매가와 동일한 금액 제안)
         is_instant_purchase = (offered_price == phone.price)
-        
+
         if existing_offer:
-            # 기존 제안 업데이트
-            existing_offer.offered_price = offered_price
-            existing_offer.message = request.data.get('message', '')
+            # 기존 제안은 cancelled로 변경하고 새로 생성 (수정도 카운트 차감)
+            existing_offer.status = 'cancelled'
             existing_offer.save()
-            offer = existing_offer
-        else:
-            # 새 제안 생성
-            offer = UsedPhoneOffer.objects.create(
-                phone=phone,
-                buyer=request.user,
-                offered_price=offered_price,
-                message=request.data.get('message', '')
-            )
+
+        # 항상 새 제안 생성 (수정이든 신규든)
+        offer = UsedPhoneOffer.objects.create(
+            phone=phone,
+            buyer=request.user,
+            offered_price=offered_price,
+            message=request.data.get('message', '')
+        )
             
             # 유니크한 구매자 수로 offer_count 업데이트
             unique_buyers_count = UsedPhoneOffer.objects.filter(
