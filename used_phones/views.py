@@ -364,11 +364,22 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             # 제안 자동 수락
             offer.status = 'accepted'
             offer.save()
-            
+
             # 상품 상태를 거래중으로 변경
             phone.status = 'trading'
             phone.save(update_fields=['status'])
-            
+
+            # UsedPhoneTransaction 생성
+            from .models import UsedPhoneTransaction
+            UsedPhoneTransaction.objects.create(
+                phone=phone,
+                offer=offer,
+                seller=phone.seller,
+                buyer=request.user,
+                final_price=offer.amount,
+                status='trading'
+            )
+
             # 다른 제안들은 그대로 pending 상태 유지 (거절하지 않음)
             
             # 즉시구매 응답
