@@ -953,6 +953,18 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             custom_reason=custom_reason if reason == 'other' else None
         )
 
+        # UsedPhoneTransaction이 있다면 상태 업데이트
+        from .models import UsedPhoneTransaction
+        transaction = UsedPhoneTransaction.objects.filter(
+            phone=phone,
+            offer=accepted_offer,
+            status__in=['reserved', 'in_progress']
+        ).first()
+
+        if transaction:
+            transaction.status = 'cancelled'
+            transaction.save(update_fields=['status'])
+
         # 취소 처리
         if is_buyer:
             # 구매자가 취소 - 상품은 자동으로 판매중으로
@@ -1162,7 +1174,20 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
             offer.status = 'accepted'
             offer.phone.status = 'trading'
             offer.phone.save(update_fields=['status'])
-            
+
+            # UsedPhoneTransaction 생성
+            from .models import UsedPhoneTransaction
+            UsedPhoneTransaction.objects.get_or_create(
+                phone=offer.phone,
+                offer=offer,
+                defaults={
+                    'seller': offer.phone.seller,
+                    'buyer': offer.buyer,
+                    'final_price': offer.offered_price,
+                    'status': 'reserved'
+                }
+            )
+
             # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
         else:
             return Response(
