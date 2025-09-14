@@ -638,9 +638,17 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             # 거래중이거나 판매완료된 상품 포함 (구매자가 완료하지 않은 경우)
             if phone.status == 'trading' or (phone.status == 'sold' and not phone.buyer_completed_at):
                 main_image = phone.images.filter(is_main=True).first() or phone.images.first()
-                
+
+                # 트랜잭션 찾기
+                transaction = UsedPhoneTransaction.objects.filter(
+                    phone=phone,
+                    buyer=request.user
+                ).exclude(status='cancelled').order_by('-created_at').first()
+
                 trading_items.append({
-                    'id': offer.id,
+                    'id': transaction.id if transaction else offer.id,  # transaction ID 우선, 없으면 offer ID
+                    'offer_id': offer.id,  # offer ID도 별도로 제공
+                    'transaction_id': transaction.id if transaction else None,  # 명시적으로 transaction ID 제공
                     'phone': {
                         'id': phone.id,
                         'title': f"{phone.brand} {phone.model}",
@@ -1717,23 +1725,43 @@ def create_simple_review(request):
         try:
             transaction = UsedPhoneTransaction.objects.get(id=transaction_id)
         except UsedPhoneTransaction.DoesNotExist:
-            # Transaction이 없으면 Phone의 가장 최근 거래를 찾아보기
+            # Transaction이 없으면 Offer ID로 시도
             try:
-                phone = UsedPhone.objects.get(id=transaction_id)  # ID를 phone_id로 시도
+                offer = UsedPhoneOffer.objects.get(id=transaction_id, status='accepted')
+                # Offer에서 phone과 buyer를 통해 transaction 찾기
                 transaction = UsedPhoneTransaction.objects.filter(
-                    phone=phone,
-                    status='completed'
-                ).first()
+                    phone=offer.phone,
+                    buyer=offer.buyer
+                ).exclude(status='cancelled').first()
+
                 if not transaction:
+                    # Transaction이 없으면 생성 (거래는 진행중이지만 트랜잭션이 없는 경우)
+                    transaction = UsedPhoneTransaction.objects.create(
+                        phone=offer.phone,
+                        seller=offer.phone.seller,
+                        buyer=offer.buyer,
+                        price=offer.offered_price,
+                        status='completed'
+                    )
+                    print(f"[SIMPLE REVIEW] Created transaction from offer: {transaction.id}")
+            except UsedPhoneOffer.DoesNotExist:
+                # Offer도 없으면 Phone ID로 시도
+                try:
+                    phone = UsedPhone.objects.get(id=transaction_id)
+                    transaction = UsedPhoneTransaction.objects.filter(
+                        phone=phone,
+                        status='completed'
+                    ).first()
+                    if not transaction:
+                        return Response(
+                            {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                except:
                     return Response(
                         {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
                         status=status.HTTP_404_NOT_FOUND
                     )
-            except:
-                return Response(
-                    {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
 
         # 거래 당사자 확인
         if transaction.seller == request.user:
