@@ -290,7 +290,7 @@ class UsedPhoneTransaction(models.Model):
     """중고폰 거래 기록"""
 
     STATUS_CHOICES = [
-        ('reserved', '예약중'),
+        ('trading', '거래중'),
         ('completed', '거래완료'),
         ('cancelled', '거래취소'),
     ]
@@ -299,7 +299,7 @@ class UsedPhoneTransaction(models.Model):
     offer = models.ForeignKey('UsedPhoneOffer', on_delete=models.CASCADE, related_name='transaction')
     seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sold_transactions')
     buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bought_transactions')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='reserved')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='trading')
 
     # 거래 완료 확인
     seller_confirmed = models.BooleanField(default=False, verbose_name='판매자 확인')

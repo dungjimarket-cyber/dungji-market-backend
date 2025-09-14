@@ -850,7 +850,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         # 현재 진행중인 거래 찾기
         transaction = UsedPhoneTransaction.objects.filter(
             phone=phone,
-            status__in=['completed', 'in_progress', 'reserved']
+            status__in=['completed', 'in_progress', 'trading']
         ).select_related('buyer', 'seller').first()
 
         if not transaction:
@@ -873,7 +873,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 seller=phone.seller,
                 buyer=accepted_offer.buyer,
                 final_price=accepted_offer.offered_price,
-                status='completed' if phone.status == 'sold' else 'reserved',
+                status='completed' if phone.status == 'sold' else 'trading',
                 seller_confirmed=True if phone.status == 'sold' else False,
                 buyer_confirmed=True if phone.status == 'sold' else False,
                 seller_confirmed_at=timezone.now() if phone.status == 'sold' else None,
@@ -958,7 +958,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         transaction = UsedPhoneTransaction.objects.filter(
             phone=phone,
             offer=accepted_offer,
-            status__in=['reserved', 'in_progress']
+            status__in=['trading', 'in_progress']
         ).first()
 
         if transaction:
@@ -1184,7 +1184,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                     'seller': offer.phone.seller,
                     'buyer': offer.buyer,
                     'final_price': offer.offered_price,
-                    'status': 'reserved'
+                    'status': 'trading'
                 }
             )
 
