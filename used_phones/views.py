@@ -361,15 +361,15 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             offered_price=offered_price,
             message=request.data.get('message', '')
         )
-            
-            # 유니크한 구매자 수로 offer_count 업데이트
-            unique_buyers_count = UsedPhoneOffer.objects.filter(
-                phone=phone,
-                status='pending'
-            ).values('buyer').distinct().count()
-            
-            phone.offer_count = unique_buyers_count
-            phone.save(update_fields=['offer_count'])
+
+        # 유니크한 구매자 수로 offer_count 업데이트
+        unique_buyers_count = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='pending'
+        ).values('buyer').distinct().count()
+
+        phone.offer_count = unique_buyers_count
+        phone.save(update_fields=['offer_count'])
         
         # 즉시구매인 경우 자동으로 거래중 상태로 전환
         if is_instant_purchase:
