@@ -796,7 +796,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 'seller': phone.seller,
                 'buyer': accepted_offer.buyer,
                 'final_price': accepted_offer.offered_price,
-                'status': 'reserved'
+                'status': 'trading'
             }
         )
 

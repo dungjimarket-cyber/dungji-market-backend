@@ -101,9 +101,9 @@ def mypage_stats(request):
         status='active'
     ).count()
     
-    reserved_sales = UsedPhone.objects.filter(
+    trading_sales = UsedPhone.objects.filter(
         seller=user,
-        status='reserved'
+        status='trading'
     ).count()
     
     completed_sales = UsedPhone.objects.filter(
@@ -130,7 +130,7 @@ def mypage_stats(request):
     # 받은 제안 통계 (판매자인 경우)
     received_offers_count = 0
     if hasattr(user, 'used_phones'):
-        user_phones = user.used_phones.filter(status__in=['active', 'reserved'])
+        user_phones = user.used_phones.filter(status__in=['active', 'trading'])
         received_offers_count = UsedPhoneOffer.objects.filter(
             phone__in=user_phones,
             status='pending'
@@ -139,9 +139,9 @@ def mypage_stats(request):
     stats_data = {
         'sales': {
             'active': active_sales,
-            'reserved': reserved_sales,
+            'trading': trading_sales,
             'completed': completed_sales,
-            'total': active_sales + reserved_sales + completed_sales,
+            'total': active_sales + trading_sales + completed_sales,
             'received_offers': received_offers_count,
         },
         'purchases': {

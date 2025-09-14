@@ -41,7 +41,7 @@ class Command(BaseCommand):
         # Create phones for sellers
         phone1 = self.create_phone(seller1, 'iPhone 14 Pro', seoul_gangnam, 'active')
         phone2 = self.create_phone(seller1, 'Galaxy S23 Ultra', seoul_songpa, 'active')
-        phone3 = self.create_phone(seller1, 'iPhone 13', seoul_gangnam, 'reserved')
+        phone3 = self.create_phone(seller1, 'iPhone 13', seoul_gangnam, 'trading')
         phone4 = self.create_phone(seller1, 'Galaxy Z Flip 5', seoul_gangnam, 'sold')
         
         phone5 = self.create_phone(seller2, 'iPhone 15 Pro Max', seoul_songpa, 'active')
