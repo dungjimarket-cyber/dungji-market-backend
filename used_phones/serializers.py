@@ -197,7 +197,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UsedPhone
-        fields = ['id', 'seller', 'brand', 'model_name', 'storage', 'condition',
+        fields = ['id', 'seller', 'brand', 'model', 'storage', 'condition_grade',
                   'battery_status', 'price', 'accept_offers', 'description',
                   'status', 'view_count', 'favorite_count', 'offer_count',
                   'sold_at', 'created_at', 'updated_at', 'images', 'is_favorite',
