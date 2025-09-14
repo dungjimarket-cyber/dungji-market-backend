@@ -143,6 +143,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     region_name = serializers.SerializerMethodField()
     regions = serializers.SerializerMethodField()
     buyer_id = serializers.SerializerMethodField()
+    transaction_id = serializers.SerializerMethodField()
 
     class Meta:
         model = UsedPhone
@@ -185,6 +186,19 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
             ).first()
             if accepted_offer:
                 return accepted_offer.buyer.id
+        return None
+
+    def get_transaction_id(self, obj):
+        """거래 완료된 경우 트랜잭션 ID 반환"""
+        if obj.status == 'completed':
+            # 완료된 거래의 트랜잭션 찾기
+            from .models import UsedPhoneTransaction
+            transaction = UsedPhoneTransaction.objects.filter(
+                phone=obj,
+                status='completed'
+            ).first()
+            if transaction:
+                return transaction.id
         return None
 
 
