@@ -138,29 +138,37 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
 
     def get_buyer(self, obj):
         """거래 완료된 경우 구매자 정보 반환"""
-        if obj.status == 'sold':
-            from .models import UsedPhoneTransaction
-            transaction = UsedPhoneTransaction.objects.filter(
-                phone=obj,
-                status='completed'
-            ).select_related('buyer').first()
-            if transaction and transaction.buyer:
-                return {
-                    'id': transaction.buyer.id,
-                    'nickname': transaction.buyer.nickname if hasattr(transaction.buyer, 'nickname') else transaction.buyer.username
-                }
+        try:
+            if obj.status == 'sold':
+                from .models import UsedPhoneTransaction
+                transaction = UsedPhoneTransaction.objects.filter(
+                    phone=obj,
+                    status='completed'
+                ).select_related('buyer').first()
+                if transaction and transaction.buyer:
+                    return {
+                        'id': transaction.buyer.id,
+                        'nickname': transaction.buyer.nickname if hasattr(transaction.buyer, 'nickname') else transaction.buyer.username
+                    }
+        except Exception as e:
+            # 오류 발생 시 None 반환
+            return None
         return None
 
     def get_transaction_id(self, obj):
         """거래 완료된 경우 거래 ID 반환"""
-        if obj.status == 'sold':
-            from .models import UsedPhoneTransaction
-            transaction = UsedPhoneTransaction.objects.filter(
-                phone=obj,
-                status='completed'
-            ).first()
-            if transaction:
-                return transaction.id
+        try:
+            if obj.status == 'sold':
+                from .models import UsedPhoneTransaction
+                transaction = UsedPhoneTransaction.objects.filter(
+                    phone=obj,
+                    status='completed'
+                ).first()
+                if transaction:
+                    return transaction.id
+        except Exception as e:
+            # 오류 발생 시 None 반환
+            return None
         return None
 
 
