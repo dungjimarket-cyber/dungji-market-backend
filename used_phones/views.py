@@ -32,7 +32,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     queryset = UsedPhone.objects.filter(status__in=['active', 'trading']).prefetch_related(
         'regions__region',  # prefetch regions to avoid N+1 queries
         'images',
-        'favorites'
+        'favorites',
+        'transactions'  # transaction 정보도 prefetch
     ).select_related('seller', 'region')
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -493,7 +494,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         
         queryset = UsedPhone.objects.filter(
             seller=request.user
-        ).exclude(status='deleted').prefetch_related('images', 'offers').select_related('region')
+        ).exclude(status='deleted').prefetch_related('images', 'offers', 'transactions').select_related('region')
         
         if status_filter:
             queryset = queryset.filter(status=status_filter)
