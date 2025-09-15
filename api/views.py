@@ -2645,6 +2645,7 @@ class GroupBuyViewSet(ModelViewSet):
         구매자/판매자 구분하여 조회
         """
         from datetime import timedelta
+        from django.db.models import Q, F
         from .models import Bid, Participation
 
         user = request.user
@@ -2660,7 +2661,6 @@ class GroupBuyViewSet(ModelViewSet):
         try:
             if hasattr(user, 'role') and (user.role == 'seller' or user.user_type == '판매'):
                 # 판매자: 내가 낙찰받고 판매완료한 공구 (새 방식 + 예전 방식 모두 포함)
-                from django.db.models import Q, F
                 bids = Bid.objects.filter(
                     seller=user,
                     is_selected=True,
@@ -2718,7 +2718,6 @@ class GroupBuyViewSet(ModelViewSet):
 
             else:
                 # 구매자: 내가 구매완료한 공구 (새 방식 + 예전 방식 모두 포함)
-                from django.db.models import Q, F
                 participations = Participation.objects.filter(
                     user=user,
                     final_decision='confirmed'
