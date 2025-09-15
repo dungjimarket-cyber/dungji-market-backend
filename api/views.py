@@ -2812,8 +2812,15 @@ class GroupBuyViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Error in recent_completed: {str(e)}")
             import traceback
-            logger.error(traceback.format_exc())
-            return Response({'error': '최근 거래 조회 중 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            error_detail = traceback.format_exc()
+            logger.error(error_detail)
+            # 개발 중 디버깅을 위해 상세 오류 반환
+            return Response({
+                'error': '최근 거래 조회 중 오류가 발생했습니다.',
+                'detail': str(e),
+                'user_role': getattr(user, 'role', 'unknown'),
+                'user_id': user.id
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 날짜 기준으로 최신순 정렬
         data.sort(key=lambda x: x.get('completed_at', ''), reverse=True)
