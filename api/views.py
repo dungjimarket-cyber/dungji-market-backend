@@ -2627,63 +2627,105 @@ class GroupBuyViewSet(ModelViewSet):
         # 15일 전 날짜 계산
         cutoff_date = timezone.now() - timedelta(days=15)
 
-        if user.role == 'seller' or user.user_type == '판매':
-            # 판매자: 내가 낙찰받고 판매완료한 공구
-            completed = self.get_queryset().filter(
-                bid__seller=user,
-                bid__is_selected=True,
-                bid__final_decision='confirmed',
-                status='completed',
-                completed_at__gte=cutoff_date  # 15일 이내
-            ).order_by('-completed_at').distinct()[:limit]
+        logger.info(f"recent_completed called for user: {user.id} ({user.role})")  # 디버깅용 로그
 
-            data = []
-            for gb in completed:
-                gb_data = {
-                    'id': gb.id,
-                    'title': gb.title,
-                    'product_name': gb.product.name if gb.product else '',
-                    'product_image': gb.product.image_url if gb.product and gb.product.image_url else None,
-                    'completed_at': gb.completed_at,
-                    'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
-                }
-                # 구매확정한 구매자 수 (노쇼신고 대상)
-                confirmed_count = Participation.objects.filter(
-                    groupbuy=gb,
-                    final_decision='confirmed'
-                ).count()
-                gb_data['participant_count'] = confirmed_count
-                data.append(gb_data)
+        data = []
 
-        else:
-            # 구매자: 내가 구매완료한 공구
-            participations = Participation.objects.filter(
-                user=user,
-                final_decision='confirmed',
-                groupbuy__status='completed',
-                groupbuy__completed_at__gte=cutoff_date  # 15일 이내
-            ).select_related('groupbuy', 'groupbuy__product').order_by('-groupbuy__completed_at')[:limit]
+        try:
+            if hasattr(user, 'role') and (user.role == 'seller' or user.user_type == '판매'):
+                # 판매자: 내가 낙찰받고 판매완료한 공구
+                # completed_at이 없을 수도 있으므로 우선 status='completed'인 것들을 조회
+                completed = GroupBuy.objects.filter(
+                    bid__seller=user,
+                    bid__is_selected=True,
+                    bid__final_decision='confirmed',
+                    status='completed'
+                ).select_related('product').distinct().order_by('-id')[:limit * 2]  # 여유있게 조회
 
-            data = []
-            for participation in participations:
-                gb = participation.groupbuy
-                gb_data = {
-                    'id': gb.id,
-                    'title': gb.title,
-                    'product_name': gb.product.name if gb.product else '',
-                    'product_image': gb.product.image_url if gb.product and gb.product.image_url else None,
-                    'completed_at': gb.completed_at,
-                    'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
-                }
-                # 판매자 정보 (노쇼신고 대상)
-                selected_bid = Bid.objects.filter(
-                    groupbuy=gb,
-                    is_selected=True,
-                    final_decision='confirmed'
-                ).first()
-                if selected_bid:
-                    gb_data['seller_name'] = selected_bid.seller.nickname or selected_bid.seller.username
-                data.append(gb_data)
+                for gb in completed:
+                    try:
+                        # completed_at이 있고 15일 이내인 경우만 처리
+                        if gb.completed_at and gb.completed_at >= cutoff_date:
+                            gb_data = {
+                                'id': gb.id,
+                                'title': gb.title or gb.product_name or '공구',
+                                'product_name': '',
+                                'product_image': None,
+                                'completed_at': gb.completed_at.isoformat() if gb.completed_at else None,
+                                'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
+                            }
+
+                            # 상품 정보 안전하게 처리
+                            if gb.product:
+                                gb_data['product_name'] = getattr(gb.product, 'name', '')
+                                if hasattr(gb.product, 'image_url'):
+                                    gb_data['product_image'] = gb.product.image_url
+
+                            # 구매확정한 구매자 수
+                            gb_data['participant_count'] = Participation.objects.filter(
+                                groupbuy=gb,
+                                final_decision='confirmed'
+                            ).count()
+
+                            data.append(gb_data)
+
+                            if len(data) >= limit:
+                                break
+                    except Exception as e:
+                        logger.error(f"Error processing seller groupbuy {gb.id}: {str(e)}")
+                        continue
+
+            else:
+                # 구매자: 내가 구매완료한 공구
+                participations = Participation.objects.filter(
+                    user=user,
+                    final_decision='confirmed',
+                    groupbuy__status='completed'
+                ).select_related('groupbuy', 'groupbuy__product').order_by('-groupbuy__id')[:limit * 2]  # 여유있게 조회
+
+                for participation in participations:
+                    try:
+                        gb = participation.groupbuy
+
+                        # completed_at이 있고 15일 이내인 경우만 처리
+                        if gb.completed_at and gb.completed_at >= cutoff_date:
+                            gb_data = {
+                                'id': gb.id,
+                                'title': gb.title or gb.product_name or '공구',
+                                'product_name': '',
+                                'product_image': None,
+                                'completed_at': gb.completed_at.isoformat() if gb.completed_at else None,
+                                'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
+                            }
+
+                            # 상품 정보 안전하게 처리
+                            if gb.product:
+                                gb_data['product_name'] = getattr(gb.product, 'name', '')
+                                if hasattr(gb.product, 'image_url'):
+                                    gb_data['product_image'] = gb.product.image_url
+
+                            # 판매자 정보
+                            selected_bid = Bid.objects.filter(
+                                groupbuy=gb,
+                                is_selected=True,
+                                final_decision='confirmed'
+                            ).first()
+                            if selected_bid and selected_bid.seller:
+                                gb_data['seller_name'] = getattr(selected_bid.seller, 'nickname', '') or getattr(selected_bid.seller, 'username', '')
+
+                            data.append(gb_data)
+
+                            if len(data) >= limit:
+                                break
+                    except Exception as e:
+                        logger.error(f"Error processing buyer participation {participation.id}: {str(e)}")
+                        continue
+
+        except Exception as e:
+            logger.error(f"Error in recent_completed: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return Response({'error': '최근 거래 조회 중 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(data)
 
