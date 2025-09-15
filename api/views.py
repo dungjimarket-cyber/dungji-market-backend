@@ -2192,15 +2192,19 @@ class GroupBuyViewSet(ModelViewSet):
         user = request.user
         
         if user.role == 'buyer':
+            # 구매완료 시간 기준으로 최신순 정렬
+            from django.db.models import F
             completed = self.get_queryset().filter(
                 participants=user,
                 participation__user=user,
                 participation__is_purchase_completed=True,  # 구매완료 처리된
                 status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
-            ).distinct()
+            ).annotate(
+                purchase_time=F('participation__purchase_completed_at')
+            ).order_by('-purchase_time', '-completed_at', '-id').distinct()
         else:
             completed = self.get_queryset().none()
-        
+
         serializer = self.get_serializer(completed, many=True)
         return Response(serializer.data)
     
@@ -2580,12 +2584,16 @@ class GroupBuyViewSet(ModelViewSet):
         
         # 판매완료 처리된 공구 (판매확정 + completed 상태)
         from .models import Bid, Participation
+        from django.db.models import F, Max
         completed = self.get_queryset().filter(
             bid__seller=request.user,
             bid__is_selected=True,
             bid__final_decision='confirmed',
-            status='completed'
-        ).distinct()
+            bid__is_sale_completed=True,  # 판매완료한 것만
+            status__in=['in_progress', 'completed']
+        ).annotate(
+            sale_time=Max('bid__sale_completed_at')  # 판매완료 시간
+        ).order_by('-sale_time', '-completed_at', '-id').distinct()
         
         data = []
         for gb in completed:
