@@ -2795,9 +2795,11 @@ class GroupBuyViewSet(ModelViewSet):
                                 ).first()
                                 if selected_bid and selected_bid.seller:
                                     gb_data['seller_name'] = getattr(selected_bid.seller, 'nickname', '') or getattr(selected_bid.seller, 'username', '')
+                                    gb_data['seller_id'] = selected_bid.seller.id  # 판매자 ID 추가
                             except Exception as e:
                                 logger.error(f"Error getting seller info for gb {gb.id}: {str(e)}")
                                 gb_data['seller_name'] = ''
+                                gb_data['seller_id'] = None
 
                             data.append(gb_data)
 
