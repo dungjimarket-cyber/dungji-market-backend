@@ -2734,8 +2734,8 @@ class GroupBuyViewSet(ModelViewSet):
 
                     groupbuys = GroupBuy.objects.filter(
                         Exists(my_participation),
-                        status__in=['in_progress', 'completed']
-                    ).order_by('-id')[:limit * 2]
+                        status='completed'  # 거래종료 상태만 조회
+                    ).order_by('-completed_at', '-id')[:limit * 2]
 
                     logger.info(f"Found {len(groupbuys)} groupbuys")
 
@@ -2747,7 +2747,8 @@ class GroupBuyViewSet(ModelViewSet):
                                 groupbuy=gb,
                                 final_decision='confirmed'
                             ).first()
-                            if p:
+                            # purchase_completed_at이 있는 경우만 추가 (거래종료한 경우)
+                            if p and p.purchase_completed_at:
                                 participations.append(p)
                         except:
                             pass
