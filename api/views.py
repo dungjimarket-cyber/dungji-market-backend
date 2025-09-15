@@ -2785,14 +2785,18 @@ class GroupBuyViewSet(ModelViewSet):
                                 if hasattr(gb.product, 'image_url'):
                                     gb_data['product_image'] = gb.product.image_url
 
-                            # 판매자 정보
-                            selected_bid = Bid.objects.filter(
-                                groupbuy=gb,
-                                is_selected=True,
-                                final_decision='confirmed'
-                            ).first()
-                            if selected_bid and selected_bid.seller:
-                                gb_data['seller_name'] = getattr(selected_bid.seller, 'nickname', '') or getattr(selected_bid.seller, 'username', '')
+                            # 판매자 정보 (안전하게 처리)
+                            try:
+                                selected_bid = Bid.objects.filter(
+                                    groupbuy=gb,
+                                    is_selected=True,
+                                    final_decision='confirmed'
+                                ).first()
+                                if selected_bid and selected_bid.seller:
+                                    gb_data['seller_name'] = getattr(selected_bid.seller, 'nickname', '') or getattr(selected_bid.seller, 'username', '')
+                            except Exception as e:
+                                logger.error(f"Error getting seller info for gb {gb.id}: {str(e)}")
+                                gb_data['seller_name'] = ''
 
                             data.append(gb_data)
 
