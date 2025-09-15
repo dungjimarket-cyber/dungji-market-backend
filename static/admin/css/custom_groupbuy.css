@@ -1,0 +1,82 @@
+/* 공동구매 목록 테이블 커스터마이징 */
+
+/* 테이블 전체 너비 조정 */
+#changelist-table {
+    width: 100%;
+}
+
+/* 테이블 셀 좌우 패딩 줄이기 */
+#changelist-table td,
+#changelist-table th {
+    padding: 8px 5px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 첫번째 열(체크박스) 너비 줄이기 */
+#changelist-table th.action-checkbox-column,
+#changelist-table td.action-checkbox {
+    width: 20px !important;
+    padding: 8px 2px !important;
+}
+
+/* 상품명 열 최대 너비 설정 */
+#changelist-table td:nth-child(2),
+#changelist-table th:nth-child(2) {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 생성자 열 너비 조정 */
+#changelist-table td:nth-child(3),
+#changelist-table th:nth-child(3) {
+    max-width: 120px;
+}
+
+/* 상태 열 너비 조정 */
+#changelist-table td:nth-child(4),
+#changelist-table th:nth-child(4) {
+    max-width: 100px;
+}
+
+/* 참여자 수 열 너비 조정 */
+#changelist-table td:nth-child(5),
+#changelist-table th:nth-child(5) {
+    max-width: 80px;
+    text-align: center;
+}
+
+/* 지역 열 너비 조정 */
+#changelist-table td:nth-child(6),
+#changelist-table th:nth-child(6) {
+    max-width: 150px;
+}
+
+/* 선정 판매자 열 너비 조정 */
+#changelist-table td:nth-child(7),
+#changelist-table th:nth-child(7) {
+    max-width: 150px;
+}
+
+/* 등록일 열 너비 조정 */
+#changelist-table td:nth-child(8),
+#changelist-table th:nth-child(8) {
+    max-width: 120px;
+    white-space: nowrap;
+}
+
+/* 테이블 컨테이너 스크롤 가능하도록 */
+.results {
+    overflow-x: auto;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 767px) {
+    #changelist-table td,
+    #changelist-table th {
+        padding: 5px 3px !important;
+        font-size: 12px;
+    }
+}

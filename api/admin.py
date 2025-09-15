@@ -1191,13 +1191,14 @@ class BidInline(admin.TabularInline):
 
 @admin.register(GroupBuy)
 class GroupBuyAdmin(admin.ModelAdmin):
-    list_display = ('product', 'creator', 'status', 'current_participants', 'get_regions', 'get_selected_seller', 'end_time')
+    list_display = ('product', 'creator', 'status', 'current_participants', 'get_regions', 'get_selected_seller', 'get_registration_date')
     raw_id_fields = ('participants',)
     readonly_fields = ('current_participants', 'get_regions_display', 'get_selected_seller_info')
     inlines = [GroupBuyRegionInline, BidInline]
     actions = ['force_complete_groupbuy', 'select_winning_bid']
     exclude = ['region']  # 기존 단일 region 필드는 제외
     list_filter = ('status', 'start_time', 'end_time')
+    list_per_page = 30  # 한 페이지에 표시할 항목 수
     search_fields = ('title', 'product__name', 'creator__username', 'creator__email')
     
     # 한글화
@@ -1248,6 +1249,14 @@ class GroupBuyAdmin(admin.ModelAdmin):
         return '선정된 판매자 없음'
     get_selected_seller_info.short_description = '최종 선정 판매자 상세 정보'
 
+    def get_registration_date(self, obj):
+        """등록일 표시 (start_time을 등록일로 사용)"""
+        if obj.start_time:
+            return obj.start_time.strftime('%Y-%m-%d %H:%M')
+        return '-'
+    get_registration_date.short_description = '등록일'
+    get_registration_date.admin_order_field = 'start_time'
+
     def force_complete_groupbuy(self, request, queryset):
         for groupbuy in queryset:
             groupbuy.status = 'completed'
@@ -1265,6 +1274,11 @@ class GroupBuyAdmin(admin.ModelAdmin):
         messages.success(request, f'{count}개 공구에 선정된 판매자가 있습니다.')
         return
     select_winning_bid.short_description = '선정된 판매자 확인'
+
+    class Media:
+        css = {
+            'all': ('admin/css/custom_groupbuy.css',)
+        }
 
 @admin.register(Bid)
 class BidAdmin(admin.ModelAdmin):
