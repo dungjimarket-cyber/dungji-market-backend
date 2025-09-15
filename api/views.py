@@ -2717,21 +2717,37 @@ class GroupBuyViewSet(ModelViewSet):
                         continue
 
             else:
-                # 구매자: 디버깅을 위한 최소한의 쿼리
+                # 구매자: 완전히 다른 방식으로 접근
                 participations = []
                 try:
                     logger.info(f"Buyer query start for user {user.id}")
-                    # 가장 단순한 쿼리
-                    user_participations = Participation.objects.filter(
+
+                    # GroupBuy에서 시작하는 역방향 쿼리
+                    from django.db.models import Exists, OuterRef
+
+                    # 내가 참여한 공구 찾기
+                    my_participation = Participation.objects.filter(
                         user=user,
+                        groupbuy=OuterRef('pk'),
                         final_decision='confirmed'
-                    )[:10]  # 일단 10개만
+                    )
 
-                    logger.info(f"Found {len(user_participations)} participations")
+                    groupbuys = GroupBuy.objects.filter(
+                        Exists(my_participation),
+                        status__in=['in_progress', 'completed']
+                    ).order_by('-id')[:limit * 2]
 
-                    for p in user_participations:
+                    logger.info(f"Found {len(groupbuys)} groupbuys")
+
+                    # 각 공구에 대한 내 participation 찾기
+                    for gb in groupbuys:
                         try:
-                            if hasattr(p, 'groupbuy'):
+                            p = Participation.objects.filter(
+                                user=user,
+                                groupbuy=gb,
+                                final_decision='confirmed'
+                            ).first()
+                            if p:
                                 participations.append(p)
                         except:
                             pass
