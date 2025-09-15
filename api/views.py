@@ -2717,12 +2717,16 @@ class GroupBuyViewSet(ModelViewSet):
                         continue
 
             else:
-                # 구매자: 내가 구매완료한 공구 (새 방식 + 예전 방식 모두 포함)
-                participations = Participation.objects.filter(
-                    user=user,
-                    final_decision='confirmed',
-                    groupbuy__status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
-                ).select_related('groupbuy', 'groupbuy__product').order_by('-id')[:limit * 2]  # 안전한 정렬
+                # 구매자: 내가 구매완료한 공구
+                try:
+                    participations = Participation.objects.filter(
+                        user=user,
+                        final_decision='confirmed',
+                        groupbuy__status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
+                    ).select_related('groupbuy').order_by('-id')[:limit * 2]  # product 제외하고 안전하게
+                except Exception as e:
+                    logger.error(f"Error in buyer query: {str(e)}")
+                    participations = []
 
                 for participation in participations:
                     try:
