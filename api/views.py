@@ -2659,7 +2659,7 @@ class GroupBuyViewSet(ModelViewSet):
         data = []
 
         try:
-            if hasattr(user, 'role') and (user.role == 'seller' or user.user_type == '판매'):
+            if hasattr(user, 'role') and user.role == 'seller':
                 # 판매자: 내가 낙찰받고 판매완료한 공구 (새 방식 + 예전 방식 모두 포함)
                 bids = Bid.objects.filter(
                     seller=user,
@@ -3565,7 +3565,7 @@ class GroupBuyViewSet(ModelViewSet):
             pass
         
         # 판매자 권한 확인 (user_type도 체크)
-        is_seller = user.user_type == '판매' or user.role == 'seller'
+        is_seller = user.role == 'seller'
         
         print(f"Permission check - User: {user.username}, Creator: {groupbuy.creator}, Selected Seller: {selected_seller}, Is Selected: {is_selected_seller}, Is Seller: {is_seller}")
             
