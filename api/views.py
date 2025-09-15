@@ -2720,10 +2720,8 @@ class GroupBuyViewSet(ModelViewSet):
                 # 구매자: 내가 구매완료한 공구 (새 방식 + 예전 방식 모두 포함)
                 participations = Participation.objects.filter(
                     user=user,
-                    final_decision='confirmed'
-                ).filter(
-                    Q(is_purchase_completed=True) |  # 새 방식: 구매완료 버튼 누른 경우
-                    Q(groupbuy__status__in=['in_progress', 'completed'])  # 예전+현재: 거래중 또는 완료 상태
+                    final_decision='confirmed',
+                    groupbuy__status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
                 ).select_related('groupbuy', 'groupbuy__product').order_by('-id')[:limit * 2]  # 안전한 정렬
 
                 for participation in participations:
