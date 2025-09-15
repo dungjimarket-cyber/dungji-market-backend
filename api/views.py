@@ -2699,8 +2699,11 @@ class GroupBuyViewSet(ModelViewSet):
                             # 상품 정보 안전하게 처리
                             if gb.product:
                                 gb_data['product_name'] = getattr(gb.product, 'name', '')
-                                if hasattr(gb.product, 'image_url'):
+                                # image_url 먼저 체크, 없으면 image 필드 체크
+                                if hasattr(gb.product, 'image_url') and gb.product.image_url:
                                     gb_data['product_image'] = gb.product.image_url
+                                elif hasattr(gb.product, 'image') and gb.product.image:
+                                    gb_data['product_image'] = gb.product.image.url if hasattr(gb.product.image, 'url') else str(gb.product.image)
 
                             # 구매확정한 구매자 수
                             gb_data['participant_count'] = Participation.objects.filter(
@@ -2783,8 +2786,11 @@ class GroupBuyViewSet(ModelViewSet):
                             # 상품 정보 안전하게 처리
                             if gb.product:
                                 gb_data['product_name'] = getattr(gb.product, 'name', '')
-                                if hasattr(gb.product, 'image_url'):
+                                # image_url 먼저 체크, 없으면 image 필드 체크
+                                if hasattr(gb.product, 'image_url') and gb.product.image_url:
                                     gb_data['product_image'] = gb.product.image_url
+                                elif hasattr(gb.product, 'image') and gb.product.image:
+                                    gb_data['product_image'] = gb.product.image.url if hasattr(gb.product.image, 'url') else str(gb.product.image)
 
                             # 판매자 정보 (안전하게 처리)
                             try:
@@ -2796,6 +2802,7 @@ class GroupBuyViewSet(ModelViewSet):
                                 if selected_bid and selected_bid.seller:
                                     gb_data['seller_name'] = getattr(selected_bid.seller, 'nickname', '') or getattr(selected_bid.seller, 'username', '')
                                     gb_data['seller_id'] = selected_bid.seller.id  # 판매자 ID 추가
+                                    gb_data['seller_phone'] = getattr(selected_bid.seller, 'phone', '')  # 판매자 연락처 추가
                             except Exception as e:
                                 logger.error(f"Error getting seller info for gb {gb.id}: {str(e)}")
                                 gb_data['seller_name'] = ''
