@@ -2659,22 +2659,31 @@ class GroupBuyViewSet(ModelViewSet):
 
         try:
             if hasattr(user, 'role') and (user.role == 'seller' or user.user_type == '판매'):
-                # 판매자: 내가 낙찰받고 판매완료한 공구
-                # 판매완료한 입찰만 조회
+                # 판매자: 내가 낙찰받고 판매완료한 공구 (새 방식 + 예전 방식 모두 포함)
+                from django.db.models import Q, F
                 bids = Bid.objects.filter(
                     seller=user,
                     is_selected=True,
-                    final_decision='confirmed',
-                    is_sale_completed=True,  # 판매완료한 것만
-                    groupbuy__status__in=['in_progress', 'completed']
-                ).select_related('groupbuy', 'groupbuy__product').order_by('-sale_completed_at')[:limit * 2]  # 판매완료 시간 기준 정렬
+                    final_decision='confirmed'
+                ).filter(
+                    Q(is_sale_completed=True) |  # 새 방식: 판매완료 버튼 누른 경우
+                    Q(groupbuy__status='completed')  # 예전 방식: 공구가 완료 상태인 경우
+                ).select_related('groupbuy', 'groupbuy__product').order_by(
+                    F('sale_completed_at').desc(nulls_last=True),  # NULL 값은 뒤로
+                    '-groupbuy__completed_at',
+                    '-groupbuy__id'
+                )[:limit * 2]
 
                 for bid in bids:
                     try:
                         gb = bid.groupbuy
 
-                        # 판매완료 시간 사용 (completed_at이 없을 수 있음)
-                        completion_date = bid.sale_completed_at or gb.completed_at
+                        # 판매완료 시간 사용 (여러 fallback 옵션)
+                        completion_date = (
+                            bid.sale_completed_at or
+                            gb.completed_at or
+                            gb.end_time  # 최종 fallback: 공구 종료 시간
+                        )
 
                         # 완료 시간이 있고 15일 이내인 경우만 처리
                         if completion_date and completion_date >= cutoff_date:
@@ -2708,20 +2717,30 @@ class GroupBuyViewSet(ModelViewSet):
                         continue
 
             else:
-                # 구매자: 내가 구매완료한 공구
+                # 구매자: 내가 구매완료한 공구 (새 방식 + 예전 방식 모두 포함)
+                from django.db.models import Q, F
                 participations = Participation.objects.filter(
                     user=user,
-                    final_decision='confirmed',
-                    is_purchase_completed=True,  # 구매완료한 것만
-                    groupbuy__status__in=['in_progress', 'completed']
-                ).select_related('groupbuy', 'groupbuy__product').order_by('-purchase_completed_at')[:limit * 2]  # 구매완료 시간 기준 정렬
+                    final_decision='confirmed'
+                ).filter(
+                    Q(is_purchase_completed=True) |  # 새 방식: 구매완료 버튼 누른 경우
+                    Q(groupbuy__status='completed')  # 예전 방식: 공구가 완료 상태인 경우
+                ).select_related('groupbuy', 'groupbuy__product').order_by(
+                    F('purchase_completed_at').desc(nulls_last=True),  # NULL 값은 뒤로
+                    '-groupbuy__completed_at',
+                    '-groupbuy__id'
+                )[:limit * 2]
 
                 for participation in participations:
                     try:
                         gb = participation.groupbuy
 
-                        # 구매완료 시간 사용 (completed_at이 없을 수 있음)
-                        completion_date = participation.purchase_completed_at or gb.completed_at
+                        # 구매완료 시간 사용 (여러 fallback 옵션)
+                        completion_date = (
+                            participation.purchase_completed_at or
+                            gb.completed_at or
+                            gb.end_time  # 최종 fallback: 공구 종료 시간
+                        )
 
                         # 완료 시간이 있고 15일 이내인 경우만 처리
                         if completion_date and completion_date >= cutoff_date:
