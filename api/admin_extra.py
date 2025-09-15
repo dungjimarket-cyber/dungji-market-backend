@@ -233,15 +233,78 @@ class NoShowReportAdmin(admin.ModelAdmin):
     actions = ['confirm_reports', 'reject_reports', 'cancel_reports']
     
     def confirm_reports(self, request, queryset):
-        """선택한 신고 확인 처리"""
+        """선택한 신고 확인 처리 (공구 상태 자동 변경 포함)"""
         from django.utils import timezone
-        updated = queryset.filter(status='pending').update(
-            status='confirmed',
-            processed_at=timezone.now(),
-            processed_by=request.user
-        )
-        self.message_user(request, f'{updated}개의 신고가 확인 처리되었습니다.')
-    confirm_reports.short_description = '선택한 신고 확인'
+        from .models import Participation
+        import logging
+
+        logger = logging.getLogger(__name__)
+        processed_count = 0
+        cancelled_count = 0
+        completed_count = 0
+
+        for report in queryset.filter(status='pending'):
+            # 신고 상태를 처리완료로 변경
+            report.status = 'completed'  # 'confirmed'가 아닌 'completed'
+            report.processed_at = timezone.now()
+            report.processed_by = request.user
+            report.save()
+
+            # 공구 상태 처리
+            groupbuy = report.groupbuy
+
+            if report.report_type == 'seller_noshow':
+                # 판매자 노쇼 -> 공구 취소
+                groupbuy.status = 'cancelled'
+                groupbuy.cancellation_reason = '판매자 노쇼로 인한 공구 취소'
+                groupbuy.save()
+                cancelled_count += 1
+                logger.info(f"판매자 노쇼로 공구 {groupbuy.id} 취소 처리")
+
+            else:  # buyer_noshow
+                # 구매자 노쇼 처리
+                confirmed_participants = Participation.objects.filter(
+                    groupbuy=groupbuy,
+                    final_decision='confirmed'
+                )
+                confirmed_count = confirmed_participants.count()
+
+                # 노쇼 신고된 사용자들 체크
+                noshow_reports = NoShowReport.objects.filter(
+                    groupbuy=groupbuy,
+                    report_type='buyer_noshow',
+                    status__in=['pending', 'completed']
+                )
+                noshow_users = set(noshow_reports.values_list('reported_user_id', flat=True))
+                noshow_count = len(noshow_users)
+
+                if confirmed_count > 0 and noshow_count >= confirmed_count:
+                    # 전원 노쇼 -> 공구 취소
+                    groupbuy.status = 'cancelled'
+                    groupbuy.cancellation_reason = '구매자 전원 노쇼로 인한 공구 취소'
+                    groupbuy.save()
+                    cancelled_count += 1
+                    logger.info(f"공구 {groupbuy.id} 전원 노쇼로 취소 처리")
+
+                elif noshow_count > 0 and noshow_count < confirmed_count:
+                    # 일부 노쇼 -> 공구 완료
+                    groupbuy.status = 'completed'
+                    groupbuy.completed_at = timezone.now()
+                    groupbuy.save()
+                    completed_count += 1
+                    logger.info(f"공구 {groupbuy.id} 부분 노쇼로 판매완료 처리")
+
+            processed_count += 1
+
+        # 결과 메시지
+        msg = f'{processed_count}개의 신고가 처리되었습니다.'
+        if cancelled_count > 0:
+            msg += f' ({cancelled_count}개 공구 취소)'
+        if completed_count > 0:
+            msg += f' ({completed_count}개 공구 완료)'
+
+        self.message_user(request, msg)
+    confirm_reports.short_description = '선택한 신고 처리완료'
     
     def reject_reports(self, request, queryset):
         """선택한 신고 반려"""
