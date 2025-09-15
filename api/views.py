@@ -2634,25 +2634,31 @@ class GroupBuyViewSet(ModelViewSet):
         try:
             if hasattr(user, 'role') and (user.role == 'seller' or user.user_type == '판매'):
                 # 판매자: 내가 낙찰받고 판매완료한 공구
-                # completed_at이 없을 수도 있으므로 우선 status='completed'인 것들을 조회
-                completed = GroupBuy.objects.filter(
-                    bid__seller=user,
-                    bid__is_selected=True,
-                    bid__final_decision='confirmed',
-                    status='completed'
-                ).select_related('product').distinct().order_by('-id')[:limit * 2]  # 여유있게 조회
+                # 판매완료한 입찰만 조회
+                bids = Bid.objects.filter(
+                    seller=user,
+                    is_selected=True,
+                    final_decision='confirmed',
+                    is_sale_completed=True,  # 판매완료한 것만
+                    groupbuy__status__in=['in_progress', 'completed']
+                ).select_related('groupbuy', 'groupbuy__product').order_by('-sale_completed_at')[:limit * 2]  # 판매완료 시간 기준 정렬
 
-                for gb in completed:
+                for bid in bids:
                     try:
-                        # completed_at이 있고 15일 이내인 경우만 처리
-                        if gb.completed_at and gb.completed_at >= cutoff_date:
+                        gb = bid.groupbuy
+
+                        # 판매완료 시간 사용 (completed_at이 없을 수 있음)
+                        completion_date = bid.sale_completed_at or gb.completed_at
+
+                        # 완료 시간이 있고 15일 이내인 경우만 처리
+                        if completion_date and completion_date >= cutoff_date:
                             gb_data = {
                                 'id': gb.id,
                                 'title': gb.title or gb.product_name or '공구',
                                 'product_name': '',
                                 'product_image': None,
-                                'completed_at': gb.completed_at.isoformat() if gb.completed_at else None,
-                                'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
+                                'completed_at': completion_date.isoformat() if completion_date else None,
+                                'days_ago': (timezone.now() - completion_date).days if completion_date else 0
                             }
 
                             # 상품 정보 안전하게 처리
@@ -2680,22 +2686,26 @@ class GroupBuyViewSet(ModelViewSet):
                 participations = Participation.objects.filter(
                     user=user,
                     final_decision='confirmed',
-                    groupbuy__status='completed'
-                ).select_related('groupbuy', 'groupbuy__product').order_by('-groupbuy__id')[:limit * 2]  # 여유있게 조회
+                    is_purchase_completed=True,  # 구매완료한 것만
+                    groupbuy__status__in=['in_progress', 'completed']
+                ).select_related('groupbuy', 'groupbuy__product').order_by('-purchase_completed_at')[:limit * 2]  # 구매완료 시간 기준 정렬
 
                 for participation in participations:
                     try:
                         gb = participation.groupbuy
 
-                        # completed_at이 있고 15일 이내인 경우만 처리
-                        if gb.completed_at and gb.completed_at >= cutoff_date:
+                        # 구매완료 시간 사용 (completed_at이 없을 수 있음)
+                        completion_date = participation.purchase_completed_at or gb.completed_at
+
+                        # 완료 시간이 있고 15일 이내인 경우만 처리
+                        if completion_date and completion_date >= cutoff_date:
                             gb_data = {
                                 'id': gb.id,
                                 'title': gb.title or gb.product_name or '공구',
                                 'product_name': '',
                                 'product_image': None,
-                                'completed_at': gb.completed_at.isoformat() if gb.completed_at else None,
-                                'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
+                                'completed_at': completion_date.isoformat() if completion_date else None,
+                                'days_ago': (timezone.now() - completion_date).days if completion_date else 0
                             }
 
                             # 상품 정보 안전하게 처리
