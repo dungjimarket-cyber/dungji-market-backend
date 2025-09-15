@@ -2669,7 +2669,7 @@ class GroupBuyViewSet(ModelViewSet):
                     Q(is_sale_completed=True) |  # 새 방식: 판매완료 버튼 누른 경우
                     Q(groupbuy__status='completed')  # 예전 방식: 공구가 완료 상태인 경우
                 ).select_related('groupbuy', 'groupbuy__product').order_by(
-                    F('sale_completed_at').desc(nulls_last=True),  # NULL 값은 뒤로
+                    '-sale_completed_at',  # 간단한 방식으로 변경
                     '-groupbuy__completed_at',
                     '-groupbuy__id'
                 )[:limit * 2]
@@ -2726,7 +2726,7 @@ class GroupBuyViewSet(ModelViewSet):
                     Q(is_purchase_completed=True) |  # 새 방식: 구매완료 버튼 누른 경우
                     Q(groupbuy__status='completed')  # 예전 방식: 공구가 완료 상태인 경우
                 ).select_related('groupbuy', 'groupbuy__product').order_by(
-                    F('purchase_completed_at').desc(nulls_last=True),  # NULL 값은 뒤로
+                    '-purchase_completed_at',  # 간단한 방식으로 변경
                     '-groupbuy__completed_at',
                     '-groupbuy__id'
                 )[:limit * 2]
