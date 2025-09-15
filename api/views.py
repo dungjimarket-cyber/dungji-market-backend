@@ -2717,28 +2717,29 @@ class GroupBuyViewSet(ModelViewSet):
                         continue
 
             else:
-                # 구매자: 내가 구매완료한 공구 (매우 단순한 쿼리)
+                # 구매자: 디버깅을 위한 최소한의 쿼리
+                participations = []
                 try:
-                    # 단계별로 분리해서 안전하게 처리
-                    participation_ids = Participation.objects.filter(
+                    logger.info(f"Buyer query start for user {user.id}")
+                    # 가장 단순한 쿼리
+                    user_participations = Participation.objects.filter(
                         user=user,
                         final_decision='confirmed'
-                    ).values_list('id', flat=True).order_by('-id')[:limit * 3]
+                    )[:10]  # 일단 10개만
 
-                    participations = []
-                    for pid in participation_ids:
+                    logger.info(f"Found {len(user_participations)} participations")
+
+                    for p in user_participations:
                         try:
-                            p = Participation.objects.select_related('groupbuy').get(id=pid)
-                            if p.groupbuy and p.groupbuy.status in ['in_progress', 'completed']:
+                            if hasattr(p, 'groupbuy'):
                                 participations.append(p)
-                                if len(participations) >= limit * 2:
-                                    break
-                        except Exception as e:
-                            logger.error(f"Error getting participation {pid}: {str(e)}")
-                            continue
+                        except:
+                            pass
+
                 except Exception as e:
-                    logger.error(f"Error in buyer query: {str(e)}")
-                    participations = []
+                    logger.error(f"Critical error in buyer query: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
 
                 for participation in participations:
                     try:
