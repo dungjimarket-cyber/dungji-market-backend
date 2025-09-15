@@ -2723,7 +2723,7 @@ class GroupBuyViewSet(ModelViewSet):
                         user=user,
                         final_decision='confirmed',
                         groupbuy__status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
-                    ).select_related('groupbuy').order_by('-id')[:limit * 2]  # product 제외하고 안전하게
+                    ).select_related('groupbuy').distinct().order_by('-id')[:limit * 2]  # distinct 추가로 중복 제거
                 except Exception as e:
                     logger.error(f"Error in buyer query: {str(e)}")
                     participations = []
