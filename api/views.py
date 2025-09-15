@@ -2782,6 +2782,8 @@ class GroupBuyViewSet(ModelViewSet):
             logger.error(traceback.format_exc())
             return Response({'error': '최근 거래 조회 중 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # 날짜 기준으로 최신순 정렬
+        data.sort(key=lambda x: x.get('completed_at', ''), reverse=True)
         return Response(data)
 
     @action(detail=False, methods=['get'])
