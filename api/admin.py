@@ -1197,7 +1197,7 @@ class GroupBuyAdmin(admin.ModelAdmin):
     inlines = [GroupBuyRegionInline, BidInline]
     actions = ['force_complete_groupbuy', 'select_winning_bid']
     exclude = ['region']  # 기존 단일 region 필드는 제외
-    list_filter = ('status', 'created_at', 'end_time')
+    list_filter = ('status', 'start_time', 'end_time')
     search_fields = ('title', 'product__name', 'creator__username', 'creator__email')
     
     # 한글화
