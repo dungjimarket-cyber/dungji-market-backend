@@ -1235,7 +1235,7 @@ class GroupBuyAdmin(admin.ModelAdmin):
             bid_info = [
                 f"<strong>판매자:</strong> {seller.username} ({seller.email})",
                 f"<strong>연락처:</strong> {seller.phone or '-'}",
-                f"<strong>입찰금액:</strong> {융{selected_bid.amount:,}",
+                f"<strong>입찰금액:</strong> ₩{selected_bid.amount:,}",
                 f"<strong>입찰일시:</strong> {selected_bid.created_at.strftime('%Y-%m-%d %H:%M')}",
                 f"<strong>입찰상태:</strong> {selected_bid.get_status_display()}",
             ]
