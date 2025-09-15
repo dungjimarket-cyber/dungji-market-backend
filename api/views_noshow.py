@@ -285,8 +285,7 @@ class NoShowReportViewSet(ModelViewSet):
         report.processed_by = request.user
         report.save()
         
-        # 관리자 처리 시 자동 상태 변경 로직 제거
-        # 단순히 신고 상태만 처리완료로 변경하고 공구 상태는 수동 처리
+        # 패널티는 수동으로 처리
         groupbuy = report.groupbuy
         action_taken = 'confirmed_only'
         message = '노쇼 신고가 처리완료되었습니다.'
