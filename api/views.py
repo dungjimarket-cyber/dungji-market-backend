@@ -2724,11 +2724,7 @@ class GroupBuyViewSet(ModelViewSet):
                 ).filter(
                     Q(is_purchase_completed=True) |  # 새 방식: 구매완료 버튼 누른 경우
                     Q(groupbuy__status__in=['in_progress', 'completed'])  # 예전+현재: 거래중 또는 완료 상태
-                ).select_related('groupbuy', 'groupbuy__product').order_by(
-                    '-purchase_completed_at',  # 간단한 방식으로 변경
-                    '-groupbuy__completed_at',
-                    '-groupbuy__id'
-                )[:limit * 2]
+                ).select_related('groupbuy', 'groupbuy__product').order_by('-id')[:limit * 2]  # 안전한 정렬
 
                 for participation in participations:
                     try:
