@@ -2717,13 +2717,25 @@ class GroupBuyViewSet(ModelViewSet):
                         continue
 
             else:
-                # 구매자: 내가 구매완료한 공구
+                # 구매자: 내가 구매완료한 공구 (매우 단순한 쿼리)
                 try:
-                    participations = Participation.objects.filter(
+                    # 단계별로 분리해서 안전하게 처리
+                    participation_ids = Participation.objects.filter(
                         user=user,
-                        final_decision='confirmed',
-                        groupbuy__status__in=['in_progress', 'completed']  # 거래중 또는 완료 상태
-                    ).select_related('groupbuy').distinct().order_by('-id')[:limit * 2]  # distinct 추가로 중복 제거
+                        final_decision='confirmed'
+                    ).values_list('id', flat=True).order_by('-id')[:limit * 3]
+
+                    participations = []
+                    for pid in participation_ids:
+                        try:
+                            p = Participation.objects.select_related('groupbuy').get(id=pid)
+                            if p.groupbuy and p.groupbuy.status in ['in_progress', 'completed']:
+                                participations.append(p)
+                                if len(participations) >= limit * 2:
+                                    break
+                        except Exception as e:
+                            logger.error(f"Error getting participation {pid}: {str(e)}")
+                            continue
                 except Exception as e:
                     logger.error(f"Error in buyer query: {str(e)}")
                     participations = []
