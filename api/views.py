@@ -2610,7 +2610,83 @@ class GroupBuyViewSet(ModelViewSet):
             data.append(gb_data)
         
         return Response(data)
-    
+
+    @action(detail=False, methods=['get'])
+    def recent_completed(self, request):
+        """최근 거래종료한 공구 조회 (노쇼신고용)
+
+        거래종료 후 15일 이내의 최근 3건 조회
+        구매자/판매자 구분하여 조회
+        """
+        from datetime import timedelta
+        from .models import Bid, Participation
+
+        user = request.user
+        limit = int(request.query_params.get('limit', 3))
+
+        # 15일 전 날짜 계산
+        cutoff_date = timezone.now() - timedelta(days=15)
+
+        if user.role == 'seller' or user.user_type == '판매':
+            # 판매자: 내가 낙찰받고 판매완료한 공구
+            completed = self.get_queryset().filter(
+                bid__seller=user,
+                bid__is_selected=True,
+                bid__final_decision='confirmed',
+                status='completed',
+                completed_at__gte=cutoff_date  # 15일 이내
+            ).order_by('-completed_at').distinct()[:limit]
+
+            data = []
+            for gb in completed:
+                gb_data = {
+                    'id': gb.id,
+                    'title': gb.title,
+                    'product_name': gb.product.name if gb.product else '',
+                    'product_image': gb.product.image_url if gb.product and gb.product.image_url else None,
+                    'completed_at': gb.completed_at,
+                    'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
+                }
+                # 구매확정한 구매자 수 (노쇼신고 대상)
+                confirmed_count = Participation.objects.filter(
+                    groupbuy=gb,
+                    final_decision='confirmed'
+                ).count()
+                gb_data['participant_count'] = confirmed_count
+                data.append(gb_data)
+
+        else:
+            # 구매자: 내가 구매완료한 공구
+            participations = Participation.objects.filter(
+                user=user,
+                final_decision='confirmed',
+                groupbuy__status='completed',
+                groupbuy__completed_at__gte=cutoff_date  # 15일 이내
+            ).select_related('groupbuy', 'groupbuy__product').order_by('-groupbuy__completed_at')[:limit]
+
+            data = []
+            for participation in participations:
+                gb = participation.groupbuy
+                gb_data = {
+                    'id': gb.id,
+                    'title': gb.title,
+                    'product_name': gb.product.name if gb.product else '',
+                    'product_image': gb.product.image_url if gb.product and gb.product.image_url else None,
+                    'completed_at': gb.completed_at,
+                    'days_ago': (timezone.now() - gb.completed_at).days if gb.completed_at else 0
+                }
+                # 판매자 정보 (노쇼신고 대상)
+                selected_bid = Bid.objects.filter(
+                    groupbuy=gb,
+                    is_selected=True,
+                    final_decision='confirmed'
+                ).first()
+                if selected_bid:
+                    gb_data['seller_name'] = selected_bid.seller.nickname or selected_bid.seller.username
+                data.append(gb_data)
+
+        return Response(data)
+
     @action(detail=False, methods=['get'])
     def seller_cancelled(self, request):
         """판매자의 취소된 공구 조회"""
