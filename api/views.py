@@ -2724,7 +2724,7 @@ class GroupBuyViewSet(ModelViewSet):
                     final_decision='confirmed'
                 ).filter(
                     Q(is_purchase_completed=True) |  # 새 방식: 구매완료 버튼 누른 경우
-                    Q(groupbuy__status='completed')  # 예전 방식: 공구가 완료 상태인 경우
+                    Q(groupbuy__status__in=['in_progress', 'completed'])  # 예전+현재: 거래중 또는 완료 상태
                 ).select_related('groupbuy', 'groupbuy__product').order_by(
                     '-purchase_completed_at',  # 간단한 방식으로 변경
                     '-groupbuy__completed_at',
