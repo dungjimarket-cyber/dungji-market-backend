@@ -1176,14 +1176,29 @@ class GroupBuyRegionInline(admin.TabularInline):
     verbose_name = '공구 지역'
     verbose_name_plural = '공구 지역 (최대 3개)'
 
+class BidInline(admin.TabularInline):
+    """입찰 인라인 관리 - 공구 상세페이지에서 입찰 현황 확인 및 선정"""
+    model = Bid
+    extra = 0
+    fields = ('seller', 'bid_type', 'amount', 'is_selected', 'status', 'final_decision', 'created_at')
+    readonly_fields = ('seller', 'bid_type', 'amount', 'created_at', 'status', 'final_decision')
+    verbose_name = '입찰'
+    verbose_name_plural = '입찰 목록'
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False  # 관리자페이지에서 직접 입찰 추가 불가
+
 @admin.register(GroupBuy)
 class GroupBuyAdmin(admin.ModelAdmin):
-    list_display = ('product', 'creator', 'status', 'current_participants', 'get_regions', 'end_time')
+    list_display = ('product', 'creator', 'status', 'current_participants', 'get_regions', 'get_selected_seller', 'end_time')
     raw_id_fields = ('participants',)
-    readonly_fields = ('current_participants', 'get_regions_display')
-    inlines = [GroupBuyRegionInline]
-    actions = ['force_complete_groupbuy']
+    readonly_fields = ('current_participants', 'get_regions_display', 'get_selected_seller_info')
+    inlines = [GroupBuyRegionInline, BidInline]
+    actions = ['force_complete_groupbuy', 'select_winning_bid']
     exclude = ['region']  # 기존 단일 region 필드는 제외
+    list_filter = ('status', 'created_at', 'end_time')
+    search_fields = ('title', 'product__name', 'creator__username', 'creator__email')
     
     # 한글화
     def __init__(self, model, admin_site):
@@ -1203,26 +1218,82 @@ class GroupBuyAdmin(admin.ModelAdmin):
             return ' / '.join([r.region.full_name for r in regions])
         return '지역 정보 없음'
     get_regions_display.short_description = '공구 가능 지역'
-    
+
+    def get_selected_seller(self, obj):
+        """목록에서 최종 선정된 판매자 표시"""
+        selected_bid = obj.bid_set.filter(is_selected=True).select_related('seller').first()
+        if selected_bid:
+            return f"{selected_bid.seller.username} ({selected_bid.seller.email})"
+        return '-'
+    get_selected_seller.short_description = '최종 선정 판매자'
+
+    def get_selected_seller_info(self, obj):
+        """상세페이지에서 최종 선정된 판매자 정보 표시"""
+        selected_bid = obj.bid_set.filter(is_selected=True).select_related('seller').first()
+        if selected_bid:
+            seller = selected_bid.seller
+            bid_info = [
+                f"<strong>판매자:</strong> {seller.username} ({seller.email})",
+                f"<strong>연락처:</strong> {seller.phone or '-'}",
+                f"<strong>입찰금액:</strong> {융{selected_bid.amount:,}",
+                f"<strong>입찰일시:</strong> {selected_bid.created_at.strftime('%Y-%m-%d %H:%M')}",
+                f"<strong>입찰상태:</strong> {selected_bid.get_status_display()}",
+            ]
+            if selected_bid.final_decision:
+                bid_info.append(f"<strong>판매자 최종선택:</strong> {selected_bid.get_final_decision_display()}")
+            if selected_bid.final_decision_at:
+                bid_info.append(f"<strong>최종선택 일시:</strong> {selected_bid.final_decision_at.strftime('%Y-%m-%d %H:%M')}")
+
+            return mark_safe("<br>".join(bid_info))
+        return '선정된 판매자 없음'
+    get_selected_seller_info.short_description = '최종 선정 판매자 상세 정보'
+
     def force_complete_groupbuy(self, request, queryset):
         for groupbuy in queryset:
             groupbuy.status = 'completed'
             groupbuy.save()
     force_complete_groupbuy.short_description = '선택한 공구를 강제 완료 처리'
 
+    def select_winning_bid(self, request, queryset):
+        """선택된 공구의 입찰자 선정 페이지로 이동"""
+        count = 0
+        for groupbuy in queryset:
+            bids = groupbuy.bid_set.filter(is_selected=True)
+            if bids.exists():
+                count += 1
+
+        messages.success(request, f'{count}개 공구에 선정된 판매자가 있습니다.')
+        return
+    select_winning_bid.short_description = '선정된 판매자 확인'
+
 @admin.register(Bid)
 class BidAdmin(admin.ModelAdmin):
-    list_display = ('seller', 'groupbuy', 'bid_type', 'display_amount', 'is_selected')
+    list_display = ('seller', 'groupbuy', 'bid_type', 'display_amount', 'is_selected', 'status', 'final_decision')
     list_editable = ('is_selected',)
-    
+    list_filter = ('is_selected', 'status', 'final_decision', 'bid_type')
+    search_fields = ('seller__username', 'seller__email', 'groupbuy__title')
+    readonly_fields = ('created_at', 'updated_at', 'final_decision_at')
+
     # 한글화
     def __init__(self, model, admin_site):
         self.list_display_links = ('seller',)
         super().__init__(model, admin_site)
 
     def display_amount(self, obj):
-        return f"{obj.amount // 10000}****"  # 부분 마스킹 처리
+        return f"₩{obj.amount:,}"  # 전체 금액 표시
     display_amount.short_description = '입찰 금액'
+
+    def save_model(self, request, obj, form, change):
+        """입찰 선정 시 다른 입찰들은 리셋"""
+        if obj.is_selected:
+            # 동일 공구의 다른 입찰들의 is_selected를 False로 설정
+            Bid.objects.filter(groupbuy=obj.groupbuy).exclude(pk=obj.pk).update(is_selected=False)
+            # 선택된 입찰의 상태를 'selected'로 변경
+            obj.status = 'selected'
+        super().save_model(request, obj, form, change)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('seller', 'groupbuy', 'groupbuy__product')
 
 
 @admin.register(ParticipantConsent)
