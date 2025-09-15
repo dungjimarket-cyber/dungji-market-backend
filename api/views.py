@@ -2186,14 +2186,15 @@ class GroupBuyViewSet(ModelViewSet):
     @action(detail=False, methods=['get'])
     def purchase_completed(self, request):
         """구매 완료된 공구 목록 조회
-        
+
         사용자가 구매완료 버튼을 눌러 거래를 완료한 공구
         """
         user = request.user
-        
+
         if user.role == 'buyer':
             # 구매완료 시간 기준으로 최신순 정렬
             from django.db.models import F
+            from .models import Participation
             completed = self.get_queryset().filter(
                 participants=user,
                 participation__user=user,
@@ -2205,8 +2206,22 @@ class GroupBuyViewSet(ModelViewSet):
         else:
             completed = self.get_queryset().none()
 
-        serializer = self.get_serializer(completed, many=True)
-        return Response(serializer.data)
+        # 각 공구에 구매완료 시간 추가
+        data = []
+        for gb in completed:
+            gb_data = self.get_serializer(gb).data
+            # 구매완료 시간 가져오기
+            participation = Participation.objects.filter(
+                groupbuy=gb,
+                user=user
+            ).first()
+            if participation and participation.purchase_completed_at:
+                gb_data['completed_at'] = participation.purchase_completed_at
+            elif gb.completed_at:
+                gb_data['completed_at'] = gb.completed_at
+            data.append(gb_data)
+
+        return Response(data)
     
     @action(detail=False, methods=['get'])
     def cancelled_groupbuys(self, request):
@@ -2604,15 +2619,18 @@ class GroupBuyViewSet(ModelViewSet):
                 final_decision='confirmed'
             ).count()
             gb_data['confirmed_buyers'] = confirmed_count
-            # 판매확정 시간을 완료시간으로 사용
+            # 판매완료 시간을 완료시간으로 사용
             bid = Bid.objects.filter(
                 groupbuy=gb,
                 seller=request.user,
                 is_selected=True
             ).first()
             if bid:
-                if bid.final_decision_at:
-                    gb_data['completed_at'] = bid.final_decision_at
+                # 판매완료 시간 우선, 없으면 GroupBuy의 completed_at 사용
+                if bid.sale_completed_at:
+                    gb_data['completed_at'] = bid.sale_completed_at
+                elif gb.completed_at:
+                    gb_data['completed_at'] = gb.completed_at
                 # 낙찰 금액 추가
                 gb_data['winning_bid_amount'] = bid.amount
             data.append(gb_data)
