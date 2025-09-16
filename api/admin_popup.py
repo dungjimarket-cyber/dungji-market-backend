@@ -18,7 +18,9 @@ class PopupAdmin(admin.ModelAdmin):
     ]
     
     list_filter = [
-        'is_active', 'popup_type', 'show_on_main', 'show_on_mobile',
+        'is_active', 'popup_type', 'show_on_main', 'show_on_groupbuy_list',
+        'show_on_groupbuy_detail', 'show_on_used_list', 'show_on_used_detail',
+        'show_on_mypage', 'show_on_mobile',
         'start_date', 'end_date', 'created_at'
     ]
     
@@ -39,11 +41,19 @@ class PopupAdmin(admin.ModelAdmin):
                 'link_url', 'link_target'
             )
         }),
-        ('표시 설정', {
+        ('페이지별 표시 설정', {
+            'fields': (
+                ('show_on_main', 'show_on_mypage'),
+                ('show_on_groupbuy_list', 'show_on_groupbuy_detail'),
+                ('show_on_used_list', 'show_on_used_detail'),
+                'show_on_mobile'
+            ),
+            'description': '팝업을 표시할 페이지를 선택하세요. 여러 페이지 동시 선택 가능.'
+        }),
+        ('표시 위치 및 크기', {
             'fields': (
                 'position', 'position_x', 'position_y',
-                'width', 'height',
-                'show_on_main', 'show_on_mobile'
+                'width', 'height'
             ),
             'classes': ('collapse',)
         }),
@@ -53,10 +63,10 @@ class PopupAdmin(admin.ModelAdmin):
         ('사용자 옵션', {
             'fields': ('show_today_close', 'show_week_close')
         }),
-        ('페이지별 설정', {
+        ('구버전 설정 (사용하지 마세요)', {
             'fields': ('show_pages', 'exclude_pages'),
             'classes': ('collapse',),
-            'description': '특정 페이지에서만 팝업을 표시하거나 제외할 수 있습니다.'
+            'description': '⚠️ 구버전 호환용입니다. 위의 체크박스를 사용하세요.'
         }),
         ('통계', {
             'fields': ('view_count', 'click_count', 'statistics_chart'),

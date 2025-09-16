@@ -107,11 +107,23 @@ class Notice(models.Model):
         verbose_name='썸네일 이미지'
     )
     
-    # 메인 노출 관련 필드
+    # 페이지별 노출 설정 (체크박스)
     show_in_main = models.BooleanField(
         default=False,
-        verbose_name='메인 화면 노출',
-        help_text='메인 화면에 노출할지 여부'
+        verbose_name='메인 페이지',
+        help_text='메인 페이지에 노출'
+    )
+
+    show_in_groupbuy = models.BooleanField(
+        default=False,
+        verbose_name='공구(견적) 목록',
+        help_text='공구(견적) 목록 페이지에 노출'
+    )
+
+    show_in_used = models.BooleanField(
+        default=False,
+        verbose_name='중고거래 목록',
+        help_text='중고거래 목록 페이지에 노출'
     )
     
     DISPLAY_TYPE_CHOICES = [

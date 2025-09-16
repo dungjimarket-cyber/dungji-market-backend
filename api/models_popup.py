@@ -134,12 +134,43 @@ class Popup(models.Model):
         help_text='팝업 표시 종료일시 (비어있으면 계속 표시)'
     )
     
+    # 페이지별 표시 설정 (체크박스)
     show_on_main = models.BooleanField(
         default=True,
-        verbose_name='메인 페이지 표시',
+        verbose_name='메인 페이지',
         help_text='메인 페이지에서 팝업 표시'
     )
-    
+
+    show_on_groupbuy_list = models.BooleanField(
+        default=False,
+        verbose_name='공구 목록',
+        help_text='공구(견적) 목록 페이지에서 표시'
+    )
+
+    show_on_groupbuy_detail = models.BooleanField(
+        default=False,
+        verbose_name='공구 상세',
+        help_text='공구(견적) 상세 페이지에서 표시'
+    )
+
+    show_on_used_list = models.BooleanField(
+        default=False,
+        verbose_name='중고거래 목록',
+        help_text='중고거래 목록 페이지에서 표시'
+    )
+
+    show_on_used_detail = models.BooleanField(
+        default=False,
+        verbose_name='중고거래 상세',
+        help_text='중고거래 상세 페이지에서 표시'
+    )
+
+    show_on_mypage = models.BooleanField(
+        default=False,
+        verbose_name='마이페이지',
+        help_text='마이페이지에서 표시'
+    )
+
     show_on_mobile = models.BooleanField(
         default=True,
         verbose_name='모바일 표시',
@@ -159,19 +190,20 @@ class Popup(models.Model):
         help_text='일주일 보지 않기 옵션 표시'
     )
     
-    # 페이지별 표시 설정
+    # 페이지별 표시 설정 (DEPRECATED - 체크박스 필드 사용)
+    # 마이그레이션 후 제거 예정
     show_pages = models.JSONField(
         default=list,
         blank=True,
-        verbose_name='표시할 페이지',
-        help_text='팝업을 표시할 페이지 경로 목록 (비어있으면 모든 페이지)'
+        verbose_name='[구버전] 표시할 페이지',
+        help_text='(사용하지 마세요) 위의 체크박스를 사용하세요'
     )
-    
+
     exclude_pages = models.JSONField(
         default=list,
         blank=True,
-        verbose_name='제외할 페이지',
-        help_text='팝업을 표시하지 않을 페이지 경로 목록'
+        verbose_name='[구버전] 제외할 페이지',
+        help_text='(사용하지 마세요) 위의 체크박스를 사용하세요'
     )
     
     # 통계

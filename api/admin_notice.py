@@ -64,11 +64,13 @@ class NoticeAdmin(admin.ModelAdmin):
     form = NoticeAdminForm
     list_display = [
         'id', 'category_badge', 'title_display', 'author',
-        'is_pinned_display', 'show_in_main_display', 'display_type',
+        'is_pinned_display', 'show_in_main_display', 'show_in_groupbuy_display',
+        'show_in_used_display', 'display_type',
         'is_published_display', 'view_count', 'published_at', 'created_at'
     ]
     list_filter = [
-        'category', 'is_pinned', 'show_in_main', 'display_type',
+        'category', 'is_pinned', 'show_in_main', 'show_in_groupbuy',
+        'show_in_used', 'display_type',
         'is_published', 'created_at', 'published_at'
     ]
     search_fields = ['title', 'content', 'summary']
@@ -88,16 +90,21 @@ class NoticeAdmin(admin.ModelAdmin):
                 'published_at'
             )
         }),
-        ('메인 화면 노출 설정', {
+        ('페이지별 노출 설정', {
             'fields': (
-                'show_in_main',
+                ('show_in_main', 'show_in_groupbuy', 'show_in_used'),
+            ),
+            'description': '공지를 노출할 페이지를 선택하세요. 여러 페이지에 동시 노출 가능합니다.'
+        }),
+        ('메인 화면 추가 설정', {
+            'fields': (
                 'display_type',
                 'main_display_order',
                 'main_banner_image',
                 'main_banner_preview',
                 'banner_link'
             ),
-            'description': '메인 화면에 노출할 공지사항 설정입니다. display_type이 "배너"인 경우 main_banner_image를 업로드해주세요.'
+            'description': '메인 화면 노출 시 추가 설정입니다. display_type이 "배너"인 경우 main_banner_image를 업로드해주세요.'
         }),
         ('내용', {
             'fields': ('content', 'content_preview'),
@@ -164,10 +171,28 @@ class NoticeAdmin(admin.ModelAdmin):
         """메인 노출 상태 표시"""
         if obj.show_in_main:
             return format_html(
-                '<span style="color: #10b981;">✅ 메인노출</span>'
+                '<span style="color: #10b981;">✅ 메인</span>'
             )
         return '-'
-    show_in_main_display.short_description = "메인노출"
+    show_in_main_display.short_description = "메인"
+
+    def show_in_groupbuy_display(self, obj):
+        """공구 목록 노출 상태 표시"""
+        if obj.show_in_groupbuy:
+            return format_html(
+                '<span style="color: #3b82f6;">✅ 공구</span>'
+            )
+        return '-'
+    show_in_groupbuy_display.short_description = "공구"
+
+    def show_in_used_display(self, obj):
+        """중고거래 노출 상태 표시"""
+        if obj.show_in_used:
+            return format_html(
+                '<span style="color: #8b5cf6;">✅ 중고</span>'
+            )
+        return '-'
+    show_in_used_display.short_description = "중고"
     
     def is_published_display(self, obj):
         """게시 상태 표시"""
