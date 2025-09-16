@@ -526,7 +526,7 @@ class BidSerializer(serializers.ModelSerializer):
     """
     seller_name = serializers.CharField(source='seller.username', read_only=True)
     seller_nickname = serializers.CharField(source='seller.nickname', read_only=True)
-    seller_phone = serializers.CharField(source='seller.phone', read_only=True)
+    seller_phone = serializers.CharField(source='seller.phone_number', read_only=True)
     groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
     product_name = serializers.CharField(source='groupbuy.product.name', read_only=True)
     current_participants = serializers.IntegerField(source='groupbuy.current_participants', read_only=True)
