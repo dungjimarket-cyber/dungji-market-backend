@@ -103,7 +103,7 @@ def buyer_final_decision(request, groupbuy_id):
             
             # 알림 발송
             if decision == 'confirmed':
-                message = f"{groupbuy.title} 공구를 구매확정하셨습니다. 판매자 정보는 마이페이지에서 확인하세요."
+                message = f"{groupbuy.title} 공구를 구매확정하셨습니다. 판매자 최종선택이 진행됩니다."
             else:
                 message = f"{groupbuy.title} 공구를 구매포기하셨습니다."
             

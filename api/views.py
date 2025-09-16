@@ -3692,7 +3692,7 @@ class ParticipationViewSet(ModelViewSet):
                     user=participation.user,
                     groupbuy=participation.groupbuy,
                     notification_type='purchase_confirmed',
-                    message=f"{participation.groupbuy.title} 공구의 구매를 확정했습니다. 판매자 정보를 확인하세요."
+                    message=f"{participation.groupbuy.title} 공구를 구매확정하셨습니다. 판매자 최종선택이 진행됩니다."
                 )
             else:
                 Notification.objects.create(
