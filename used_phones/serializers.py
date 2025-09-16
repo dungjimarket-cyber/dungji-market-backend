@@ -86,9 +86,10 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'brand', 'model', 'storage', 'color', 'price', 'final_price',
             'min_offer_price', 'accept_offers', 'condition_grade',
-            'battery_status', 'status', 'view_count', 'favorite_count',
-            'offer_count', 'region_name', 'regions', 'images', 'is_favorite',
-            'created_at', 'body_only', 'is_modified', 'buyer', 'transaction_id'
+            'condition_description', 'battery_status', 'status', 'view_count',
+            'favorite_count', 'offer_count', 'region_name', 'regions', 'images',
+            'is_favorite', 'created_at', 'body_only', 'has_box', 'has_charger',
+            'has_earphones', 'meeting_place', 'is_modified', 'buyer', 'transaction_id'
         ]
     
     def get_region_name(self, obj):
@@ -197,12 +198,14 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UsedPhone
-        fields = ['id', 'seller', 'brand', 'model', 'storage', 'condition_grade',
-                  'battery_status', 'price', 'accept_offers', 'description',
-                  'status', 'view_count', 'favorite_count', 'offer_count',
-                  'sold_at', 'created_at', 'updated_at', 'images', 'is_favorite',
-                  'region_name', 'regions', 'buyer_id', 'buyer', 'transaction_id',
-                  'final_price']
+        fields = ['id', 'seller', 'brand', 'model', 'storage', 'color',
+                  'condition_grade', 'condition_description', 'battery_status',
+                  'price', 'min_offer_price', 'accept_offers', 'description',
+                  'body_only', 'has_box', 'has_charger', 'has_earphones',
+                  'meeting_place', 'status', 'view_count', 'favorite_count',
+                  'offer_count', 'sold_at', 'created_at', 'updated_at',
+                  'images', 'is_favorite', 'region_name', 'regions',
+                  'buyer_id', 'buyer', 'transaction_id', 'final_price']
         read_only_fields = ['id', 'seller', 'view_count', 'favorite_count',
                            'offer_count', 'created_at', 'updated_at']
     
