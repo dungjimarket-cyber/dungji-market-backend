@@ -590,15 +590,18 @@ class NoShowReportSerializer(serializers.ModelSerializer):
     """노쇼 신고 시리얼라이저"""
     reporter_name = serializers.CharField(source='reporter.username', read_only=True)
     reported_user_name = serializers.CharField(source='reported_user.username', read_only=True)
+    reported_user_nickname = serializers.CharField(source='reported_user.nickname', read_only=True)
+    reported_user_phone = serializers.CharField(source='reported_user.phone_number', read_only=True)
     groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
     
     class Meta:
         model = NoShowReport
         fields = ['id', 'reporter', 'reporter_name', 'reported_user', 'reported_user_name',
+                 'reported_user_nickname', 'reported_user_phone',
                  'groupbuy', 'groupbuy_title', 'participation', 'bid', 'report_type',
-                 'content', 'evidence_image', 'evidence_image_2', 'evidence_image_3', 
+                 'content', 'evidence_image', 'evidence_image_2', 'evidence_image_3',
                  'status', 'admin_comment', 'created_at',
-                 'updated_at', 'processed_at', 'processed_by', 'edit_count', 
+                 'updated_at', 'processed_at', 'processed_by', 'edit_count',
                  'last_edited_at', 'noshow_buyers']
         read_only_fields = ['id', 'reporter', 'status', 'admin_comment', 'created_at',
                            'updated_at', 'processed_at', 'processed_by', 'edit_count',
