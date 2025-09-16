@@ -50,7 +50,7 @@ class SellerSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'sell_count', 'buy_count', 'total_trade_count']
+        fields = ['id', 'username', 'nickname', 'email', 'sell_count', 'buy_count', 'total_trade_count']
     
     def get_sell_count(self, obj):
         """판매 완료 횟수"""
