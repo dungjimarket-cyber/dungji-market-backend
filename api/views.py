@@ -1955,24 +1955,30 @@ class GroupBuyViewSet(ModelViewSet):
                     winning_bid = highest_bid
             
             if winning_bid:
+                # 낙찰된 입찰 정보를 시리얼라이즈
+                from api.serializers import BidSerializer
+                winning_bid_data = BidSerializer(winning_bid).data
+                data['selected_bid'] = winning_bid_data
+                data['winning_bid'] = winning_bid_data  # 하위 호환성을 위해 둘 다 제공
+
                 # 사용자가 참여자이거나 판매자인 경우에만 실제 금액 표시
                 user = request.user
                 is_participant = False
                 is_winning_seller = False
                 is_any_seller = False
                 my_bid = None
-                
+
                 # 인증된 사용자인 경우에만 참여자/판매자 확인
                 if user.is_authenticated:
                     is_participant = instance.participation_set.filter(user=user).exists()
                     is_winning_seller = winning_bid.seller == user
                     # 판매자 역할 확인 (최종선택 단계 이후에는 모든 판매자가 금액 확인 가능)
                     is_any_seller = user.role == 'seller'
-                    
+
                     # 판매자인 경우 내 입찰 정보 찾기
                     if is_any_seller:
                         my_bid = instance.bid_set.filter(seller=user).first()
-                
+
                 # 최종선택 단계 이후부터는 참여자와 모든 판매자에게 정상 금액 표시
                 if (instance.status in ['final_selection_buyers', 'final_selection_seller', 'in_progress', 'completed'] and (is_participant or is_any_seller)) or is_winning_seller:
                     data['winning_bid_amount'] = winning_bid.amount
