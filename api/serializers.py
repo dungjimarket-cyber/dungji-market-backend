@@ -521,18 +521,21 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 class BidSerializer(serializers.ModelSerializer):
     """견적 제안 데이터를 위한 시리얼라이저
-    
+
     판매자가 제안한 견적 내역 및 상태를 관리합니다.
     """
     seller_name = serializers.CharField(source='seller.username', read_only=True)
+    seller_nickname = serializers.CharField(source='seller.nickname', read_only=True)
+    seller_phone = serializers.CharField(source='seller.phone', read_only=True)
     groupbuy_title = serializers.CharField(source='groupbuy.title', read_only=True)
     product_name = serializers.CharField(source='groupbuy.product.name', read_only=True)
     current_participants = serializers.IntegerField(source='groupbuy.current_participants', read_only=True)
     max_participants = serializers.IntegerField(source='groupbuy.max_participants', read_only=True)
-    
+
     class Meta:
         model = Bid
         fields = ['id', 'groupbuy', 'groupbuy_title', 'product_name', 'seller', 'seller_name',
+                 'seller_nickname', 'seller_phone',
                  'bid_type', 'amount', 'message', 'contract_period', 'created_at', 'updated_at',
                  'is_selected', 'status', 'current_participants', 'max_participants']
         extra_kwargs = {
