@@ -123,21 +123,21 @@ class NoticeViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset().filter(
             show_in_main=True
         ).order_by('main_display_order', '-published_at')
-        
+
         # display_type별로 분류
         banners = []
         texts = []
         popups = []
-        
+
         for notice in queryset:
             serializer_data = NoticeListSerializer(notice).data
-            
+
             # 팝업 타입 처리
             if notice.display_type == 'popup':
                 # 팝업 종료일시 체크
                 if notice.popup_expires_at and notice.popup_expires_at < timezone.now():
                     continue  # 만료된 팝업은 건너뛰기
-                    
+
                 # 팝업 전용 데이터 추가
                 serializer_data['popup_type'] = notice.popup_type
                 serializer_data['popup_width'] = notice.popup_width
@@ -148,16 +148,64 @@ class NoticeViewSet(viewsets.ModelViewSet):
                 serializer_data['popup_show_today_close'] = notice.popup_show_today_close
                 serializer_data['popup_expires_at'] = notice.popup_expires_at.isoformat() if notice.popup_expires_at else None
                 popups.append(serializer_data)
-            
+
             if notice.display_type in ['banner', 'both']:
                 banners.append(serializer_data)
             if notice.display_type in ['text', 'both']:
                 texts.append(serializer_data)
-        
+
         return Response({
             'banners': banners[:5],  # 최대 5개 배너
             'texts': texts[:3],  # 최대 3개 텍스트 공지
             'popups': popups[:1]  # 최대 1개 팝업 (보통 한 번에 하나만 표시)
+        })
+
+    @action(detail=False, methods=['get'])
+    def groupbuy(self, request):
+        """공구(견적) 목록 페이지 노출 공지사항"""
+        queryset = self.get_queryset().filter(
+            show_in_groupbuy=True
+        ).order_by('-is_pinned', '-published_at')
+
+        # display_type별로 분류
+        banners = []
+        texts = []
+
+        for notice in queryset:
+            serializer_data = NoticeListSerializer(notice).data
+
+            if notice.display_type in ['banner', 'both']:
+                banners.append(serializer_data)
+            if notice.display_type in ['text', 'both']:
+                texts.append(serializer_data)
+
+        return Response({
+            'banners': banners[:3],  # 최대 3개 배너
+            'texts': texts[:2],  # 최대 2개 텍스트 공지
+        })
+
+    @action(detail=False, methods=['get'])
+    def used(self, request):
+        """중고거래 목록 페이지 노출 공지사항"""
+        queryset = self.get_queryset().filter(
+            show_in_used=True
+        ).order_by('-is_pinned', '-published_at')
+
+        # display_type별로 분류
+        banners = []
+        texts = []
+
+        for notice in queryset:
+            serializer_data = NoticeListSerializer(notice).data
+
+            if notice.display_type in ['banner', 'both']:
+                banners.append(serializer_data)
+            if notice.display_type in ['text', 'both']:
+                texts.append(serializer_data)
+
+        return Response({
+            'banners': banners[:3],  # 최대 3개 배너
+            'texts': texts[:2],  # 최대 2개 텍스트 공지
         })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])

@@ -73,35 +73,45 @@ class PopupViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def active_popups(self, request):
-        """활성 팝업 목록 (메인 페이지용)"""
+        """활성 팝업 목록 (페이지별)"""
         now = timezone.now()
-        
-        # 디버그 로그
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        # 메인 페이지에 표시할 팝업 - 더 간단한 쿼리로 시작
+        page_type = request.query_params.get('page_type', 'main')
+
+        # 기본 필터
         popups = Popup.objects.filter(
             is_active=True,
-            show_on_main=True,
             start_date__lte=now
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=now)
-        ).order_by('-priority', '-created_at')
-        
-        logger.info(f"Active popups query count: {popups.count()}")
-        logger.info(f"Active popups: {list(popups.values('id', 'title', 'is_active', 'show_on_main'))}")
-        
+        )
+
+        # 페이지 타입별 필터링
+        if page_type == 'main':
+            popups = popups.filter(show_on_main=True)
+        elif page_type == 'groupbuy_list':
+            popups = popups.filter(show_on_groupbuy_list=True)
+        elif page_type == 'groupbuy_detail':
+            popups = popups.filter(show_on_groupbuy_detail=True)
+        elif page_type == 'used_list':
+            popups = popups.filter(show_on_used_list=True)
+        elif page_type == 'used_detail':
+            popups = popups.filter(show_on_used_detail=True)
+        elif page_type == 'mypage':
+            popups = popups.filter(show_on_mypage=True)
+
+        # 우선순위 정렬
+        popups = popups.order_by('-priority', '-created_at')
+
         # 쿠키에서 오늘/일주일 숨김 팝업 확인
         hidden_today = request.COOKIES.get('hidden_popups_today', '').split(',')
         hidden_week = request.COOKIES.get('hidden_popups_week', '').split(',')
-        
+
         # 숨김 처리된 팝업 제외
         if hidden_today[0]:  # 빈 문자열이 아닌 경우
             popups = popups.exclude(id__in=hidden_today)
         if hidden_week[0]:  # 빈 문자열이 아닌 경우
             popups = popups.exclude(id__in=hidden_week)
-        
+
         serializer = PopupListSerializer(popups, many=True)
         return Response(serializer.data)
     
