@@ -601,8 +601,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 견적이 있는 경우 수정 가능 필드 제한
-        has_offers = instance.offers.exists()
+        # 견적이 있는 경우 수정 가능 필드 제한 (pending 상태만 체크)
+        has_offers = instance.offers.filter(status='pending').exists()
         
         if has_offers:
             # 수정 가능한 필드만 허용
