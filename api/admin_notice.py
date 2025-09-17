@@ -90,11 +90,15 @@ class NoticeAdmin(admin.ModelAdmin):
                 'published_at'
             )
         }),
-        ('페이지별 노출 설정', {
+        ('공지사항 게시판 탭 설정', {
             'fields': (
                 ('show_in_main', 'show_in_groupbuy', 'show_in_used'),
             ),
-            'description': '공지를 노출할 페이지를 선택하세요. 여러 페이지에 동시 노출 가능합니다.'
+            'description': '공지사항 게시판(/notices)에서 어느 탭에 표시할지 선택합니다. 체크된 탭에 공지가 나타납니다. 여러 탭에 동시 표시 가능합니다.'
+        }),
+        ('페이지 상단 노출 설정', {
+            'fields': (),
+            'description': '⚠️ 상단고정(is_pinned)이 체크되어야 각 페이지 상단에 노출됩니다. 예: 공구목록 탭 체크 + 상단고정 = 공구 페이지 상단과 게시판 공구탭 모두 표시'
         }),
         ('메인 화면 추가 설정', {
             'fields': (

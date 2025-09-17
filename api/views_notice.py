@@ -32,7 +32,7 @@ class NoticeViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """권한 설정"""
-        if self.action in ['list', 'retrieve', 'main', 'pinned', 'recent', 'categories']:
+        if self.action in ['list', 'retrieve', 'main', 'groupbuy', 'used', 'pinned', 'recent', 'categories']:
             permission_classes = [AllowAny]
         elif self.action in ['create_comment', 'update_comment', 'delete_comment']:
             permission_classes = [IsAuthenticated]
@@ -162,10 +162,11 @@ class NoticeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def groupbuy(self, request):
-        """공구(견적) 목록 페이지 노출 공지사항"""
+        """공구(견적) 목록 페이지 상단 노출 공지사항 (상단고정된 것만)"""
         queryset = self.get_queryset().filter(
-            show_in_groupbuy=True
-        ).order_by('-is_pinned', '-published_at')
+            show_in_groupbuy=True,
+            is_pinned=True  # 페이지 상단에는 고정된 공지만 표시
+        ).order_by('-published_at')
 
         # display_type별로 분류
         banners = []
@@ -186,10 +187,11 @@ class NoticeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def used(self, request):
-        """중고거래 목록 페이지 노출 공지사항"""
+        """중고거래 목록 페이지 상단 노출 공지사항 (상단고정된 것만)"""
         queryset = self.get_queryset().filter(
-            show_in_used=True
-        ).order_by('-is_pinned', '-published_at')
+            show_in_used=True,
+            is_pinned=True  # 페이지 상단에는 고정된 공지만 표시
+        ).order_by('-published_at')
 
         # display_type별로 분류
         banners = []
