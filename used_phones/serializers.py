@@ -349,14 +349,14 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
 
     def validate_images(self, value):
         """이미지 유효성 검사"""
-        if len(value) > 5:
-            raise serializers.ValidationError("최대 5개의 이미지만 업로드할 수 있습니다.")
+        if len(value) > 10:
+            raise serializers.ValidationError("최대 10개의 이미지만 업로드할 수 있습니다.")
 
         # 이미지 크기 및 형식 검사
         for image in value:
-            # 파일 크기 검사 (3MB 제한)
-            if image.size > 3 * 1024 * 1024:
-                raise serializers.ValidationError(f"이미지 파일 크기는 3MB를 초과할 수 없습니다. ({image.name})")
+            # 파일 크기 검사 (10MB 제한 - 이미지당)
+            if image.size > 10 * 1024 * 1024:
+                raise serializers.ValidationError(f"이미지 파일 크기는 10MB를 초과할 수 없습니다. ({image.name})")
 
             # 파일 형식 검사
             allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
