@@ -82,10 +82,28 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     Q(region__full_name__icontains=region)  # 메인 region의 full_name
                 ).distinct()
         
+        # manufacturer 파라미터를 brand로 매핑
+        manufacturer = self.request.query_params.get('manufacturer')
+        if manufacturer:
+            queryset = queryset.filter(brand=manufacturer)
+
+        # condition 파라미터를 condition_grade로 매핑
+        condition = self.request.query_params.get('condition')
+        if condition:
+            queryset = queryset.filter(condition_grade=condition)
+
+        # include_completed 파라미터 처리 (거래완료 포함/제외)
+        include_completed = self.request.query_params.get('include_completed')
+        # 기본값: 거래완료 제외
+        # include_completed가 'true'일 때만 거래완료 포함
+        if include_completed != 'true':
+            # 거래완료 제외 (기본값)
+            queryset = queryset.exclude(status='sold')
+
         # 가격 범위 필터링
         min_price = self.request.query_params.get('min_price')
         max_price = self.request.query_params.get('max_price')
-        
+
         if min_price:
             try:
                 queryset = queryset.filter(price__gte=int(min_price))
@@ -592,40 +610,54 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             'penalty_end': penalty_end.isoformat() if has_offers else None
         })
     
+    def perform_update(self, serializer):
+        """Update시 region 필드 처리"""
+        instance = serializer.save()
+
+        # region 필드 업데이트 (메인 지역)
+        region_code = self.request.data.get('region')
+        if region_code:
+            from api.models import Region
+            region = Region.objects.filter(code=region_code).first()
+            if region:
+                instance.region = region
+                instance.save(update_fields=['region'])
+                logger.info(f"[수정] 메인 region 필드 업데이트: {region.full_name}")
+
     def update(self, request, *args, **kwargs):
         """수정 처리 (견적 후 제한 적용)"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        
+
         # 권한 체크
         if instance.seller != request.user:
             return Response(
                 {'error': '수정 권한이 없습니다.'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         # 견적이 있는 경우 수정 가능 필드 제한 (pending 상태만 체크)
         has_offers = instance.offers.filter(status='pending').exists()
-        
+
         if has_offers:
             # 수정 가능한 필드만 허용
             allowed_fields = ['price', 'description', 'meeting_place']
-            
+
             # 수정 불가능한 필드 체크
             restricted_fields = []
             for field in request.data.keys():
                 if field not in allowed_fields and field not in ['existing_images', 'new_images', 'regions', 'region']:
                     restricted_fields.append(field)
-            
+
             if restricted_fields:
                 return Response(
                     {'error': f'견적 제안 후에는 다음 필드를 수정할 수 없습니다: {", ".join(restricted_fields)}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             # 수정됨 플래그 설정
             instance.is_modified = True
-        
+
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
