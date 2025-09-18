@@ -46,12 +46,21 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         """지역 필터링 추가"""
         # list와 retrieve 액션은 sold 포함 (조회는 가능)
         if self.action in ['list', 'retrieve']:
+            # 디버깅 로그 추가
+            logger.info(f"[UsedPhoneViewSet] Action: {self.action}")
+            logger.info(f"[UsedPhoneViewSet] Including sold items in queryset")
+
             queryset = UsedPhone.objects.exclude(status='deleted').prefetch_related(
                 'regions__region',
                 'images',
                 'favorites',
                 'transactions'
             ).select_related('seller', 'region')
+
+            # 쿼리셋 상태 확인
+            logger.info(f"[UsedPhoneViewSet] Queryset count: {queryset.count()}")
+            sold_count = queryset.filter(status='sold').count()
+            logger.info(f"[UsedPhoneViewSet] Sold items in queryset: {sold_count}")
         else:
             # 다른 액션들(update, delete 등)은 active와 trading만 접근 가능
             queryset = UsedPhone.objects.filter(
@@ -105,12 +114,14 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(condition_grade=condition)
 
         # include_completed 파라미터 처리 (거래완료 포함/제외)
-        include_completed = self.request.query_params.get('include_completed')
-        # 기본값: 거래완료 제외
-        # include_completed가 'true'일 때만 거래완료 포함
-        if include_completed != 'true':
-            # 거래완료 제외 (기본값)
-            queryset = queryset.exclude(status='sold')
+        # retrieve 액션(상세조회)에서는 include_completed 파라미터 무시
+        if self.action == 'list':
+            include_completed = self.request.query_params.get('include_completed')
+            # 기본값: 거래완료 제외
+            # include_completed가 'true'일 때만 거래완료 포함
+            if include_completed != 'true':
+                # 거래완료 제외 (기본값)
+                queryset = queryset.exclude(status='sold')
 
         # 가격 범위 필터링
         min_price = self.request.query_params.get('min_price')
