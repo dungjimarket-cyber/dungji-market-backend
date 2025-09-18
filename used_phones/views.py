@@ -29,7 +29,7 @@ from .serializers import (
 
 class UsedPhoneViewSet(viewsets.ModelViewSet):
     """Used Phone ViewSet"""
-    queryset = UsedPhone.objects.filter(status__in=['active', 'trading']).prefetch_related(
+    queryset = UsedPhone.objects.all().prefetch_related(
         'regions__region',  # prefetch regions to avoid N+1 queries
         'images',
         'favorites',
@@ -41,15 +41,27 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     search_fields = ['model', 'description']
     ordering_fields = ['price', 'created_at', 'view_count']
     ordering = ['-created_at']
-    
+
     def get_queryset(self):
         """지역 필터링 추가"""
-        queryset = super().get_queryset()
-        
-        # list 액션일 때는 deleted 상태만 제외하고 모든 상품 표시
-        # active(판매중), trading(거래중), sold(판매완료) 모두 포함
+        # list 액션일 때는 전체 상품에서 시작 (sold 포함)
         if self.action == 'list':
-            queryset = queryset.exclude(status='deleted')
+            queryset = UsedPhone.objects.exclude(status='deleted').prefetch_related(
+                'regions__region',
+                'images',
+                'favorites',
+                'transactions'
+            ).select_related('seller', 'region')
+        else:
+            # 다른 액션들은 active와 trading만 접근 가능
+            queryset = UsedPhone.objects.filter(
+                status__in=['active', 'trading']
+            ).prefetch_related(
+                'regions__region',
+                'images',
+                'favorites',
+                'transactions'
+            ).select_related('seller', 'region')
         
         # 지역 필터링
         region = self.request.query_params.get('region')
