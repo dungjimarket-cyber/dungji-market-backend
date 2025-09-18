@@ -1478,7 +1478,7 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """현재 사용자의 거래 리뷰만 반환"""
+        """현재 사용자 관련 리뷰만 반환"""
         user = self.request.user
         return UsedPhoneReview.objects.filter(
             Q(reviewer=user) | Q(reviewee=user)

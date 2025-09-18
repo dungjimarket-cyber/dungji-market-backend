@@ -120,13 +120,8 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
 
     def get_is_favorite(self, obj):
         request = self.context.get('request')
-        # 디버깅용 로그 추가
-        if request:
-            logger.debug(f"[UsedPhoneListSerializer] User: {request.user}, Authenticated: {request.user.is_authenticated}")
         if request and request.user.is_authenticated:
-            is_fav = obj.favorites.filter(user=request.user).exists()
-            logger.debug(f"[UsedPhoneListSerializer] Phone {obj.id} is_favorite for user {request.user.id}: {is_fav}")
-            return is_fav
+            return obj.favorites.filter(user=request.user).exists()
         return False
 
     def get_final_price(self, obj):
