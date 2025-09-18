@@ -79,6 +79,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     region_name = serializers.SerializerMethodField()
     regions = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
+    final_offer_price = serializers.SerializerMethodField()  # final_price 별칭
     offer_count = serializers.SerializerMethodField()  # offer_count를 동적으로 계산
     buyer = serializers.SerializerMethodField()  # 구매자 정보 추가
     transaction_id = serializers.SerializerMethodField()  # 거래 ID 추가
@@ -86,7 +87,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     class Meta:
         model = UsedPhone
         fields = [
-            'id', 'brand', 'model', 'storage', 'color', 'price', 'final_price',
+            'id', 'brand', 'model', 'storage', 'color', 'price', 'final_price', 'final_offer_price',
             'min_offer_price', 'accept_offers', 'condition_grade',
             'condition_description', 'battery_status', 'status', 'view_count',
             'favorite_count', 'offer_count', 'region_name', 'regions', 'images',
@@ -124,13 +125,22 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
         return False
     
     def get_final_price(self, obj):
-        """거래완료된 경우 실제 거래 금액 반환"""
-        if obj.status == 'sold':
-            # 수락된 제안의 금액을 찾기
+        """거래중 또는 거래완료된 경우 실제 거래 금액 반환"""
+        if obj.status in ['trading', 'sold']:
+            # 거래 중인 경우 transaction에서 final_price 가져오기
+            from .models import UsedPhoneTransaction
+            transaction = UsedPhoneTransaction.objects.filter(phone=obj).first()
+            if transaction:
+                return transaction.final_price
+            # transaction이 없으면 수락된 제안의 금액을 찾기
             accepted_offer = obj.offers.filter(status='accepted').first()
             if accepted_offer:
                 return accepted_offer.offered_price
         return None
+
+    def get_final_offer_price(self, obj):
+        """get_final_price의 별칭 - 프론트엔드 호환성"""
+        return self.get_final_price(obj)
 
     def get_offer_count(self, obj):
         """실시간으로 pending 상태의 유니크한 구매자 수 계산"""
@@ -198,6 +208,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     buyer = serializers.SerializerMethodField()
     transaction_id = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
+    final_offer_price = serializers.SerializerMethodField()  # final_price 별칭
 
     class Meta:
         model = UsedPhone
@@ -208,7 +219,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
                   'meeting_place', 'status', 'view_count', 'favorite_count',
                   'offer_count', 'sold_at', 'created_at', 'updated_at',
                   'images', 'is_favorite', 'region_name', 'regions',
-                  'buyer_id', 'buyer', 'transaction_id', 'final_price']
+                  'buyer_id', 'buyer', 'transaction_id', 'final_price', 'final_offer_price']
         read_only_fields = ['id', 'seller', 'view_count', 'favorite_count',
                            'offer_count', 'created_at', 'updated_at']
     
@@ -295,9 +306,14 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
         return None
 
     def get_final_price(self, obj):
-        """거래완료된 경우 실제 거래 금액 반환"""
-        if obj.status == 'sold':
-            # 수락된 제안의 금액을 찾기
+        """거래중 또는 거래완료된 경우 실제 거래 금액 반환"""
+        if obj.status in ['trading', 'sold']:
+            # 거래 중인 경우 transaction에서 final_price 가져오기
+            from .models import UsedPhoneTransaction
+            transaction = UsedPhoneTransaction.objects.filter(phone=obj).first()
+            if transaction:
+                return transaction.final_price
+            # transaction이 없으면 수락된 제안의 금액을 찾기
             from .models import UsedPhoneOffer
             accepted_offer = UsedPhoneOffer.objects.filter(
                 phone=obj,
@@ -306,6 +322,10 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
             if accepted_offer:
                 return accepted_offer.offered_price
         return None
+
+    def get_final_offer_price(self, obj):
+        """get_final_price의 별칭 - 프론트엔드 호환성"""
+        return self.get_final_price(obj)
 
 
 class UsedPhoneCreateSerializer(serializers.ModelSerializer):
