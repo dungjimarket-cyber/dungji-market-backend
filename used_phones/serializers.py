@@ -9,8 +9,10 @@ from .models import (
     UsedPhoneReport, UsedPhonePenalty
 )
 from api.models import Region
+import logging
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class UsedPhoneImageSerializer(serializers.ModelSerializer):
@@ -107,7 +109,8 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
                 {
                     'id': pr.id,
                     'name': pr.region.name if pr.region else None,
-                    'full_name': pr.region.full_name if pr.region else None,
+                    # full_name이 제대로 있으면 full_name, 아니면 name 사용
+                    'full_name': pr.region.full_name if pr.region and pr.region.full_name and pr.region.full_name != pr.region.name else pr.region.name if pr.region else None,
                 }
                 for pr in phone_regions
             ]
@@ -223,7 +226,8 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
                 {
                     'code': pr.region.code,
                     'name': pr.region.name,
-                    'full_name': pr.region.full_name
+                    # full_name이 제대로 있으면 full_name, 아니면 name 사용
+                    'full_name': pr.region.full_name if pr.region.full_name and pr.region.full_name != pr.region.name else pr.region.name
                 }
                 for pr in phone_regions
             ]
