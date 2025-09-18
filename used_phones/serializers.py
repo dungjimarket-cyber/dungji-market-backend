@@ -590,6 +590,8 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
     reviewee_username = serializers.CharField(source='reviewee.username', read_only=True)
     reviewer_nickname = serializers.CharField(source='reviewer.nickname', read_only=True)
     reviewee_nickname = serializers.CharField(source='reviewee.nickname', read_only=True)
+    phone_brand = serializers.CharField(source='transaction.phone.brand', read_only=True)
+    phone_model = serializers.CharField(source='transaction.phone.model', read_only=True)
 
     class Meta:
         model = UsedPhoneReview
@@ -597,6 +599,7 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
             'id', 'transaction', 'reviewer', 'reviewer_username', 'reviewer_nickname',
             'reviewee', 'reviewee_username', 'reviewee_nickname', 'rating', 'comment',
             'is_punctual', 'is_friendly', 'is_honest', 'is_fast_response',
+            'phone_brand', 'phone_model',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'reviewer', 'reviewee', 'created_at', 'updated_at']
