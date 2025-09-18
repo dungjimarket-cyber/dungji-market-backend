@@ -1556,15 +1556,42 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=['get'], url_path='my-written')
-    def my_written_reviews(self, request):
+    @action(detail=False, methods=['get'], url_path='written')
+    def written(self, request):
         """내가 작성한 후기 목록"""
         reviews = UsedPhoneReview.objects.filter(
             reviewer=request.user
-        ).select_related('transaction', 'reviewee')
+        ).select_related('transaction', 'reviewee').order_by('-created_at')
+
+        # 페이지네이션 적용
+        page = self.paginate_queryset(reviews)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(reviews, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='received')
+    def received(self, request):
+        """내가 받은 후기 목록"""
+        reviews = UsedPhoneReview.objects.filter(
+            reviewee=request.user
+        ).select_related('transaction', 'reviewer').order_by('-created_at')
+
+        # 페이지네이션 적용
+        page = self.paginate_queryset(reviews)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(reviews, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='my-written')
+    def my_written_reviews(self, request):
+        """내가 작성한 후기 목록 (기존 호환성 유지)"""
+        return self.written(request)
 
     @action(detail=False, methods=['get'], url_path='user-stats')
     def user_stats(self, request):

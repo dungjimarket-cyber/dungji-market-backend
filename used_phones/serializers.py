@@ -83,6 +83,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     offer_count = serializers.SerializerMethodField()  # offer_count를 동적으로 계산
     buyer = serializers.SerializerMethodField()  # 구매자 정보 추가
     transaction_id = serializers.SerializerMethodField()  # 거래 ID 추가
+    has_review = serializers.SerializerMethodField()  # 후기 작성 여부
 
     class Meta:
         model = UsedPhone
