@@ -74,9 +74,12 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 ).distinct()
             else:
                 # 하위 지역이거나 정확한 매칭
+                # "서울특별시 성동구" 형태로 검색하는 경우 full_name으로도 검색
                 queryset = queryset.filter(
-                    Q(regions__region__name__icontains=region) |  # UsedPhoneRegion을 통한 다중 지역
-                    Q(region__name__icontains=region)  # 메인 region 필드
+                    Q(regions__region__name__icontains=region) |  # name으로 검색
+                    Q(regions__region__full_name__icontains=region) |  # full_name으로 검색
+                    Q(region__name__icontains=region) |  # 메인 region의 name
+                    Q(region__full_name__icontains=region)  # 메인 region의 full_name
                 ).distinct()
         
         # 가격 범위 필터링
