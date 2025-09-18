@@ -612,17 +612,17 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     
     def perform_update(self, serializer):
         """Update시 region 필드 처리"""
-        instance = serializer.save()
-
-        # region 필드 업데이트 (메인 지역)
+        # region 필드를 validated_data에 추가하여 save 시 함께 저장되도록 함
         region_code = self.request.data.get('region')
         if region_code:
             from api.models import Region
             region = Region.objects.filter(code=region_code).first()
             if region:
-                instance.region = region
-                instance.save(update_fields=['region'])
-                logger.info(f"[수정] 메인 region 필드 업데이트: {region.full_name}")
+                serializer.validated_data['region'] = region
+                logger.info(f"[수정] region 필드 설정: {region.full_name}")
+
+        # 이제 save하면 region도 함께 저장됨
+        instance = serializer.save()
 
     def update(self, request, *args, **kwargs):
         """수정 처리 (견적 후 제한 적용)"""
