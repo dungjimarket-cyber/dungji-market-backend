@@ -44,8 +44,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """지역 필터링 추가"""
-        # list 액션일 때는 전체 상품에서 시작 (sold 포함)
-        if self.action == 'list':
+        # list와 retrieve 액션은 sold 포함 (조회는 가능)
+        if self.action in ['list', 'retrieve']:
             queryset = UsedPhone.objects.exclude(status='deleted').prefetch_related(
                 'regions__region',
                 'images',
@@ -53,7 +53,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 'transactions'
             ).select_related('seller', 'region')
         else:
-            # 다른 액션들은 active와 trading만 접근 가능
+            # 다른 액션들(update, delete 등)은 active와 trading만 접근 가능
             queryset = UsedPhone.objects.filter(
                 status__in=['active', 'trading']
             ).prefetch_related(
