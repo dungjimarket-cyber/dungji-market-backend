@@ -334,8 +334,8 @@ class UsedPhoneCreateSerializer(serializers.ModelSerializer):
         child=serializers.ImageField(),
         write_only=True,
         required=False,
-        max_length=5,  # 최대 5개 이미지
-        help_text="최대 5개의 이미지를 업로드할 수 있습니다."
+        max_length=10,  # 최대 10개 이미지
+        help_text="최대 10개의 이미지를 업로드할 수 있습니다."
     )
     regions = serializers.ListField(
         child=serializers.CharField(),
