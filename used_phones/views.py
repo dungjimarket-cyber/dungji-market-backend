@@ -14,7 +14,7 @@ import logging
 from .models import (
     UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
     UsedPhoneDeletePenalty, UsedPhoneTransaction, UsedPhoneReview, TradeCancellation,
-    UsedPhoneReport, UsedPhonePenalty
+    UsedPhoneReport, UsedPhonePenalty, UsedPhoneRegion
 )
 
 logger = logging.getLogger(__name__)
@@ -611,10 +611,88 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         })
     
     def perform_update(self, serializer):
-        """Update시 추가 처리"""
-        # 지역 처리 로직 제거 (임시 조치)
-        # TODO: 지역 수정 기능 재구현 필요
+        """Update시 추가 처리 - 지역 재등록 방식"""
         instance = serializer.save()
+
+        # 지역 재등록 처리 (기존 지역 삭제 후 새로 등록)
+        regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
+
+        if regions_data:
+            logger.info(f"[지역 수정] 기존 지역 삭제 후 재등록 - regions: {regions_data}")
+
+            # 기존 지역 모두 삭제
+            UsedPhoneRegion.objects.filter(used_phone=instance).delete()
+
+            # 새 지역 등록 (perform_create와 동일한 로직)
+            from api.models import Region
+
+            for region_str in regions_data:
+                region = None
+
+                if isinstance(region_str, str):
+                    try:
+                        import json
+                        region_data = json.loads(region_str)
+                    except json.JSONDecodeError:
+                        # JSON 파싱 실패 시 문자열로 처리
+                        if '/' in region_str:
+                            parts = region_str.split('/')
+                            province = parts[0].strip()
+                            city = parts[1].strip() if len(parts) > 1 else ''
+                            region_data = {'province': province, 'city': city}
+                        else:
+                            continue
+                else:
+                    region_data = region_str
+
+                if region_data:
+                    province = region_data.get('province', '').strip()
+                    city = region_data.get('city', '').strip()
+
+                    if province and city:
+                        # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
+                        province_mapping = {
+                            '전북특별자치도': '전라북도',
+                            '제주특별자치도': '제주도',
+                            '강원특별자치도': '강원도'
+                        }
+                        city_mapping = {
+                            '서귀포': '서귀포시',
+                            '제주': '제주시'
+                        }
+
+                        mapped_province = province_mapping.get(province, province)
+                        mapped_city = city_mapping.get(city, city)
+
+                        # 세종특별자치시 처리
+                        if mapped_province == '세종특별자치시' and mapped_city == '세종시':
+                            region = Region.objects.filter(
+                                name='세종특별자치시',
+                                level=1
+                            ).first()
+
+                        # 일반 지역 검색
+                        if not region:
+                            region = Region.objects.filter(
+                                name=mapped_city,
+                                parent__name=mapped_province,
+                                level__in=[1, 2]
+                            ).first()
+
+                            if not region:
+                                # full_name으로 검색
+                                full_name_search = f"{mapped_province} {mapped_city}"
+                                region = Region.objects.filter(full_name=full_name_search).first()
+
+                    if region:
+                        # UsedPhoneRegion 생성
+                        UsedPhoneRegion.objects.create(
+                            used_phone=instance,
+                            region=region
+                        )
+                        logger.info(f"[지역 등록 성공] {region.full_name} (코드: {region.code})")
+                    else:
+                        logger.warning(f"[지역 등록 실패] {province} {city}에 해당하는 지역을 찾을 수 없습니다.")
 
     def update(self, request, *args, **kwargs):
         """수정 처리 (견적 후 제한 적용)"""
