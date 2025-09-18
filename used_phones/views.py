@@ -1478,8 +1478,14 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """현재 사용자 관련 리뷰만 반환"""
+        """현재 사용자가 받은 리뷰만 반환 (list 액션용)"""
         user = self.request.user
+        # list 액션에서는 받은 리뷰만 반환
+        if self.action == 'list':
+            return UsedPhoneReview.objects.filter(
+                reviewee=user
+            ).select_related('transaction', 'reviewer', 'reviewee')
+        # 다른 액션에서는 모든 관련 리뷰 반환
         return UsedPhoneReview.objects.filter(
             Q(reviewer=user) | Q(reviewee=user)
         ).select_related('transaction', 'reviewer', 'reviewee')
