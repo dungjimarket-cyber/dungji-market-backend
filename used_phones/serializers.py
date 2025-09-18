@@ -93,7 +93,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             'condition_description', 'battery_status', 'status', 'view_count',
             'favorite_count', 'offer_count', 'region_name', 'regions', 'images',
             'is_favorite', 'created_at', 'body_only', 'has_box', 'has_charger',
-            'has_earphones', 'meeting_place', 'is_modified', 'buyer', 'transaction_id'
+            'has_earphones', 'meeting_place', 'is_modified', 'buyer', 'transaction_id', 'has_review'
         ]
     
     def get_region_name(self, obj):
@@ -196,6 +196,44 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             # 오류 발생 시 None 반환
             return None
         return None
+
+    def get_has_review(self, obj):
+        """현재 사용자가 이 거래에 대해 후기를 작성했는지 확인"""
+        try:
+            request = self.context.get('request')
+            if not request or not request.user.is_authenticated:
+                return False
+
+            # 거래완료 상태가 아니면 False
+            if obj.status != 'sold':
+                return False
+
+            # 거래 ID 가져오기
+            from .models import UsedPhoneTransaction, UsedPhoneReview
+            transaction = UsedPhoneTransaction.objects.filter(
+                phone=obj,
+                status='completed'
+            ).first()
+
+            if not transaction:
+                return False
+
+            # 현재 사용자가 이 거래에 대해 리뷰를 작성했는지 확인
+            # 판매자인 경우
+            if obj.seller == request.user:
+                return UsedPhoneReview.objects.filter(
+                    transaction=transaction,
+                    reviewer=request.user
+                ).exists()
+
+            # 구매자인 경우
+            return UsedPhoneReview.objects.filter(
+                transaction=transaction,
+                reviewer=request.user
+            ).exists()
+
+        except Exception:
+            return False
 
 
 class UsedPhoneDetailSerializer(serializers.ModelSerializer):

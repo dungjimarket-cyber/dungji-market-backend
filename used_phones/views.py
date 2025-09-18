@@ -788,10 +788,19 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     buyer=request.user
                 ).exclude(status='cancelled').order_by('-created_at').first()
 
+                # 리뷰 작성 여부 확인
+                has_review = False
+                if transaction and phone.status == 'sold':
+                    has_review = UsedPhoneReview.objects.filter(
+                        transaction=transaction,
+                        reviewer=request.user
+                    ).exists()
+
                 trading_items.append({
                     'id': transaction.id if transaction else offer.id,  # transaction ID 우선, 없으면 offer ID
                     'offer_id': offer.id,  # offer ID도 별도로 제공
                     'transaction_id': transaction.id if transaction else None,  # 명시적으로 transaction ID 제공
+                    'has_review': has_review,  # 후기 작성 여부
                     'phone': {
                         'id': phone.id,
                         'title': f"{phone.brand} {phone.model}",
