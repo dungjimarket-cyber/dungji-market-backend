@@ -611,7 +611,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             # 수정 불가능한 필드 체크
             restricted_fields = []
             for field in request.data.keys():
-                if field not in allowed_fields and field not in ['existing_images', 'new_images']:
+                if field not in allowed_fields and field not in ['existing_images', 'new_images', 'regions', 'region']:
                     restricted_fields.append(field)
             
             if restricted_fields:
@@ -626,10 +626,67 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        
+
+        # 지역 정보 업데이트 처리
+        regions_data = request.data.getlist('regions') if hasattr(request.data, 'getlist') else request.data.get('regions', [])
+
+        if regions_data:
+            from api.models import Region
+            from used_phones.models import UsedPhoneRegion
+
+            logger.info(f"[수정] 지역 업데이트 - {len(regions_data)}개 지역")
+
+            # 기존 지역 정보 삭제
+            UsedPhoneRegion.objects.filter(used_phone=instance).delete()
+
+            # 새로운 지역 정보 추가 (create와 동일한 로직)
+            for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
+                try:
+                    if isinstance(region_data, str):
+                        parts = region_data.split()
+                        province = parts[0] if len(parts) > 0 else None
+                        city = parts[1] if len(parts) > 1 else None
+
+                        if province and city:
+                            # full_name으로 검색
+                            region = Region.objects.filter(
+                                full_name=f"{province} {city}"
+                            ).first()
+
+                            if not region:
+                                # 부모-자식 관계로 검색
+                                region = Region.objects.filter(
+                                    name=city,
+                                    parent__name=province
+                                ).first()
+
+                            if region:
+                                UsedPhoneRegion.objects.create(
+                                    used_phone=instance,
+                                    region=region,
+                                    order=idx
+                                )
+                                logger.info(f"[수정] 지역 추가: {region.full_name}")
+                        elif province:  # 시/도만 있는 경우
+                            region = Region.objects.filter(
+                                name=province,
+                                parent__isnull=True
+                            ).first()
+
+                            if region:
+                                UsedPhoneRegion.objects.create(
+                                    used_phone=instance,
+                                    region=region,
+                                    order=idx
+                                )
+                                logger.info(f"[수정] 지역 추가: {region.full_name}")
+
+                except Exception as e:
+                    logger.error(f"[수정] 지역 처리 오류: {e}")
+
         if getattr(instance, '_prefetched_objects_cache', None):
             instance._prefetched_objects_cache = {}
-        
+
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='my-trading')
