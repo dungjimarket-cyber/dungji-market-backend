@@ -1545,6 +1545,16 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['get'], url_path='my-written')
+    def my_written_reviews(self, request):
+        """내가 작성한 후기 목록"""
+        reviews = UsedPhoneReview.objects.filter(
+            reviewer=request.user
+        ).select_related('transaction', 'reviewee')
+
+        serializer = self.get_serializer(reviews, many=True)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['get'], url_path='user-stats')
     def user_stats(self, request):
         """사용자 평가 통계"""
