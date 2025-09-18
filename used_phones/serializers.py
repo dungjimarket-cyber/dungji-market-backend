@@ -117,13 +117,18 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             ]
         except:
             return []
-    
+
     def get_is_favorite(self, obj):
         request = self.context.get('request')
+        # 디버깅용 로그 추가
+        if request:
+            logger.debug(f"[UsedPhoneListSerializer] User: {request.user}, Authenticated: {request.user.is_authenticated}")
         if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
+            is_fav = obj.favorites.filter(user=request.user).exists()
+            logger.debug(f"[UsedPhoneListSerializer] Phone {obj.id} is_favorite for user {request.user.id}: {is_fav}")
+            return is_fav
         return False
-    
+
     def get_final_price(self, obj):
         """거래중 또는 거래완료된 경우 실제 거래 금액 반환"""
         if obj.status in ['trading', 'sold']:
