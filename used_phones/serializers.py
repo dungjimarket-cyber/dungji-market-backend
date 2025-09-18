@@ -549,12 +549,14 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
     """거래 후기 시리얼라이저"""
     reviewer_username = serializers.CharField(source='reviewer.username', read_only=True)
     reviewee_username = serializers.CharField(source='reviewee.username', read_only=True)
+    reviewer_nickname = serializers.CharField(source='reviewer.nickname', read_only=True)
+    reviewee_nickname = serializers.CharField(source='reviewee.nickname', read_only=True)
 
     class Meta:
         model = UsedPhoneReview
         fields = [
-            'id', 'transaction', 'reviewer', 'reviewer_username',
-            'reviewee', 'reviewee_username', 'rating', 'comment',
+            'id', 'transaction', 'reviewer', 'reviewer_username', 'reviewer_nickname',
+            'reviewee', 'reviewee_username', 'reviewee_nickname', 'rating', 'comment',
             'is_punctual', 'is_friendly', 'is_honest', 'is_fast_response',
             'created_at', 'updated_at'
         ]
