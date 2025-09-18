@@ -630,7 +630,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         # 지역 정보 업데이트 처리
         regions_data = request.data.getlist('regions') if hasattr(request.data, 'getlist') else request.data.get('regions', [])
 
-        if regions_data:
+        # regions 필드가 명시적으로 전달된 경우에만 업데이트
+        # 빈 리스트가 전달되면 지역을 모두 제거하려는 의도
+        # None이거나 키가 없으면 기존 지역 유지
+        if 'regions' in request.data:
             from api.models import Region
             from used_phones.models import UsedPhoneRegion
 
@@ -640,49 +643,50 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             UsedPhoneRegion.objects.filter(used_phone=instance).delete()
 
             # 새로운 지역 정보 추가 (create와 동일한 로직)
-            for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
-                try:
-                    if isinstance(region_data, str):
-                        parts = region_data.split()
-                        province = parts[0] if len(parts) > 0 else None
-                        city = parts[1] if len(parts) > 1 else None
+            if regions_data:  # regions_data가 있을 때만 새로운 지역 추가
+                for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
+                    try:
+                        if isinstance(region_data, str):
+                            parts = region_data.split()
+                            province = parts[0] if len(parts) > 0 else None
+                            city = parts[1] if len(parts) > 1 else None
 
-                        if province and city:
-                            # full_name으로 검색
-                            region = Region.objects.filter(
-                                full_name=f"{province} {city}"
-                            ).first()
-
-                            if not region:
-                                # 부모-자식 관계로 검색
+                            if province and city:
+                                # full_name으로 검색
                                 region = Region.objects.filter(
-                                    name=city,
-                                    parent__name=province
+                                    full_name=f"{province} {city}"
                                 ).first()
 
-                            if region:
-                                UsedPhoneRegion.objects.create(
-                                    used_phone=instance,
-                                    region=region,
-                                    order=idx
-                                )
-                                logger.info(f"[수정] 지역 추가: {region.full_name}")
-                        elif province:  # 시/도만 있는 경우
-                            region = Region.objects.filter(
-                                name=province,
-                                parent__isnull=True
-                            ).first()
+                                if not region:
+                                    # 부모-자식 관계로 검색
+                                    region = Region.objects.filter(
+                                        name=city,
+                                        parent__name=province
+                                    ).first()
 
-                            if region:
-                                UsedPhoneRegion.objects.create(
-                                    used_phone=instance,
-                                    region=region,
-                                    order=idx
-                                )
-                                logger.info(f"[수정] 지역 추가: {region.full_name}")
+                                if region:
+                                    UsedPhoneRegion.objects.create(
+                                        used_phone=instance,
+                                        region=region,
+                                        order=idx
+                                    )
+                                    logger.info(f"[수정] 지역 추가: {region.full_name}")
+                            elif province:  # 시/도만 있는 경우
+                                region = Region.objects.filter(
+                                    name=province,
+                                    parent__isnull=True
+                                ).first()
 
-                except Exception as e:
-                    logger.error(f"[수정] 지역 처리 오류: {e}")
+                                if region:
+                                    UsedPhoneRegion.objects.create(
+                                        used_phone=instance,
+                                        region=region,
+                                        order=idx
+                                    )
+                                    logger.info(f"[수정] 지역 추가: {region.full_name}")
+
+                    except Exception as e:
+                        logger.error(f"[수정] 지역 처리 오류: {e}")
 
         if getattr(instance, '_prefetched_objects_cache', None):
             instance._prefetched_objects_cache = {}
