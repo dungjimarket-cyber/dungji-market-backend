@@ -611,17 +611,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         })
     
     def perform_update(self, serializer):
-        """Update시 region 필드 처리"""
-        # region 필드를 validated_data에 추가하여 save 시 함께 저장되도록 함
-        region_code = self.request.data.get('region')
-        if region_code:
-            from api.models import Region
-            region = Region.objects.filter(code=region_code).first()
-            if region:
-                serializer.validated_data['region'] = region
-                logger.info(f"[수정] region 필드 설정: {region.full_name}")
-
-        # 이제 save하면 region도 함께 저장됨
+        """Update시 추가 처리"""
+        # 지역 처리 로직 제거 (임시 조치)
+        # TODO: 지역 수정 기능 재구현 필요
         instance = serializer.save()
 
     def update(self, request, *args, **kwargs):
@@ -662,66 +654,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        # 지역 정보 업데이트 처리
-        regions_data = request.data.getlist('regions') if hasattr(request.data, 'getlist') else request.data.get('regions', [])
-
-        # regions 필드가 명시적으로 전달된 경우에만 업데이트
-        # 빈 리스트가 전달되면 지역을 모두 제거하려는 의도
-        # None이거나 키가 없으면 기존 지역 유지
-        if 'regions' in request.data:
-            from api.models import Region
-            from used_phones.models import UsedPhoneRegion
-
-            logger.info(f"[수정] 지역 업데이트 - {len(regions_data)}개 지역")
-
-            # 기존 지역 정보 삭제
-            UsedPhoneRegion.objects.filter(used_phone=instance).delete()
-
-            # 새로운 지역 정보 추가 (create와 동일한 로직)
-            if regions_data:  # regions_data가 있을 때만 새로운 지역 추가
-                for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
-                    try:
-                        if isinstance(region_data, str):
-                            parts = region_data.split()
-                            province = parts[0] if len(parts) > 0 else None
-                            city = parts[1] if len(parts) > 1 else None
-
-                            if province and city:
-                                # full_name으로 검색
-                                region = Region.objects.filter(
-                                    full_name=f"{province} {city}"
-                                ).first()
-
-                                if not region:
-                                    # 부모-자식 관계로 검색
-                                    region = Region.objects.filter(
-                                        name=city,
-                                        parent__name=province
-                                    ).first()
-
-                                if region:
-                                    UsedPhoneRegion.objects.create(
-                                        used_phone=instance,
-                                        region=region,
-                                        order=idx
-                                    )
-                                    logger.info(f"[수정] 지역 추가: {region.full_name}")
-                            elif province:  # 시/도만 있는 경우
-                                region = Region.objects.filter(
-                                    name=province,
-                                    parent__isnull=True
-                                ).first()
-
-                                if region:
-                                    UsedPhoneRegion.objects.create(
-                                        used_phone=instance,
-                                        region=region,
-                                        order=idx
-                                    )
-                                    logger.info(f"[수정] 지역 추가: {region.full_name}")
-
-                    except Exception as e:
-                        logger.error(f"[수정] 지역 처리 오류: {e}")
+        # 지역 정보 업데이트 처리 제거 (임시 조치)
+        # TODO: 지역 수정 기능 재구현 필요
 
         if getattr(instance, '_prefetched_objects_cache', None):
             instance._prefetched_objects_cache = {}
