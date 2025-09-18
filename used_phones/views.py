@@ -42,6 +42,12 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     ordering_fields = ['price', 'created_at', 'view_count']
     ordering = ['-created_at']
 
+    def get_serializer_context(self):
+        """Serializer context에 request 포함"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
     def get_queryset(self):
         """지역 필터링 추가"""
         # list와 retrieve 액션은 sold 포함 (조회는 가능)
@@ -788,13 +794,17 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     buyer=request.user
                 ).exclude(status='cancelled').order_by('-created_at').first()
 
-                # 리뷰 작성 여부 확인
+                # 리뷰 작성 여부 확인 (에러 방지)
                 has_review = False
-                if transaction and phone.status == 'sold':
-                    has_review = UsedPhoneReview.objects.filter(
-                        transaction=transaction,
-                        reviewer=request.user
-                    ).exists()
+                try:
+                    if transaction and phone.status == 'sold':
+                        has_review = UsedPhoneReview.objects.filter(
+                            transaction=transaction,
+                            reviewer=request.user
+                        ).exists()
+                except Exception as e:
+                    print(f"[ERROR] Failed to check review status: {e}")
+                    has_review = False
 
                 trading_items.append({
                     'id': transaction.id if transaction else offer.id,  # transaction ID 우선, 없으면 offer ID
