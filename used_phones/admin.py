@@ -199,6 +199,8 @@ class UsedPhonePenaltyAdmin(admin.ModelAdmin):
 
     def duration_display(self, obj):
         """패널티 기간 표시"""
+        if not obj.duration_hours:
+            return '미설정'
         hours = obj.duration_hours
         if hours >= 24:
             days = hours // 24
@@ -211,7 +213,8 @@ class UsedPhonePenaltyAdmin(admin.ModelAdmin):
 
     def end_date_display(self, obj):
         """종료 예정 시간 표시"""
-        return obj.get_end_date()
+        end_date = obj.get_end_date()
+        return end_date if end_date else '미설정'
     end_date_display.short_description = '종료 예정'
 
     def remaining_time_display(self, obj):

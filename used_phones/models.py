@@ -461,7 +461,7 @@ class UsedPhonePenalty(models.Model):
     # 패널티 정보
     penalty_type = models.CharField(max_length=20, choices=PENALTY_TYPE_CHOICES, verbose_name='패널티유형')
     reason = models.TextField(verbose_name='패널티사유')
-    duration_hours = models.IntegerField(verbose_name='패널티시간', help_text='시간 단위로 입력 (예: 24시간 = 1일, 168시간 = 7일)')
+    duration_hours = models.IntegerField(default=24, verbose_name='패널티시간', help_text='시간 단위로 입력 (예: 24시간 = 1일, 168시간 = 7일)')
 
     # 관련 신고들 (선택사항)
     related_reports = models.ManyToManyField('UsedPhoneReport', blank=True, related_name='penalties', verbose_name='관련신고')
@@ -490,6 +490,8 @@ class UsedPhonePenalty(models.Model):
     def get_end_date(self):
         """패널티 종료 예정 시간 계산"""
         from datetime import timedelta
+        if not self.duration_hours:
+            return None
         return self.start_date + timedelta(hours=self.duration_hours)
 
     def is_active(self):
@@ -502,9 +504,13 @@ class UsedPhonePenalty(models.Model):
         if self.revoked_at:
             return False
 
+        # duration_hours가 없으면 비활성
+        if not self.duration_hours:
+            return False
+
         # 시간이 만료된 경우
         end_date = self.get_end_date()
-        if timezone.now() > end_date:
+        if end_date and timezone.now() > end_date:
             # 자동으로 상태를 만료로 변경
             self.status = 'expired'
             self.save(update_fields=['status'])
@@ -519,7 +525,13 @@ class UsedPhonePenalty(models.Model):
             return 0
 
         end_date = self.get_end_date()
+        if not end_date:
+            return 0
+
         remaining = end_date - timezone.now()
+        if remaining.total_seconds() <= 0:
+            return 0
+
         return int(remaining.total_seconds() / 3600)
 
     def __str__(self):
