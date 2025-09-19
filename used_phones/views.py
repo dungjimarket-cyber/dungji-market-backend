@@ -640,8 +640,34 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         })
     
     def perform_update(self, serializer):
-        """Update시 추가 처리 - 지역 재등록 방식"""
+        """Update시 추가 처리 - 이미지 및 지역 재등록 방식"""
         instance = serializer.save()
+
+        # 이미지 재등록 처리 (기존 이미지 삭제 후 새로 등록)
+        if 'images' in self.request.FILES or hasattr(self.request.data, 'getlist') and self.request.data.getlist('images'):
+            logger.info(f"[이미지 수정] 기존 이미지 삭제 후 재등록 시작")
+
+            # 기존 이미지 모두 삭제
+            deleted_count = UsedPhoneImage.objects.filter(phone=instance).delete()[0]
+            logger.info(f"[이미지 수정] {deleted_count}개 기존 이미지 삭제 완료")
+
+            # 새 이미지 등록
+            images_data = self.request.FILES.getlist('images')
+            logger.info(f"[이미지 수정] {len(images_data)}개 새 이미지 등록 시작")
+
+            for index, image in enumerate(images_data):
+                try:
+                    phone_image = UsedPhoneImage.objects.create(
+                        phone=instance,
+                        image=image,
+                        is_main=(index == 0),  # 첫 번째 이미지를 대표 이미지로
+                        order=index
+                    )
+                    logger.info(f"[이미지 수정] 이미지 {index + 1}/{len(images_data)} 저장 완료")
+                except Exception as e:
+                    logger.error(f"[이미지 수정] 이미지 저장 실패: {e}")
+
+            logger.info(f"[이미지 수정] 이미지 재등록 완료")
 
         # 지역 재등록 처리 (기존 지역 삭제 후 새로 등록)
         regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
@@ -1775,15 +1801,15 @@ class UsedPhoneReportViewSet(viewsets.ModelViewSet):
         if phone and nickname:
             # 둘 다 입력된 경우 둘 다 일치하는 사용자
             users = users.filter(
-                phone_number__icontains=phone,
-                nickname__icontains=nickname
+                phone_number__exact=phone,
+                nickname__exact=nickname
             )
         elif phone:
             # 연락처만 입력된 경우
-            users = users.filter(phone_number__icontains=phone)
+            users = users.filter(phone_number__exact=phone)
         else:
             # 닉네임만 입력된 경우
-            users = users.filter(nickname__icontains=nickname)
+            users = users.filter(nickname__exact=nickname)
 
         # 최대 5명까지만 반환
         users = users[:5]
