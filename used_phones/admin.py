@@ -167,7 +167,7 @@ class UsedPhonePenaltyAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'penalty_type', 'duration_display', 'status', 'is_active_display', 'start_date', 'end_date_display', 'remaining_time_display']
     list_filter = ['penalty_type', 'status', 'start_date']
     search_fields = ['user__username', 'user__email', 'reason']
-    readonly_fields = ['start_date', 'created_at', 'updated_at', 'end_date_display', 'remaining_time_display']
+    readonly_fields = ['created_at', 'updated_at', 'end_date_display', 'remaining_time_display']
     filter_horizontal = ['related_reports']
     actions = ['revoke_penalty']
 
@@ -219,6 +219,8 @@ class UsedPhonePenaltyAdmin(admin.ModelAdmin):
 
     def remaining_time_display(self, obj):
         """남은 시간 표시"""
+        if not obj.start_date:
+            return '미시작'
         if not obj.is_active():
             return "만료/해제"
         hours = obj.get_remaining_hours()

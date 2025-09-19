@@ -490,7 +490,7 @@ class UsedPhonePenalty(models.Model):
     def get_end_date(self):
         """패널티 종료 예정 시간 계산"""
         from datetime import timedelta
-        if not self.duration_hours:
+        if not self.duration_hours or not self.start_date:
             return None
         return self.start_date + timedelta(hours=self.duration_hours)
 
