@@ -435,7 +435,7 @@ class UsedPhoneReport(models.Model):
         verbose_name_plural = '중고폰 신고'
 
     def __str__(self):
-        return f"{self.reporter.username} → {self.reported_user.username if self.reported_user else (self.reported_nickname or self.reported_phone_number or "정보없음")} ({self.get_report_type_display()})"
+        return f"{self.reporter.username} → {self.reported_user.username if self.reported_user else (self.reported_nickname or self.reported_phone_number or '정보없음')} ({self.get_report_type_display()})"
 
 
 class UsedPhonePenalty(models.Model):
