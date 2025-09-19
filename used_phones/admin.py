@@ -164,11 +164,69 @@ class UsedPhoneReportAdmin(admin.ModelAdmin):
 
 @admin.register(UsedPhonePenalty)
 class UsedPhonePenaltyAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'penalty_type', 'duration_days', 'status', 'is_active_display', 'start_date', 'end_date']
+    list_display = ['id', 'user', 'penalty_type', 'duration_display', 'status', 'is_active_display', 'start_date', 'end_date_display', 'remaining_time_display']
     list_filter = ['penalty_type', 'status', 'start_date']
-    search_fields = ['user__username', 'reason']
-    readonly_fields = ['user', 'start_date', 'created_at', 'updated_at']
+    search_fields = ['user__username', 'user__email', 'reason']
+    readonly_fields = ['start_date', 'created_at', 'updated_at', 'end_date_display', 'remaining_time_display']
+    filter_horizontal = ['related_reports']
     actions = ['revoke_penalty']
+
+    fieldsets = (
+        ('패널티 대상', {
+            'fields': ('user',)
+        }),
+        ('패널티 정보', {
+            'fields': ('penalty_type', 'reason', 'duration_hours', 'status')
+        }),
+        ('관련 신고', {
+            'fields': ('related_reports',),
+            'classes': ('collapse',),
+            'description': '신고 기반 패널티인 경우에만 선택'
+        }),
+        ('시간 정보', {
+            'fields': ('start_date', 'end_date_display', 'remaining_time_display'),
+            'classes': ('collapse',)
+        }),
+        ('해제 정보', {
+            'fields': ('revoked_by', 'revoked_at'),
+            'classes': ('collapse',)
+        }),
+        ('메타 정보', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def duration_display(self, obj):
+        """패널티 기간 표시"""
+        hours = obj.duration_hours
+        if hours >= 24:
+            days = hours // 24
+            remaining_hours = hours % 24
+            if remaining_hours > 0:
+                return f"{days}일 {remaining_hours}시간"
+            return f"{days}일"
+        return f"{hours}시간"
+    duration_display.short_description = '패널티 기간'
+
+    def end_date_display(self, obj):
+        """종료 예정 시간 표시"""
+        return obj.get_end_date()
+    end_date_display.short_description = '종료 예정'
+
+    def remaining_time_display(self, obj):
+        """남은 시간 표시"""
+        if not obj.is_active():
+            return "만료/해제"
+        hours = obj.get_remaining_hours()
+        if hours >= 24:
+            days = hours // 24
+            remaining_hours = hours % 24
+            if remaining_hours > 0:
+                return f"{days}일 {remaining_hours}시간"
+            return f"{days}일"
+        return f"{hours}시간"
+    remaining_time_display.short_description = '남은 시간'
 
     def is_active_display(self, obj):
         """현재 패널티 활성 상태 표시"""

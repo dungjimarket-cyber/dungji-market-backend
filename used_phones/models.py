@@ -461,14 +461,13 @@ class UsedPhonePenalty(models.Model):
     # 패널티 정보
     penalty_type = models.CharField(max_length=20, choices=PENALTY_TYPE_CHOICES, verbose_name='패널티유형')
     reason = models.TextField(verbose_name='패널티사유')
-    duration_days = models.IntegerField(verbose_name='패널티일수')
+    duration_hours = models.IntegerField(verbose_name='패널티시간', help_text='시간 단위로 입력 (예: 24시간 = 1일, 168시간 = 7일)')
 
-    # 관련 신고들
+    # 관련 신고들 (선택사항)
     related_reports = models.ManyToManyField('UsedPhoneReport', blank=True, related_name='penalties', verbose_name='관련신고')
 
-    # 패널티 기간
+    # 패널티 시작일
     start_date = models.DateTimeField(auto_now_add=True, verbose_name='시작일')
-    end_date = models.DateTimeField(verbose_name='종료일')
 
     # 상태
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name='상태')
@@ -488,22 +487,48 @@ class UsedPhonePenalty(models.Model):
         verbose_name = '중고폰 패널티'
         verbose_name_plural = '중고폰 패널티'
 
-    def save(self, *args, **kwargs):
-        """패널티 저장 시 종료일 자동 계산"""
-        if not self.end_date and self.duration_days:
-            from django.utils import timezone
-            from datetime import timedelta
-            self.end_date = timezone.now() + timedelta(days=self.duration_days)
-        super().save(*args, **kwargs)
+    def get_end_date(self):
+        """패널티 종료 예정 시간 계산"""
+        from datetime import timedelta
+        return self.start_date + timedelta(hours=self.duration_hours)
 
     def is_active(self):
         """현재 패널티가 활성 상태인지 확인"""
         from django.utils import timezone
-        return (
-            self.status == 'active' and
-            self.end_date and
-            timezone.now() < self.end_date
-        )
+        if self.status != 'active':
+            return False
+
+        # 해제된 경우
+        if self.revoked_at:
+            return False
+
+        # 시간이 만료된 경우
+        end_date = self.get_end_date()
+        if timezone.now() > end_date:
+            # 자동으로 상태를 만료로 변경
+            self.status = 'expired'
+            self.save(update_fields=['status'])
+            return False
+
+        return True
+
+    def get_remaining_hours(self):
+        """남은 패널티 시간 계산"""
+        from django.utils import timezone
+        if not self.is_active():
+            return 0
+
+        end_date = self.get_end_date()
+        remaining = end_date - timezone.now()
+        return int(remaining.total_seconds() / 3600)
 
     def __str__(self):
-        return f"{self.user.username} - {self.get_penalty_type_display()} ({self.duration_days}일)"
+        hours_display = f"{self.duration_hours}시간"
+        if self.duration_hours >= 24:
+            days = self.duration_hours // 24
+            remaining_hours = self.duration_hours % 24
+            if remaining_hours > 0:
+                hours_display = f"{days}일 {remaining_hours}시간"
+            else:
+                hours_display = f"{days}일"
+        return f"{self.user.username} - {self.get_penalty_type_display()} ({hours_display})"
