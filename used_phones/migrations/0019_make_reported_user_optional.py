@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('used_phones', '0015_fix_related_name_conflicts'),
+        ('used_phones', '0018_rename_amount_to_offered_price'),
     ]
 
     operations = [
