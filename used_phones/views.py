@@ -1753,9 +1753,10 @@ class UsedPhoneReportViewSet(viewsets.ModelViewSet):
         # 신고자를 현재 사용자로 설정
         serializer.save(reporter=self.request.user)
 
-        # 자동 패널티 처리 로직
-        reported_user = serializer.validated_data['reported_user']
-        self._check_auto_penalty(reported_user, serializer.instance)
+        # 자동 패널티 처리 로직 (reported_user가 있는 경우에만)
+        reported_user = serializer.validated_data.get('reported_user')
+        if reported_user:
+            self._check_auto_penalty(reported_user, serializer.instance)
 
     @action(detail=False, methods=['get'])
     def search_user(self, request):

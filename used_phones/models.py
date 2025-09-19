@@ -403,9 +403,13 @@ class UsedPhoneReport(models.Model):
         ('rejected', '거부됨'),
     ]
 
-    # 신고 대상
-    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_used_phone_reports', verbose_name='신고대상')
+    # 신고 대상 (선택사항 - 사용자를 찾지 못해도 신고 가능)
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='received_used_phone_reports', verbose_name='신고대상')
     reported_phone = models.ForeignKey('UsedPhone', on_delete=models.SET_NULL, null=True, blank=True, related_name='reports', verbose_name='신고상품')
+
+    # 신고 대상 텍스트 정보 (사용자를 찾지 못한 경우)
+    reported_nickname = models.CharField(max_length=100, null=True, blank=True, verbose_name='신고대상 닉네임')
+    reported_phone_number = models.CharField(max_length=20, null=True, blank=True, verbose_name='신고대상 연락처')
 
     # 신고자 정보
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submitted_used_phone_reports', verbose_name='신고자')

@@ -621,30 +621,62 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
 class UsedPhoneReportSerializer(serializers.ModelSerializer):
     """중고폰 신고 시리얼라이저"""
     reporter_username = serializers.CharField(source='reporter.username', read_only=True)
-    reported_user_username = serializers.CharField(source='reported_user.username', read_only=True)
-    reported_phone_model = serializers.CharField(source='reported_phone.model', read_only=True)
-    processed_by_username = serializers.CharField(source='processed_by.username', read_only=True)
+    reporter_nickname = serializers.CharField(source='reporter.nickname', read_only=True)
+    reported_user_username = serializers.CharField(source='reported_user.username', read_only=True, allow_null=True)
+    reported_user_nickname = serializers.CharField(source='reported_user.nickname', read_only=True, allow_null=True)
+    reported_phone_model = serializers.CharField(source='reported_phone.model', read_only=True, allow_null=True)
+    processed_by_username = serializers.CharField(source='processed_by.username', read_only=True, allow_null=True)
     report_type_display = serializers.CharField(source='get_report_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    # 신고 대상 정보 통합 필드 (읽기 전용)
+    reported_user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = UsedPhoneReport
         fields = [
-            'id', 'reported_user', 'reported_user_username',
-            'reported_phone', 'reported_phone_model', 'reporter', 'reporter_username',
+            'id', 'reported_user', 'reported_user_username', 'reported_user_nickname',
+            'reported_nickname', 'reported_phone_number',
+            'reported_phone', 'reported_phone_model',
+            'reporter', 'reporter_username', 'reporter_nickname',
             'report_type', 'report_type_display', 'description', 'status', 'status_display',
             'admin_note', 'processed_by', 'processed_by_username', 'processed_at',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'reporter', 'processed_by', 'processed_at', 'created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        """신고 대상 정보를 통합하여 표시"""
+        data = super().to_representation(instance)
+
+        # reported_user 정보 통합
+        if instance.reported_user:
+            data['reported_user'] = {
+                'id': instance.reported_user.id,
+                'nickname': instance.reported_user.nickname,
+                'username': instance.reported_user.username
+            }
+        else:
+            # 텍스트 정보만 있는 경우
+            data['reported_user'] = {
+                'id': None,
+                'nickname': instance.reported_nickname or '알 수 없음',
+                'username': None
+            }
+
+        return data
+
     def validate(self, data):
         """신고 유효성 검증"""
         request_user = self.context['request'].user
         reported_user = data.get('reported_user')
 
-        # 자신을 신고할 수 없음
-        if reported_user == request_user:
+        # 자신을 신고할 수 없음 (reported_user가 있는 경우만 체크)
+        if reported_user and reported_user == request_user:
             raise serializers.ValidationError("자신을 신고할 수 없습니다.")
 
         # 같은 사용자를 24시간 내에 중복 신고 방지
