@@ -643,31 +643,65 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         """Update시 추가 처리 - 이미지 및 지역 재등록 방식"""
         instance = serializer.save()
 
-        # 이미지 재등록 처리 (기존 이미지 삭제 후 새로 등록)
-        if 'images' in self.request.FILES or hasattr(self.request.data, 'getlist') and self.request.data.getlist('images'):
-            logger.info(f"[이미지 수정] 기존 이미지 삭제 후 재등록 시작")
+        # 이미지 처리 - 기존 이미지 유지 + 새 이미지 추가 방식
+        existing_image_ids = self.request.data.getlist('existing_image_ids') if hasattr(self.request.data, 'getlist') else []
+        new_images = self.request.FILES.getlist('new_images') if 'new_images' in self.request.FILES else []
 
-            # 기존 이미지 모두 삭제
-            deleted_count = UsedPhoneImage.objects.filter(phone=instance).delete()[0]
-            logger.info(f"[이미지 수정] {deleted_count}개 기존 이미지 삭제 완료")
+        # 이미지 변경이 있는 경우만 처리
+        if existing_image_ids or new_images or 'images' in self.request.FILES:
+            logger.info(f"[이미지 수정] 시작 - 유지: {len(existing_image_ids)}개, 새 이미지: {len(new_images)}개")
 
-            # 새 이미지 등록
-            images_data = self.request.FILES.getlist('images')
-            logger.info(f"[이미지 수정] {len(images_data)}개 새 이미지 등록 시작")
+            # 기존 방식 (images 필드)과의 호환성 유지
+            if 'images' in self.request.FILES:
+                # 기존 방식: 모든 이미지 재등록
+                logger.info(f"[이미지 수정] 기존 방식으로 처리 (전체 재등록)")
+                deleted_count = UsedPhoneImage.objects.filter(phone=instance).delete()[0]
+                logger.info(f"[이미지 수정] {deleted_count}개 기존 이미지 삭제")
 
-            for index, image in enumerate(images_data):
-                try:
-                    phone_image = UsedPhoneImage.objects.create(
-                        phone=instance,
-                        image=image,
-                        is_main=(index == 0),  # 첫 번째 이미지를 대표 이미지로
-                        order=index
-                    )
-                    logger.info(f"[이미지 수정] 이미지 {index + 1}/{len(images_data)} 저장 완료")
-                except Exception as e:
-                    logger.error(f"[이미지 수정] 이미지 저장 실패: {e}")
+                images_data = self.request.FILES.getlist('images')
+                for index, image in enumerate(images_data):
+                    try:
+                        UsedPhoneImage.objects.create(
+                            phone=instance,
+                            image=image,
+                            is_main=(index == 0),
+                            order=index
+                        )
+                    except Exception as e:
+                        logger.error(f"[이미지 수정] 이미지 저장 실패: {e}")
+            else:
+                # 새로운 방식: 선택적 유지 + 추가
+                # 유지하지 않을 이미지만 삭제
+                if existing_image_ids:
+                    existing_ids = [int(id) for id in existing_image_ids if id]
+                    deleted = UsedPhoneImage.objects.filter(phone=instance).exclude(id__in=existing_ids)
+                    deleted_count = deleted.count()
+                    deleted.delete()
+                    logger.info(f"[이미지 수정] {deleted_count}개 이미지 삭제 (유지: {len(existing_ids)}개)")
 
-            logger.info(f"[이미지 수정] 이미지 재등록 완료")
+                    # 유지된 이미지들의 순서 재정렬
+                    for idx, img_id in enumerate(existing_ids):
+                        UsedPhoneImage.objects.filter(id=img_id).update(order=idx)
+                else:
+                    # existing_image_ids가 비어있으면 모든 기존 이미지 삭제
+                    deleted_count = UsedPhoneImage.objects.filter(phone=instance).delete()[0]
+                    logger.info(f"[이미지 수정] 모든 기존 이미지 삭제: {deleted_count}개")
+
+                # 새 이미지 추가
+                existing_count = len(existing_image_ids) if existing_image_ids else 0
+                for index, image in enumerate(new_images):
+                    try:
+                        UsedPhoneImage.objects.create(
+                            phone=instance,
+                            image=image,
+                            is_main=(existing_count == 0 and index == 0),  # 기존 이미지가 없고 첫 번째면 대표
+                            order=existing_count + index  # 기존 이미지 다음 순서
+                        )
+                        logger.info(f"[이미지 수정] 새 이미지 추가 {index + 1}/{len(new_images)}")
+                    except Exception as e:
+                        logger.error(f"[이미지 수정] 새 이미지 저장 실패: {e}")
+
+            logger.info(f"[이미지 수정] 완료")
 
         # 지역 재등록 처리 (기존 지역 삭제 후 새로 등록)
         regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
