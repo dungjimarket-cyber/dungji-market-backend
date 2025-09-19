@@ -184,7 +184,7 @@ class UsedPhonePenaltyAdmin(admin.ModelAdmin):
             'description': '신고 기반 패널티인 경우에만 선택'
         }),
         ('시간 정보', {
-            'fields': ('start_date', 'end_date_display', 'remaining_time_display'),
+            'fields': ('end_date_display', 'remaining_time_display'),
             'classes': ('collapse',)
         }),
         ('해제 정보', {
