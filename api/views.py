@@ -2036,7 +2036,7 @@ class GroupBuyViewSet(ModelViewSet):
                         'amount': my_bid.amount,
                         'total_bidders': all_bids.count(),
                         'status': 'won' if my_rank == 1 else 'lost',
-                        'message': '축하합니다! 선정되셨습니다! 🎉' if my_rank == 1 else f'아쉽지만 선정되지 못했습니다 😢 (내 순위: {my_rank}위)'
+                        'message': '축하합니다! 선정되셨습니다! 🎉' if my_rank == 1 else '아쉽지만 공구에 선정되지 않았습니다.'
                     }
         
         return Response(data)

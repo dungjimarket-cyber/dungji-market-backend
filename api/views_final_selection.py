@@ -487,7 +487,7 @@ def check_buyer_decisions_completed(groupbuy):
                     Notification.objects.create(
                         user=bid.seller,
                         groupbuy=groupbuy,
-                        message=f"{groupbuy.title} 공구에 선정되지 않으셨습니다. 다음 기회에 도전해주세요."
+                        message=f"아쉽지만 {groupbuy.title} 공구에 선정되지 않았습니다."
                     )
             
             # 판매자 최종선택 단계로 전환
