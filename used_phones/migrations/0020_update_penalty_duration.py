@@ -25,7 +25,7 @@ def reverse_convert(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('used_phones', '0015_add_minimum_offer_price'),  # 이전 마이그레이션 번호 확인 필요
+        ('used_phones', '0019_make_reported_user_optional'),
     ]
 
     operations = [
