@@ -2509,9 +2509,9 @@ class GroupBuyViewSet(ModelViewSet):
             # 낙찰 금액 추가
             winning_bid = Bid.objects.filter(
                 groupbuy=gb,
-                seller=request.user
-            ).filter(
-                Q(is_selected=True) | Q(status='selected')
+                seller=request.user,
+                is_selected=True,
+                status='selected'
             ).first()
             if winning_bid:
                 gb_data['winning_bid_amount'] = winning_bid.amount
@@ -2530,9 +2530,9 @@ class GroupBuyViewSet(ModelViewSet):
         pending = self.get_queryset().filter(
             bid__seller=request.user,
             bid__final_decision='pending',
-            status='final_selection_seller'
-        ).filter(
-            Q(bid__is_selected=True) | Q(bid__status='selected')
+            status='final_selection_seller',
+            bid__is_selected=True,
+            bid__status='selected'
         ).distinct()
         
         data = []
@@ -2548,9 +2548,9 @@ class GroupBuyViewSet(ModelViewSet):
             # 낙찰 금액 추가
             winning_bid = Bid.objects.filter(
                 groupbuy=gb,
-                seller=request.user
-            ).filter(
-                Q(is_selected=True) | Q(status='selected')
+                seller=request.user,
+                is_selected=True,
+                status='selected'
             ).first()
             if winning_bid:
                 gb_data['winning_bid_amount'] = winning_bid.amount
