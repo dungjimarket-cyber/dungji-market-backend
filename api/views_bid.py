@@ -400,7 +400,8 @@ class BidViewSet(viewsets.ModelViewSet):
         bids = Bid.objects.filter(
             seller=request.user,
             groupbuy__status='final_selection_seller',
-            status='selected'
+            status='selected',
+            is_selected=True  # is_selected 조건 추가로 확실한 필터링
         ).select_related('groupbuy', 'groupbuy__product').order_by('-created_at')
         
         # 직렬화할 때 final_selection_end 포함

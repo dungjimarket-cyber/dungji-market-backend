@@ -2093,6 +2093,7 @@ class GroupBuyViewSet(ModelViewSet):
             pending = self.get_queryset().filter(
                 bid__seller=user,
                 bid__status='selected',  # is_selected 대신 status='selected' 사용
+                bid__is_selected=True,  # is_selected 조건 추가로 확실한 필터링
                 bid__final_decision='pending',
                 status='final_selection_seller'
             ).distinct()
