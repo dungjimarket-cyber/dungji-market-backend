@@ -135,14 +135,23 @@ class BidViewSet(viewsets.ModelViewSet):
     def seller_bids(self, request):
         """
         판매자의 모든 입찰 조회 API
+        groupbuy_id 파라미터가 있으면 해당 공구의 입찰만 조회
         """
         if request.user.role != 'seller':
             return Response(
-                {"detail": "판매회원만 접근할 수 있습니다."}, 
+                {"detail": "판매회원만 접근할 수 있습니다."},
                 status=status.HTTP_403_FORBIDDEN
             )
-            
-        bids = Bid.objects.filter(seller=request.user).order_by('-created_at')
+
+        # 기본적으로 판매자의 모든 입찰 조회
+        bids = Bid.objects.filter(seller=request.user)
+
+        # groupbuy_id 파라미터가 있으면 해당 공구의 입찰만 필터링
+        groupbuy_id = request.query_params.get('groupbuy_id')
+        if groupbuy_id:
+            bids = bids.filter(groupbuy_id=groupbuy_id)
+
+        bids = bids.order_by('-created_at')
         serializer = self.get_serializer(bids, many=True)
         return Response(serializer.data)
     

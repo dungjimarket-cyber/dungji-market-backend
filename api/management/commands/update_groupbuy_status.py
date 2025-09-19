@@ -55,20 +55,24 @@ class Command(BaseCommand):
         for groupbuy in final_selection_expired:
             # 확정한 참여자가 있는지 확인
             confirmed_participants = groupbuy.participation_set.filter(final_decision='confirmed').count()
-            
+
             if confirmed_participants > 0:
-                # 최고 지원금 입찰 선택
-                winning_bid = groupbuy.bid_set.order_by('-amount', 'created_at').first()
-                
+                # 이미 선정된 낙찰자가 있는지 확인
+                winning_bid = groupbuy.bid_set.filter(status='selected', is_selected=True).first()
+
+                if not winning_bid:
+                    # 낙찰자가 없는 경우에만 새로 선정
+                    winning_bid = groupbuy.bid_set.order_by('-amount', 'created_at').first()
+                    if winning_bid:
+                        winning_bid.status = 'selected'
+                        winning_bid.is_selected = True
+                        winning_bid.save()
+
                 if winning_bid:
-                    winning_bid.status = 'selected'
-                    winning_bid.is_selected = True  # is_selected 플래그도 설정
-                    winning_bid.save()
-                    
                     groupbuy.status = 'final_selection_seller'
                     groupbuy.seller_selection_end = now + timedelta(hours=6)
                     groupbuy.save()
-                    logger.info(f"공구 {groupbuy.id}의 낙찰자를 선정하고 판매자 확정 대기 상태로 변경했습니다.")
+                    logger.info(f"공구 {groupbuy.id}를 판매자 확정 대기 상태로 변경했습니다. (낙찰자: {winning_bid.seller.username})")
                     updated_count += 1
             else:
                 # 확정한 참여자가 없으면 취소
