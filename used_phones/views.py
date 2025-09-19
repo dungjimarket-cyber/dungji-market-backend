@@ -1757,6 +1757,48 @@ class UsedPhoneReportViewSet(viewsets.ModelViewSet):
         reported_user = serializer.validated_data['reported_user']
         self._check_auto_penalty(reported_user, serializer.instance)
 
+    @action(detail=False, methods=['get'])
+    def search_user(self, request):
+        """연락처와 닉네임으로 사용자 검색"""
+        phone = request.query_params.get('phone', '').strip()
+        nickname = request.query_params.get('nickname', '').strip()
+
+        if not phone and not nickname:
+            return Response({"error": "연락처 또는 닉네임을 입력해주세요."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from api.models import User
+
+        # 연락처와 닉네임 모두 일치하는 사용자 찾기
+        users = User.objects.all()
+
+        if phone and nickname:
+            # 둘 다 입력된 경우 둘 다 일치하는 사용자
+            users = users.filter(
+                phone_number__icontains=phone,
+                nickname__icontains=nickname
+            )
+        elif phone:
+            # 연락처만 입력된 경우
+            users = users.filter(phone_number__icontains=phone)
+        else:
+            # 닉네임만 입력된 경우
+            users = users.filter(nickname__icontains=nickname)
+
+        # 최대 5명까지만 반환
+        users = users[:5]
+
+        user_data = []
+        for user in users:
+            user_data.append({
+                'id': user.id,
+                'nickname': user.nickname,
+                'username': user.username,
+                'phone_number': user.phone_number if hasattr(user, 'phone_number') else None,
+                'region': user.address_region.full_name if hasattr(user, 'address_region') and user.address_region else None
+            })
+
+        return Response({'users': user_data})
+
     def _check_auto_penalty(self, reported_user, current_report):
         """신고 누적에 따른 자동 패널티 처리"""
         # 최근 30일 내 해당 사용자에 대한 신고 수 확인
