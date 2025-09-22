@@ -52,7 +52,7 @@ class RegionSerializer(serializers.ModelSerializer):
     """지역 정보 시리얼라이저"""
     class Meta:
         model = Region
-        fields = ['id', 'sido', 'sigungu', 'dong', 'name']
+        fields = ['code', 'name', 'full_name', 'level']
 
 
 class ElectronicsListSerializer(serializers.ModelSerializer):
@@ -80,8 +80,9 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
         regions = []
         for er in obj.regions.all():
             regions.append({
-                'id': er.region.id,
-                'name': str(er.region)
+                'code': er.region.code,
+                'name': er.region.name,
+                'full_name': er.region.full_name
             })
         return regions
 
@@ -120,11 +121,10 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
         regions = []
         for er in obj.regions.all():
             regions.append({
-                'id': er.region.id,
-                'sido': er.region.sido,
-                'sigungu': er.region.sigungu,
-                'dong': er.region.dong,
-                'name': str(er.region)
+                'code': er.region.code,
+                'name': er.region.name,
+                'full_name': er.region.full_name,
+                'level': er.region.level
             })
         return regions
 

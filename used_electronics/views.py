@@ -59,9 +59,35 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         if condition:
             queryset = queryset.filter(condition_grade=condition)
 
+        # 지역 필터링 - UsedPhone과 동일한 방식 적용
         region = self.request.query_params.get('region', None)
         if region:
-            queryset = queryset.filter(regions__region__id=region).distinct()
+            from api.models import Region
+            from django.db.models import Q
+
+            # 상위 지역(시/도)인지 확인
+            parent_region = Region.objects.filter(
+                name=region,
+                parent_id__isnull=True  # parent_id가 null이면 상위 지역
+            ).first()
+
+            if parent_region:
+                # 상위 지역인 경우: 해당 지역과 모든 하위 지역 포함
+                sub_regions = Region.objects.filter(parent_id=parent_region.pk)
+                region_codes = [parent_region.pk] + list(sub_regions.values_list('pk', flat=True))
+
+                queryset = queryset.filter(
+                    Q(regions__region__code__in=region_codes) |  # ElectronicsRegion을 통한 다중 지역
+                    Q(region__code__in=region_codes)  # 메인 region 필드
+                ).distinct()
+            else:
+                # 하위 지역이거나 정확한 매칭
+                queryset = queryset.filter(
+                    Q(regions__region__name__icontains=region) |  # name으로 검색
+                    Q(regions__region__full_name__icontains=region) |  # full_name으로 검색
+                    Q(region__name__icontains=region) |  # 메인 region의 name
+                    Q(region__full_name__icontains=region)  # 메인 region의 full_name
+                ).distinct()
 
         # 내 상품만 보기 (판매자용)
         if self.action == 'my_list':
