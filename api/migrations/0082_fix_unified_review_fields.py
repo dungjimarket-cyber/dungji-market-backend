@@ -13,14 +13,20 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 1. reviewed_user를 reviewee로 이름 변경
+        # 1. 먼저 unique_together 제거 (item_id 참조 때문에)
+        migrations.AlterUniqueTogether(
+            model_name='unifiedreview',
+            unique_together=set(),
+        ),
+
+        # 2. reviewed_user를 reviewee로 이름 변경
         migrations.RenameField(
             model_name='unifiedreview',
             old_name='reviewed_user',
             new_name='reviewee',
         ),
 
-        # 2. transaction_type을 is_from_buyer로 변경
+        # 3. transaction_type을 is_from_buyer로 변경
         migrations.RemoveField(
             model_name='unifiedreview',
             name='transaction_type',
@@ -31,7 +37,7 @@ class Migration(migrations.Migration):
             field=models.BooleanField(default=True, verbose_name='구매자가 작성'),
         ),
 
-        # 3. transaction_id 필드 추가 (item_id 대신 사용)
+        # 4. transaction_id 필드 추가 (item_id 대신 사용)
         migrations.RemoveField(
             model_name='unifiedreview',
             name='item_id',
@@ -72,11 +78,7 @@ class Migration(migrations.Migration):
             field=models.DateTimeField(auto_now=True, verbose_name='후기 수정일'),
         ),
 
-        # 6. unique_together 변경 - 먼저 기존 것 제거 후 새로 설정
-        migrations.AlterUniqueTogether(
-            name='unifiedreview',
-            unique_together=set(),  # 먼저 제거
-        ),
+        # 6. unique_together 새로 설정
         migrations.AlterUniqueTogether(
             name='unifiedreview',
             unique_together={('item_type', 'transaction_id', 'reviewer')},
