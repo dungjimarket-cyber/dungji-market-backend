@@ -101,10 +101,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         ).count()
 
         if active_count >= 5:
-            return Response(
-                {'error': '최대 5개까지만 등록 가능합니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError('최대 5개까지만 등록 가능합니다.')
 
         serializer.save(seller=self.request.user)
 
