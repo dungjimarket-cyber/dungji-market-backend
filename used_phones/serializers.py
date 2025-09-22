@@ -4,7 +4,7 @@ Used Phones Serializers
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
-    UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
+    UsedPhone, UsedPhoneImage, UsedPhoneOffer,
     UsedPhoneRegion, UsedPhoneTransaction, UsedPhoneReview,
     UsedPhoneReport, UsedPhonePenalty
 )

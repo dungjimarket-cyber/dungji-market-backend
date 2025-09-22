@@ -5,7 +5,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     UsedElectronics, ElectronicsRegion, ElectronicsImage,
-    ElectronicsOffer, ElectronicsFavorite, ElectronicsTransaction
+    ElectronicsOffer, ElectronicsTransaction
 )
 from api.models import Region
 from api.models_unified_simple import UnifiedFavorite
