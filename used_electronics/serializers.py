@@ -164,7 +164,7 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
         max_length=10
     )
     regions = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.CharField(),
         write_only=True,
         max_length=3
     )
@@ -222,7 +222,8 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
         # 첫 번째 지역을 메인 지역으로 설정
         if regions_data:
             try:
-                main_region = Region.objects.get(id=regions_data[0])
+                # regions_data에는 지역 코드가 들어옴 (프론트엔드에서 code를 전달)
+                main_region = Region.objects.get(code=regions_data[0])
                 validated_data['region'] = main_region
             except Region.DoesNotExist:
                 pass
@@ -231,9 +232,9 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
         electronics = UsedElectronics.objects.create(**validated_data)
 
         # 지역 연결
-        for region_id in regions_data:
+        for region_code in regions_data:
             try:
-                region = Region.objects.get(id=region_id)
+                region = Region.objects.get(code=region_code)
                 ElectronicsRegion.objects.create(electronics=electronics, region=region)
             except Region.DoesNotExist:
                 continue
@@ -267,9 +268,9 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
             instance.regions.all().delete()
 
             # 새 지역 추가
-            for idx, region_id in enumerate(regions_data):
+            for idx, region_code in enumerate(regions_data):
                 try:
-                    region = Region.objects.get(id=region_id)
+                    region = Region.objects.get(code=region_code)
                     ElectronicsRegion.objects.create(electronics=instance, region=region)
                     if idx == 0:
                         instance.region = region
