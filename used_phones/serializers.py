@@ -122,12 +122,16 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     def get_is_favorite(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            from api.models_unified_simple import UnifiedFavorite
-            return UnifiedFavorite.objects.filter(
-                user=request.user,
-                item_type='phone',
-                item_id=obj.id
-            ).exists()
+            try:
+                from api.models_unified_simple import UnifiedFavorite
+                return UnifiedFavorite.objects.filter(
+                    user=request.user,
+                    item_type='phone',
+                    item_id=obj.id
+                ).exists()
+            except:
+                # 통합 모델 실패시 기존 방식으로 폴백
+                return obj.favorites.filter(user=request.user).exists()
         return False
 
     def get_final_price(self, obj):
@@ -293,12 +297,16 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     def get_is_favorite(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            from api.models_unified_simple import UnifiedFavorite
-            return UnifiedFavorite.objects.filter(
-                user=request.user,
-                item_type='phone',
-                item_id=obj.id
-            ).exists()
+            try:
+                from api.models_unified_simple import UnifiedFavorite
+                return UnifiedFavorite.objects.filter(
+                    user=request.user,
+                    item_type='phone',
+                    item_id=obj.id
+                ).exists()
+            except:
+                # 통합 모델 실패시 기존 방식으로 폴백
+                return obj.favorites.filter(user=request.user).exists()
         return False
 
     def get_buyer_id(self, obj):
