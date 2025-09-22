@@ -291,7 +291,6 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             queryset.prefetch_related(
                 'regions__region',
                 'images',
-                'favorites',
                 'offers__buyer',
                 'transactions__buyer'
             ).select_related('seller', 'region'),
@@ -307,31 +306,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def favorite(self, request, pk=None):
-        """Toggle favorite - 통합 모델 사용"""
-        phone = self.get_object()
 
-        # 통합 찜 모델 사용
-        favorite, created = UnifiedFavorite.objects.get_or_create(
-            user=request.user,
-            item_type='phone',
-            item_id=phone.id
-        )
-
-        if not created:
-            favorite.delete()
-            phone.favorite_count = F('favorite_count') - 1
-            phone.save(update_fields=['favorite_count'])
-            phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
-            return Response({'status': 'unfavorited', 'favorite_count': phone.favorite_count})
-
-        phone.favorite_count = F('favorite_count') + 1
-        phone.save(update_fields=['favorite_count'])
-        phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
-        return Response({'status': 'favorited', 'favorite_count': phone.favorite_count})
-    
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def offer(self, request, pk=None):
         """가격 제안하기"""
