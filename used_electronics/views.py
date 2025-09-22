@@ -405,29 +405,50 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
         return Response(offers_data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post', 'delete'], permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
-        """찜하기 토글 - 통합 모델 사용"""
+        """찜하기/찜 해제 - 통합 모델 사용"""
         electronics = self.get_object()
 
-        # 통합 찜 모델 사용
-        favorite, created = UnifiedFavorite.objects.get_or_create(
-            user=request.user,
-            item_type='electronics',
-            item_id=electronics.id
-        )
+        if request.method == 'POST':
+            # 찜하기
+            favorite, created = UnifiedFavorite.objects.get_or_create(
+                user=request.user,
+                item_type='electronics',
+                item_id=electronics.id
+            )
 
-        if not created:
-            # 이미 찜한 경우 - 찜 해제
-            favorite.delete()
-            electronics.favorite_count = max(0, electronics.favorite_count - 1)
-            electronics.save(update_fields=['favorite_count'])
-            return Response({'is_favorited': False})
+            if created:
+                # 찜 카운트 증가
+                electronics.favorite_count = UnifiedFavorite.objects.filter(
+                    item_type='electronics',
+                    item_id=electronics.id
+                ).count()
+                electronics.save(update_fields=['favorite_count'])
 
-        # 찜하기
-        electronics.favorite_count += 1
-        electronics.save(update_fields=['favorite_count'])
-        return Response({'is_favorited': True})
+                return Response({'status': 'favorited', 'message': '찜 목록에 추가되었습니다.'})
+            else:
+                return Response({'status': 'already_favorited', 'message': '이미 찜한 상품입니다.'})
+
+        elif request.method == 'DELETE':
+            # 찜 해제
+            deleted_count, _ = UnifiedFavorite.objects.filter(
+                user=request.user,
+                item_type='electronics',
+                item_id=electronics.id
+            ).delete()
+
+            if deleted_count > 0:
+                # 찜 카운트 감소
+                electronics.favorite_count = UnifiedFavorite.objects.filter(
+                    item_type='electronics',
+                    item_id=electronics.id
+                ).count()
+                electronics.save(update_fields=['favorite_count'])
+
+                return Response({'status': 'unfavorited', 'message': '찜 목록에서 제거되었습니다.'})
+            else:
+                return Response({'status': 'not_favorited', 'message': '찜하지 않은 상품입니다.'})
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def favorites(self, request):

@@ -465,6 +465,51 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         serializer = UsedPhoneOfferSerializer(offer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
+    @action(detail=True, methods=['post', 'delete'], permission_classes=[IsAuthenticated])
+    def favorite(self, request, pk=None):
+        """찜하기/찜 해제"""
+        phone = self.get_object()
+
+        if request.method == 'POST':
+            # 찜하기
+            favorite, created = UnifiedFavorite.objects.get_or_create(
+                user=request.user,
+                item_type='phone',
+                item_id=phone.id
+            )
+
+            if created:
+                # 찜 카운트 증가
+                phone.favorite_count = UnifiedFavorite.objects.filter(
+                    item_type='phone',
+                    item_id=phone.id
+                ).count()
+                phone.save(update_fields=['favorite_count'])
+
+                return Response({'status': 'favorited', 'message': '찜 목록에 추가되었습니다.'})
+            else:
+                return Response({'status': 'already_favorited', 'message': '이미 찜한 상품입니다.'})
+
+        elif request.method == 'DELETE':
+            # 찜 해제
+            deleted_count, _ = UnifiedFavorite.objects.filter(
+                user=request.user,
+                item_type='phone',
+                item_id=phone.id
+            ).delete()
+
+            if deleted_count > 0:
+                # 찜 카운트 감소
+                phone.favorite_count = UnifiedFavorite.objects.filter(
+                    item_type='phone',
+                    item_id=phone.id
+                ).count()
+                phone.save(update_fields=['favorite_count'])
+
+                return Response({'status': 'unfavorited', 'message': '찜 목록에서 제거되었습니다.'})
+            else:
+                return Response({'status': 'not_favorited', 'message': '찜하지 않은 상품입니다.'})
+
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def offer_count(self, request, pk=None):
         """사용자의 제안 횟수 조회"""
