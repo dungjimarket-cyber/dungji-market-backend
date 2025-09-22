@@ -36,7 +36,6 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     queryset = UsedPhone.objects.all().prefetch_related(
         'regions__region',  # prefetch regions to avoid N+1 queries
         'images',
-        'favorites',
         'transactions'  # transaction 정보도 prefetch
     ).select_related('seller', 'region')
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -63,7 +62,6 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             queryset = UsedPhone.objects.exclude(status='deleted').prefetch_related(
                 'regions__region',
                 'images',
-                'favorites',
                 'transactions'
             ).select_related('seller', 'region')
 
@@ -78,7 +76,6 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             ).prefetch_related(
                 'regions__region',
                 'images',
-                'favorites',
                 'transactions'
             ).select_related('seller', 'region')
         
