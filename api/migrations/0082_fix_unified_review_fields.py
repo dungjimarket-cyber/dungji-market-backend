@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
     operations = [
         # 1. 먼저 unique_together 제거 (item_id 참조 때문에)
         migrations.AlterUniqueTogether(
-            model_name='unifiedreview',
+            name='unifiedreview',
             unique_together=set(),
         ),
 
