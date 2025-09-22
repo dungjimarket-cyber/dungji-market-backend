@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (UsedPhone, UsedPhoneImage, UsedPhoneOffer,
-                     UsedPhoneRegion, TradeCancellation, UsedPhoneReview,
+                     UsedPhoneRegion, TradeCancellation,
                      UsedPhoneReport, UsedPhonePenalty, UsedPhoneTransaction)
 
 
@@ -114,17 +114,6 @@ class UsedPhoneTransactionAdmin(admin.ModelAdmin):
     get_phone_info.short_description = '상품'
 
 
-@admin.register(UsedPhoneReview)
-class UsedPhoneReviewAdmin(admin.ModelAdmin):
-    list_display = ['id', 'get_transaction_info', 'reviewer', 'reviewee', 'rating', 'created_at']
-    list_filter = ['rating', 'created_at']
-    search_fields = ['reviewer__username', 'reviewee__username', 'transaction__phone__model']
-    readonly_fields = ['transaction', 'reviewer', 'reviewee', 'created_at', 'updated_at']
-
-    def get_transaction_info(self, obj):
-        """거래 정보 표시"""
-        return f"{obj.transaction.phone.brand} {obj.transaction.phone.model}"
-    get_transaction_info.short_description = '거래 상품'
 
 
 @admin.register(UsedPhoneReport)

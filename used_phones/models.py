@@ -337,44 +337,6 @@ class UsedPhoneTransaction(models.Model):
         return False
 
 
-class UsedPhoneReview(models.Model):
-    """중고폰 거래 후기"""
-
-    RATING_CHOICES = [
-        (5, '매우 만족'),
-        (4, '만족'),
-        (3, '보통'),
-        (2, '불만족'),
-        (1, '매우 불만족'),
-    ]
-
-    transaction = models.ForeignKey('UsedPhoneTransaction', on_delete=models.CASCADE, related_name='reviews')
-    reviewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='written_used_phone_reviews')
-    reviewee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_used_phone_reviews')
-
-    # 평가 내용
-    rating = models.IntegerField(choices=RATING_CHOICES, verbose_name='평점')
-    comment = models.TextField(null=True, blank=True, verbose_name='후기내용')
-
-    # 평가 항목 (선택적)
-    is_punctual = models.BooleanField(null=True, blank=True, verbose_name='시간약속준수')
-    is_friendly = models.BooleanField(null=True, blank=True, verbose_name='친절함')
-    is_honest = models.BooleanField(null=True, blank=True, verbose_name='정직한거래')
-    is_fast_response = models.BooleanField(null=True, blank=True, verbose_name='빠른응답')
-
-    # 타임스탬프
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'used_phone_reviews'
-        ordering = ['-created_at']
-        verbose_name = '중고폰 거래 후기'
-        verbose_name_plural = '중고폰 거래 후기'
-        unique_together = ('transaction', 'reviewer')  # 한 거래당 한 번만 평가 가능
-
-    def __str__(self):
-        return f"{self.reviewer.username} → {self.reviewee.username} ({self.rating}★)"
 
 
 class UsedPhoneReport(models.Model):

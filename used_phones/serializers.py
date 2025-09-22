@@ -5,11 +5,11 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     UsedPhone, UsedPhoneImage, UsedPhoneOffer,
-    UsedPhoneRegion, UsedPhoneTransaction, UsedPhoneReview,
+    UsedPhoneRegion, UsedPhoneTransaction,
     UsedPhoneReport, UsedPhonePenalty
 )
 from api.models import Region
-from api.models_unified_simple import UnifiedFavorite
+from api.models_unified_simple import UnifiedFavorite, UnifiedReview
 import logging
 
 User = get_user_model()
@@ -215,7 +215,7 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
                 return False
 
             # 거래 ID 가져오기
-            from .models import UsedPhoneTransaction, UsedPhoneReview
+            from .models import UsedPhoneTransaction
             transaction = UsedPhoneTransaction.objects.filter(
                 phone=obj,
                 status='completed'
@@ -227,14 +227,16 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             # 현재 사용자가 이 거래에 대해 리뷰를 작성했는지 확인
             # 판매자인 경우
             if obj.seller == request.user:
-                return UsedPhoneReview.objects.filter(
-                    transaction=transaction,
+                return UnifiedReview.objects.filter(
+                    item_type='phone',
+                    transaction_id=transaction.id,
                     reviewer=request.user
                 ).exists()
 
             # 구매자인 경우
-            return UsedPhoneReview.objects.filter(
-                transaction=transaction,
+            return UnifiedReview.objects.filter(
+                item_type='phone',
+                transaction_id=transaction.id,
                 reviewer=request.user
             ).exists()
 
@@ -588,37 +590,69 @@ class UsedPhoneTransactionSerializer(serializers.ModelSerializer):
 
 
 class UsedPhoneReviewSerializer(serializers.ModelSerializer):
-    """거래 후기 시리얼라이저"""
+    """거래 후기 시리얼라이저 - UnifiedReview 사용"""
     reviewer_username = serializers.CharField(source='reviewer.username', read_only=True)
     reviewee_username = serializers.CharField(source='reviewee.username', read_only=True)
     reviewer_nickname = serializers.CharField(source='reviewer.nickname', read_only=True)
     reviewee_nickname = serializers.CharField(source='reviewee.nickname', read_only=True)
-    phone_brand = serializers.CharField(source='transaction.phone.brand', read_only=True)
-    phone_model = serializers.CharField(source='transaction.phone.model', read_only=True)
+
+    # UnifiedReview는 transaction_id를 사용하므로 transaction 필드 매핑
+    transaction = serializers.IntegerField(source='transaction_id', write_only=True)
+    transaction_id = serializers.IntegerField(read_only=True)
+
+    # 추가 정보 필드들 (backward compatibility)
+    phone_brand = serializers.SerializerMethodField()
+    phone_model = serializers.SerializerMethodField()
 
     class Meta:
-        model = UsedPhoneReview
+        model = UnifiedReview
         fields = [
-            'id', 'transaction', 'reviewer', 'reviewer_username', 'reviewer_nickname',
+            'id', 'transaction', 'transaction_id', 'reviewer', 'reviewer_username', 'reviewer_nickname',
             'reviewee', 'reviewee_username', 'reviewee_nickname', 'rating', 'comment',
             'is_punctual', 'is_friendly', 'is_honest', 'is_fast_response',
-            'phone_brand', 'phone_model',
+            'phone_brand', 'phone_model', 'item_type', 'is_from_buyer',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'reviewer', 'reviewee', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'reviewer', 'reviewee', 'item_type', 'created_at', 'updated_at']
+
+    def get_phone_brand(self, obj):
+        """거래에서 휴대폰 브랜드 정보 가져오기"""
+        transaction = obj.get_transaction()
+        if transaction and hasattr(transaction, 'phone'):
+            return transaction.phone.brand
+        return None
+
+    def get_phone_model(self, obj):
+        """거래에서 휴대폰 모델 정보 가져오기"""
+        transaction = obj.get_transaction()
+        if transaction and hasattr(transaction, 'phone'):
+            return transaction.phone.model
+        return None
 
     def validate(self, data):
         """거래 완료 후에만 리뷰 작성 가능"""
-        transaction = data.get('transaction')
-        if transaction and transaction.status != 'completed':
-            raise serializers.ValidationError("거래가 완료된 후에만 리뷰를 작성할 수 있습니다.")
+        transaction_id = data.get('transaction_id')
+        if transaction_id:
+            try:
+                from .models import UsedPhoneTransaction
+                transaction = UsedPhoneTransaction.objects.get(id=transaction_id)
+                if transaction.status != 'completed':
+                    raise serializers.ValidationError("거래가 완료된 후에만 리뷰를 작성할 수 있습니다.")
 
-        # 리뷰어가 거래 당사자인지 확인
-        request_user = self.context['request'].user
-        if transaction.seller != request_user and transaction.buyer != request_user:
-            raise serializers.ValidationError("해당 거래의 당사자만 리뷰를 작성할 수 있습니다.")
+                # 리뷰어가 거래 당사자인지 확인
+                request_user = self.context['request'].user
+                if transaction.seller != request_user and transaction.buyer != request_user:
+                    raise serializers.ValidationError("해당 거래의 당사자만 리뷰를 작성할 수 있습니다.")
+
+            except UsedPhoneTransaction.DoesNotExist:
+                raise serializers.ValidationError("거래를 찾을 수 없습니다.")
 
         return data
+
+    def create(self, validated_data):
+        """UnifiedReview 생성 시 item_type을 'phone'으로 설정"""
+        validated_data['item_type'] = 'phone'
+        return super().create(validated_data)
 
 
 class UsedPhoneReportSerializer(serializers.ModelSerializer):

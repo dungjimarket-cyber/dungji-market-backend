@@ -13,7 +13,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 import logging
 from .models import (
     UsedPhone, UsedPhoneImage, UsedPhoneOffer,
-    UsedPhoneTransaction, UsedPhoneReview, TradeCancellation,
+    UsedPhoneTransaction, TradeCancellation,
     UsedPhoneReport, UsedPhonePenalty, UsedPhoneRegion
 )
 from api.models_unified_simple import (
@@ -908,8 +908,9 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 has_review = False
                 try:
                     if transaction and phone.status == 'sold':
-                        has_review = UsedPhoneReview.objects.filter(
-                            transaction=transaction,
+                        has_review = UnifiedReview.objects.filter(
+                            item_type='phone',
+                            transaction_id=transaction.id,
                             reviewer=request.user
                         ).exists()
                 except Exception as e:
@@ -1601,17 +1602,19 @@ class UsedPhoneTransactionViewSet(viewsets.ModelViewSet):
 
 
 class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
-    """중고폰 거래 후기 ViewSet"""
-    queryset = UsedPhoneReview.objects.all()
+    """중고폰 거래 후기 ViewSet - UnifiedReview 사용"""
+    queryset = UnifiedReview.objects.filter(item_type='phone')
     serializer_class = UsedPhoneReviewSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         """현재 사용자 관련 리뷰만 반환"""
         user = self.request.user
-        return UsedPhoneReview.objects.filter(
+        return UnifiedReview.objects.filter(
+            item_type='phone'
+        ).filter(
             Q(reviewer=user) | Q(reviewee=user)
-        ).select_related('transaction', 'reviewer', 'reviewee')
+        ).select_related('reviewer', 'reviewee')
 
     def create(self, request, *args, **kwargs):
         """리뷰 작성"""
@@ -1663,8 +1666,9 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
             )
 
         # 이미 리뷰를 작성했는지 확인
-        existing_review = UsedPhoneReview.objects.filter(
-            transaction=transaction,
+        existing_review = UnifiedReview.objects.filter(
+            item_type='phone',
+            transaction_id=transaction.id,
             reviewer=request.user
         ).first()
 
@@ -1677,10 +1681,14 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
         # 리뷰 생성
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # is_from_buyer 결정
+        is_from_buyer = transaction.buyer == request.user
         serializer.save(
-            transaction=transaction,
+            item_type='phone',
+            transaction_id=transaction.id,
             reviewer=request.user,
-            reviewee=reviewee
+            reviewee=reviewee,
+            is_from_buyer=is_from_buyer
         )
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -1688,9 +1696,10 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='written')
     def written(self, request):
         """내가 작성한 후기 목록"""
-        reviews = UsedPhoneReview.objects.filter(
+        reviews = UnifiedReview.objects.filter(
+            item_type='phone',
             reviewer=request.user
-        ).select_related('transaction', 'reviewee').order_by('-created_at')
+        ).select_related('reviewer', 'reviewee').order_by('-created_at')
 
         # 페이지네이션 적용
         page = self.paginate_queryset(reviews)
@@ -1704,9 +1713,10 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='received')
     def received(self, request):
         """내가 받은 후기 목록"""
-        reviews = UsedPhoneReview.objects.filter(
+        reviews = UnifiedReview.objects.filter(
+            item_type='phone',
             reviewee=request.user
-        ).select_related('transaction', 'reviewer').order_by('-created_at')
+        ).select_related('reviewer', 'reviewee').order_by('-created_at')
 
         # 페이지네이션 적용
         page = self.paginate_queryset(reviews)
@@ -1739,7 +1749,7 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
                     )
 
             # 받은 리뷰 통계
-            reviews = UsedPhoneReview.objects.filter(reviewee=user)
+            reviews = UnifiedReview.objects.filter(item_type='phone', reviewee=user)
 
             # 기본 통계값 설정
             stats = {
@@ -2172,8 +2182,9 @@ def create_simple_review(request):
             )
 
         # 이미 리뷰를 작성했는지 확인
-        existing_review = UsedPhoneReview.objects.filter(
-            transaction=transaction,
+        existing_review = UnifiedReview.objects.filter(
+            item_type='phone',
+            transaction_id=transaction.id,
             reviewer=reviewer
         ).first()
 
@@ -2184,12 +2195,15 @@ def create_simple_review(request):
             )
 
         # 리뷰 생성
-        review = UsedPhoneReview.objects.create(
-            transaction=transaction,
+        is_from_buyer = transaction.buyer == reviewer
+        review = UnifiedReview.objects.create(
+            item_type='phone',
+            transaction_id=transaction.id,
             reviewer=reviewer,
             reviewee=reviewee,
             rating=rating,
             comment=comment,
+            is_from_buyer=is_from_buyer,
             # 평가 태그들 (선택사항)
             is_punctual=request.data.get('is_punctual', False),
             is_friendly=request.data.get('is_friendly', False),

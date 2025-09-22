@@ -72,7 +72,11 @@ class Migration(migrations.Migration):
             field=models.DateTimeField(auto_now=True, verbose_name='후기 수정일'),
         ),
 
-        # 6. unique_together 변경
+        # 6. unique_together 변경 - 먼저 기존 것 제거 후 새로 설정
+        migrations.AlterUniqueTogether(
+            name='unifiedreview',
+            unique_together=set(),  # 먼저 제거
+        ),
         migrations.AlterUniqueTogether(
             name='unifiedreview',
             unique_together={('item_type', 'transaction_id', 'reviewer')},
