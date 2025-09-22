@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
                 ('item_type', models.CharField(choices=[('phone', '휴대폰'), ('electronics', '전자제품')], max_length=20, verbose_name='상품 유형')),
                 ('item_id', models.PositiveIntegerField(verbose_name='상품 ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='찜한 날짜')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='unified_favorites', to='auth.user')),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='unified_favorites', to='api.user')),
             ],
             options={
                 'verbose_name': '통합 찜',
@@ -40,8 +40,8 @@ class Migration(migrations.Migration):
                 ('rating', models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)], verbose_name='평점')),
                 ('comment', models.TextField(blank=True, max_length=500, verbose_name='후기 내용')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='후기 작성일')),
-                ('reviewer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='written_reviews', to='auth.user')),
-                ('reviewed_user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='received_reviews', to='auth.user')),
+                ('reviewer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='written_reviews', to='api.user')),
+                ('reviewed_user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='received_reviews', to='api.user')),
             ],
             options={
                 'verbose_name': '통합 후기',
