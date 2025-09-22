@@ -191,7 +191,7 @@ def reverse_migrate_favorites(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0001_initial'),
+        ('api', '0080_add_unified_report_penalty_models'),
         ('used_phones', '0001_initial'),
         ('used_electronics', '0001_initial'),
     ]
