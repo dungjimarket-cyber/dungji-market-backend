@@ -88,16 +88,7 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
         """현재 사용자의 찜 여부"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            try:
-                from api.models_unified_simple import UnifiedFavorite
-                return UnifiedFavorite.objects.filter(
-                    user=request.user,
-                    item_type='electronics',
-                    item_id=obj.id
-                ).exists()
-            except:
-                # 통합 모델 실패시 기존 방식으로 폴백
-                return obj.favorites.filter(user=request.user).exists()
+            return obj.favorites.filter(user=request.user).exists()
         return False
 
 
@@ -135,16 +126,7 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
         """현재 사용자의 찜 여부"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            try:
-                from api.models_unified_simple import UnifiedFavorite
-                return UnifiedFavorite.objects.filter(
-                    user=request.user,
-                    item_type='electronics',
-                    item_id=obj.id
-                ).exists()
-            except:
-                # 통합 모델 실패시 기존 방식으로 폴백
-                return obj.favorites.filter(user=request.user).exists()
+            return obj.favorites.filter(user=request.user).exists()
         return False
 
     def get_is_mine(self, obj):
