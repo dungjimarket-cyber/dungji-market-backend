@@ -107,6 +107,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "api",
     "used_phones",  # 중고폰 직거래 앱 추가
+    "used_electronics",  # 전자제품/가전 직거래 앱 추가
     "rest_framework",
     "rest_framework.authtoken",  # Token 인증을 위해 추가
     "rest_framework_simplejwt",

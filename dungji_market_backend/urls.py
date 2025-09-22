@@ -256,6 +256,10 @@ urlpatterns = [
     
     # 중고폰 직거래 API
     path('api/used/', include('used_phones.urls')),
+    path('api/used/electronics/', include('used_electronics.urls')),
+
+    # 통합 찜/후기 API
+    path('api/unified/', include('api.urls_unified')),
     
     # 마이페이지 API
     path('api/mypage/profile/', mypage_profile, name='mypage_profile'),

@@ -1416,3 +1416,5 @@ from .models_verification import PhoneVerification, BusinessNumberVerification, 
 from .models_banner import Banner, Event
 # Import Partner models
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
+# Import Unified models for favorites and reviews
+from .models_unified_simple import UnifiedFavorite, UnifiedReview

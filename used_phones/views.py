@@ -13,8 +13,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 import logging
 from .models import (
     UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
-    UsedPhoneDeletePenalty, UsedPhoneTransaction, UsedPhoneReview, TradeCancellation,
+    UsedPhoneTransaction, UsedPhoneReview, TradeCancellation,
     UsedPhoneReport, UsedPhonePenalty, UsedPhoneRegion
+)
+from api.models_unified_simple import (
+    UnifiedFavorite, UnifiedReview, UnifiedDeletePenalty,
+    UnifiedReport, UnifiedPenalty
 )
 
 logger = logging.getLogger(__name__)
@@ -309,20 +313,23 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
-        """Toggle favorite"""
+        """Toggle favorite - 통합 모델 사용"""
         phone = self.get_object()
-        favorite, created = UsedPhoneFavorite.objects.get_or_create(
+
+        # 통합 찜 모델 사용
+        favorite, created = UnifiedFavorite.objects.get_or_create(
             user=request.user,
-            phone=phone
+            item_type='phone',
+            item_id=phone.id
         )
-        
+
         if not created:
             favorite.delete()
             phone.favorite_count = F('favorite_count') - 1
             phone.save(update_fields=['favorite_count'])
             phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
             return Response({'status': 'unfavorited', 'favorite_count': phone.favorite_count})
-        
+
         phone.favorite_count = F('favorite_count') + 1
         phone.save(update_fields=['favorite_count'])
         phone.refresh_from_db()  # F() expression 사용 후 객체 다시 로드
@@ -584,7 +591,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         ).count()
         
         # 패널티 체크
-        active_penalty = UsedPhoneDeletePenalty.objects.filter(
+        active_penalty = UnifiedDeletePenalty.objects.filter(
             user=request.user,
             penalty_end__gt=timezone.now()
         ).first()
@@ -619,9 +626,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         if has_offers:
             # 6시간 패널티 적용
             penalty_end = timezone.now() + timedelta(hours=6)
-            UsedPhoneDeletePenalty.objects.create(
+            UnifiedDeletePenalty.objects.create(
                 user=request.user,
-                phone_model=instance.model,
+                item_name=instance.model,
+                item_type='phone',
                 had_offers=True,
                 penalty_end=penalty_end
             )
@@ -1327,7 +1335,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         for offer in queryset:
             phone = offer.phone
             main_image = phone.images.filter(is_main=True).first() or phone.images.first()
-            
+
             offers_data.append({
                 'id': offer.id,
                 'phone': {
@@ -1740,47 +1748,49 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 
 
 class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
-    """중고폰 찜 ViewSet"""
-    queryset = UsedPhoneFavorite.objects.all()
+    """중고폰 찜 ViewSet - 통합 모델 사용"""
+    queryset = UnifiedFavorite.objects.filter(item_type='phone')
     serializer_class = UsedPhoneFavoriteSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         """현재 사용자의 찜 목록만 반환"""
-        return UsedPhoneFavorite.objects.filter(
-            user=self.request.user
-        ).select_related('phone', 'phone__seller').prefetch_related('phone__images')
-    
+        return UnifiedFavorite.objects.filter(
+            user=self.request.user,
+            item_type='phone'
+        ).order_by('-created_at')
+
     def list(self, request):
         """찜 목록 조회 (MyPage용)"""
-        queryset = self.get_queryset().order_by('-created_at')
-        
+        queryset = self.get_queryset()
+
         # 찜 데이터 직렬화
         favorites_data = []
         for favorite in queryset:
-            phone = favorite.phone
-            main_image = phone.images.filter(is_main=True).first() or phone.images.first()
-            
-            favorites_data.append({
-                'id': favorite.id,
-                'phone': {
-                    'id': phone.id,
-                    'title': f"{phone.brand} {phone.model}",
-                    'brand': phone.brand,
-                    'model': phone.model,
-                    'price': phone.price,
-                    'status': phone.status,  # 상품 상태 추가
-                    'images': [{
-                        'image_url': main_image.image_url if main_image else None,
-                        'is_main': True
-                    }] if main_image else [],
-                    'seller': {
-                        'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
-                    }
-                },
-                'created_at': favorite.created_at
-            })
-        
+            phone = favorite.get_item()
+            if phone:
+                main_image = phone.images.filter(is_main=True).first() or phone.images.first()
+
+                favorites_data.append({
+                    'id': favorite.id,
+                    'phone': {
+                        'id': phone.id,
+                        'title': f"{phone.brand} {phone.model}",
+                        'brand': phone.brand,
+                        'model': phone.model,
+                        'price': phone.price,
+                        'status': phone.status,
+                        'images': [{
+                            'image_url': main_image.image_url if main_image else None,
+                            'is_main': True
+                        }] if main_image else [],
+                        'seller': {
+                            'nickname': phone.seller.nickname if hasattr(phone.seller, 'nickname') else phone.seller.username
+                        }
+                    },
+                    'created_at': favorite.created_at
+                })
+
         return Response({'results': favorites_data})
 
 

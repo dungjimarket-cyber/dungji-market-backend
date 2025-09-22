@@ -3,7 +3,7 @@ Used Phones Models
 """
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, MinLengthValidator
 from api.models import Region
 from django.conf import settings
 import logging
@@ -80,7 +80,7 @@ class UsedPhone(models.Model):
     
     # 상태 정보
     condition_grade = models.CharField(max_length=1, choices=CONDITION_CHOICES, verbose_name='상태등급')
-    condition_description = models.TextField(null=True, blank=True, verbose_name='상태설명')
+    condition_description = models.TextField(null=True, blank=True, max_length=500, verbose_name='상태설명')
     battery_status = models.CharField(max_length=20, choices=BATTERY_CHOICES, default='good', verbose_name='배터리상태')
     
     # 구성품
@@ -90,7 +90,11 @@ class UsedPhone(models.Model):
     has_earphones = models.BooleanField(default=False, verbose_name='이어폰포함')
     
     # 상품 설명
-    description = models.TextField(null=True, blank=True, verbose_name='상품설명')
+    description = models.TextField(
+        validators=[MinLengthValidator(10)],
+        max_length=2000,
+        verbose_name='상품설명'
+    )
     
     # 거래 위치 (공구와 동일한 구조)
     region_type = models.CharField(max_length=20, default='local', verbose_name='지역 유형')  # local only for used phones
