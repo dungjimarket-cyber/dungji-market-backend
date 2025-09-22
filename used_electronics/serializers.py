@@ -8,6 +8,7 @@ from .models import (
     ElectronicsOffer, ElectronicsFavorite, ElectronicsTransaction
 )
 from api.models import Region
+from api.models_unified_simple import UnifiedFavorite
 import logging
 
 User = get_user_model()
@@ -88,7 +89,12 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
         """현재 사용자의 찜 여부"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
+            # 통합 찜 모델 사용
+            return UnifiedFavorite.objects.filter(
+                user=request.user,
+                item_type='electronics',
+                item_id=obj.id
+            ).exists()
         return False
 
 
@@ -126,7 +132,12 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
         """현재 사용자의 찜 여부"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
+            # 통합 찜 모델 사용
+            return UnifiedFavorite.objects.filter(
+                user=request.user,
+                item_type='electronics',
+                item_id=obj.id
+            ).exists()
         return False
 
     def get_is_mine(self, obj):

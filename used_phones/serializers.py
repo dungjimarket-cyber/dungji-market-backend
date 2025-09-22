@@ -9,6 +9,7 @@ from .models import (
     UsedPhoneReport, UsedPhonePenalty
 )
 from api.models import Region
+from api.models_unified_simple import UnifiedFavorite
 import logging
 
 User = get_user_model()
@@ -122,7 +123,12 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
     def get_is_favorite(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
+            # 통합 찜 모델 사용
+            return UnifiedFavorite.objects.filter(
+                user=request.user,
+                item_type='phone',
+                item_id=obj.id
+            ).exists()
         return False
 
     def get_final_price(self, obj):
@@ -288,7 +294,12 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     def get_is_favorite(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
+            # 통합 찜 모델 사용
+            return UnifiedFavorite.objects.filter(
+                user=request.user,
+                item_type='phone',
+                item_id=obj.id
+            ).exists()
         return False
 
     def get_buyer_id(self, obj):
