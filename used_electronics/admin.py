@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     UsedElectronics, ElectronicsRegion, ElectronicsImage,
-    ElectronicsOffer, ElectronicsFavorite, ElectronicsTransaction
+    ElectronicsOffer, ElectronicsTransaction
 )
 
 # ElectronicsRegion과 ElectronicsImage는 Inline으로만 사용 (독립 메뉴 X)
@@ -35,10 +35,6 @@ class ElectronicsOfferAdmin(admin.ModelAdmin):
     search_fields = ['electronics__model_name', 'buyer__username']
 
 
-@admin.register(ElectronicsFavorite)
-class ElectronicsFavoriteAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'electronics', 'created_at']
-    search_fields = ['user__username', 'electronics__model_name']
 
 
 @admin.register(ElectronicsTransaction)

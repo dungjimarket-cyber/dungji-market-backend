@@ -187,17 +187,6 @@ class UsedPhoneImage(models.Model):
             super().save(*args, **kwargs)
 
 
-class UsedPhoneFavorite(models.Model):
-    """중고폰 찜"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='used_phone_favorites')
-    phone = models.ForeignKey(UsedPhone, on_delete=models.CASCADE, related_name='favorites')
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        db_table = 'used_phone_favorites'
-        unique_together = ['user', 'phone']
-        verbose_name = '중고폰 찜'
-        verbose_name_plural = '중고폰 찜'
 
 
 class UsedPhoneOffer(models.Model):

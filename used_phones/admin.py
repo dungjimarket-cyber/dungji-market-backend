@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import (UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
+from .models import (UsedPhone, UsedPhoneImage, UsedPhoneOffer,
                      UsedPhoneRegion, TradeCancellation, UsedPhoneReview,
                      UsedPhoneReport, UsedPhonePenalty, UsedPhoneTransaction)
 
@@ -85,10 +85,6 @@ class UsedPhoneOfferAdmin(admin.ModelAdmin):
     get_phone_info.short_description = '상품 정보'
 
 
-@admin.register(UsedPhoneFavorite)
-class UsedPhoneFavoriteAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'phone', 'created_at']
-    search_fields = ['user__username', 'phone__model']
 
 
 @admin.register(TradeCancellation)

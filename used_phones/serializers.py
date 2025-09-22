@@ -568,14 +568,6 @@ class UsedPhoneOfferSerializer(serializers.ModelSerializer):
         return value
 
 
-class UsedPhoneFavoriteSerializer(serializers.ModelSerializer):
-    """찜 시리얼라이저"""
-    phone = UsedPhoneListSerializer(read_only=True)
-
-    class Meta:
-        model = UsedPhoneFavorite
-        fields = ['id', 'phone', 'created_at']
-        read_only_fields = ['id', 'created_at']
 
 
 class UsedPhoneTransactionSerializer(serializers.ModelSerializer):

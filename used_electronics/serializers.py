@@ -339,11 +339,3 @@ class ElectronicsOfferSerializer(serializers.ModelSerializer):
         return offer
 
 
-class ElectronicsFavoriteSerializer(serializers.ModelSerializer):
-    """전자제품 찜 시리얼라이저"""
-    electronics = ElectronicsListSerializer(read_only=True)
-
-    class Meta:
-        model = ElectronicsFavorite
-        fields = '__all__'
-        read_only_fields = ['user', 'electronics']

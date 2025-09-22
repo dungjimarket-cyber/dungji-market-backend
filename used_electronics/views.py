@@ -10,7 +10,7 @@ from django.db.models import Q, Count, Exists, OuterRef
 from django.shortcuts import get_object_or_404
 from .models import (
     UsedElectronics, ElectronicsImage, ElectronicsOffer,
-    ElectronicsFavorite, ElectronicsTransaction
+    ElectronicsTransaction
 )
 from api.models_unified_simple import (
     UnifiedFavorite, UnifiedReview, UnifiedDeletePenalty,
@@ -18,8 +18,7 @@ from api.models_unified_simple import (
 )
 from .serializers import (
     ElectronicsListSerializer, ElectronicsDetailSerializer,
-    ElectronicsCreateUpdateSerializer, ElectronicsOfferSerializer,
-    ElectronicsFavoriteSerializer
+    ElectronicsCreateUpdateSerializer, ElectronicsOfferSerializer
 )
 import logging
 

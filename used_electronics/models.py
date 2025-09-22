@@ -213,21 +213,6 @@ class ElectronicsOffer(models.Model):
         return f"{self.electronics.model_name} - {self.buyer.username} - {self.offer_price:,}원"
 
 
-class ElectronicsFavorite(models.Model):
-    """전자제품 찜하기"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='electronics_favorites')
-    electronics = models.ForeignKey(UsedElectronics, on_delete=models.CASCADE, related_name='favorites')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='찜한날짜')
-
-    class Meta:
-        db_table = 'used_electronics_favorites'
-        verbose_name = '전자제품 찜'
-        verbose_name_plural = '전자제품 찜 관리'
-        unique_together = ('user', 'electronics')
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.user.username} - {self.electronics.model_name}"
 
 
 class ElectronicsTransaction(models.Model):

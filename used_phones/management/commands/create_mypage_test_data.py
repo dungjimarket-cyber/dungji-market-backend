@@ -3,7 +3,8 @@ Management command to create test data for MyPage functionality
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from used_phones.models import UsedPhone, UsedPhoneImage, UsedPhoneOffer, UsedPhoneFavorite
+from used_phones.models import UsedPhone, UsedPhoneImage, UsedPhoneOffer
+from api.models_unified_simple import UnifiedFavorite
 from api.models import Region
 from django.utils import timezone
 from datetime import timedelta
@@ -206,9 +207,10 @@ class Command(BaseCommand):
     
     def create_favorite(self, phone, user):
         """Create a test favorite"""
-        favorite, created = UsedPhoneFavorite.objects.get_or_create(
-            phone=phone,
-            user=user
+        favorite, created = UnifiedFavorite.objects.get_or_create(
+            user=user,
+            item_type='phone',
+            item_id=phone.id
         )
         
         if created:

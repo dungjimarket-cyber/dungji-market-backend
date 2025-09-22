@@ -7,7 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Count, Q, Avg, Sum
 from django.contrib.auth import get_user_model
-from used_phones.models import UsedPhone, UsedPhoneOffer, UsedPhoneFavorite
+from used_phones.models import UsedPhone, UsedPhoneOffer
+from api.models_unified_simple import UnifiedFavorite
 import logging
 
 User = get_user_model()
@@ -123,8 +124,9 @@ def mypage_stats(request):
     ).count()
     
     # 찜 통계
-    favorites_count = UsedPhoneFavorite.objects.filter(
-        user=user
+    favorites_count = UnifiedFavorite.objects.filter(
+        user=user,
+        item_type='phone'
     ).count()
     
     # 받은 제안 통계 (판매자인 경우)

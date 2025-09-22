@@ -12,7 +12,7 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 import logging
 from .models import (
-    UsedPhone, UsedPhoneImage, UsedPhoneFavorite, UsedPhoneOffer,
+    UsedPhone, UsedPhoneImage, UsedPhoneOffer,
     UsedPhoneTransaction, UsedPhoneReview, TradeCancellation,
     UsedPhoneReport, UsedPhonePenalty, UsedPhoneRegion
 )
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 from .serializers import (
     UsedPhoneListSerializer, UsedPhoneDetailSerializer,
     UsedPhoneCreateSerializer, UsedPhoneOfferSerializer,
-    UsedPhoneFavoriteSerializer, UsedPhoneTransactionSerializer,
+    UsedPhoneTransactionSerializer,
     UsedPhoneReviewSerializer, UsedPhoneReportSerializer,
     UsedPhonePenaltySerializer, UserRatingSerializer
 )
@@ -1795,7 +1795,6 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 class UsedPhoneFavoriteViewSet(viewsets.ModelViewSet):
     """중고폰 찜 ViewSet - 통합 모델 사용"""
     queryset = UnifiedFavorite.objects.filter(item_type='phone')
-    serializer_class = UsedPhoneFavoriteSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
