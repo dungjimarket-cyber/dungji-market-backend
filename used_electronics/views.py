@@ -194,6 +194,9 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
+        # 최신순으로 정렬
+        queryset = queryset.order_by('-created_at')
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
