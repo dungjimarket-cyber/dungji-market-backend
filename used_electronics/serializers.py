@@ -3,6 +3,7 @@
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db import models
 from .models import (
     UsedElectronics, ElectronicsRegion, ElectronicsImage,
     ElectronicsOffer, ElectronicsTransaction
@@ -243,6 +244,17 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
         required=False,
         max_length=10
     )
+    new_images = serializers.ListField(
+        child=serializers.ImageField(),
+        write_only=True,
+        required=False,
+        max_length=10
+    )
+    existing_image_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False
+    )
     regions = serializers.ListField(
         child=serializers.CharField(),
         write_only=True,
@@ -336,10 +348,13 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
         if instance.offer_count > 0:
             allowed_fields = ['price', 'min_offer_price', 'accept_offers', 'meeting_place', 'description']
             for field in list(validated_data.keys()):
-                if field not in allowed_fields:
+                if field not in allowed_fields and field not in ['existing_image_ids', 'new_images', 'images', 'regions']:
                     validated_data.pop(field)
 
-        images_data = validated_data.pop('images', None)
+        # 이미지 관련 데이터 추출
+        images_data = validated_data.pop('images', None)  # 기존 방식 호환
+        new_images_data = validated_data.pop('new_images', None)
+        existing_image_ids = validated_data.pop('existing_image_ids', None)
         regions_data = validated_data.pop('regions', None)
 
         # 지역 업데이트
@@ -357,12 +372,31 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
                 except Region.DoesNotExist:
                     continue
 
-        # 이미지 업데이트
-        if images_data is not None:
-            # 기존 이미지 삭제
-            instance.images.all().delete()
+        # 이미지 업데이트 - 휴대폰과 동일한 방식
+        if new_images_data is not None or existing_image_ids is not None:
+            # 유지할 이미지와 삭제할 이미지 구분
+            if existing_image_ids:
+                # 기존 이미지 중 existing_image_ids에 없는 것만 삭제
+                instance.images.exclude(id__in=existing_image_ids).delete()
+            else:
+                # existing_image_ids가 없으면 모든 기존 이미지 삭제
+                instance.images.all().delete()
 
             # 새 이미지 추가
+            if new_images_data:
+                # 기존 이미지의 최대 order 값 찾기
+                max_order = instance.images.aggregate(max_order=models.Max('order'))['max_order'] or -1
+
+                for idx, image in enumerate(new_images_data):
+                    ElectronicsImage.objects.create(
+                        electronics=instance,
+                        image=image,
+                        is_primary=(max_order == -1 and idx == 0),  # 기존 이미지가 없으면 첫 번째를 primary로
+                        order=max_order + idx + 1
+                    )
+        elif images_data is not None:
+            # 기존 방식 호환 (images 필드로 온 경우)
+            instance.images.all().delete()
             for idx, image in enumerate(images_data):
                 ElectronicsImage.objects.create(
                     electronics=instance,
