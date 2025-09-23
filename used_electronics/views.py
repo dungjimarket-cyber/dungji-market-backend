@@ -877,28 +877,69 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='my-trading', permission_classes=[IsAuthenticated])
     def my_trading_items(self, request):
         """내 거래중 목록 조회 (구매자)"""
-        transactions = ElectronicsTransaction.objects.filter(
+        # 현재 사용자가 구매자이고 accepted 상태인 제안들 찾기
+        accepted_offers = ElectronicsOffer.objects.filter(
             buyer=request.user,
-            status__in=['in_progress', 'completed']
-        ).select_related('electronics', 'seller')
+            status='accepted'
+        ).select_related('electronics', 'electronics__seller').prefetch_related('electronics__images')
 
-        page = self.paginate_queryset(transactions)
-        if page is not None:
-            # Transaction 데이터를 적절한 형식으로 변환
-            data = []
-            for transaction in page:
-                offer_data = {
-                    'id': transaction.id,
-                    'electronics': ElectronicsDetailSerializer(transaction.electronics).data,
-                    'offered_price': transaction.final_price,
-                    'status': 'accepted' if transaction.status == 'in_progress' else 'completed',
-                    'created_at': transaction.created_at,
-                    'has_review': False  # TODO: 리뷰 모델 추가 후 수정
-                }
-                data.append(offer_data)
-            return self.get_paginated_response(data)
+        print(f"[DEBUG] Electronics my_trading - User: {request.user.username}, Accepted offers count: {accepted_offers.count()}")
 
-        return Response([])
+        trading_items = []
+        for offer in accepted_offers:
+            electronics = offer.electronics
+            print(f"[DEBUG] Offer ID: {offer.id}, Electronics ID: {electronics.id}, Electronics status: {electronics.status}")
+            # 거래중이거나 판매완료된 상품 포함 (구매자가 완료하지 않은 경우)
+            if electronics.status == 'trading' or (electronics.status == 'sold' and not electronics.buyer_completed_at):
+                main_image = electronics.images.filter(is_primary=True).first() or electronics.images.first()
+                # 트랜잭션 찾기
+                transaction = ElectronicsTransaction.objects.filter(
+                    electronics=electronics,
+                    buyer=request.user
+                ).exclude(status='cancelled').order_by('-created_at').first()
+                # 리뷰 작성 여부 확인 (에러 방지)
+                has_review = False
+                try:
+                    if transaction and electronics.status == 'sold':
+                        has_review = UnifiedReview.objects.filter(
+                            item_type='electronics',
+                            transaction_id=transaction.id,
+                            reviewer=request.user
+                        ).exists()
+                except Exception as e:
+                    print(f"[ERROR] Failed to check review status: {e}")
+                    has_review = False
+                trading_items.append({
+                    'id': transaction.id if transaction else offer.id,  # transaction ID 우선, 없으면 offer ID
+                    'offer_id': offer.id,  # offer ID도 별도로 제공
+                    'transaction_id': transaction.id if transaction else None,  # 명시적으로 transaction ID 제공
+                    'has_review': has_review,  # 후기 작성 여부
+                    'electronics': {
+                        'id': electronics.id,
+                        'brand': electronics.brand,
+                        'model_name': electronics.model_name,
+                        'price': electronics.price,
+                        'images': [{
+                            'imageUrl': main_image.imageUrl if main_image else None,
+                            'is_primary': True
+                        }] if main_image else [],
+                        'status': electronics.status,
+                        'seller_completed': bool(electronics.seller_completed_at),
+                        'buyer_completed': bool(electronics.buyer_completed_at),
+                        'seller': {
+                            'id': electronics.seller.id,
+                            'nickname': electronics.seller.nickname if hasattr(electronics.seller, 'nickname') else electronics.seller.username,
+                            'phone': electronics.seller.phone_number if hasattr(electronics.seller, 'phone_number') else None,
+                            'email': electronics.seller.email,
+                            'region': electronics.seller.address_region.full_name if hasattr(electronics.seller, 'address_region') and electronics.seller.address_region else None,
+                        }
+                    },
+                    'offered_price': offer.offer_price,
+                    'status': 'accepted',
+                    'created_at': offer.created_at,
+                })
+
+        return Response(trading_items)
 
     @action(detail=False, methods=['post'], url_path='offers/(?P<offer_id>[^/.]+)/cancel', permission_classes=[IsAuthenticated])
     def cancel_offer(self, request, offer_id=None):
