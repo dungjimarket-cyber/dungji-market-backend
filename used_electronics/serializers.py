@@ -58,12 +58,14 @@ class RegionSerializer(serializers.ModelSerializer):
 class ElectronicsListSerializer(serializers.ModelSerializer):
     """전자제품 목록 시리얼라이저"""
     images = ElectronicsImageSerializer(many=True, read_only=True)
-    seller = SellerSerializer(read_only=True)
+    seller_info = SellerSerializer(source='seller', read_only=True)
     regions = serializers.SerializerMethodField()
     subcategory_display = serializers.CharField(source='get_subcategory_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_grade_display', read_only=True)
     purchase_period_display = serializers.CharField(source='get_purchase_period_display', read_only=True)
     is_favorited = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+    has_my_offer = serializers.SerializerMethodField()
 
     class Meta:
         model = UsedElectronics
@@ -71,8 +73,8 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             'id', 'subcategory', 'subcategory_display', 'brand', 'model_name',
             'price', 'accept_offers', 'min_offer_price', 'condition_grade', 'condition_display',
             'purchase_period', 'purchase_period_display', 'status',
-            'images', 'seller', 'regions', 'view_count', 'offer_count',
-            'favorite_count', 'is_favorited', 'created_at'
+            'images', 'seller', 'seller_info', 'regions', 'view_count', 'offer_count',
+            'favorite_count', 'is_favorited', 'is_mine', 'has_my_offer', 'created_at'
         ]
 
     def get_regions(self, obj):
@@ -98,11 +100,25 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
+    def get_is_mine(self, obj):
+        """내 상품 여부"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.seller == request.user
+        return False
+
+    def get_has_my_offer(self, obj):
+        """내 제안 존재 여부"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.offers.filter(buyer=request.user, status='pending').exists()
+        return False
+
 
 class ElectronicsDetailSerializer(serializers.ModelSerializer):
     """전자제품 상세 시리얼라이저"""
     images = ElectronicsImageSerializer(many=True, read_only=True)
-    seller = SellerSerializer(read_only=True)
+    seller_info = SellerSerializer(source='seller', read_only=True)
     regions = serializers.SerializerMethodField()
     subcategory_display = serializers.CharField(source='get_subcategory_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_grade_display', read_only=True)

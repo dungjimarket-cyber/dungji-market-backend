@@ -182,7 +182,12 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def my_list(self, request):
         """내 상품 목록"""
-        queryset = self.get_queryset()
+        # my_list는 내 상품이므로 모든 status를 포함해야 함
+        queryset = UsedElectronics.objects.filter(seller=request.user)
+
+        # 관련 데이터 미리 로드
+        queryset = queryset.select_related('seller')
+        queryset = queryset.prefetch_related('images', 'regions__region')
 
         # status 필터링 (쿼리 파라미터로 받음)
         status_filter = request.query_params.get('status', None)
