@@ -82,11 +82,14 @@ class UsedElectronics(models.Model):
 
     # ========== 상태 정보 ==========
     purchase_period = models.CharField(max_length=50, blank=True, verbose_name='구매시기')
+    usage_period = models.CharField(max_length=50, blank=True, verbose_name='사용기간')
+    is_unused = models.BooleanField(default=False, verbose_name='미개봉')
     condition_grade = models.CharField(max_length=1, choices=CONDITION_CHOICES, verbose_name='상태등급')
 
     # ========== 구성품 ==========
     has_box = models.BooleanField(default=False, verbose_name='박스포함')
     has_charger = models.BooleanField(default=False, verbose_name='충전기/전원선포함')
+    has_manual = models.BooleanField(default=False, verbose_name='매뉴얼포함')
     other_accessories = models.CharField(max_length=200, blank=True, verbose_name='기타구성품')
 
     # ========== 가격 정보 (휴대폰과 동일) ==========
