@@ -69,7 +69,7 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
         model = UsedElectronics
         fields = [
             'id', 'subcategory', 'subcategory_display', 'brand', 'model_name',
-            'price', 'accept_offers', 'condition_grade', 'condition_display',
+            'price', 'accept_offers', 'min_offer_price', 'condition_grade', 'condition_display',
             'purchase_period', 'purchase_period_display', 'status',
             'images', 'seller', 'regions', 'view_count', 'offer_count',
             'favorite_count', 'is_favorited', 'created_at'
