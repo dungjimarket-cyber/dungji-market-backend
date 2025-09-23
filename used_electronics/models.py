@@ -94,12 +94,12 @@ class UsedElectronics(models.Model):
 
     # ========== 가격 정보 (휴대폰과 동일) ==========
     price = models.IntegerField(
-        validators=[MinValueValidator(1000), MaxValueValidator(99000000)],
+        validators=[MinValueValidator(1000), MaxValueValidator(100000000)],
         verbose_name='판매가격'
     )
     min_offer_price = models.IntegerField(
         null=True, blank=True,
-        validators=[MinValueValidator(0), MaxValueValidator(99000000)],
+        validators=[MinValueValidator(0), MaxValueValidator(100000000)],
         verbose_name='최소제안가격'
     )
     accept_offers = models.BooleanField(default=False, verbose_name='가격제안허용')

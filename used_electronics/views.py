@@ -183,6 +183,12 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     def my_list(self, request):
         """내 상품 목록"""
         queryset = self.get_queryset()
+
+        # status 필터링 (쿼리 파라미터로 받음)
+        status_filter = request.query_params.get('status', None)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
