@@ -58,7 +58,7 @@ class RegionSerializer(serializers.ModelSerializer):
 class ElectronicsListSerializer(serializers.ModelSerializer):
     """전자제품 목록 시리얼라이저"""
     images = ElectronicsImageSerializer(many=True, read_only=True)
-    seller_info = SellerSerializer(source='seller', read_only=True)
+    seller = SellerSerializer(read_only=True)
     regions = serializers.SerializerMethodField()
     subcategory_display = serializers.CharField(source='get_subcategory_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_grade_display', read_only=True)
@@ -66,6 +66,9 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
     is_favorited = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
     has_my_offer = serializers.SerializerMethodField()
+    buyer = serializers.SerializerMethodField()
+    buyer_id = serializers.SerializerMethodField()
+    transaction_id = serializers.SerializerMethodField()
 
     class Meta:
         model = UsedElectronics
@@ -73,8 +76,9 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             'id', 'subcategory', 'subcategory_display', 'brand', 'model_name',
             'price', 'accept_offers', 'min_offer_price', 'condition_grade', 'condition_display',
             'purchase_period', 'purchase_period_display', 'status',
-            'images', 'seller', 'seller_info', 'regions', 'view_count', 'offer_count',
-            'favorite_count', 'is_favorited', 'is_mine', 'has_my_offer', 'created_at'
+            'images', 'seller', 'regions', 'view_count', 'offer_count',
+            'favorite_count', 'is_favorited', 'is_mine', 'has_my_offer',
+            'buyer', 'buyer_id', 'transaction_id', 'created_at'
         ]
 
     def get_regions(self, obj):
@@ -114,11 +118,40 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             return obj.offers.filter(buyer=request.user, status='pending').exists()
         return False
 
+    def get_buyer(self, obj):
+        """구매자 정보"""
+        if obj.status in ['trading', 'sold']:
+            # 거래 테이블에서 구매자 정보 조회
+            from used_electronics.models import ElectronicsTransaction
+            transaction = ElectronicsTransaction.objects.filter(
+                electronics=obj,
+                status__in=['trading', 'completed']
+            ).first()
+            if transaction and transaction.buyer:
+                return SellerSerializer(transaction.buyer).data
+        return None
+
+    def get_buyer_id(self, obj):
+        """구매자 ID"""
+        buyer = self.get_buyer(obj)
+        return buyer['id'] if buyer else None
+
+    def get_transaction_id(self, obj):
+        """거래 ID"""
+        if obj.status in ['trading', 'sold']:
+            from used_electronics.models import ElectronicsTransaction
+            transaction = ElectronicsTransaction.objects.filter(
+                electronics=obj,
+                status__in=['trading', 'completed']
+            ).first()
+            return transaction.id if transaction else None
+        return None
+
 
 class ElectronicsDetailSerializer(serializers.ModelSerializer):
     """전자제품 상세 시리얼라이저"""
     images = ElectronicsImageSerializer(many=True, read_only=True)
-    seller_info = SellerSerializer(source='seller', read_only=True)
+    seller = SellerSerializer(read_only=True)
     regions = serializers.SerializerMethodField()
     subcategory_display = serializers.CharField(source='get_subcategory_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_grade_display', read_only=True)
@@ -126,6 +159,9 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
     is_favorited = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
     has_my_offer = serializers.SerializerMethodField()
+    buyer = serializers.SerializerMethodField()
+    buyer_id = serializers.SerializerMethodField()
+    transaction_id = serializers.SerializerMethodField()
 
     class Meta:
         model = UsedElectronics
@@ -169,6 +205,34 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.offers.filter(buyer=request.user).exists()
         return False
+
+    def get_buyer(self, obj):
+        """구매자 정보"""
+        if obj.status in ['trading', 'sold']:
+            from used_electronics.models import ElectronicsTransaction
+            transaction = ElectronicsTransaction.objects.filter(
+                electronics=obj,
+                status__in=['trading', 'completed']
+            ).first()
+            if transaction and transaction.buyer:
+                return SellerSerializer(transaction.buyer).data
+        return None
+
+    def get_buyer_id(self, obj):
+        """구매자 ID"""
+        buyer = self.get_buyer(obj)
+        return buyer['id'] if buyer else None
+
+    def get_transaction_id(self, obj):
+        """거래 ID"""
+        if obj.status in ['trading', 'sold']:
+            from used_electronics.models import ElectronicsTransaction
+            transaction = ElectronicsTransaction.objects.filter(
+                electronics=obj,
+                status__in=['trading', 'completed']
+            ).first()
+            return transaction.id if transaction else None
+        return None
 
 
 class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
