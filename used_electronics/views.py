@@ -620,9 +620,9 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='offers/(?P<offer_id>[^/.]+)/respond', permission_classes=[IsAuthenticated])
     def respond_to_offer(self, request, offer_id=None):
-        """제안 응답 (수락/거절)"""
-        action_type = request.data.get('action')  # 'accept' or 'reject'
-        message = request.data.get('message')
+        """제안 응답 (수락/거절) - 휴대폰과 동일한 로직"""
+        action = request.data.get('action')  # 'accept' or 'reject'
+        message = request.data.get('message', '')
 
         try:
             offer = ElectronicsOffer.objects.get(
@@ -635,53 +635,47 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        if action_type == 'accept':
+        # 이미 응답한 제안인지 확인
+        if offer.status != 'pending':
+            return Response(
+                {'error': '이미 응답한 제안입니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 제안 응답 처리 (거절 제거, 수락만 처리)
+        if action == 'accept':
+            # 제안 수락 = 즉시 거래중으로 전환
             offer.status = 'accepted'
-            # 다른 제안들 거절
-            ElectronicsOffer.objects.filter(
-                electronics=offer.electronics
-            ).exclude(id=offer_id).update(status='rejected')
-        elif action_type == 'reject':
-            offer.status = 'rejected'
+            offer.electronics.status = 'trading'
+            offer.electronics.save(update_fields=['status'])
+
+            # ElectronicsTransaction 생성 (취소된 거래가 있어도 새로 생성)
+            # 기존 trading 상태 트랜잭션이 있는지 확인
+            existing_trading = ElectronicsTransaction.objects.filter(
+                electronics=offer.electronics,
+                status='in_progress'
+            ).first()
+
+            if not existing_trading:
+                # 취소된 트랜잭션이 있더라도 새로운 트랜잭션 생성
+                ElectronicsTransaction.objects.create(
+                    electronics=offer.electronics,
+                    seller=offer.electronics.seller,
+                    buyer=offer.buyer,
+                    final_price=offer.offer_price,  # 전자제품은 offer_price
+                    status='in_progress'  # 전자제품은 in_progress
+                )
+
+            # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
         else:
             return Response(
                 {'error': '잘못된 액션입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        offer.save()
-        return Response({'message': f'제안이 {action_type}되었습니다.'})
+        offer.save(update_fields=['status'])
+        return Response({'message': '제안을 수락했습니다.', 'status': offer.status})
 
-    @action(detail=False, methods=['post'], url_path='offers/(?P<offer_id>[^/.]+)/proceed-trade', permission_classes=[IsAuthenticated])
-    def proceed_trade(self, request, offer_id=None):
-        """거래 진행 (수락된 제안을 거래중으로 전환)"""
-        try:
-            offer = ElectronicsOffer.objects.get(
-                id=offer_id,
-                electronics__seller=request.user,
-                status='accepted'
-            )
-        except ElectronicsOffer.DoesNotExist:
-            return Response(
-                {'error': '수락된 제안을 찾을 수 없습니다.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # 상품 상태를 거래중으로 변경
-        electronics = offer.electronics
-        electronics.status = 'trading'
-        electronics.save()
-
-        # 거래 생성
-        ElectronicsTransaction.objects.create(
-            electronics=electronics,
-            seller=electronics.seller,
-            buyer=offer.buyer,
-            final_price=offer.offer_price,
-            status='in_progress'
-        )
-
-        return Response({'message': '거래가 시작되었습니다.'})
 
     @action(detail=True, methods=['get'], url_path='buyer-info', permission_classes=[IsAuthenticated])
     def buyer_info(self, request, pk=None):
@@ -778,6 +772,36 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         }
 
         return Response(transaction_data)
+
+    @action(detail=True, methods=['post'], url_path='seller-complete', permission_classes=[IsAuthenticated])
+    def seller_complete(self, request, pk=None):
+        """판매 완료 (판매자용)"""
+        electronics = self.get_object()
+
+        try:
+            transaction = ElectronicsTransaction.objects.get(
+                electronics=electronics,
+                seller=request.user,
+                status='in_progress'
+            )
+        except ElectronicsTransaction.DoesNotExist:
+            return Response(
+                {'error': '거래 정보를 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 판매자 완료 처리 - 당근마켓 방식: 판매자가 완료하면 자동으로 거래 완료
+        transaction.seller_completed = True
+        transaction.buyer_completed = True  # 자동 완료
+        transaction.status = 'completed'
+
+        # 상품 상태도 sold로 변경
+        electronics.status = 'sold'
+        electronics.save(update_fields=['status'])
+
+        transaction.save()
+
+        return Response({'message': '거래가 완료되었습니다.'})
 
     @action(detail=True, methods=['post'], url_path='buyer-complete', permission_classes=[IsAuthenticated])
     def buyer_complete(self, request, pk=None):
