@@ -59,6 +59,11 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         queryset = queryset.prefetch_related('images', 'regions__region')
 
         # 필터링
+        # status 필터링 추가 (휴대폰과 동일하게)
+        status = self.request.query_params.get('status', None)
+        if status:
+            queryset = queryset.filter(status=status)
+
         subcategory = self.request.query_params.get('subcategory', None)
         if subcategory:
             queryset = queryset.filter(subcategory=subcategory)
