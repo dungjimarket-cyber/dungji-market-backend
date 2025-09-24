@@ -63,7 +63,6 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
     regions = serializers.SerializerMethodField()
     subcategory_display = serializers.CharField(source='get_subcategory_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_grade_display', read_only=True)
-    purchase_period_display = serializers.CharField(source='get_purchase_period_display', read_only=True)
     is_favorited = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
     has_my_offer = serializers.SerializerMethodField()
@@ -78,7 +77,7 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'subcategory', 'subcategory_display', 'brand', 'model_name',
             'price', 'accept_offers', 'min_offer_price', 'condition_grade', 'condition_display',
-            'purchase_period', 'purchase_period_display', 'status',
+            'purchase_period', 'status',
             'images', 'seller', 'regions', 'view_count', 'offer_count',
             'favorite_count', 'is_favorited', 'is_mine', 'has_my_offer',
             'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review', 'created_at'
@@ -192,7 +191,6 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
     regions = serializers.SerializerMethodField()
     subcategory_display = serializers.CharField(source='get_subcategory_display', read_only=True)
     condition_display = serializers.CharField(source='get_condition_grade_display', read_only=True)
-    purchase_period_display = serializers.CharField(source='get_purchase_period_display', read_only=True)
     is_favorited = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
     has_my_offer = serializers.SerializerMethodField()
@@ -214,7 +212,7 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
             'extra_specs', 'status', 'view_count', 'offer_count', 'favorite_count',
             'created_at', 'updated_at',
             'seller', 'images', 'regions',
-            'purchase_period_display', 'is_favorited', 'is_mine', 'has_my_offer',
+            'is_favorited', 'is_mine', 'has_my_offer',
             'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review'
         ]
         read_only_fields = ['seller', 'view_count', 'offer_count', 'favorite_count']
