@@ -128,7 +128,7 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             from used_electronics.models import ElectronicsTransaction
             transaction = ElectronicsTransaction.objects.filter(
                 electronics=obj,
-                status__in=['trading', 'completed']
+                status__in=['in_progress', 'completed']
             ).first()
             if transaction and transaction.buyer:
                 return SellerSerializer(transaction.buyer).data
@@ -145,7 +145,7 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             from used_electronics.models import ElectronicsTransaction
             transaction = ElectronicsTransaction.objects.filter(
                 electronics=obj,
-                status__in=['trading', 'completed']
+                status__in=['in_progress', 'completed']
             ).first()
             return transaction.id if transaction else None
         return None
@@ -251,7 +251,7 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
             from used_electronics.models import ElectronicsTransaction
             transaction = ElectronicsTransaction.objects.filter(
                 electronics=obj,
-                status__in=['trading', 'completed']
+                status__in=['in_progress', 'completed']
             ).first()
             if transaction and transaction.buyer:
                 return SellerSerializer(transaction.buyer).data
@@ -268,7 +268,7 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
             from used_electronics.models import ElectronicsTransaction
             transaction = ElectronicsTransaction.objects.filter(
                 electronics=obj,
-                status__in=['trading', 'completed']
+                status__in=['in_progress', 'completed']
             ).first()
             return transaction.id if transaction else None
         return None
