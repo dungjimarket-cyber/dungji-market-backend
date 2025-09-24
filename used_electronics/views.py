@@ -2,7 +2,7 @@
 전자제품/가전 Views
 """
 from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from django_filters.rest_framework import DjangoFilterBackend
@@ -1194,3 +1194,186 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             "message": "제안이 취소되었습니다.",
             "status": offer.status
         })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_simple_review(request):
+    """
+    전자제품 간단한 리뷰 작성 API
+    휴대폰과 동일한 로직 적용
+    """
+    print(f"[ELECTRONICS SIMPLE REVIEW] Request data: {request.data}")
+    print(f"[ELECTRONICS SIMPLE REVIEW] User: {request.user}")
+
+    try:
+        transaction_id = request.data.get('transaction')
+        rating = request.data.get('rating', 5)
+        comment = request.data.get('comment', '')
+
+        # 평가 태그 추가
+        is_punctual = request.data.get('is_punctual', False)
+        is_friendly = request.data.get('is_friendly', False)
+        is_honest = request.data.get('is_honest', False)
+        is_fast_response = request.data.get('is_fast_response', False)
+
+        # transaction_id 검증
+        if not transaction_id or transaction_id == 0:
+            # electronics_id로 시도해보기
+            electronics_id = request.data.get('electronics_id')
+            if electronics_id:
+                print(f"[ELECTRONICS SIMPLE REVIEW] No transaction_id, trying with electronics_id: {electronics_id}")
+                try:
+                    electronics = UsedElectronics.objects.get(id=electronics_id)
+                    # 해당 전자제품의 가장 최근 트랜잭션 찾기
+                    transaction = ElectronicsTransaction.objects.filter(
+                        electronics=electronics
+                    ).exclude(status='cancelled').order_by('-created_at').first()
+
+                    if transaction:
+                        transaction_id = transaction.id
+                        print(f"[ELECTRONICS SIMPLE REVIEW] Found transaction {transaction_id} for electronics {electronics_id}")
+                    else:
+                        # 트랜잭션이 없으면 accepted offer로 생성
+                        accepted_offer = ElectronicsOffer.objects.filter(
+                            electronics=electronics,
+                            status='accepted'
+                        ).first()
+
+                        if accepted_offer:
+                            transaction = ElectronicsTransaction.objects.create(
+                                electronics=electronics,
+                                seller=electronics.seller,
+                                buyer=accepted_offer.buyer,
+                                final_price=accepted_offer.offer_price,
+                                status='completed',
+                                seller_completed=True,
+                                buyer_completed=True
+                            )
+                            transaction_id = transaction.id
+                            print(f"[ELECTRONICS SIMPLE REVIEW] Created transaction {transaction_id} for electronics {electronics_id}")
+                        else:
+                            return Response(
+                                {'error': f'전자제품 {electronics_id}에 대한 거래 정보를 찾을 수 없습니다.'},
+                                status=status.HTTP_404_NOT_FOUND
+                            )
+                except UsedElectronics.DoesNotExist:
+                    return Response(
+                        {'error': f'전자제품 {electronics_id}를 찾을 수 없습니다.'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                return Response(
+                    {'error': 'transaction_id 또는 electronics_id가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Transaction 찾기
+        try:
+            transaction = ElectronicsTransaction.objects.get(id=transaction_id)
+        except ElectronicsTransaction.DoesNotExist:
+            # Transaction이 없으면 Offer ID로 시도
+            try:
+                offer = ElectronicsOffer.objects.get(id=transaction_id, status='accepted')
+                # Offer에서 electronics와 buyer를 통해 transaction 찾기
+                transaction = ElectronicsTransaction.objects.filter(
+                    electronics=offer.electronics,
+                    buyer=offer.buyer
+                ).exclude(status='cancelled').first()
+
+                if not transaction:
+                    # Transaction이 없으면 생성
+                    transaction = ElectronicsTransaction.objects.create(
+                        electronics=offer.electronics,
+                        seller=offer.electronics.seller,
+                        buyer=offer.buyer,
+                        final_price=offer.offer_price,
+                        status='completed',
+                        seller_completed=True,
+                        buyer_completed=True
+                    )
+                    print(f"[ELECTRONICS SIMPLE REVIEW] Created transaction from offer: {transaction.id}")
+            except ElectronicsOffer.DoesNotExist:
+                # Offer도 없으면 Electronics ID로 시도
+                try:
+                    electronics = UsedElectronics.objects.get(id=transaction_id)
+                    transaction = ElectronicsTransaction.objects.filter(
+                        electronics=electronics,
+                        status='completed'
+                    ).first()
+                    if not transaction:
+                        return Response(
+                            {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                except UsedElectronics.DoesNotExist:
+                    return Response(
+                        {'error': f'거래를 찾을 수 없습니다. (ID: {transaction_id})'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+        print(f"[ELECTRONICS SIMPLE REVIEW] Found transaction: {transaction.id}")
+
+        # 리뷰할 대상 결정 (판매자 <-> 구매자)
+        if request.user == transaction.seller:
+            reviewee = transaction.buyer
+            is_from_buyer = False
+        elif request.user == transaction.buyer:
+            reviewee = transaction.seller
+            is_from_buyer = True
+        else:
+            return Response(
+                {'error': '이 거래에 대한 리뷰를 작성할 권한이 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 이미 리뷰 작성했는지 확인
+        existing_review = UnifiedReview.objects.filter(
+            item_type='electronics',
+            transaction_id=transaction.id,
+            reviewer=request.user
+        ).first()
+
+        if existing_review:
+            return Response(
+                {'error': '이미 이 거래에 대한 리뷰를 작성하셨습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # UnifiedReview 생성
+        review = UnifiedReview.objects.create(
+            item_type='electronics',
+            transaction_id=transaction.id,
+            reviewer=request.user,
+            reviewee=reviewee,
+            rating=rating,
+            comment=comment,
+            is_from_buyer=is_from_buyer,
+            is_punctual=is_punctual,
+            is_friendly=is_friendly,
+            is_honest=is_honest,
+            is_fast_response=is_fast_response
+        )
+
+        print(f"[ELECTRONICS SIMPLE REVIEW] Created review: {review.id}")
+
+        return Response({
+            'message': '리뷰가 성공적으로 작성되었습니다.',
+            'review': {
+                'id': review.id,
+                'transaction_id': transaction.id,
+                'rating': review.rating,
+                'comment': review.comment,
+                'reviewer': review.reviewer.username,
+                'reviewee': review.reviewee.username,
+                'is_from_buyer': review.is_from_buyer,
+                'created_at': review.created_at.isoformat()
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        print(f"[ELECTRONICS SIMPLE REVIEW ERROR] {str(e)}")
+        return Response(
+            {'error': f'리뷰 작성 중 오류가 발생했습니다: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

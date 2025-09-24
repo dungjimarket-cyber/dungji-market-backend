@@ -173,8 +173,79 @@ def mypage_reviews_received(request):
 @permission_classes([IsAuthenticated])
 def mypage_reviews_pending(request):
     """작성 대기 중인 거래 후기 조회"""
-    # TODO: 거래 후기 모델 구현 후 작성
-    return Response({'results': []})
+    from used_phones.models import UsedPhone, UsedPhoneTransaction
+    from used_electronics.models import UsedElectronics, ElectronicsTransaction
+    from api.models_unified_simple import UnifiedReview
+
+    pending_reviews = []
+
+    # 휴대폰 거래 중 후기 미작성 건
+    phone_transactions = UsedPhoneTransaction.objects.filter(
+        Q(seller=request.user) | Q(buyer=request.user),
+        status='completed'
+    ).select_related('phone', 'seller', 'buyer')
+
+    for transaction in phone_transactions:
+        # 이미 리뷰를 작성했는지 확인
+        has_review = UnifiedReview.objects.filter(
+            item_type='phone',
+            transaction_id=transaction.id,
+            reviewer=request.user
+        ).exists()
+
+        if not has_review:
+            # 거래 상대방 결정
+            is_seller = transaction.seller == request.user
+            partner = transaction.buyer if is_seller else transaction.seller
+
+            pending_reviews.append({
+                'transaction_id': transaction.id,
+                'item_type': 'phone',
+                'item_id': transaction.phone.id,
+                'item_name': f"{transaction.phone.brand} {transaction.phone.model_name}",
+                'partner_name': partner.nickname if hasattr(partner, 'nickname') else partner.username,
+                'partner_id': partner.id,
+                'is_seller': is_seller,
+                'completed_date': transaction.updated_at.isoformat() if transaction.updated_at else transaction.created_at.isoformat(),
+            })
+
+    # 전자제품 거래 중 후기 미작성 건
+    electronics_transactions = ElectronicsTransaction.objects.filter(
+        Q(seller=request.user) | Q(buyer=request.user),
+        status='completed'
+    ).select_related('electronics', 'seller', 'buyer')
+
+    for transaction in electronics_transactions:
+        # 이미 리뷰를 작성했는지 확인
+        has_review = UnifiedReview.objects.filter(
+            item_type='electronics',
+            transaction_id=transaction.id,
+            reviewer=request.user
+        ).exists()
+
+        if not has_review:
+            # 거래 상대방 결정
+            is_seller = transaction.seller == request.user
+            partner = transaction.buyer if is_seller else transaction.seller
+
+            pending_reviews.append({
+                'transaction_id': transaction.id,
+                'item_type': 'electronics',
+                'item_id': transaction.electronics.id,
+                'item_name': f"{transaction.electronics.brand} {transaction.electronics.model_name}",
+                'partner_name': partner.nickname if hasattr(partner, 'nickname') else partner.username,
+                'partner_id': partner.id,
+                'is_seller': is_seller,
+                'completed_date': transaction.updated_at.isoformat() if transaction.updated_at else transaction.created_at.isoformat(),
+            })
+
+    # 최신 거래순으로 정렬
+    pending_reviews.sort(key=lambda x: x['completed_date'], reverse=True)
+
+    return Response({
+        'results': pending_reviews,
+        'count': len(pending_reviews)
+    })
 
 
 @api_view(['POST'])
