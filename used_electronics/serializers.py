@@ -283,6 +283,40 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
             return transaction.id if transaction else None
         return None
 
+    def get_final_price(self, obj):
+        """거래중 또는 거래완료된 경우 실제 거래 금액 반환"""
+        if obj.status in ['trading', 'sold']:
+            # 거래 중인 경우 transaction에서 final_price 가져오기
+            from .models import ElectronicsTransaction
+            transaction = ElectronicsTransaction.objects.filter(electronics=obj).first()
+            if transaction:
+                return transaction.final_price
+            # transaction이 없으면 수락된 제안의 금액을 찾기
+            accepted_offer = obj.offers.filter(status='accepted').first()
+            if accepted_offer:
+                return accepted_offer.offer_price
+        return None
+
+    def get_has_review(self, obj):
+        """구매자가 후기를 작성했는지 여부"""
+        if obj.status == 'sold':
+            from .models import ElectronicsTransaction
+            from api.models_unified_simple import UnifiedReview
+
+            transaction = ElectronicsTransaction.objects.filter(
+                electronics=obj,
+                status='completed'
+            ).first()
+
+            if transaction:
+                # 구매자가 후기를 작성했는지 확인
+                return UnifiedReview.objects.filter(
+                    item_type='electronics',
+                    transaction_id=transaction.id,
+                    reviewer=transaction.buyer
+                ).exists()
+        return False
+
 
 class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
     """전자제품 등록/수정 시리얼라이저"""
