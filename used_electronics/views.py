@@ -713,16 +713,26 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        buyer_data = {
-            'id': transaction.buyer.id,
-            'nickname': getattr(transaction.buyer, 'nickname', transaction.buyer.username),
-            'phone': getattr(transaction.buyer, 'phone', None),
-            'email': transaction.buyer.email,
-            'region': getattr(transaction.buyer, 'region_name', None),
-            'accepted_price': transaction.final_price
-        }
+        buyer = transaction.buyer
 
-        return Response(buyer_data)
+        # 전자제품의 제안 찾기 (거래 시작 시 수락된 제안)
+        accepted_offer = ElectronicsOffer.objects.filter(
+            electronics=electronics,
+            buyer=buyer,
+            status='accepted'
+        ).first()
+
+        # 구매자 정보 반환 (휴대폰과 동일한 형식)
+        return Response({
+            'id': buyer.id,
+            'nickname': buyer.nickname if hasattr(buyer, 'nickname') else buyer.username,
+            'phone': buyer.phone_number if hasattr(buyer, 'phone_number') else None,
+            'email': buyer.email,
+            'region': buyer.address_region.full_name if hasattr(buyer, 'address_region') and buyer.address_region else None,
+            'profile_image': buyer.profile_image if hasattr(buyer, 'profile_image') else None,
+            'offered_price': transaction.final_price,  # 거래 가격
+            'message': accepted_offer.message if accepted_offer else ''  # 제안 메시지
+        })
 
     @action(detail=True, methods=['get'], url_path='seller-info', permission_classes=[IsAuthenticated])
     def seller_info(self, request, pk=None):
@@ -749,16 +759,25 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             )
 
         seller = electronics.seller
-        seller_data = {
-            'id': seller.id,
-            'nickname': getattr(seller, 'nickname', seller.username),
-            'phone': getattr(seller, 'phone', None),
-            'email': seller.email,
-            'region': getattr(seller, 'region_name', None),
-            'accepted_price': transaction.final_price
-        }
 
-        return Response(seller_data)
+        # 전자제품의 제안 찾기 (거래 시작 시 수락된 제안)
+        accepted_offer = ElectronicsOffer.objects.filter(
+            electronics=electronics,
+            buyer=request.user,
+            status='accepted'
+        ).first()
+
+        # 판매자 정보 반환 (휴대폰과 동일한 형식)
+        return Response({
+            'id': seller.id,
+            'nickname': seller.nickname if hasattr(seller, 'nickname') else seller.username,
+            'phone': seller.phone_number if hasattr(seller, 'phone_number') else None,
+            'email': seller.email,
+            'region': seller.address_region.full_name if hasattr(seller, 'address_region') and seller.address_region else None,
+            'profile_image': seller.profile_image if hasattr(seller, 'profile_image') else None,
+            'offered_price': transaction.final_price,  # 거래 가격
+            'message': accepted_offer.message if accepted_offer else ''  # 제안 메시지
+        })
 
     @action(detail=True, methods=['get'], url_path='transaction-info', permission_classes=[IsAuthenticated])
     def transaction_info(self, request, pk=None):
