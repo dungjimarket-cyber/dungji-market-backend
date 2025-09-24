@@ -576,7 +576,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
         return Response({'message': '제안을 수락했습니다.'})
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], url_path='complete-trade', permission_classes=[IsAuthenticated])
     def complete_transaction(self, request, pk=None):
         """거래 완료 (판매자)"""
         # get_object() 대신 직접 조회 (거래중 상태도 포함)
