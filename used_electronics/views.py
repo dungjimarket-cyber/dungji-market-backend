@@ -898,8 +898,10 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 {'error': '전자제품을 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        reason = request.data.get('reason')
-        custom_reason = request.data.get('custom_reason')
+
+        reason = request.data.get('reason', '')
+        custom_reason = request.data.get('custom_reason', '')
+        return_to_sale = request.data.get('return_to_sale', True)  # 기본값 True
 
         try:
             transaction = ElectronicsTransaction.objects.get(
@@ -919,24 +921,32 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # 거래 취소
-        transaction.status = 'cancelled'
-        transaction.cancelled_by = request.user
-        transaction.cancellation_reason = reason
-        transaction.cancellation_detail = custom_reason
-        transaction.save()
+        try:
+            # 거래 취소
+            transaction.status = 'cancelled'
+            transaction.cancelled_by = request.user
+            transaction.cancellation_reason = reason if reason else 'other'
+            transaction.cancellation_detail = custom_reason if custom_reason else ''
+            transaction.save()
 
-        # 상품 상태를 다시 활성으로 변경
-        electronics.status = 'active'
-        electronics.save()
+            # return_to_sale이 True이고 판매자가 취소하는 경우 상품을 다시 활성으로
+            if return_to_sale and transaction.seller == request.user:
+                electronics.status = 'active'
+                electronics.save()
 
-        # 제안 상태도 초기화
-        ElectronicsOffer.objects.filter(
-            electronics=electronics,
-            status='accepted'
-        ).update(status='cancelled')
+            # 제안 상태도 초기화
+            ElectronicsOffer.objects.filter(
+                electronics=electronics,
+                status='accepted'
+            ).update(status='cancelled')
 
-        return Response({'message': '거래가 취소되었습니다.'})
+            return Response({'message': '거래가 취소되었습니다.'})
+        except Exception as e:
+            logger.error(f"거래 취소 중 오류 발생: {str(e)}")
+            return Response(
+                {'error': f'거래 취소 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['get'], url_path='my-offers', permission_classes=[IsAuthenticated])
     def my_sent_offers(self, request):
