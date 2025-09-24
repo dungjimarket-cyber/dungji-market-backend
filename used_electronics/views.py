@@ -1108,8 +1108,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 buyer=request.user
             ).exclude(status='cancelled').order_by('-created_at').first()
 
-            # 거래중이거나 판매완료된 상품 포함 (구매자가 완료하지 않은 경우)
-            if electronics.status == 'trading' or (electronics.status == 'sold' and transaction and not transaction.buyer_completed):
+            # 거래중이거나 판매완료된 상품 모두 포함
+            if electronics.status in ['trading', 'sold']:
                 main_image = electronics.images.filter(is_primary=True).first() or electronics.images.first()
 
                 # 리뷰 작성 여부 확인 (에러 방지)

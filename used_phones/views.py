@@ -869,8 +869,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         for offer in accepted_offers:
             phone = offer.phone
             print(f"[DEBUG] Offer ID: {offer.id}, Phone ID: {phone.id}, Phone status: {phone.status}")
-            # 거래중이거나 판매완료된 상품 포함 (구매자가 완료하지 않은 경우)
-            if phone.status == 'trading' or (phone.status == 'sold' and not phone.buyer_completed_at):
+            # 거래중이거나 판매완료된 상품 모두 포함
+            if phone.status in ['trading', 'sold']:
                 main_image = phone.images.filter(is_main=True).first() or phone.images.first()
 
                 # 트랜잭션 찾기
