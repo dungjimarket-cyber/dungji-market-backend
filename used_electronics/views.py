@@ -263,7 +263,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             )
 
         # 제안 금액 검증
-        offered_price = request.data.get('offer_price')
+        offered_price = request.data.get('offered_price')  # 프론트엔드와 일치
         if not offered_price:
             return Response(
                 {'error': '제안 금액을 입력해주세요.'},
@@ -381,7 +381,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
         return Response({
             'id': my_offer.id,
-            'offer_price': my_offer.offer_price,
+            'offered_price': my_offer.offer_price,  # 프론트엔드와 일치
             'message': my_offer.message,
             'status': my_offer.status,
             'created_at': my_offer.created_at,
@@ -436,7 +436,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                     'nickname': offer.buyer.nickname if hasattr(offer.buyer, 'nickname') else offer.buyer.username,
                     'profile_image': offer.buyer.profile_image if hasattr(offer.buyer, 'profile_image') else None
                 },
-                'offer_price': offer.offer_price,
+                'offered_price': offer.offer_price,  # 프론트엔드와 일치하도록 필드명 변경
                 'message': offer.message,
                 'status': offer.status,
                 'created_at': offer.created_at
