@@ -35,12 +35,28 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """쿼리셋 반환"""
-        queryset = UsedElectronics.objects.filter(status='active')
+        """쿼리셋 반환 - UsedPhone과 동일한 로직 적용"""
+        # list와 retrieve 액션은 sold 포함 (조회는 가능)
+        if self.action in ['list', 'retrieve']:
+            # 디버깅 로그 추가
+            logger.info(f"[UsedElectronicsViewSet] Action: {self.action}")
+            logger.info(f"[UsedElectronicsViewSet] Including sold items in queryset")
+
+            queryset = UsedElectronics.objects.exclude(status='deleted')
+
+            # 쿼리셋 상태 확인
+            logger.info(f"[UsedElectronicsViewSet] Queryset count: {queryset.count()}")
+            sold_count = queryset.filter(status='sold').count()
+            logger.info(f"[UsedElectronicsViewSet] Sold items in queryset: {sold_count}")
+        else:
+            # 다른 액션들(update, delete 등)은 active와 trading만 접근 가능
+            queryset = UsedElectronics.objects.filter(
+                status__in=['active', 'trading']
+            )
 
         # 관련 데이터 미리 로드 (N+1 쿼리 방지)
         queryset = queryset.select_related('seller', 'region')
-        queryset = queryset.prefetch_related('images', 'regions__region')
+        queryset = queryset.prefetch_related('images', 'regions__region', 'transactions')
 
         # 필터링
         subcategory = self.request.query_params.get('subcategory', None)
@@ -88,6 +104,16 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                     Q(region__name__icontains=region) |  # 메인 region의 name
                     Q(region__full_name__icontains=region)  # 메인 region의 full_name
                 ).distinct()
+
+        # include_completed 파라미터 처리 (거래완료 포함/제외)
+        # retrieve 액션(상세조회)에서는 include_completed 파라미터 무시
+        if self.action == 'list':
+            include_completed = self.request.query_params.get('include_completed')
+            # 기본값: 거래완료 제외
+            # include_completed가 'true'일 때만 거래완료 포함
+            if include_completed != 'true':
+                # 거래완료 제외 (기본값)
+                queryset = queryset.exclude(status='sold')
 
         # 내 상품만 보기 (판매자용)
         if self.action == 'my_list':
