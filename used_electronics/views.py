@@ -642,17 +642,19 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
         # 판매자 완료 처리 시 자동으로 구매자도 완료 처리
         from django.utils import timezone
+        now = timezone.now()
+
         transaction.seller_completed = True
         transaction.buyer_completed = True  # 자동 설정
-        transaction.seller_completed_at = timezone.now()
-        transaction.buyer_completed_at = timezone.now()
+        transaction.seller_completed_at = now
+        transaction.buyer_completed_at = now
         transaction.status = 'completed'
-        transaction.completed_at = timezone.now()
+        transaction.completed_at = now
         transaction.save()
 
         # 상품 상태를 sold로 변경
         electronics.status = 'sold'
-        electronics.sold_at = timezone.now()
+        electronics.sold_at = now
         electronics.save()
 
         return Response({
@@ -923,13 +925,20 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             )
 
         # 판매자 완료 처리 - 당근마켓 방식: 판매자가 완료하면 자동으로 거래 완료
+        from django.utils import timezone
+        now = timezone.now()
+
         transaction.seller_completed = True
         transaction.buyer_completed = True  # 자동 완료
+        transaction.seller_completed_at = now
+        transaction.buyer_completed_at = now
         transaction.status = 'completed'
+        transaction.completed_at = now
 
         # 상품 상태도 sold로 변경
         electronics.status = 'sold'
-        electronics.save(update_fields=['status'])
+        electronics.sold_at = now
+        electronics.save(update_fields=['status', 'sold_at'])
 
         transaction.save()
 

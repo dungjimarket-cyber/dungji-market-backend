@@ -137,6 +137,7 @@ class UsedElectronics(models.Model):
     # ========== 타임스탬프 ==========
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='등록일')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    sold_at = models.DateTimeField(null=True, blank=True, verbose_name='판매완료일')
 
     class Meta:
         db_table = 'used_electronics'
@@ -236,6 +237,8 @@ class ElectronicsTransaction(models.Model):
     # 거래 완료 추적
     seller_completed = models.BooleanField(default=False, verbose_name='판매자 완료')
     buyer_completed = models.BooleanField(default=False, verbose_name='구매자 완료')
+    seller_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='판매자 완료 시간')
+    buyer_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='구매자 완료 시간')
 
     # 거래 취소 관련
     cancelled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
