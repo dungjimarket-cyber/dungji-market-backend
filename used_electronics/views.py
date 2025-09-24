@@ -887,16 +887,37 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         if status_filter:
             offers = offers.filter(status=status_filter)
 
-        offers = offers.select_related('electronics', 'electronics__seller')
+        offers = offers.select_related('electronics', 'electronics__seller').prefetch_related('electronics__images')
         offers = offers.order_by('-created_at')
 
-        page = self.paginate_queryset(offers)
-        if page is not None:
-            serializer = ElectronicsOfferSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+        # 제안 데이터 직렬화 (휴대폰과 동일한 구조로)
+        offers_data = []
+        for offer in offers:
+            electronics = offer.electronics
+            main_image = electronics.images.filter(is_primary=True).first() or electronics.images.first()
+            offers_data.append({
+                'id': offer.id,
+                'electronics': {
+                    'id': electronics.id,
+                    'brand': electronics.brand,
+                    'model_name': electronics.model_name,
+                    'price': electronics.price,
+                    'status': electronics.status,  # 상품 상태 추가
+                    'images': [{
+                        'imageUrl': main_image.image.url if main_image and main_image.image else None,
+                        'is_primary': True
+                    }] if main_image else [],
+                    'seller': {
+                        'nickname': electronics.seller.nickname if hasattr(electronics.seller, 'nickname') else electronics.seller.username
+                    }
+                },
+                'offered_price': offer.offer_price,  # 프론트엔드 기대 필드명으로 매핑
+                'message': offer.message,
+                'status': offer.status,
+                'created_at': offer.created_at
+            })
 
-        serializer = ElectronicsOfferSerializer(offers, many=True)
-        return Response(serializer.data)
+        return Response({'results': offers_data})
 
     @action(detail=False, methods=['get'], url_path='my-trading', permission_classes=[IsAuthenticated])
     def my_trading_items(self, request):
