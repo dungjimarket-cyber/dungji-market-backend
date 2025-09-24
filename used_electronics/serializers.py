@@ -204,7 +204,19 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UsedElectronics
-        fields = '__all__'
+        fields = [
+            'id', 'subcategory', 'subcategory_display', 'brand', 'model_name',
+            'purchase_period', 'usage_period', 'is_unused', 'condition_grade', 'condition_display',
+            'has_box', 'has_charger', 'has_manual', 'other_accessories',
+            'price', 'min_offer_price', 'accept_offers',
+            'description', 'region_type', 'region', 'region_name', 'meeting_place',
+            'has_warranty_card', 'serial_number', 'warranty_end_date', 'purchase_date',
+            'extra_specs', 'status', 'view_count', 'offer_count', 'favorite_count',
+            'created_at', 'updated_at',
+            'seller', 'images', 'regions',
+            'purchase_period_display', 'is_favorited', 'is_mine', 'has_my_offer',
+            'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review'
+        ]
         read_only_fields = ['seller', 'view_count', 'offer_count', 'favorite_count']
 
     def get_regions(self, obj):
