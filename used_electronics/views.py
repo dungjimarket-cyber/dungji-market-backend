@@ -588,29 +588,52 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # 판매자 또는 구매자 확인
+        # 거래 정보 확인
         try:
-            transaction = ElectronicsTransaction.objects.get(electronics=electronics)
+            transaction = ElectronicsTransaction.objects.get(
+                electronics=electronics,
+                status='in_progress'
+            )
         except ElectronicsTransaction.DoesNotExist:
             return Response(
-                {'error': '거래 정보를 찾을 수 없습니다.'},
+                {'error': '진행 중인 거래를 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        if request.user not in [transaction.seller, transaction.buyer]:
+        # 판매자만 거래 완료 가능
+        if transaction.seller != request.user:
             return Response(
-                {'error': '거래 당사자만 완료할 수 있습니다.'},
+                {'error': '판매자만 거래를 완료할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # 거래 완료
+        # 이미 완료된 거래인지 확인
+        if transaction.seller_completed:
+            return Response({
+                'message': '이미 거래가 완료되었습니다.',
+                'status': 'already_completed'
+            })
+
+        # 판매자 완료 처리 시 자동으로 구매자도 완료 처리
+        from django.utils import timezone
+        transaction.seller_completed = True
+        transaction.buyer_completed = True  # 자동 설정
+        transaction.seller_completed_at = timezone.now()
+        transaction.buyer_completed_at = timezone.now()
         transaction.status = 'completed'
+        transaction.completed_at = timezone.now()
         transaction.save()
 
+        # 상품 상태를 sold로 변경
         electronics.status = 'sold'
+        electronics.sold_at = timezone.now()
         electronics.save()
 
-        return Response({'message': '거래가 완료되었습니다.'})
+        return Response({
+            'message': '거래가 완료되었습니다.',
+            'status': 'completed',
+            'transaction_id': transaction.id
+        })
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def my_listings(self, request):
@@ -910,18 +933,11 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # 구매자 완료 처리
-        transaction.buyer_completed = True
-
-        # 양쪽 모두 완료한 경우 거래 완료
-        if transaction.seller_completed:
-            transaction.status = 'completed'
-            electronics.status = 'sold'
-            electronics.save()
-
-        transaction.save()
-
-        return Response({'message': '구매 확정되었습니다.'})
+        # 구매자는 거래 완료 버튼이 없음 - 판매자만 최종 완료 가능
+        return Response(
+            {'error': '구매자는 거래를 완료할 수 없습니다. 판매자가 거래를 완료해야 합니다.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     @action(detail=True, methods=['post'], url_path='cancel-trade', permission_classes=[IsAuthenticated])
     def cancel_trade(self, request, pk=None):
@@ -965,8 +981,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             transaction.cancellation_detail = custom_reason if custom_reason else ''
             transaction.save()
 
-            # return_to_sale이 True이고 판매자가 취소하는 경우 상품을 다시 활성으로
-            if return_to_sale and transaction.seller == request.user:
+            # return_to_sale이 True인 경우 상품을 다시 활성으로 (판매자/구매자 모두)
+            if return_to_sale:
                 electronics.status = 'active'
                 electronics.save()
 
