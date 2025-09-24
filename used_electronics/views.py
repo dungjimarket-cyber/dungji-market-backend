@@ -133,7 +133,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         """상세 조회 - 조회수 증가"""
-        # 직접 쿼리로 sold 상태도 포함하여 조회
+        # 직접 쿼리로 sold 상태도 포함하여 조회 (500 에러 수정)
         from django.shortcuts import get_object_or_404
 
         queryset = UsedElectronics.objects.exclude(status='deleted')
