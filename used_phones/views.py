@@ -1723,8 +1723,8 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_401_UNAUTHORIZED
                     )
 
-            # 받은 리뷰 통계
-            reviews = UnifiedReview.objects.filter(item_type='phone', reviewee=user)
+            # 받은 리뷰 통계 - 휴대폰과 전자제품 모두 포함
+            reviews = UnifiedReview.objects.filter(reviewee=user)
 
             # 기본 통계값 설정
             stats = {
