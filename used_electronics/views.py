@@ -913,14 +913,16 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         for offer in accepted_offers:
             electronics = offer.electronics
             print(f"[DEBUG] Offer ID: {offer.id}, Electronics ID: {electronics.id}, Electronics status: {electronics.status}")
+            # 트랜잭션 찾기
+            transaction = ElectronicsTransaction.objects.filter(
+                electronics=electronics,
+                buyer=request.user
+            ).exclude(status='cancelled').order_by('-created_at').first()
+
             # 거래중이거나 판매완료된 상품 포함 (구매자가 완료하지 않은 경우)
-            if electronics.status == 'trading' or (electronics.status == 'sold' and not electronics.buyer_completed_at):
+            if electronics.status == 'trading' or (electronics.status == 'sold' and transaction and not transaction.buyer_completed):
                 main_image = electronics.images.filter(is_primary=True).first() or electronics.images.first()
-                # 트랜잭션 찾기
-                transaction = ElectronicsTransaction.objects.filter(
-                    electronics=electronics,
-                    buyer=request.user
-                ).exclude(status='cancelled').order_by('-created_at').first()
+
                 # 리뷰 작성 여부 확인 (에러 방지)
                 has_review = False
                 try:
@@ -933,6 +935,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     print(f"[ERROR] Failed to check review status: {e}")
                     has_review = False
+
                 trading_items.append({
                     'id': transaction.id if transaction else offer.id,  # transaction ID 우선, 없으면 offer ID
                     'offer_id': offer.id,  # offer ID도 별도로 제공
@@ -944,12 +947,12 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                         'model_name': electronics.model_name,
                         'price': electronics.price,
                         'images': [{
-                            'imageUrl': main_image.imageUrl if main_image else None,
+                            'imageUrl': main_image.image.url if main_image and main_image.image else None,
                             'is_primary': True
                         }] if main_image else [],
                         'status': electronics.status,
-                        'seller_completed': bool(electronics.seller_completed_at),
-                        'buyer_completed': bool(electronics.buyer_completed_at),
+                        'seller_completed': transaction.seller_completed if transaction else False,
+                        'buyer_completed': transaction.buyer_completed if transaction else False,
                         'seller': {
                             'id': electronics.seller.id,
                             'nickname': electronics.seller.nickname if hasattr(electronics.seller, 'nickname') else electronics.seller.username,
