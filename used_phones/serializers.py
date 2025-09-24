@@ -771,42 +771,62 @@ class UserRatingSerializer(serializers.ModelSerializer):
     total_reviews = serializers.SerializerMethodField()
     recent_reviews = serializers.SerializerMethodField()
     penalty_status = serializers.SerializerMethodField()
+    review_stats = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'nickname', 'average_rating', 'total_reviews',
-            'recent_reviews', 'penalty_status'
+            'recent_reviews', 'penalty_status', 'review_stats'
         ]
 
     def get_average_rating(self, obj):
-        """평균 평점 계산"""
+        """평균 평점 계산 - UnifiedReview 사용"""
         from django.db.models import Avg
-        avg = obj.received_used_phone_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating']
+        from api.models_unified_simple import UnifiedReview
+
+        # unified_reviews_received 관계 사용
+        avg = obj.unified_reviews_received.aggregate(avg_rating=Avg('rating'))['avg_rating']
         return round(avg, 1) if avg else None
 
     def get_total_reviews(self, obj):
-        """총 리뷰 개수"""
-        return obj.received_used_phone_reviews.count()
+        """총 리뷰 개수 - UnifiedReview 사용"""
+        from api.models_unified_simple import UnifiedReview
+        return obj.unified_reviews_received.count()
 
     def get_recent_reviews(self, obj):
-        """최근 리뷰 3개"""
-        recent_reviews = obj.received_used_phone_reviews.select_related(
-            'reviewer', 'transaction__phone'
+        """최근 리뷰 3개 - UnifiedReview 사용"""
+        from api.models_unified_simple import UnifiedReview
+
+        recent_reviews = obj.unified_reviews_received.select_related(
+            'reviewer'
         ).order_by('-created_at')[:3]
 
-        return [{
-            'id': review.id,
-            'rating': review.rating,
-            'comment': review.comment,
-            'reviewer_username': review.reviewer.username,
-            'phone_model': review.transaction.phone.model,
-            'created_at': review.created_at,
-            'is_punctual': review.is_punctual,
-            'is_friendly': review.is_friendly,
-            'is_honest': review.is_honest,
-            'is_fast_response': review.is_fast_response,
-        } for review in recent_reviews]
+        reviews = []
+        for review in recent_reviews:
+            # 거래 정보 가져오기
+            transaction = review.get_transaction()
+            phone_model = 'Unknown'
+            if transaction:
+                if review.item_type == 'phone' and hasattr(transaction, 'phone'):
+                    phone_model = f"{transaction.phone.brand} {transaction.phone.model}"
+                elif review.item_type == 'electronics' and hasattr(transaction, 'electronics'):
+                    phone_model = f"{transaction.electronics.brand} {transaction.electronics.model_name}"
+
+            reviews.append({
+                'id': review.id,
+                'rating': review.rating,
+                'comment': review.comment,
+                'reviewer_username': review.reviewer.username,
+                'phone_model': phone_model,
+                'created_at': review.created_at,
+                'is_punctual': review.is_punctual,
+                'is_friendly': review.is_friendly,
+                'is_honest': review.is_honest,
+                'is_fast_response': review.is_fast_response,
+            })
+
+        return reviews
 
     def get_penalty_status(self, obj):
         """현재 패널티 상태"""
@@ -819,3 +839,46 @@ class UserRatingSerializer(serializers.ModelSerializer):
                 'reason': active_penalty.reason
             }
         return {'has_penalty': False}
+
+    def get_review_stats(self, obj):
+        """세부 평가 항목 통계"""
+        from django.db.models import Count, Q
+        from api.models_unified_simple import UnifiedReview
+
+        # 전체 리뷰 대상으로 통계 계산
+        reviews = obj.unified_reviews_received.all()
+        total = reviews.count()
+
+        if total == 0:
+            return {
+                'is_punctual': {'count': 0, 'percentage': 0},
+                'is_friendly': {'count': 0, 'percentage': 0},
+                'is_honest': {'count': 0, 'percentage': 0},
+                'is_fast_response': {'count': 0, 'percentage': 0}
+            }
+
+        stats = reviews.aggregate(
+            is_punctual_count=Count('id', filter=Q(is_punctual=True)),
+            is_friendly_count=Count('id', filter=Q(is_friendly=True)),
+            is_honest_count=Count('id', filter=Q(is_honest=True)),
+            is_fast_response_count=Count('id', filter=Q(is_fast_response=True))
+        )
+
+        return {
+            'is_punctual': {
+                'count': stats['is_punctual_count'],
+                'percentage': round((stats['is_punctual_count'] / total) * 100)
+            },
+            'is_friendly': {
+                'count': stats['is_friendly_count'],
+                'percentage': round((stats['is_friendly_count'] / total) * 100)
+            },
+            'is_honest': {
+                'count': stats['is_honest_count'],
+                'percentage': round((stats['is_honest_count'] / total) * 100)
+            },
+            'is_fast_response': {
+                'count': stats['is_fast_response_count'],
+                'percentage': round((stats['is_fast_response_count'] / total) * 100)
+            }
+        }
