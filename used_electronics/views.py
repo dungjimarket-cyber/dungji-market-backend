@@ -557,7 +557,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def complete_transaction(self, request, pk=None):
         """거래 완료 (판매자)"""
-        electronics = self.get_object()
+        # get_object() 대신 직접 조회 (거래중 상태도 포함)
+        try:
+            electronics = UsedElectronics.objects.get(pk=pk)
+        except UsedElectronics.DoesNotExist:
+            return Response(
+                {'error': '전자제품을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         # 판매자 또는 구매자 확인
         try:
@@ -680,7 +687,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='buyer-info', permission_classes=[IsAuthenticated])
     def buyer_info(self, request, pk=None):
         """구매자 정보 조회 (거래중인 판매자용)"""
-        electronics = self.get_object()
+        # get_object() 대신 직접 조회 (거래중 상태도 포함)
+        try:
+            electronics = UsedElectronics.objects.get(pk=pk)
+        except UsedElectronics.DoesNotExist:
+            return Response(
+                {'error': '전자제품을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         if electronics.seller != request.user:
             return Response(
@@ -713,7 +727,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='seller-info', permission_classes=[IsAuthenticated])
     def seller_info(self, request, pk=None):
         """판매자 정보 조회 (거래중인 구매자용)"""
-        electronics = self.get_object()
+        # get_object() 대신 직접 조회 (거래중 상태도 포함)
+        try:
+            electronics = UsedElectronics.objects.get(pk=pk)
+        except UsedElectronics.DoesNotExist:
+            return Response(
+                {'error': '전자제품을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         try:
             transaction = ElectronicsTransaction.objects.get(
@@ -742,7 +763,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='transaction-info', permission_classes=[IsAuthenticated])
     def transaction_info(self, request, pk=None):
         """거래 정보 조회 (후기 작성용)"""
-        electronics = self.get_object()
+        # get_object() 대신 직접 조회 (거래완료 상태도 포함)
+        try:
+            electronics = UsedElectronics.objects.get(pk=pk)
+        except UsedElectronics.DoesNotExist:
+            return Response(
+                {'error': '전자제품을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         try:
             transaction = ElectronicsTransaction.objects.get(
@@ -806,7 +834,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='buyer-complete', permission_classes=[IsAuthenticated])
     def buyer_complete(self, request, pk=None):
         """구매 완료 (구매자용)"""
-        electronics = self.get_object()
+        # get_object() 대신 직접 조회 (거래중 상태도 포함)
+        try:
+            electronics = UsedElectronics.objects.get(pk=pk)
+        except UsedElectronics.DoesNotExist:
+            return Response(
+                {'error': '전자제품을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         try:
             transaction = ElectronicsTransaction.objects.get(
@@ -836,7 +871,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='cancel-trade', permission_classes=[IsAuthenticated])
     def cancel_trade(self, request, pk=None):
         """거래 취소"""
-        electronics = self.get_object()
+        # get_object() 대신 직접 조회 (거래중 상태도 포함)
+        try:
+            electronics = UsedElectronics.objects.get(pk=pk)
+        except UsedElectronics.DoesNotExist:
+            return Response(
+                {'error': '전자제품을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         reason = request.data.get('reason')
         custom_reason = request.data.get('custom_reason')
 
