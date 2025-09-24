@@ -55,8 +55,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             )
 
         # 관련 데이터 미리 로드 (N+1 쿼리 방지)
-        queryset = queryset.select_related('seller', 'region')
-        queryset = queryset.prefetch_related('images', 'regions__region', 'transactions')
+        queryset = queryset.select_related('seller', 'region', 'transaction')
+        queryset = queryset.prefetch_related('images', 'regions__region')
 
         # 필터링
         subcategory = self.request.query_params.get('subcategory', None)
