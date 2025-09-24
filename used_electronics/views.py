@@ -133,12 +133,22 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         """상세 조회 - 조회수 증가"""
-        instance = self.get_object()
+        # 직접 쿼리로 sold 상태도 포함하여 조회
+        from django.shortcuts import get_object_or_404
+
+        queryset = UsedElectronics.objects.exclude(status='deleted')
+        instance = get_object_or_404(
+            queryset.select_related('seller', 'region')
+                    .prefetch_related('images', 'regions__region'),
+            pk=kwargs.get('pk')
+        )
 
         # 조회수 증가 (본인 제외)
         if request.user != instance.seller:
-            instance.view_count += 1
+            from django.db.models import F
+            instance.view_count = F('view_count') + 1
             instance.save(update_fields=['view_count'])
+            instance.refresh_from_db()
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
