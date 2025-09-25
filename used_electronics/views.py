@@ -1104,12 +1104,25 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='my-trading', permission_classes=[IsAuthenticated])
     def my_trading_items(self, request):
-        """내 거래중 목록 조회 (구매자)"""
-        # 현재 사용자가 구매자이고 accepted 상태인 제안들 찾기
-        accepted_offers = ElectronicsOffer.objects.filter(
+        """내 거래중 목록 조회 (구매자/판매자)"""
+        # 현재 사용자가 구매자 또는 판매자인 accepted 상태인 제안들 찾기
+        from django.db.models import Q
+
+        # 구매자로서의 제안
+        buyer_offers = ElectronicsOffer.objects.filter(
             buyer=request.user,
             status='accepted'
         ).select_related('electronics', 'electronics__seller').prefetch_related('electronics__images')
+
+        # 판매자로서의 제안 (자신이 판매한 전자제품에 대한 accepted 제안)
+        seller_offers = ElectronicsOffer.objects.filter(
+            electronics__seller=request.user,
+            status='accepted'
+        ).select_related('electronics', 'buyer').prefetch_related('electronics__images')
+
+        # 두 쿼리셋 합치기
+        accepted_offers = buyer_offers | seller_offers
+        accepted_offers = accepted_offers.distinct()
 
         print(f"[DEBUG] Electronics my_trading - User: {request.user.username}, Accepted offers count: {accepted_offers.count()}")
 
@@ -1173,6 +1186,10 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                             'email': electronics.seller.email,
                             'region': electronics.seller.address_region.full_name if hasattr(electronics.seller, 'address_region') and electronics.seller.address_region else None,
                         }
+                    },
+                    'buyer': {  # 구매자 정보도 추가
+                        'id': offer.buyer.id,
+                        'nickname': offer.buyer.nickname if hasattr(offer.buyer, 'nickname') else offer.buyer.username,
                     },
                     'offered_price': offer.offer_price,
                     'status': 'accepted',
