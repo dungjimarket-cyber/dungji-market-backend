@@ -1107,11 +1107,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         for offer in accepted_offers:
             electronics = offer.electronics
             print(f"[DEBUG] Offer ID: {offer.id}, Electronics ID: {electronics.id}, Electronics status: {electronics.status}")
-            # 트랜잭션 찾기
-            transaction = ElectronicsTransaction.objects.filter(
-                electronics=electronics,
-                buyer=request.user
-            ).exclude(status='cancelled').order_by('-created_at').first()
+            # 트랜잭션 찾기 (OneToOne 직접 접근)
+            try:
+                transaction = electronics.transaction
+                if transaction.status == 'cancelled':
+                    transaction = None
+            except ElectronicsTransaction.DoesNotExist:
+                transaction = None
+                print(f"[DEBUG] No transaction found for electronics {electronics.id}")
 
             # 거래중이거나 판매완료된 상품 모두 포함
             if electronics.status in ['trading', 'sold']:
