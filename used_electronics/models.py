@@ -228,7 +228,8 @@ class ElectronicsTransaction(models.Model):
         ('cancelled', '거래취소'),
     ]
 
-    electronics = models.OneToOneField(UsedElectronics, on_delete=models.CASCADE, related_name='transaction')
+    electronics = models.ForeignKey(UsedElectronics, on_delete=models.CASCADE, related_name='transactions')
+    offer = models.ForeignKey('ElectronicsOffer', on_delete=models.SET_NULL, null=True, blank=True, related_name='transaction')
     seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='electronics_sales')
     buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='electronics_purchases')
     final_price = models.IntegerField(verbose_name='거래가격')

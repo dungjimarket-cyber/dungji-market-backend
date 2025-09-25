@@ -400,6 +400,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 # 거래가 없으면 새로 생성
                 ElectronicsTransaction.objects.create(
                     electronics=electronics,
+                    offer=offer,  # offer 연결 추가
                     seller=electronics.seller,
                     buyer=request.user,
                     final_price=offer.offer_price,
@@ -607,9 +608,10 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         electronics.status = 'trading'
         electronics.save()
 
-        # 거래 생성
+        # 거래 생성 (offer 연결)
         ElectronicsTransaction.objects.create(
             electronics=electronics,
+            offer=offer,  # offer 연결 추가
             seller=electronics.seller,
             buyer=offer.buyer,
             final_price=offer.offer_price
@@ -629,13 +631,9 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # 거래 정보 확인
-        try:
-            transaction = ElectronicsTransaction.objects.get(
-                electronics=electronics,
-                status='in_progress'
-            )
-        except ElectronicsTransaction.DoesNotExist:
+        # 거래 정보 확인 (ForeignKey이므로 filter 사용)
+        transaction = electronics.transactions.filter(status='in_progress').first()
+        if not transaction:
             return Response(
                 {'error': '진행 중인 거래를 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
@@ -769,6 +767,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 # 거래가 없으면 새로 생성
                 ElectronicsTransaction.objects.create(
                     electronics=offer.electronics,
+                    offer=offer,  # offer 연결 추가
                     seller=offer.electronics.seller,
                     buyer=offer.buyer,
                     final_price=offer.offer_price,  # 전자제품은 offer_price
@@ -1132,14 +1131,10 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         for offer in accepted_offers:
             electronics = offer.electronics
             print(f"[DEBUG] Offer ID: {offer.id}, Electronics ID: {electronics.id}, Electronics status: {electronics.status}")
-            # 트랜잭션 찾기 (OneToOne 직접 접근)
-            try:
-                transaction = electronics.transaction
-                if transaction.status == 'cancelled':
-                    transaction = None
-            except ElectronicsTransaction.DoesNotExist:
-                transaction = None
-                print(f"[DEBUG] No transaction found for electronics {electronics.id}")
+            # 트랜잭션 찾기 (ForeignKey로 변경됨)
+            transaction = electronics.transactions.exclude(status='cancelled').order_by('-created_at').first()
+            if not transaction:
+                print(f"[DEBUG] No active transaction found for electronics {electronics.id}")
 
             # 거래중이거나 판매완료된 상품 모두 포함
             if electronics.status in ['trading', 'sold']:
@@ -1148,12 +1143,21 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 # 리뷰 작성 여부 확인 (에러 방지)
                 has_review = False
                 try:
-                    if transaction and electronics.status == 'sold':
-                        has_review = UnifiedReview.objects.filter(
-                            item_type='electronics',
-                            transaction_id=transaction.id,
-                            reviewer=request.user
-                        ).exists()
+                    if electronics.status == 'sold':
+                        # transaction이 있으면 transaction_id로, 없으면 offer_id로 체크
+                        if transaction:
+                            has_review = UnifiedReview.objects.filter(
+                                item_type='electronics',
+                                transaction_id=transaction.id,
+                                reviewer=request.user
+                            ).exists()
+                        else:
+                            # transaction이 없는 경우 - offer와 연결된 리뷰 체크
+                            # UnifiedReview는 transaction_id를 사용하므로,
+                            # offer로 생성된 임시 transaction을 찾거나 offer 자체로는 체크 불가
+                            # 따라서 has_review를 False로 유지 (평가대기로 표시)
+                            has_review = False
+                            print(f"[DEBUG] No transaction for electronics {electronics.id}, marking as pending review")
                 except Exception as e:
                     print(f"[ERROR] Failed to check review status: {e}")
                     has_review = False
