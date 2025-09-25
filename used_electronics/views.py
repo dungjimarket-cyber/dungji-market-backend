@@ -1024,6 +1024,33 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             )
 
         try:
+            # 수락된 제안 찾기
+            accepted_offer = ElectronicsOffer.objects.filter(
+                electronics=electronics,
+                status='accepted'
+            ).first()
+
+            if not accepted_offer:
+                return Response(
+                    {'error': '수락된 제안을 찾을 수 없습니다.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # 취소자가 판매자인지 구매자인지 확인
+            is_seller = request.user == transaction.seller
+            is_buyer = request.user == transaction.buyer
+
+            # 취소 기록 저장 (휴대폰 방식과 동일)
+            from .models import ElectronicsTradeCancellation
+            ElectronicsTradeCancellation.objects.create(
+                electronics=electronics,
+                offer=accepted_offer,
+                cancelled_by='seller' if is_seller else 'buyer',
+                canceller=request.user,
+                reason=reason if reason else 'other',
+                custom_reason=custom_reason if reason == 'other' else None
+            )
+
             # 거래 취소
             transaction.status = 'cancelled'
             transaction.cancelled_by = request.user
@@ -1037,10 +1064,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 electronics.save()
 
             # 제안 상태도 초기화
-            ElectronicsOffer.objects.filter(
-                electronics=electronics,
-                status='accepted'
-            ).update(status='cancelled')
+            accepted_offer.status = 'cancelled'
+            accepted_offer.save()
 
             return Response({'message': '거래가 취소되었습니다.'})
         except Exception as e:
