@@ -616,17 +616,23 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'reviewer', 'reviewee', 'item_type', 'created_at', 'updated_at']
 
     def get_phone_brand(self, obj):
-        """거래에서 휴대폰 브랜드 정보 가져오기"""
+        """거래에서 상품 브랜드 정보 가져오기 (휴대폰/전자제품)"""
         transaction = obj.get_transaction()
-        if transaction and hasattr(transaction, 'phone'):
-            return transaction.phone.brand
+        if transaction:
+            if hasattr(transaction, 'phone'):
+                return transaction.phone.brand
+            elif hasattr(transaction, 'electronics'):
+                return transaction.electronics.brand
         return None
 
     def get_phone_model(self, obj):
-        """거래에서 휴대폰 모델 정보 가져오기"""
+        """거래에서 상품 모델 정보 가져오기 (휴대폰/전자제품)"""
         transaction = obj.get_transaction()
-        if transaction and hasattr(transaction, 'phone'):
-            return transaction.phone.model
+        if transaction:
+            if hasattr(transaction, 'phone'):
+                return transaction.phone.model
+            elif hasattr(transaction, 'electronics'):
+                return transaction.electronics.model_name
         return None
 
     def validate(self, data):

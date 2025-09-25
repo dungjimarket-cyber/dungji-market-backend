@@ -1671,9 +1671,8 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='written')
     def written(self, request):
-        """내가 작성한 후기 목록"""
+        """내가 작성한 후기 목록 (휴대폰 + 전자제품 통합)"""
         reviews = UnifiedReview.objects.filter(
-            item_type='phone',
             reviewer=request.user
         ).select_related('reviewer', 'reviewee').order_by('-created_at')
 
@@ -1688,9 +1687,8 @@ class UsedPhoneReviewViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='received')
     def received(self, request):
-        """내가 받은 후기 목록"""
+        """내가 받은 후기 목록 (휴대폰 + 전자제품 통합)"""
         reviews = UnifiedReview.objects.filter(
-            item_type='phone',
             reviewee=request.user
         ).select_related('reviewer', 'reviewee').order_by('-created_at')
 

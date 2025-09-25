@@ -170,12 +170,20 @@ def create_review(request):
                     # status 조건 제거 - 실제로 accepted인 offer만 review 작성 가능하도록 나중에 확인
                     offer = ElectronicsOffer.objects.get(id=offer_id)
                     print(f"[UNIFIED REVIEW] Found offer {offer_id} with status: {offer.status}")
+                    print(f"[UNIFIED REVIEW] Offer buyer: {offer.buyer.username}, Request user: {request.user.username}")
 
                     # offer가 accepted가 아니면 에러
                     if offer.status != 'accepted':
                         return Response(
                             {'error': f'제안 {offer_id}의 상태가 accepted가 아닙니다. 현재 상태: {offer.status}'},
                             status=400
+                        )
+
+                    # 권한 체크: 구매자 또는 판매자만 후기 작성 가능
+                    if request.user != offer.buyer and request.user != offer.electronics.seller:
+                        return Response(
+                            {'error': '해당 거래의 참여자만 후기를 작성할 수 있습니다.'},
+                            status=403
                         )
 
                     electronics = offer.electronics
@@ -271,10 +279,19 @@ def create_review(request):
                 )
 
     # 거래 확인
+    print(f"[UNIFIED REVIEW] Final transaction_id to find: {transaction_id}, item_type: {item_type}")
     if item_type == 'phone':
         transaction = get_object_or_404(UsedPhoneTransaction, id=transaction_id)
     else:
-        transaction = get_object_or_404(ElectronicsTransaction, id=transaction_id)
+        try:
+            transaction = ElectronicsTransaction.objects.get(id=transaction_id)
+            print(f"[UNIFIED REVIEW] Found ElectronicsTransaction {transaction_id}")
+        except ElectronicsTransaction.DoesNotExist:
+            print(f"[UNIFIED REVIEW] ElectronicsTransaction {transaction_id} not found!")
+            return Response(
+                {'error': f'전자제품 거래 {transaction_id}를 찾을 수 없습니다.'},
+                status=404
+            )
 
     # 권한 확인 (구매자 또는 판매자만 작성 가능)
     if request.user not in [transaction.buyer, transaction.seller]:
