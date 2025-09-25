@@ -169,11 +169,13 @@ def create_review(request):
                     offer = ElectronicsOffer.objects.get(id=offer_id, status='accepted')
                     electronics = offer.electronics
 
-                    # 트랜잭션 찾기 또는 생성
-                    transaction = ElectronicsTransaction.objects.filter(
-                        electronics=electronics,
-                        buyer=offer.buyer
-                    ).exclude(status='cancelled').order_by('-created_at').first()
+                    # 트랜잭션 찾기 (OneToOne 직접 접근)
+                    try:
+                        transaction = electronics.transaction
+                        if transaction.status == 'cancelled':
+                            transaction = None
+                    except ElectronicsTransaction.DoesNotExist:
+                        transaction = None
 
                     if not transaction:
                         # 트랜잭션 생성

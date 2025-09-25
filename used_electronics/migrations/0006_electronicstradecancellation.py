@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('used_electronics', '0002_remove_electronicsfavorite'),
+        ('used_electronics', '0005_add_timestamp_fields'),
     ]
 
     operations = [
