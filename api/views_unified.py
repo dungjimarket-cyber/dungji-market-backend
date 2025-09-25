@@ -8,8 +8,8 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Count, Q
 from .models_unified_simple import UnifiedFavorite, UnifiedReview
-from used_phones.models import UsedPhone, UsedPhoneTransaction
-from used_electronics.models import UsedElectronics, ElectronicsTransaction
+from used_phones.models import UsedPhone, UsedPhoneTransaction, UsedPhoneOffer
+from used_electronics.models import UsedElectronics, ElectronicsTransaction, ElectronicsOffer
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -138,9 +138,12 @@ def my_favorites(request):
 @permission_classes([IsAuthenticated])
 def create_review(request):
     """거래 후기 작성 (휴대폰/전자제품 통합)"""
+    print(f"[UNIFIED REVIEW] Request data: {request.data}")
+    print(f"[UNIFIED REVIEW] User: {request.user}")
+
     item_type = request.data.get('item_type')  # 'phone' or 'electronics'
-    transaction_id = request.data.get('transaction_id')
-    rating = request.data.get('rating')
+    transaction_id = request.data.get('transaction_id', request.data.get('transaction'))
+    rating = request.data.get('rating', 5)
     comment = request.data.get('comment', '')
 
     # 추가 평가 항목
@@ -149,11 +152,99 @@ def create_review(request):
     is_honest = request.data.get('is_honest', False)
     is_fast_response = request.data.get('is_fast_response', False)
 
-    if not all([item_type, transaction_id, rating]):
-        return Response({'error': '필수 필드가 누락되었습니다.'}, status=400)
+    if not item_type:
+        return Response({'error': 'item_type이 필요합니다.'}, status=400)
 
     if item_type not in ['phone', 'electronics']:
         return Response({'error': '잘못된 item_type입니다.'}, status=400)
+
+    # transaction_id가 없거나 0인 경우 처리
+    if not transaction_id or transaction_id == 0:
+        if item_type == 'electronics':
+            # 전자제품: offer_id로 시도
+            offer_id = request.data.get('offer_id')
+            if offer_id:
+                print(f"[UNIFIED REVIEW] No transaction_id, trying with offer_id: {offer_id}")
+                try:
+                    offer = ElectronicsOffer.objects.get(id=offer_id, status='accepted')
+                    electronics = offer.electronics
+
+                    # 트랜잭션 찾기 또는 생성
+                    transaction = ElectronicsTransaction.objects.filter(
+                        electronics=electronics,
+                        buyer=offer.buyer
+                    ).exclude(status='cancelled').order_by('-created_at').first()
+
+                    if not transaction:
+                        # 트랜잭션 생성
+                        transaction = ElectronicsTransaction.objects.create(
+                            electronics=electronics,
+                            seller=electronics.seller,
+                            buyer=offer.buyer,
+                            final_price=offer.offer_price,
+                            status='completed',
+                            seller_completed=True,
+                            buyer_completed=True
+                        )
+                        print(f"[UNIFIED REVIEW] Created transaction {transaction.id} from offer {offer_id}")
+                    transaction_id = transaction.id
+                except ElectronicsOffer.DoesNotExist:
+                    return Response(
+                        {'error': f'제안 {offer_id}를 찾을 수 없습니다.'},
+                        status=404
+                    )
+            else:
+                return Response(
+                    {'error': 'transaction_id 또는 offer_id가 필요합니다.'},
+                    status=400
+                )
+        else:
+            # 휴대폰: phone_id로 시도
+            phone_id = request.data.get('phone_id')
+            if phone_id:
+                print(f"[UNIFIED REVIEW] No transaction_id, trying with phone_id: {phone_id}")
+                try:
+                    phone = UsedPhone.objects.get(id=phone_id)
+                    # 해당 폰의 가장 최근 트랜잭션 찾기
+                    transaction = UsedPhoneTransaction.objects.filter(
+                        phone=phone
+                    ).exclude(status='cancelled').order_by('-created_at').first()
+
+                    if transaction:
+                        transaction_id = transaction.id
+                        print(f"[UNIFIED REVIEW] Found transaction {transaction_id} for phone {phone_id}")
+                    else:
+                        # 트랜잭션이 없으면 accepted offer로 생성
+                        accepted_offer = UsedPhoneOffer.objects.filter(
+                            phone=phone,
+                            status='accepted'
+                        ).first()
+
+                        if accepted_offer:
+                            transaction = UsedPhoneTransaction.objects.create(
+                                phone=phone,
+                                seller=phone.seller,
+                                buyer=accepted_offer.buyer,
+                                price=accepted_offer.offered_price,
+                                status='completed'
+                            )
+                            transaction_id = transaction.id
+                            print(f"[UNIFIED REVIEW] Created transaction {transaction_id} for phone {phone_id}")
+                        else:
+                            return Response(
+                                {'error': f'폰 {phone_id}에 대한 거래 정보를 찾을 수 없습니다.'},
+                                status=404
+                            )
+                except UsedPhone.DoesNotExist:
+                    return Response(
+                        {'error': f'폰 {phone_id}를 찾을 수 없습니다.'},
+                        status=404
+                    )
+            else:
+                return Response(
+                    {'error': 'transaction_id 또는 phone_id가 필요합니다.'},
+                    status=400
+                )
 
     # 거래 확인
     if item_type == 'phone':
