@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     UsedElectronics, ElectronicsRegion, ElectronicsImage,
-    ElectronicsOffer, ElectronicsTransaction
+    ElectronicsOffer, ElectronicsTransaction, ElectronicsTradeCancellation
 )
 
 # ElectronicsRegion과 ElectronicsImage는 Inline으로만 사용 (독립 메뉴 X)
@@ -42,3 +42,16 @@ class ElectronicsTransactionAdmin(admin.ModelAdmin):
     list_display = ['id', 'electronics', 'seller', 'buyer', 'final_price', 'status', 'created_at']
     list_filter = ['status']
     search_fields = ['electronics__model_name', 'seller__username', 'buyer__username']
+
+
+@admin.register(ElectronicsTradeCancellation)
+class ElectronicsTradeCancellationAdmin(admin.ModelAdmin):
+    list_display = ['id', 'electronics', 'offer', 'cancelled_by', 'canceller', 'reason', 'created_at']
+    list_filter = ['cancelled_by', 'reason', 'created_at']
+    search_fields = ['electronics__model_name', 'canceller__username', 'custom_reason']
+    readonly_fields = ['created_at']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'electronics', 'offer', 'canceller'
+        )
