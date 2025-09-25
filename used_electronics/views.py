@@ -1219,9 +1219,39 @@ def create_simple_review(request):
 
         # transaction_id 검증
         if not transaction_id or transaction_id == 0:
+            # offer_id로 시도해보기
+            offer_id = request.data.get('offer_id')
+            if offer_id:
+                print(f"[ELECTRONICS SIMPLE REVIEW] No transaction_id, trying with offer_id: {offer_id}")
+                try:
+                    offer = ElectronicsOffer.objects.get(id=offer_id, status='accepted')
+                    electronics = offer.electronics
+                    # 트랜잭션 찾기 또는 생성
+                    transaction = ElectronicsTransaction.objects.filter(
+                        electronics=electronics,
+                        buyer=offer.buyer
+                    ).exclude(status='cancelled').order_by('-created_at').first()
+
+                    if not transaction:
+                        # 트랜잭션 생성
+                        transaction = ElectronicsTransaction.objects.create(
+                            electronics=electronics,
+                            seller=electronics.seller,
+                            buyer=offer.buyer,
+                            final_price=offer.offer_price,
+                            status='completed',
+                            seller_completed=True,
+                            buyer_completed=True
+                        )
+                        print(f"[ELECTRONICS SIMPLE REVIEW] Created transaction {transaction.id} from offer {offer_id}")
+                    transaction_id = transaction.id
+                except ElectronicsOffer.DoesNotExist:
+                    return Response(
+                        {'error': f'제안 {offer_id}를 찾을 수 없습니다.'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
             # electronics_id로 시도해보기
-            electronics_id = request.data.get('electronics_id')
-            if electronics_id:
+            elif electronics_id := request.data.get('electronics_id'):
                 print(f"[ELECTRONICS SIMPLE REVIEW] No transaction_id, trying with electronics_id: {electronics_id}")
                 try:
                     electronics = UsedElectronics.objects.get(id=electronics_id)
