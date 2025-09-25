@@ -191,6 +191,14 @@ def create_review(request):
                         print(f"[UNIFIED REVIEW] Created transaction {transaction.id} from offer {offer_id}")
                     transaction_id = transaction.id
                 except ElectronicsOffer.DoesNotExist:
+                    # 디버깅을 위해 더 자세한 정보 제공
+                    all_offers = ElectronicsOffer.objects.filter(id=offer_id)
+                    if all_offers.exists():
+                        actual_status = all_offers.first().status
+                        return Response(
+                            {'error': f'제안 {offer_id}의 상태가 accepted가 아닙니다. 현재 상태: {actual_status}'},
+                            status=404
+                        )
                     return Response(
                         {'error': f'제안 {offer_id}를 찾을 수 없습니다.'},
                         status=404
