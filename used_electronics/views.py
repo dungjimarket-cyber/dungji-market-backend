@@ -248,13 +248,13 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def check_limit(self, request):
-        """등록 제한 체크"""
+        """등록 제한 체크 (활성/거래중 상품 5개 및 패널티)"""
         from django.utils import timezone
 
-        # 활성 상품 수 체크
+        # 활성 및 거래중 상품 수 체크
         active_count = UsedElectronics.objects.filter(
             seller=request.user,
-            status='active'
+            status__in=['active', 'trading']
         ).count()
 
         # 패널티 체크

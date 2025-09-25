@@ -607,14 +607,14 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='check-limit')
     def check_limit(self, request):
-        """등록 제한 체크 (활성 상품 5개 및 패널티)"""
+        """등록 제한 체크 (활성/거래중 상품 5개 및 패널티)"""
         from django.utils import timezone
         from datetime import timedelta
-        
-        # 활성 상품 개수
+
+        # 활성 및 거래중 상품 개수
         active_count = UsedPhone.objects.filter(
             seller=request.user,
-            status='active'
+            status__in=['active', 'trading']
         ).count()
         
         # 패널티 체크
