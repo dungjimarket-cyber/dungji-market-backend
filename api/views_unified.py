@@ -159,6 +159,7 @@ def create_review(request):
         return Response({'error': '잘못된 item_type입니다.'}, status=400)
 
     # transaction_id가 없거나 0인 경우 처리
+    print(f"[UNIFIED REVIEW] transaction_id: {transaction_id}, type: {type(transaction_id)}")
     if not transaction_id or transaction_id == 0:
         if item_type == 'electronics':
             # 전자제품: offer_id로 시도
@@ -166,39 +167,54 @@ def create_review(request):
             if offer_id:
                 print(f"[UNIFIED REVIEW] No transaction_id, trying with offer_id: {offer_id}")
                 try:
-                    offer = ElectronicsOffer.objects.get(id=offer_id, status='accepted')
+                    # status 조건 제거 - 실제로 accepted인 offer만 review 작성 가능하도록 나중에 확인
+                    offer = ElectronicsOffer.objects.get(id=offer_id)
+                    print(f"[UNIFIED REVIEW] Found offer {offer_id} with status: {offer.status}")
+
+                    # offer가 accepted가 아니면 에러
+                    if offer.status != 'accepted':
+                        return Response(
+                            {'error': f'제안 {offer_id}의 상태가 accepted가 아닙니다. 현재 상태: {offer.status}'},
+                            status=400
+                        )
+
                     electronics = offer.electronics
+                    print(f"[UNIFIED REVIEW] Electronics {electronics.id} status: {electronics.status}")
 
                     # 트랜잭션 찾기 (OneToOne 직접 접근)
                     try:
                         transaction = electronics.transaction
+                        print(f"[UNIFIED REVIEW] Found existing transaction {transaction.id} with status: {transaction.status}")
                         if transaction.status == 'cancelled':
+                            print(f"[UNIFIED REVIEW] Transaction is cancelled, will create new one")
                             transaction = None
                     except ElectronicsTransaction.DoesNotExist:
+                        print(f"[UNIFIED REVIEW] No transaction exists for electronics {electronics.id}")
                         transaction = None
 
                     if not transaction:
-                        # 트랜잭션 생성
-                        transaction = ElectronicsTransaction.objects.create(
-                            electronics=electronics,
-                            seller=electronics.seller,
-                            buyer=offer.buyer,
-                            final_price=offer.offer_price,
-                            status='completed',
-                            seller_completed=True,
-                            buyer_completed=True
-                        )
-                        print(f"[UNIFIED REVIEW] Created transaction {transaction.id} from offer {offer_id}")
+                        print(f"[UNIFIED REVIEW] Creating new transaction for electronics {electronics.id}")
+                        # 트랜잭션 생성 (전자제품은 거래 완료 시 자동 생성되어야 하지만 없는 경우 생성)
+                        try:
+                            transaction = ElectronicsTransaction.objects.create(
+                                electronics=electronics,
+                                seller=electronics.seller,
+                                buyer=offer.buyer,
+                                final_price=offer.offer_price,
+                                status='completed',
+                                seller_completed=True,
+                                buyer_completed=True
+                            )
+                            print(f"[UNIFIED REVIEW] Created transaction {transaction.id} from offer {offer_id}")
+                        except Exception as e:
+                            print(f"[UNIFIED REVIEW] Failed to create transaction: {e}")
+                            return Response(
+                                {'error': f'거래 생성 실패: {str(e)}'},
+                                status=400
+                            )
                     transaction_id = transaction.id
                 except ElectronicsOffer.DoesNotExist:
-                    # 디버깅을 위해 더 자세한 정보 제공
-                    all_offers = ElectronicsOffer.objects.filter(id=offer_id)
-                    if all_offers.exists():
-                        actual_status = all_offers.first().status
-                        return Response(
-                            {'error': f'제안 {offer_id}의 상태가 accepted가 아닙니다. 현재 상태: {actual_status}'},
-                            status=404
-                        )
+                    print(f"[UNIFIED REVIEW] Offer {offer_id} not found")
                     return Response(
                         {'error': f'제안 {offer_id}를 찾을 수 없습니다.'},
                         status=404
