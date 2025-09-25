@@ -1149,6 +1149,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                     has_review = False
 
                 trading_items.append({
+                    'type': 'electronics',  # 명확한 타입 구분자
                     'id': transaction.id if transaction else offer.id,  # transaction ID 우선, 없으면 offer ID
                     'offer_id': offer.id,  # offer ID도 별도로 제공
                     'transaction_id': transaction.id if transaction else None,  # 명시적으로 transaction ID 제공
