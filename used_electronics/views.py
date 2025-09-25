@@ -448,6 +448,16 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         ).count()
         return Response({'count': count})
 
+    @action(detail=True, methods=['get'], url_path='active-offers-count')
+    def active_offers_count(self, request, pk=None):
+        """활성 제안 수 조회 (취소된 제안 제외, 중복 사용자 제외)"""
+        electronics = self.get_object()
+        active_count = ElectronicsOffer.objects.filter(
+            electronics=electronics,
+            status='pending'  # pending 상태만 (cancelled, accepted 제외)
+        ).values('buyer').distinct().count()  # 같은 사용자는 하나로 카운트
+        return Response({'count': active_count})
+
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def offers(self, request, pk=None):
         """상품에 대한 제안 목록 조회 (판매자만 가능)"""

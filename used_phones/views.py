@@ -493,6 +493,16 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
 
         return Response({'count': count})
     
+    @action(detail=True, methods=['get'], url_path='active-offers-count')
+    def active_offers_count(self, request, pk=None):
+        """활성 제안 수 조회 (취소된 제안 제외, 중복 사용자 제외)"""
+        phone = self.get_object()
+        active_count = UsedPhoneOffer.objects.filter(
+            phone=phone,
+            status='pending'  # pending 상태만 (cancelled, accepted 제외)
+        ).values('buyer').distinct().count()  # 같은 사용자는 하나로 카운트
+        return Response({'count': active_count})
+
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated], url_path='my-offer')
     def my_offer(self, request, pk=None):
         """내가 제안한 금액 조회"""
