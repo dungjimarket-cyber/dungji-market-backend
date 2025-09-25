@@ -1027,7 +1027,14 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
             # 취소 기록 저장 (휴대폰 방식과 동일)
             from .models import ElectronicsTradeCancellation
-            ElectronicsTradeCancellation.objects.create(
+            print(f"[CANCEL_TRADE] Creating cancellation record:")
+            print(f"  - Electronics ID: {electronics.id}")
+            print(f"  - Offer ID: {accepted_offer.id}")
+            print(f"  - Cancelled by: {'seller' if is_seller else 'buyer'}")
+            print(f"  - Reason: {reason if reason else 'other'}")
+            print(f"  - Custom reason: {custom_reason if reason == 'other' else None}")
+
+            cancellation = ElectronicsTradeCancellation.objects.create(
                 electronics=electronics,
                 offer=accepted_offer,
                 cancelled_by='seller' if is_seller else 'buyer',
@@ -1035,6 +1042,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 reason=reason if reason else 'other',
                 custom_reason=custom_reason if reason == 'other' else None
             )
+            print(f"[CANCEL_TRADE] Cancellation record created with ID: {cancellation.id}")
 
             # 거래 취소
             transaction.status = 'cancelled'
