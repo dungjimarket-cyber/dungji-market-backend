@@ -375,37 +375,23 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             electronics.status = 'trading'
             electronics.save(update_fields=['status'])
 
-            # 기존 취소된 거래가 있는지 확인하고 삭제 또는 업데이트
-            try:
-                existing_transaction = ElectronicsTransaction.objects.get(
-                    electronics=electronics
+            # 진행중인 거래가 있는지 확인 (ForeignKey)
+            existing_transaction = electronics.transactions.filter(status='in_progress').first()
+            if existing_transaction:
+                return Response(
+                    {'error': '이미 진행중인 거래가 있습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-                # 기존 거래가 취소 상태인 경우 재사용
-                if existing_transaction.status == 'cancelled':
-                    existing_transaction.buyer = request.user
-                    existing_transaction.seller = electronics.seller
-                    existing_transaction.final_price = offer.offer_price
-                    existing_transaction.status = 'in_progress'
-                    existing_transaction.cancelled_by = None
-                    existing_transaction.cancellation_reason = ''
-                    existing_transaction.cancellation_detail = ''
-                    existing_transaction.save()
-                else:
-                    # 이미 진행중인 거래가 있으면 에러
-                    return Response(
-                        {'error': '이미 진행중인 거래가 있습니다.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except ElectronicsTransaction.DoesNotExist:
-                # 거래가 없으면 새로 생성
-                ElectronicsTransaction.objects.create(
-                    electronics=electronics,
-                    offer=offer,  # offer 연결 추가
-                    seller=electronics.seller,
-                    buyer=request.user,
-                    final_price=offer.offer_price,
-                    status='in_progress'
-                )
+
+            # 새 거래 생성 (취소된 거래가 있어도 새로 생성)
+            ElectronicsTransaction.objects.create(
+                electronics=electronics,
+                offer=offer,
+                seller=electronics.seller,
+                buyer=request.user,
+                final_price=offer.offer_price,
+                status='in_progress'
+            )
 
             # 다른 제안들은 그대로 pending 상태 유지
 

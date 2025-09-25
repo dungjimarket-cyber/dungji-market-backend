@@ -181,16 +181,12 @@ def create_review(request):
                     electronics = offer.electronics
                     print(f"[UNIFIED REVIEW] Electronics {electronics.id} status: {electronics.status}")
 
-                    # 트랜잭션 찾기 (OneToOne 직접 접근)
-                    try:
-                        transaction = electronics.transaction
+                    # 트랜잭션 찾기 (ForeignKey로 변경됨)
+                    transaction = electronics.transactions.exclude(status='cancelled').order_by('-created_at').first()
+                    if transaction:
                         print(f"[UNIFIED REVIEW] Found existing transaction {transaction.id} with status: {transaction.status}")
-                        if transaction.status == 'cancelled':
-                            print(f"[UNIFIED REVIEW] Transaction is cancelled, will create new one")
-                            transaction = None
-                    except ElectronicsTransaction.DoesNotExist:
-                        print(f"[UNIFIED REVIEW] No transaction exists for electronics {electronics.id}")
-                        transaction = None
+                    else:
+                        print(f"[UNIFIED REVIEW] No active transaction exists for electronics {electronics.id}")
 
                     if not transaction:
                         print(f"[UNIFIED REVIEW] Creating new transaction for electronics {electronics.id}")
@@ -198,6 +194,7 @@ def create_review(request):
                         try:
                             transaction = ElectronicsTransaction.objects.create(
                                 electronics=electronics,
+                                offer=offer,  # offer 연결 추가
                                 seller=electronics.seller,
                                 buyer=offer.buyer,
                                 final_price=offer.offer_price,
@@ -212,6 +209,7 @@ def create_review(request):
                                 {'error': f'거래 생성 실패: {str(e)}'},
                                 status=400
                             )
+                    # transaction_id 업데이트 중요!
                     transaction_id = transaction.id
                 except ElectronicsOffer.DoesNotExist:
                     print(f"[UNIFIED REVIEW] Offer {offer_id} not found")
