@@ -19,17 +19,6 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Log in to Docker Hub (if credentials available)
-      uses: docker/login-action@v3
-      continue-on-error: true  # Don't fail if no credentials
-      if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
     - name: Validate secrets
       run: |
         echo "Validating required secrets..."
@@ -210,62 +199,13 @@ jobs:
             export HOST_PORT=8000
           fi
           
-          # Docker Hub 인증 문제 해결
-          echo "🔧 Setting up Docker authentication..."
-          # Docker 로그아웃 후 재시도 (익명 사용자로)
-          sudo docker logout docker.io || true
-
-          # Docker buildx 설정 (더 나은 빌드 성능과 캐싱)
-          sudo docker buildx create --use --name mybuilder || true
-          sudo docker buildx inspect --bootstrap || true
-
-          # 재시도 함수 정의
-          retry_docker_build() {
-              local max_attempts=3
-              local delay=30
-              local attempt=1
-
-              while [ $attempt -le $max_attempts ]; do
-                  echo "🔄 Build attempt $attempt/$max_attempts"
-                  if sudo docker-compose -p $PROJECT_NAME build --no-cache; then
-                      echo "✅ Build succeeded on attempt $attempt"
-                      return 0
-                  else
-                      if [ $attempt -lt $max_attempts ]; then
-                          echo "❌ Build failed on attempt $attempt. Retrying in ${delay}s..."
-                          sleep $delay
-                          delay=$((delay + 30))
-                      else
-                          echo "❌ Build failed after $max_attempts attempts"
-                          return 1
-                      fi
-                  fi
-                  attempt=$((attempt + 1))
-              done
-          }
-
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
           # 고정된 프로젝트 이름 사용 (기존 컨테이너를 교체)
           PROJECT_NAME="dungji-backend"
           echo "Using project name: $PROJECT_NAME"
           export PROJECT_NAME
-
-          # 재시도 로직으로 빌드 수행
-          if retry_docker_build; then
-              echo "✅ Images built successfully, starting containers..."
-              sudo docker-compose -p $PROJECT_NAME up -d --force-recreate --remove-orphans
-          else
-              echo "❌ Build failed. Trying with existing images..."
-              # 기존 이미지가 있다면 그것으로 시도
-              if sudo docker-compose -p $PROJECT_NAME up -d --force-recreate --remove-orphans; then
-                  echo "✅ Started with existing images"
-              else
-                  echo "❌ Failed to start containers"
-                  sudo docker-compose -p $PROJECT_NAME logs --tail=50
-                  exit 1
-              fi
-          fi
+          sudo docker-compose -p $PROJECT_NAME up --build -d --force-recreate --remove-orphans
           
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
