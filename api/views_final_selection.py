@@ -133,9 +133,16 @@ def buyer_final_decision(request, groupbuy_id):
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"구매자 최종선택 오류: {str(e)}")
+        import traceback
+        error_detail = traceback.format_exc()
+        logger.error(f"구매자 최종선택 오류: {str(e)}\n{error_detail}")
         return Response(
-            {'error': '최종선택 처리 중 오류가 발생했습니다.'},
+            {
+                'error': '최종선택 처리 중 오류가 발생했습니다.',
+                'detail': str(e),
+                'type': type(e).__name__,
+                'traceback': error_detail
+            },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
