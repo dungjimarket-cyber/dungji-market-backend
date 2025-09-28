@@ -112,7 +112,7 @@ def check_custom_groupbuys_cron(request):
     Cron job endpoint for checking custom groupbuy expiration
     """
     try:
-        from .services.custom_expiration_service import CustomExpirationService
+        from api.services.custom_expiration_service import CustomExpirationService
 
         logger.info("Starting cron job for custom groupbuy expiration check")
 
