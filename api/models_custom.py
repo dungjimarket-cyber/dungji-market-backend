@@ -3,7 +3,7 @@
 """
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.utils import timezone
 from datetime import timedelta
 import uuid
@@ -146,7 +146,7 @@ class CustomGroupBuy(models.Model):
         null=True, blank=True,
         verbose_name='연락처',
         validators=[
-            models.validators.RegexValidator(
+            RegexValidator(
                 r'^[\d\-\(\)\s]+$',
                 '숫자, 하이픈, 괄호, 공백만 입력 가능합니다.'
             )

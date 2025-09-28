@@ -61,7 +61,7 @@ from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibilit
 from api.views_objection import NoShowObjectionViewSet, check_objection_eligibility
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
-from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check
+from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check, check_custom_groupbuys_cron
 from api.views_partner import (
     partner_login, dashboard_summary, ReferralRecordListView, referral_link,
     account_info, update_account, PartnerSettlementListView, request_settlement,
@@ -225,6 +225,7 @@ urlpatterns = [
     # Cron job APIs
     path('api/cron/update-status/', update_groupbuy_status_cron, name='cron_update_status'),
     path('api/cron/send-reminders/', send_reminder_notifications_cron, name='cron_send_reminders'),
+    path('api/cron/check-custom-groupbuys/', check_custom_groupbuys_cron, name='cron_check_custom_groupbuys'),
     path('api/cron/health/', cron_health_check, name='cron_health_check'),
     
     # Partner APIs

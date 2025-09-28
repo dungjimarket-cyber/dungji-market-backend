@@ -105,6 +105,37 @@ def send_reminder_notifications_cron(request):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
+@cron_auth_required
+def check_custom_groupbuys_cron(request):
+    """
+    Cron job endpoint for checking custom groupbuy expiration
+    """
+    try:
+        from .services.custom_expiration_service import CustomExpirationService
+
+        logger.info("Starting cron job for custom groupbuy expiration check")
+
+        # 만료 체크 실행
+        CustomExpirationService.check_expired_groupbuys()
+        CustomExpirationService.check_seller_decision_deadline()
+
+        logger.info("Custom groupbuy expiration check completed")
+
+        return JsonResponse({
+            'success': True,
+            'timestamp': timezone.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error in custom groupbuy cron job: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def cron_health_check(request):
     """
