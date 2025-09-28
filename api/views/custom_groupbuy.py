@@ -156,8 +156,28 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         return queryset.order_by('-created_at')
 
+    def list(self, request, *args, **kwargs):
+        # 목록 조회 시 만료된 공구들 일괄 체크
+        from django.utils import timezone
+        expired_groupbuys = CustomGroupBuy.objects.filter(
+            status='recruiting',
+            expired_at__lte=timezone.now()
+        )
+        for groupbuy in expired_groupbuys[:10]:  # 최대 10개만 체크 (성능 고려)
+            try:
+                groupbuy.check_expiration()
+            except Exception:
+                pass  # 에러 발생해도 목록 조회는 계속
+
+        return super().list(request, *args, **kwargs)
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
+
+        # 조회 시점에 만료 체크
+        if instance.status == 'recruiting':
+            instance.check_expiration()
+
         instance.view_count = F('view_count') + 1
         instance.save(update_fields=['view_count'])
         instance.refresh_from_db()
