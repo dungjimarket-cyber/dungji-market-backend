@@ -17,10 +17,30 @@ User = get_user_model()
 class CustomGroupBuyImageSerializer(serializers.ModelSerializer):
     """공구 이미지 시리얼라이저"""
 
+    imageUrl = serializers.SerializerMethodField()
+    thumbnailUrl = serializers.SerializerMethodField()
+
     class Meta:
         model = CustomGroupBuyImage
-        fields = ['id', 'image_url', 'order_index', 'is_primary', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'image', 'image_url', 'imageUrl', 'thumbnail', 'thumbnail_url', 'thumbnailUrl',
+                  'is_primary', 'order_index', 'width', 'height', 'file_size', 'created_at']
+        read_only_fields = ['id', 'image_url', 'thumbnail_url', 'width', 'height', 'file_size', 'created_at']
+
+    def get_imageUrl(self, obj):
+        """프론트엔드 호환성을 위한 imageUrl 필드"""
+        if obj.image_url:
+            return obj.image_url
+        elif obj.image:
+            return obj.image.url if hasattr(obj.image, 'url') else None
+        return None
+
+    def get_thumbnailUrl(self, obj):
+        """프론트엔드 호환성을 위한 thumbnailUrl 필드"""
+        if obj.thumbnail_url:
+            return obj.thumbnail_url
+        elif obj.thumbnail:
+            return obj.thumbnail.url if hasattr(obj.thumbnail, 'url') else None
+        return self.get_imageUrl(obj)
 
 
 class CustomGroupBuyListSerializer(serializers.ModelSerializer):
@@ -207,10 +227,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
     """공구 생성 시리얼라이저"""
 
     images = serializers.ListField(
-        child=serializers.URLField(),
-        required=False,
+        child=serializers.ImageField(),
         write_only=True,
-        help_text='이미지 URL 목록'
+        required=False,
+        max_length=10,
+        help_text="최대 10개의 이미지를 업로드할 수 있습니다."
     )
     region_codes = serializers.ListField(
         child=serializers.CharField(),
@@ -417,19 +438,15 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         from django.db import transaction
         from api.models_region import Region
-        from api.services.url_metadata_service import URLMetadataService
+        import logging
+
+        logger = logging.getLogger(__name__)
 
         images_data = validated_data.pop('images', [])
         region_codes = validated_data.pop('region_codes', [])
 
-        discount_url = validated_data.get('discount_url')
-        if discount_url and validated_data.get('type') == 'online':
-            metadata = URLMetadataService.extract_metadata(discount_url)
-            if metadata:
-                validated_data.update({
-                    k: v for k, v in metadata.items()
-                    if v is not None and k not in validated_data
-                })
+        logger.info(f"[CustomGroupBuy Create] images count: {len(images_data)}")
+        logger.info(f"[CustomGroupBuy Create] region codes: {region_codes}")
 
         with transaction.atomic():
             groupbuy = CustomGroupBuy.objects.create(
@@ -437,14 +454,18 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 **validated_data
             )
 
-            # 이미지 생성
-            for idx, image_url in enumerate(images_data):
-                CustomGroupBuyImage.objects.create(
-                    custom_groupbuy=groupbuy,
-                    image_url=image_url,
-                    order_index=idx,
-                    is_primary=(idx == 0)
-                )
+            # 이미지 처리 (중고거래 방식)
+            for index, image in enumerate(images_data):
+                try:
+                    groupbuy_image = CustomGroupBuyImage.objects.create(
+                        custom_groupbuy=groupbuy,
+                        image=image,
+                        is_primary=(index == 0),
+                        order_index=index
+                    )
+                    logger.info(f"이미지 업로드 완료: {groupbuy_image.id}, 순서: {index}")
+                except Exception as e:
+                    logger.error(f"이미지 업로드 실패: {e}")
 
             # 지역 연결
             for code in region_codes:
@@ -459,6 +480,62 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                     continue
 
         return groupbuy
+
+    def update(self, instance, validated_data):
+        from django.db import transaction
+        from api.models_region import Region
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        images_data = validated_data.pop('images', None)
+        region_codes = validated_data.pop('region_codes', None)
+
+        logger.info(f"[CustomGroupBuy Update] images: {len(images_data) if images_data else 0}")
+        logger.info(f"[CustomGroupBuy Update] region codes: {region_codes}")
+
+        with transaction.atomic():
+            # 기본 필드 업데이트
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+
+            # 이미지 업데이트 (중고거래 방식)
+            if images_data is not None:
+                # 기존 이미지 삭제
+                instance.images.all().delete()
+
+                # 새 이미지 생성
+                for index, image in enumerate(images_data):
+                    try:
+                        groupbuy_image = CustomGroupBuyImage.objects.create(
+                            custom_groupbuy=instance,
+                            image=image,
+                            is_primary=(index == 0),
+                            order_index=index
+                        )
+                        logger.info(f"이미지 업로드 완료: {groupbuy_image.id}, 순서: {index}")
+                    except Exception as e:
+                        logger.error(f"이미지 업로드 실패: {e}")
+
+            # 지역 업데이트 (새 지역이 있을 경우)
+            if region_codes is not None:
+                # 기존 지역 연결 삭제
+                CustomGroupBuyRegion.objects.filter(custom_groupbuy=instance).delete()
+
+                # 새 지역 연결 생성
+                for code in region_codes:
+                    try:
+                        region = Region.objects.get(code=code)
+                        CustomGroupBuyRegion.objects.create(
+                            custom_groupbuy=instance,
+                            region=region
+                        )
+                    except Region.DoesNotExist:
+                        logger.error(f"유효하지 않은 지역 코드: {code}")
+                        continue
+
+        return instance
 
 
 class CustomParticipantSerializer(serializers.ModelSerializer):

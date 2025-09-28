@@ -57,28 +57,17 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 이미지 파일 처리 (중고거래 방식)
-        image_files = request.FILES.getlist('images')
-        uploaded_urls = []
+        # 중고거래 방식 - Serializer가 이미지 처리
+        logger.info(f"=== CustomGroupBuy Create Request ===")
+        logger.info(f"User: {request.user}")
+        logger.info(f"Request data keys: {request.data.keys()}")
+        logger.info(f"Request FILES keys: {request.FILES.keys()}")
 
-        if image_files:
-            try:
-                uploaded_urls = ImageService.upload_multiple_images(
-                    image_files,
-                    folder='custom'
-                )
-            except Exception as e:
-                logger.error(f"이미지 업로드 실패: {str(e)}")
-                return Response(
-                    {'error': f'이미지 업로드 실패: {str(e)}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        # 이미지 URL을 request.data에 추가
-        if uploaded_urls:
-            request.data['images'] = uploaded_urls
-
-        return super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -99,28 +88,11 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-        # 이미지 파일 처리 (중고거래 방식)
-        image_files = request.FILES.getlist('images')
-        uploaded_urls = []
-
-        if image_files:
-            try:
-                uploaded_urls = ImageService.upload_multiple_images(
-                    image_files,
-                    folder='custom'
-                )
-                # 기존 이미지 URL과 병합
-                existing_images = request.data.get('existing_images', [])
-                if isinstance(existing_images, str):
-                    import json
-                    existing_images = json.loads(existing_images)
-                request.data['images'] = existing_images + uploaded_urls
-            except Exception as e:
-                logger.error(f"이미지 업로드 실패: {str(e)}")
-                return Response(
-                    {'error': f'이미지 업로드 실패: {str(e)}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        # 중고거래 방식 - Serializer가 이미지 처리
+        logger.info(f"=== CustomGroupBuy Update Request ===")
+        logger.info(f"User: {request.user}")
+        logger.info(f"Request data keys: {request.data.keys()}")
+        logger.info(f"Request FILES keys: {request.FILES.keys()}")
 
         return super().update(request, *args, **kwargs)
 
