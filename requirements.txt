@@ -22,3 +22,4 @@ django-storages==1.14.2
 whitenoise==6.9.0
 xlsxwriter==3.2.5
 qrcode==7.4.2
+beautifulsoup4==4.12.3

@@ -48,6 +48,7 @@ from rest_framework_simplejwt.views import (
 from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, check_phone_duplicate, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status, verify_user_phone, reset_password_phone, find_id_by_phone
 from api.views_nickname import nickname_change_status, nickname_change_history, nickname_change_test_status
 from api.views_auth_token import refresh_user_token, verify_token_role
+from api.views_link_preview import get_link_preview
 from api.views_social import social_login_dispatch, kakao_callback, check_kakao_user_exists
 from api.views_verification import send_verification_code, verify_code, check_verification_status, verify_business_number, get_business_verification_history, check_business_number_format, verify_business_number_registration
 from api.views_phone_verification import send_phone_verification, verify_phone, check_phone_verification_status, update_phone_number
@@ -289,6 +290,9 @@ urlpatterns = [
 
     # 커스텀 특가 카테고리 API
     path('api/custom/categories/', get_custom_categories, name='custom_categories'),
+
+    # 링크 미리보기 API
+    path('api/link-preview/', get_link_preview, name='link_preview'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
