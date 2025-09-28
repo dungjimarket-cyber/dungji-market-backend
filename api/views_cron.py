@@ -83,25 +83,22 @@ def send_reminder_notifications_cron(request):
     """
     try:
         from .utils.notification_scheduler import send_reminder_notifications
-        
+
         logger.info("Starting cron job for reminder notifications")
-        
+
         sent_count = send_reminder_notifications()
-        
+
         logger.info(f"Sent {sent_count} reminder notifications")
-        
+
         return JsonResponse({
             'success': True,
             'sent': sent_count,
             'timestamp': timezone.now().isoformat()
         })
-        
+
     except Exception as e:
         logger.error(f"Error in reminder notifications cron job: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+
 
 
 @csrf_exempt
