@@ -234,9 +234,9 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # 제목 길이 검증
         title = data.get('title', '')
-        if len(title) > 200:
+        if len(title) > 50:
             raise serializers.ValidationError({
-                'title': '제목은 최대 200자까지 입력 가능합니다.'
+                'title': '제목은 최대 50자까지 입력 가능합니다.'
             })
 
         # 설명 길이 검증

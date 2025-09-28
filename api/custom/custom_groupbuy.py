@@ -13,6 +13,8 @@ from api.serializers_custom import (
     CustomParticipantSerializer,
     CustomFavoriteSerializer
 )
+from api.services.image_service import ImageService
+from api.services.url_metadata_service import URLMetadataService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,34 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 이미지 파일 처리 (중고거래 방식)
+        image_files = request.FILES.getlist('images')
+        uploaded_urls = []
+
+        if image_files:
+            try:
+                uploaded_urls = ImageService.upload_multiple_images(
+                    image_files,
+                    folder='custom'
+                )
+            except Exception as e:
+                logger.error(f"이미지 업로드 실패: {str(e)}")
+                return Response(
+                    {'error': f'이미지 업로드 실패: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # 이미지 URL을 request.data에 추가
+        if uploaded_urls:
+            request.data['images'] = uploaded_urls
+
+        # 온라인 할인 링크 메타데이터 추출
+        if request.data.get('type') == 'online' and request.data.get('discount_url'):
+            url = request.data.get('discount_url')
+            metadata = URLMetadataService.extract_metadata(url)
+            if metadata:
+                request.data.update(metadata)
+
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
@@ -67,30 +97,46 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # 참여자가 있을 때는 제목, 상세설명, 이용안내만 수정 가능
         if instance.current_participants > 0:
-            protected_fields = ['discount_codes', 'discount_url', 'target_participants', 'online_discount_type']
-            for field in protected_fields:
-                if field in request.data:
-                    new_value = request.data[field]
-                    old_value = getattr(instance, field)
+            allowed_fields = ['title', 'description', 'usage_guide']
+            for field in request.data.keys():
+                if field not in allowed_fields and field not in ['images', 'existing_images']:
+                    return Response(
+                        {'error': '참여자가 있는 공구는 제목, 상세설명, 이용안내만 수정 가능합니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-                    if field == 'discount_codes':
-                        if isinstance(new_value, list) and isinstance(old_value, list):
-                            if new_value != old_value:
-                                return Response(
-                                    {'error': '참여자가 있는 공구는 할인코드를 수정할 수 없습니다.'},
-                                    status=status.HTTP_400_BAD_REQUEST
-                                )
-                        elif new_value != old_value:
-                            return Response(
-                                {'error': '참여자가 있는 공구는 할인코드를 수정할 수 없습니다.'},
-                                status=status.HTTP_400_BAD_REQUEST
-                            )
-                    elif new_value != old_value:
-                        return Response(
-                            {'error': f'참여자가 있는 공구는 {field}를 수정할 수 없습니다.'},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
+        # 이미지 파일 처리 (중고거래 방식)
+        image_files = request.FILES.getlist('images')
+        uploaded_urls = []
+
+        if image_files:
+            try:
+                uploaded_urls = ImageService.upload_multiple_images(
+                    image_files,
+                    folder='custom'
+                )
+                # 기존 이미지 URL과 병합
+                existing_images = request.data.get('existing_images', [])
+                if isinstance(existing_images, str):
+                    import json
+                    existing_images = json.loads(existing_images)
+                request.data['images'] = existing_images + uploaded_urls
+            except Exception as e:
+                logger.error(f"이미지 업로드 실패: {str(e)}")
+                return Response(
+                    {'error': f'이미지 업로드 실패: {str(e)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # 온라인 할인 링크 메타데이터 추출 (링크가 변경된 경우만)
+        if request.data.get('type') == 'online' and request.data.get('discount_url'):
+            url = request.data.get('discount_url')
+            if url != instance.discount_url:
+                metadata = URLMetadataService.extract_metadata(url)
+                if metadata:
+                    request.data.update(metadata)
 
         return super().update(request, *args, **kwargs)
 

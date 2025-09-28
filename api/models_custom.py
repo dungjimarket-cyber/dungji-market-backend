@@ -65,7 +65,7 @@ class CustomGroupBuy(models.Model):
     ]
 
     # 기본 정보
-    title = models.CharField(max_length=200, verbose_name='제목')
+    title = models.CharField(max_length=50, verbose_name='제목')
     description = models.TextField(verbose_name='설명')
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, verbose_name='유형')
     categories = models.JSONField(default=list, verbose_name='카테고리')
