@@ -1,0 +1,423 @@
+"""
+커스텀 특가 시리얼라이저
+"""
+from rest_framework import serializers
+from api.models_custom import (
+    CustomGroupBuy,
+    CustomGroupBuyImage,
+    CustomParticipant,
+    CustomFavorite,
+    CustomGroupBuyRegion
+)
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+
+class CustomGroupBuyImageSerializer(serializers.ModelSerializer):
+    """공구 이미지 시리얼라이저"""
+
+    class Meta:
+        model = CustomGroupBuyImage
+        fields = ['id', 'image_url', 'order_index', 'is_primary', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class CustomGroupBuyListSerializer(serializers.ModelSerializer):
+    """공구 목록 시리얼라이저"""
+
+    type_display = serializers.CharField(source='get_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    final_price = serializers.IntegerField(read_only=True)
+    is_completed = serializers.BooleanField(read_only=True)
+    seller_name = serializers.CharField(read_only=True)
+    seller_type = serializers.CharField(read_only=True)
+    primary_image = serializers.SerializerMethodField()
+    is_favorited = serializers.SerializerMethodField()
+    regions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomGroupBuy
+        fields = [
+            'id', 'title', 'type', 'type_display', 'categories', 'regions', 'usage_guide',
+            'original_price', 'discount_rate', 'final_price',
+            'target_participants', 'current_participants', 'is_completed',
+            'status', 'status_display', 'expired_at',
+            'seller_name', 'seller_type',
+            'primary_image', 'view_count', 'favorite_count', 'is_favorited',
+            'created_at'
+        ]
+
+    def get_primary_image(self, obj):
+        primary_image = obj.images.filter(is_primary=True).first()
+        if primary_image:
+            return primary_image.image_url
+        first_image = obj.images.first()
+        return first_image.image_url if first_image else None
+
+    def get_is_favorited(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return CustomFavorite.objects.filter(
+                user=request.user,
+                custom_groupbuy=obj
+            ).exists()
+        return False
+
+    def get_regions(self, obj):
+        region_links = CustomGroupBuyRegion.objects.filter(
+            custom_groupbuy=obj
+        ).select_related('region', 'region__parent')
+
+        result = []
+        for region_link in region_links:
+            region = region_link.region
+            if region:
+                display_name = region.name
+                if region.parent:
+                    parent_name = region.parent.name
+                    display_name = f"{parent_name} {region.name}"
+
+                result.append({
+                    'code': region.code,
+                    'name': region.name,
+                    'full_name': display_name
+                })
+
+        return result
+
+
+class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
+    """공구 상세 시리얼라이저"""
+
+    type_display = serializers.CharField(source='get_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    online_discount_type_display = serializers.CharField(
+        source='get_online_discount_type_display',
+        read_only=True
+    )
+    final_price = serializers.IntegerField(read_only=True)
+    is_completed = serializers.BooleanField(read_only=True)
+    seller_name = serializers.CharField(read_only=True)
+    seller_type = serializers.CharField(read_only=True)
+    is_business_verified = serializers.BooleanField(read_only=True)
+    images = CustomGroupBuyImageSerializer(many=True, read_only=True)
+    is_favorited = serializers.SerializerMethodField()
+    is_participated = serializers.SerializerMethodField()
+    regions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomGroupBuy
+        fields = [
+            'id', 'title', 'description', 'type', 'type_display',
+            'categories', 'regions', 'usage_guide',
+            'original_price', 'discount_rate', 'final_price',
+            'target_participants', 'current_participants', 'is_completed',
+            'max_wait_hours', 'expired_at', 'completed_at',
+            'seller_decision_deadline',
+            'discount_valid_days', 'discount_valid_until',
+            'allow_partial_sale',
+            'seller', 'seller_name', 'seller_type', 'is_business_verified',
+            'online_discount_type', 'online_discount_type_display',
+            'location', 'location_detail', 'phone_number',
+            'meta_title', 'meta_image', 'meta_description', 'meta_price',
+            'status', 'status_display',
+            'view_count', 'favorite_count',
+            'images', 'is_favorited', 'is_participated',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'seller', 'current_participants', 'expired_at',
+            'completed_at', 'seller_decision_deadline',
+            'discount_valid_until', 'status',
+            'view_count', 'favorite_count', 'created_at', 'updated_at'
+        ]
+
+    def get_is_favorited(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return CustomFavorite.objects.filter(
+                user=request.user,
+                custom_groupbuy=obj
+            ).exists()
+        return False
+
+    def get_is_participated(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return CustomParticipant.objects.filter(
+                user=request.user,
+                custom_groupbuy=obj,
+                status='confirmed'
+            ).exists()
+        return False
+
+    def get_regions(self, obj):
+        region_links = CustomGroupBuyRegion.objects.filter(
+            custom_groupbuy=obj
+        ).select_related('region', 'region__parent')
+
+        result = []
+        for region_link in region_links:
+            region = region_link.region
+            if region:
+                display_name = region.name
+                if region.parent:
+                    parent_name = region.parent.name
+                    display_name = f"{parent_name} {region.name}"
+
+                result.append({
+                    'code': region.code,
+                    'name': region.name,
+                    'full_name': display_name
+                })
+
+        return result
+
+
+class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
+    """공구 생성 시리얼라이저"""
+
+    images = serializers.ListField(
+        child=serializers.URLField(),
+        required=False,
+        write_only=True,
+        help_text='이미지 URL 목록'
+    )
+    region_codes = serializers.ListField(
+        child=serializers.CharField(),
+        write_only=True,
+        required=False,
+        help_text='지역 코드 목록 (최대 3개)'
+    )
+
+    class Meta:
+        model = CustomGroupBuy
+        fields = [
+            'title', 'description', 'type', 'categories', 'region_codes', 'usage_guide',
+            'original_price', 'discount_rate',
+            'target_participants', 'max_wait_hours',
+            'discount_valid_days', 'allow_partial_sale',
+            'online_discount_type', 'discount_url', 'discount_codes',
+            'location', 'location_detail', 'phone_number',
+            'images'
+        ]
+
+    def validate(self, data):
+        # 제목 길이 검증
+        title = data.get('title', '')
+        if len(title) > 200:
+            raise serializers.ValidationError({
+                'title': '제목은 최대 200자까지 입력 가능합니다.'
+            })
+
+        # 설명 길이 검증
+        description = data.get('description', '')
+        if len(description) > 5000:
+            raise serializers.ValidationError({
+                'description': '설명은 최대 5,000자까지 입력 가능합니다.'
+            })
+
+        # 이용안내 길이 검증
+        usage_guide = data.get('usage_guide', '')
+        if usage_guide and len(usage_guide) > 1000:
+            raise serializers.ValidationError({
+                'usage_guide': '이용안내는 최대 1,000자까지 입력 가능합니다.'
+            })
+
+        # 카테고리 검증
+        categories = data.get('categories', [])
+        if not categories:
+            raise serializers.ValidationError({
+                'categories': '최소 1개 이상의 카테고리를 선택해주세요.'
+            })
+        if len(categories) > 5:
+            raise serializers.ValidationError({
+                'categories': '카테고리는 최대 5개까지 선택 가능합니다.'
+            })
+        if len(set(categories)) != len(categories):
+            raise serializers.ValidationError({
+                'categories': '중복된 카테고리가 있습니다.'
+            })
+
+        # 유효한 카테고리인지 검증
+        from api.models_custom import CustomGroupBuy
+        valid_categories = [choice[0] for choice in CustomGroupBuy.CATEGORY_CHOICES]
+        for category in categories:
+            if category not in valid_categories:
+                raise serializers.ValidationError({
+                    'categories': f'유효하지 않은 카테고리입니다: {category}'
+                })
+
+        # 이미지 개수 검증
+        images = data.get('images', [])
+        if images and len(images) > 10:
+            raise serializers.ValidationError({
+                'images': '이미지는 최대 10개까지 등록 가능합니다.'
+            })
+
+        # 할인코드 검증
+        discount_codes = data.get('discount_codes', [])
+        if discount_codes:
+            if not all(str(code).strip() for code in discount_codes):
+                raise serializers.ValidationError({
+                    'discount_codes': '빈 할인코드는 등록할 수 없습니다.'
+                })
+            if len(set(discount_codes)) != len(discount_codes):
+                raise serializers.ValidationError({
+                    'discount_codes': '중복된 할인코드가 있습니다.'
+                })
+            for code in discount_codes:
+                if len(str(code)) > 50:
+                    raise serializers.ValidationError({
+                        'discount_codes': '각 할인코드는 최대 50자까지 입력 가능합니다.'
+                    })
+
+        # 지역 검증
+        region_codes = data.get('region_codes', [])
+        if region_codes:
+            if len(region_codes) > 3:
+                raise serializers.ValidationError({
+                    'region_codes': '최대 3개까지 지역을 선택할 수 있습니다.'
+                })
+
+            from api.models_region import Region
+            for code in region_codes:
+                if not Region.objects.filter(code=code, is_active=True).exists():
+                    raise serializers.ValidationError({
+                        'region_codes': f'유효하지 않은 지역 코드입니다: {code}'
+                    })
+
+        # 온라인 공구 검증
+        if data.get('type') == 'online':
+            if not data.get('online_discount_type'):
+                raise serializers.ValidationError({
+                    'online_discount_type': '온라인 공구는 할인 제공 방식이 필수입니다.'
+                })
+
+            discount_type = data.get('online_discount_type')
+            if discount_type in ['link_only', 'both'] and not data.get('discount_url'):
+                raise serializers.ValidationError({
+                    'discount_url': '할인링크 제공 시 링크가 필수입니다.'
+                })
+
+            if discount_type in ['code_only', 'both']:
+                codes = data.get('discount_codes', [])
+                if not codes:
+                    raise serializers.ValidationError({
+                        'discount_codes': '할인코드 제공 시 코드가 필수입니다.'
+                    })
+                if len(codes) < data.get('target_participants', 0):
+                    raise serializers.ValidationError({
+                        'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다.'
+                    })
+
+        # 오프라인 공구 검증
+        if data.get('type') == 'offline':
+            if not region_codes:
+                raise serializers.ValidationError({
+                    'region_codes': '오프라인 공구는 지역 선택이 필수입니다.'
+                })
+            if not data.get('location'):
+                raise serializers.ValidationError({
+                    'location': '오프라인 공구는 매장 위치가 필수입니다.'
+                })
+            if not data.get('phone_number'):
+                raise serializers.ValidationError({
+                    'phone_number': '오프라인 공구는 연락처가 필수입니다.'
+                })
+            if not data.get('discount_valid_days'):
+                raise serializers.ValidationError({
+                    'discount_valid_days': '오프라인 공구는 할인 유효기간이 필수입니다.'
+                })
+
+            codes = data.get('discount_codes', [])
+            if not codes:
+                raise serializers.ValidationError({
+                    'discount_codes': '오프라인 공구는 할인코드가 필수입니다.'
+                })
+            if len(codes) < data.get('target_participants', 0):
+                raise serializers.ValidationError({
+                    'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다. (필요: {data.get("target_participants")}, 보유: {len(codes)})'
+                })
+
+        return data
+
+    def create(self, validated_data):
+        from django.db import transaction
+        from api.models_region import Region
+        from api.services.url_metadata_service import URLMetadataService
+
+        images_data = validated_data.pop('images', [])
+        region_codes = validated_data.pop('region_codes', [])
+
+        discount_url = validated_data.get('discount_url')
+        if discount_url and validated_data.get('type') == 'online':
+            metadata = URLMetadataService.extract_metadata(discount_url)
+            if metadata:
+                validated_data.update({
+                    k: v for k, v in metadata.items()
+                    if v is not None and k not in validated_data
+                })
+
+        with transaction.atomic():
+            groupbuy = CustomGroupBuy.objects.create(
+                seller=self.context['request'].user,
+                **validated_data
+            )
+
+            # 이미지 생성
+            for idx, image_url in enumerate(images_data):
+                CustomGroupBuyImage.objects.create(
+                    custom_groupbuy=groupbuy,
+                    image_url=image_url,
+                    order_index=idx,
+                    is_primary=(idx == 0)
+                )
+
+            # 지역 연결
+            for code in region_codes:
+                try:
+                    region = Region.objects.get(code=code)
+                    CustomGroupBuyRegion.objects.create(
+                        custom_groupbuy=groupbuy,
+                        region=region
+                    )
+                except Region.DoesNotExist:
+                    logger.error(f"유효하지 않은 지역 코드: {code}")
+                    continue
+
+        return groupbuy
+
+
+class CustomParticipantSerializer(serializers.ModelSerializer):
+    """참여자 시리얼라이저"""
+
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    groupbuy_title = serializers.CharField(source='custom_groupbuy.title', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = CustomParticipant
+        fields = [
+            'id', 'user', 'user_name', 'custom_groupbuy', 'groupbuy_title',
+            'participated_at', 'participation_code',
+            'discount_code', 'discount_url',
+            'discount_used', 'discount_used_at',
+            'status', 'status_display'
+        ]
+        read_only_fields = [
+            'id', 'user', 'participated_at', 'participation_code',
+            'discount_code', 'discount_url'
+        ]
+
+
+class CustomFavoriteSerializer(serializers.ModelSerializer):
+    """찜 시리얼라이저"""
+
+    groupbuy = CustomGroupBuyListSerializer(source='custom_groupbuy', read_only=True)
+
+    class Meta:
+        model = CustomFavorite
+        fields = ['id', 'custom_groupbuy', 'groupbuy', 'created_at']
+        read_only_fields = ['id', 'created_at']

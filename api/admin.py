@@ -43,6 +43,12 @@ try:
 except ImportError:
     pass
 
+# 커스텀 특가 Admin 등록
+try:
+    from . import admin_custom
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # 설정 확인 로깅

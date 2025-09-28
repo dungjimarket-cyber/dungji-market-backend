@@ -87,6 +87,8 @@ from api.views_mypage import (
     mypage_profile, mypage_update_profile, mypage_stats,
     mypage_reviews_received, mypage_reviews_pending, mypage_create_review
 )
+from api.views.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
+from api.views.custom_image import CustomImageUploadView, CustomImageDeleteView
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -107,6 +109,9 @@ router.register(r'noshow-objections', NoShowObjectionViewSet, basename='noshow-o
 router.register(r'inquiries', InquiryViewSet, basename='inquiry')
 router.register(r'notices', NoticeViewSet, basename='notice')
 router.register(r'popups', PopupViewSet, basename='popup')
+router.register(r'custom-groupbuys', CustomGroupBuyViewSet, basename='custom-groupbuy')
+router.register(r'custom-participants', CustomParticipantViewSet, basename='custom-participant')
+router.register(r'custom-favorites', CustomFavoriteViewSet, basename='custom-favorite')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -276,6 +281,13 @@ urlpatterns = [
     path('api/auth/email/send-verification/', send_verification_email, name='send_verification_email'),
     path('api/auth/email/verify-code/', verify_email_code, name='verify_email_code'),
     path('api/auth/email/change/', change_email, name='change_email'),
+
+    # 커스텀 특가 이미지 API
+    path('api/custom/images/upload/', CustomImageUploadView.as_view(), name='custom_image_upload'),
+    path('api/custom/images/delete/', CustomImageDeleteView.as_view(), name='custom_image_delete'),
+
+    # 커스텀 특가 카테고리 API
+    path('api/custom/categories/', get_custom_categories, name='custom_categories'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
