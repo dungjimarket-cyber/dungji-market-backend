@@ -72,7 +72,23 @@ class CustomGroupBuy(models.Model):
     usage_guide = models.TextField(null=True, blank=True, verbose_name='이용안내', help_text='사용기간, 시간 조건 등 이용 안내사항')
 
     # 가격 정보
-    original_price = models.PositiveIntegerField(verbose_name='정가')
+    pricing_type = models.CharField(
+        max_length=20,
+        choices=[('single_product', '단일상품'), ('all_products', '전품목 할인')],
+        default='single_product',
+        verbose_name='가격 유형'
+    )
+    product_name = models.CharField(
+        max_length=200,
+        null=True, blank=True,
+        verbose_name='상품명',
+        help_text='단일상품인 경우 상품명 입력'
+    )
+    original_price = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='정가',
+        help_text='단일상품인 경우 정가 입력'
+    )
     discount_rate = models.PositiveIntegerField(
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         verbose_name='할인율'
@@ -89,11 +105,16 @@ class CustomGroupBuy(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
     max_wait_hours = models.PositiveIntegerField(
+        null=True, blank=True,
         validators=[MinValueValidator(24), MaxValueValidator(720)],
         verbose_name='최대 대기 시간(시간)',
-        help_text='24~720시간 (1~30일)'
+        help_text='24~720시간 (1~30일), 미설정 시 무제한'
     )
-    expired_at = models.DateTimeField(verbose_name='만료 시간')
+    expired_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='만료 시간',
+        help_text='max_wait_hours 설정 시 자동 계산'
+    )
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='완료일')
     seller_decision_deadline = models.DateTimeField(
         null=True, blank=True,
@@ -190,7 +211,11 @@ class CustomGroupBuy(models.Model):
 
     @property
     def final_price(self):
-        """최종 가격 계산"""
+        """최종 가격 계산 (단일상품만)"""
+        if self.pricing_type != 'single_product':
+            return None  # 전품목 할인은 가격 없음
+        if not self.original_price or not self.discount_rate:
+            return 0
         return int(self.original_price * (100 - self.discount_rate) / 100)
 
     @property
@@ -474,3 +499,110 @@ class CustomGroupBuyRegion(models.Model):
 
     def __str__(self):
         return f"{self.custom_groupbuy.title} - {self.region.full_name}"
+
+
+class CustomNoShowReport(models.Model):
+    """커스텀 공구 노쇼 신고 (기존 NoShowReport 복사)"""
+    REPORT_STATUS_CHOICES = [
+        ('pending', '처리중'),
+        ('completed', '처리완료'),
+        ('on_hold', '보류중'),
+    ]
+
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_noshow_reports_made', verbose_name='신고자')
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_noshow_reports_received', verbose_name='피신고자')
+    custom_groupbuy = models.ForeignKey(CustomGroupBuy, on_delete=models.CASCADE, related_name='noshow_reports', verbose_name='커스텀 공구')
+    participant = models.ForeignKey(CustomParticipant, on_delete=models.CASCADE, related_name='noshow_reports', verbose_name='참여 정보', null=True, blank=True)
+
+    report_type = models.CharField(max_length=20, choices=[
+        ('buyer_noshow', '구매자 노쇼'),
+        ('seller_noshow', '판매자 노쇼'),
+    ], verbose_name='신고 유형')
+
+    content = models.TextField(verbose_name='신고 내용')
+    evidence_image = models.ImageField(upload_to='custom_noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지')
+    evidence_image_2 = models.ImageField(upload_to='custom_noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지 2')
+    evidence_image_3 = models.ImageField(upload_to='custom_noshow_reports/', null=True, blank=True, verbose_name='증빙 이미지 3')
+
+    status = models.CharField(max_length=20, choices=REPORT_STATUS_CHOICES, default='pending', verbose_name='처리 상태')
+    admin_comment = models.TextField(blank=True, verbose_name='관리자 코멘트')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='신고일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name='처리일')
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_custom_noshow_reports', verbose_name='처리자')
+
+    edit_count = models.IntegerField(default=0, verbose_name='수정 횟수')
+    last_edited_at = models.DateTimeField(null=True, blank=True, verbose_name='마지막 수정 시간')
+
+    noshow_buyers = models.JSONField(default=list, blank=True, verbose_name='노쇼 구매자 목록')
+
+    is_cancelled = models.BooleanField(default=False, verbose_name='취소 여부')
+    cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name='취소 시간')
+    cancellation_reason = models.TextField(blank=True, verbose_name='취소 사유')
+
+    def can_edit(self):
+        return self.status == 'pending' and self.edit_count < 1
+
+    def can_cancel(self):
+        return self.status == 'pending'
+
+    class Meta:
+        db_table = 'custom_noshow_report'
+        verbose_name = '커스텀 노쇼 신고'
+        verbose_name_plural = '커스텀 노쇼 신고 관리'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['reporter', 'reported_user', 'custom_groupbuy'],
+                name='unique_custom_noshow_report_per_user_groupbuy'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.reporter.username}이 {self.reported_user.username}을 신고 ({self.custom_groupbuy.title})'
+
+
+class CustomPenalty(models.Model):
+    """커스텀 공구 패널티 (기존 Penalty 복사)"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_penalties', verbose_name='사용자')
+    reason = models.TextField(verbose_name='사유')
+    penalty_type = models.CharField(max_length=20, verbose_name='페널티 유형',
+                                   help_text='예: 노쇼, 판매포기, 기타')
+    duration_hours = models.PositiveIntegerField(default=24, verbose_name='패널티 기간(시간)',
+                                                 help_text='시간 단위로 입력 (예: 24, 48, 72)')
+    start_date = models.DateTimeField(default=timezone.now, verbose_name='시작일')
+    end_date = models.DateTimeField(verbose_name='종료일', blank=True, null=True)
+    is_active = models.BooleanField(default=True, verbose_name='활성화 여부')
+    count = models.PositiveSmallIntegerField(default=1, verbose_name='누적 횟수')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='custom_penalties_created', verbose_name='등록자')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='등록일')
+
+    custom_groupbuy = models.ForeignKey(CustomGroupBuy, on_delete=models.SET_NULL, null=True, blank=True, related_name='penalties', verbose_name='관련 커스텀 공구')
+    participant = models.ForeignKey(CustomParticipant, on_delete=models.SET_NULL, null=True, blank=True, related_name='penalties', verbose_name='관련 참여 정보')
+
+    def __str__(self):
+        active = "[활성]" if self.is_active else "[비활성]"
+        return f"{self.user.username} - {self.penalty_type} ({self.count}회) - {self.duration_hours}시간 {active}"
+
+    def get_penalty_duration(self):
+        return timezone.timedelta(hours=self.duration_hours)
+
+    def save(self, *args, **kwargs):
+        if not self.start_date:
+            self.start_date = timezone.now()
+
+        if not self.end_date:
+            self.end_date = self.start_date + timezone.timedelta(hours=self.duration_hours)
+
+        if self.end_date and timezone.now() > self.end_date:
+            self.is_active = False
+
+        super().save(*args, **kwargs)
+
+    class Meta:
+        db_table = 'custom_penalty'
+        verbose_name = '커스텀 노쇼 패널티'
+        verbose_name_plural = '커스텀 노쇼 패널티 관리'
+        ordering = ['-created_at', '-start_date']

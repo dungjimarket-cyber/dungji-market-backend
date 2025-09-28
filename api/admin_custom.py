@@ -1,10 +1,14 @@
 from django.contrib import admin
+from django.utils.html import mark_safe, format_html
+from django.utils import timezone
 from api.models_custom import (
     CustomGroupBuy,
     CustomGroupBuyImage,
     CustomParticipant,
     CustomFavorite,
-    CustomGroupBuyRegion
+    CustomGroupBuyRegion,
+    CustomNoShowReport,
+    CustomPenalty
 )
 
 
@@ -131,3 +135,235 @@ class CustomGroupBuyRegionAdmin(admin.ModelAdmin):
     list_filter = ['created_at']
     search_fields = ['custom_groupbuy__title', 'region__name']
     readonly_fields = ['created_at']
+
+
+@admin.register(CustomNoShowReport)
+class CustomNoShowReportAdmin(admin.ModelAdmin):
+    list_display = ['id', 'reporter', 'reported_user', 'custom_groupbuy', 'report_type', 'status', 'cancelled_status', 'edit_status', 'created_at']
+    list_filter = ['status', 'report_type', 'is_cancelled', 'edit_count', 'created_at', 'processed_at']
+    search_fields = ['reporter__username', 'reported_user__username', 'custom_groupbuy__title', 'content']
+    readonly_fields = ['created_at', 'updated_at', 'processed_at', 'processed_by', 'edit_count',
+                      'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display']
+    date_hierarchy = 'created_at'
+
+    fieldsets = (
+        ('신고 정보', {
+            'fields': ('reporter', 'reported_user', 'custom_groupbuy', 'report_type', 'content', 'created_at', 'updated_at')
+        }),
+        ('증빙 자료', {
+            'fields': ('evidence_image', 'evidence_image_2', 'evidence_image_3',
+                      'evidence_image_display', 'evidence_image_2_display', 'evidence_image_3_display')
+        }),
+        ('수정/취소 정보', {
+            'fields': ('edit_count', 'is_cancelled', 'cancelled_at', 'cancellation_reason'),
+            'classes': ('collapse',)
+        }),
+        ('처리 정보', {
+            'fields': ('status', 'admin_comment', 'processed_by', 'processed_at')
+        }),
+    )
+
+    def cancelled_status(self, obj):
+        if obj.is_cancelled:
+            return mark_safe('<span style="background-color: #DC3545; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">취소됨</span>')
+        return '-'
+    cancelled_status.short_description = '취소'
+
+    def edit_status(self, obj):
+        if obj.edit_count > 0:
+            return mark_safe(f'<span style="color: blue;">수정 {obj.edit_count}회</span>')
+        return '-'
+    edit_status.short_description = '수정'
+
+    actions = ['confirm_reports', 'reject_reports', 'cancel_reports']
+
+    def confirm_reports(self, request, queryset):
+        from .models_custom import CustomParticipant
+        import logging
+
+        logger = logging.getLogger(__name__)
+        processed_count = 0
+        cancelled_count = 0
+        completed_count = 0
+
+        for report in queryset.filter(status='pending'):
+            report.status = 'completed'
+            report.processed_at = timezone.now()
+            report.processed_by = request.user
+            report.save()
+
+            custom_groupbuy = report.custom_groupbuy
+
+            if report.report_type == 'seller_noshow':
+                custom_groupbuy.status = 'cancelled'
+                custom_groupbuy.cancellation_reason = '판매자 노쇼로 인한 커스텀 공구 취소'
+                custom_groupbuy.save()
+                cancelled_count += 1
+                logger.info(f"판매자 노쇼로 커스텀 공구 {custom_groupbuy.id} 취소 처리")
+
+            else:
+                confirmed_participants = CustomParticipant.objects.filter(
+                    custom_groupbuy=custom_groupbuy,
+                    status='confirmed'
+                )
+                confirmed_count = confirmed_participants.count()
+
+                noshow_reports = CustomNoShowReport.objects.filter(
+                    custom_groupbuy=custom_groupbuy,
+                    report_type='buyer_noshow',
+                    status__in=['pending', 'completed']
+                )
+                noshow_users = set(noshow_reports.values_list('reported_user_id', flat=True))
+                noshow_count = len(noshow_users)
+
+                if confirmed_count > 0 and noshow_count >= confirmed_count:
+                    custom_groupbuy.status = 'cancelled'
+                    custom_groupbuy.cancellation_reason = '구매자 전원 노쇼로 인한 커스텀 공구 취소'
+                    custom_groupbuy.save()
+                    cancelled_count += 1
+                    logger.info(f"커스텀 공구 {custom_groupbuy.id} 전원 노쇼로 취소 처리")
+
+                elif noshow_count > 0 and noshow_count < confirmed_count:
+                    custom_groupbuy.status = 'completed'
+                    custom_groupbuy.completed_at = timezone.now()
+                    custom_groupbuy.save()
+                    completed_count += 1
+                    logger.info(f"커스텀 공구 {custom_groupbuy.id} 부분 노쇼로 판매완료 처리")
+
+            processed_count += 1
+
+        msg = f'{processed_count}개의 신고가 처리되었습니다.'
+        if cancelled_count > 0:
+            msg += f' ({cancelled_count}개 공구 취소)'
+        if completed_count > 0:
+            msg += f' ({completed_count}개 공구 완료)'
+
+        self.message_user(request, msg)
+    confirm_reports.short_description = '선택한 신고 처리완료'
+
+    def reject_reports(self, request, queryset):
+        updated = queryset.filter(status='pending').update(
+            status='rejected',
+            processed_at=timezone.now(),
+            processed_by=request.user
+        )
+        self.message_user(request, f'{updated}개의 신고가 반려되었습니다.')
+    reject_reports.short_description = '선택한 신고 반려'
+
+    def cancel_reports(self, request, queryset):
+        count = 0
+        for report in queryset.filter(is_cancelled=False):
+            report.is_cancelled = True
+            report.cancelled_at = timezone.now()
+            report.cancellation_reason = '관리자에 의한 수동 취소'
+            report.save()
+            count += 1
+        self.message_user(request, f'{count}개의 신고가 취소 처리되었습니다.')
+    cancel_reports.short_description = '선택한 신고 취소 처리'
+
+    def evidence_image_display(self, obj):
+        if obj.evidence_image:
+            return format_html(
+                '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                '<a href="{}" download>다운로드</a>',
+                obj.evidence_image.url, obj.evidence_image.url, obj.evidence_image.url
+            )
+        return "없음"
+    evidence_image_display.short_description = "증빙 파일 1"
+
+    def evidence_image_2_display(self, obj):
+        if obj.evidence_image_2:
+            return format_html(
+                '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                '<a href="{}" download>다운로드</a>',
+                obj.evidence_image_2.url, obj.evidence_image_2.url, obj.evidence_image_2.url
+            )
+        return "없음"
+    evidence_image_2_display.short_description = "증빙 파일 2"
+
+    def evidence_image_3_display(self, obj):
+        if obj.evidence_image_3:
+            return format_html(
+                '<a href="{}" target="_blank"><img src="{}" style="max-width: 200px; max-height: 200px;" /></a><br/>'
+                '<a href="{}" download>다운로드</a>',
+                obj.evidence_image_3.url, obj.evidence_image_3.url, obj.evidence_image_3.url
+            )
+        return "없음"
+    evidence_image_3_display.short_description = "증빙 파일 3"
+
+    def save_model(self, request, obj, form, change):
+        if change and 'status' in form.changed_data:
+            if obj.status in ['confirmed', 'rejected'] and not obj.processed_by:
+                obj.processed_by = request.user
+                obj.processed_at = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(CustomPenalty)
+class CustomPenaltyAdmin(admin.ModelAdmin):
+    list_display = ['get_user_display', 'penalty_type', 'get_duration_display',
+                    'get_status_display', 'start_date', 'end_date', 'count', 'created_by']
+    list_filter = ['is_active', 'penalty_type', 'created_at']
+    search_fields = ['user__username', 'user__email', 'user__name', 'reason']
+    readonly_fields = ['created_at', 'created_by']
+    autocomplete_fields = ['user']
+    fieldsets = (
+        ('사용자 선택', {
+            'fields': ('user',),
+            'description': '사용자 닉네임(username) 또는 이메일을 입력하여 검색하세요. 자동완성이 지원됩니다.'
+        }),
+        ('패널티 정보', {
+            'fields': ('penalty_type', 'reason', 'count')
+        }),
+        ('기간 설정', {
+            'fields': ('duration_hours', 'start_date', 'end_date'),
+            'description': '패널티 기간을 시간 단위로 입력하세요. end_date를 비워두면 자동 계산됩니다.'
+        }),
+        ('상태', {
+            'fields': ('is_active',)
+        }),
+        ('기록', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def get_user_display(self, obj):
+        nickname = obj.user.nickname if obj.user.nickname else obj.user.username
+        return f"{obj.user.username} ({nickname})"
+    get_user_display.short_description = '사용자'
+    get_user_display.admin_order_field = 'user__username'
+
+    def get_duration_display(self, obj):
+        return f"{obj.duration_hours}시간"
+    get_duration_display.short_description = '패널티 기간'
+    get_duration_display.admin_order_field = 'duration_hours'
+
+    def get_status_display(self, obj):
+        if obj.is_active:
+            if obj.end_date and timezone.now() < obj.end_date:
+                remaining = obj.end_date - timezone.now()
+                hours = int(remaining.total_seconds() // 3600)
+                minutes = int((remaining.total_seconds() % 3600) // 60)
+                return f"✅ 활성 (남은시간: {hours}시간 {minutes}분)"
+            return mark_safe('<span style="color: red;">⚠️ 활성 (만료됨)</span>')
+        return "❌ 비활성"
+    get_status_display.short_description = '상태'
+    get_status_display.admin_order_field = 'is_active'
+
+    actions = ['deactivate_penalties', 'activate_penalties']
+
+    def deactivate_penalties(self, request, queryset):
+        queryset.update(is_active=False)
+        self.message_user(request, f"{queryset.count()}개의 패널티를 비활성화했습니다.")
+    deactivate_penalties.short_description = '선택한 패널티 비활성화'
+
+    def activate_penalties(self, request, queryset):
+        count = 0
+        for penalty in queryset:
+            if penalty.end_date and timezone.now() < penalty.end_date:
+                penalty.is_active = True
+                penalty.save()
+                count += 1
+        self.message_user(request, f"{count}개의 패널티를 활성화했습니다.")
+    activate_penalties.short_description = '선택한 패널티 활성화'
