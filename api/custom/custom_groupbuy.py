@@ -14,7 +14,6 @@ from api.serializers_custom import (
     CustomFavoriteSerializer
 )
 from api.services.image_service import ImageService
-from api.services.url_metadata_service import URLMetadataService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -79,13 +78,6 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         if uploaded_urls:
             request.data['images'] = uploaded_urls
 
-        # 온라인 할인 링크 메타데이터 추출
-        if request.data.get('type') == 'online' and request.data.get('discount_url'):
-            url = request.data.get('discount_url')
-            metadata = URLMetadataService.extract_metadata(url)
-            if metadata:
-                request.data.update(metadata)
-
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
@@ -129,14 +121,6 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                     {'error': f'이미지 업로드 실패: {str(e)}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-        # 온라인 할인 링크 메타데이터 추출 (링크가 변경된 경우만)
-        if request.data.get('type') == 'online' and request.data.get('discount_url'):
-            url = request.data.get('discount_url')
-            if url != instance.discount_url:
-                metadata = URLMetadataService.extract_metadata(url)
-                if metadata:
-                    request.data.update(metadata)
 
         return super().update(request, *args, **kwargs)
 
