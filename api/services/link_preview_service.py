@@ -42,24 +42,26 @@ class LinkPreviewService:
             og_image = soup.find('meta', property='og:image')
 
             # 일반 메타 태그 fallback
-            title = (
-                og_title['content'] if og_title and og_title.get('content')
-                else soup.find('title').text if soup.find('title')
-                else ''
-            )
+            # 제목 추출
+            title = ''
+            if og_title and og_title.get('content'):
+                title = og_title['content']
+            elif soup.find('title'):
+                title = soup.find('title').text
 
-            description = (
-                og_description['content'] if og_description and og_description.get('content')
-                else soup.find('meta', attrs={'name': 'description'})
-                else ''
-            )
-            if isinstance(description, dict) or hasattr(description, 'get'):
-                description = description.get('content', '') if description else ''
+            # 설명 추출
+            description = ''
+            if og_description and og_description.get('content'):
+                description = og_description['content']
+            else:
+                desc_tag = soup.find('meta', attrs={'name': 'description'})
+                if desc_tag and desc_tag.get('content'):
+                    description = desc_tag['content']
 
-            image = (
-                og_image['content'] if og_image and og_image.get('content')
-                else ''
-            )
+            # 이미지 추출
+            image = ''
+            if og_image and og_image.get('content'):
+                image = og_image['content']
 
             return {
                 'title': title[:200] if title else '',  # 최대 200자
