@@ -448,7 +448,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             groupbuy = CustomGroupBuy.objects.create(
-                seller=self.context['request'].user,
                 **validated_data
             )
 
