@@ -45,6 +45,197 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [IsAuthenticated()]
 
+    def perform_create(self, serializer):
+        """공구 생성 시 지역 처리 - 중고거래와 동일한 로직"""
+        logger.info(f"perform_create called by user: {self.request.user}")
+
+        # 공구 생성
+        instance = serializer.save(seller=self.request.user)
+
+        # 다중 지역 처리 (중고거래와 동일한 로직)
+        regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
+
+        if regions_data:
+            from api.models_region import Region
+
+            logger.info(f"[다중 지역 처리 시작] {len(regions_data)}개 지역 데이터 처리")
+
+            for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
+                try:
+                    # 프론트엔드에서 전달된 데이터 파싱
+                    if isinstance(region_data, str):
+                        # "서울특별시 강남구" 형식
+                        parts = region_data.split()
+                        province = parts[0] if len(parts) > 0 else None
+                        city = parts[1] if len(parts) > 1 else None
+                        region_code = None
+                        region_name = None
+                    else:
+                        # 딕셔너리 형식
+                        region_code = region_data.get('code')
+                        region_name = region_data.get('name')
+                        province = region_data.get('province')
+                        city = region_data.get('city')
+
+                    logger.info(f"[지역 {idx+1}] 처리 시작 - code: {region_code}, name: {region_name}, province: {province}, city: {city}")
+
+                    region = None
+
+                    if region_code:
+                        # 1. 코드로 검색
+                        region = Region.objects.filter(code=region_code).first()
+                        if region:
+                            logger.info(f"[지역 검색 성공 - 코드 매칭] {region.name} (코드: {region.code})")
+
+                    # 2. province/city로 검색
+                    if not region and province and city:
+                        # 지역명 매핑 (프론트엔드와 백엔드 데이터 불일치 해결)
+                        province_mapping = {
+                            '전북특별자치도': '전라북도',
+                            '제주특별자치도': '제주도',
+                            '강원특별자치도': '강원도'
+                        }
+                        city_mapping = {
+                            '서귀포': '서귀포시',
+                            '제주': '제주시'
+                        }
+
+                        mapped_province = province_mapping.get(province, province)
+                        mapped_city = city_mapping.get(city, city)
+
+                        logger.info(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
+
+                        # 세종특별자치시 처리
+                        if mapped_province == '세종특별자치시' and mapped_city == '세종시':
+                            region = Region.objects.filter(
+                                name='세종특별자치시',
+                                level=1
+                            ).first()
+                            if region:
+                                logger.info(f"[지역 검색 성공 - 특별자치시] {region.name} (코드: {region.code})")
+
+                        # 일반 지역 검색
+                        if not region:
+                            region = Region.objects.filter(
+                                name=mapped_city,
+                                parent__name=mapped_province,
+                                level__in=[1, 2]
+                            ).first()
+
+                            if region:
+                                logger.info(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
+                            else:
+                                # full_name으로 검색
+                                full_name_search = f"{mapped_province} {mapped_city}"
+                                region = Region.objects.filter(full_name=full_name_search).first()
+                                if region:
+                                    logger.info(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                                else:
+                                    logger.warning(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
+
+                    if region:
+                        # CustomGroupBuyRegion 생성
+                        CustomGroupBuyRegion.objects.create(
+                            custom_groupbuy=instance,
+                            region=region
+                        )
+                        logger.info(f"[지역 추가 완료] {region.name} (코드: {region.code})")
+
+                except Exception as e:
+                    logger.error(f"[지역 처리 오류] {e}", exc_info=True)
+
+    def perform_update(self, serializer):
+        """공구 수정 시 지역 처리 - 중고거래와 동일한 로직"""
+        logger.info(f"perform_update called by user: {self.request.user}")
+
+        instance = serializer.save()
+
+        # 지역 데이터가 있으면 업데이트
+        regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
+
+        if regions_data is not None and len(regions_data) > 0:
+            from api.models_region import Region
+
+            logger.info(f"[다중 지역 수정] {len(regions_data)}개 지역 데이터 처리")
+
+            # 기존 지역 연결 삭제
+            CustomGroupBuyRegion.objects.filter(custom_groupbuy=instance).delete()
+
+            for idx, region_data in enumerate(regions_data[:3]):  # 최대 3개
+                try:
+                    # 프론트엔드에서 전달된 데이터 파싱 (create와 동일)
+                    if isinstance(region_data, str):
+                        parts = region_data.split()
+                        province = parts[0] if len(parts) > 0 else None
+                        city = parts[1] if len(parts) > 1 else None
+                        region_code = None
+                        region_name = None
+                    else:
+                        region_code = region_data.get('code')
+                        region_name = region_data.get('name')
+                        province = region_data.get('province')
+                        city = region_data.get('city')
+
+                    logger.info(f"[지역 {idx+1}] 처리 시작 - code: {region_code}, name: {region_name}, province: {province}, city: {city}")
+
+                    region = None
+
+                    if region_code:
+                        region = Region.objects.filter(code=region_code).first()
+                        if region:
+                            logger.info(f"[지역 검색 성공 - 코드 매칭] {region.name} (코드: {region.code})")
+
+                    if not region and province and city:
+                        province_mapping = {
+                            '전북특별자치도': '전라북도',
+                            '제주특별자치도': '제주도',
+                            '강원특별자치도': '강원도'
+                        }
+                        city_mapping = {
+                            '서귀포': '서귀포시',
+                            '제주': '제주시'
+                        }
+
+                        mapped_province = province_mapping.get(province, province)
+                        mapped_city = city_mapping.get(city, city)
+
+                        logger.info(f"[province/city 검색 시도] {province} {city} -> {mapped_province} {mapped_city}")
+
+                        if mapped_province == '세종특별자치시' and mapped_city == '세종시':
+                            region = Region.objects.filter(
+                                name='세종특별자치시',
+                                level=1
+                            ).first()
+                            if region:
+                                logger.info(f"[지역 검색 성공 - 특별자치시] {region.name} (코드: {region.code})")
+
+                        if not region:
+                            region = Region.objects.filter(
+                                name=mapped_city,
+                                parent__name=mapped_province,
+                                level__in=[1, 2]
+                            ).first()
+
+                            if region:
+                                logger.info(f"[지역 검색 성공 - province/city] {region.name} (코드: {region.code})")
+                            else:
+                                full_name_search = f"{mapped_province} {mapped_city}"
+                                region = Region.objects.filter(full_name=full_name_search).first()
+                                if region:
+                                    logger.info(f"[지역 검색 성공 - full_name] {region.name} (코드: {region.code})")
+                                else:
+                                    logger.warning(f"[지역 검색 실패] {mapped_province} {mapped_city}에 해당하는 지역을 찾을 수 없습니다.")
+
+                    if region:
+                        CustomGroupBuyRegion.objects.create(
+                            custom_groupbuy=instance,
+                            region=region
+                        )
+                        logger.info(f"[지역 추가 완료] {region.name} (코드: {region.code})")
+
+                except Exception as e:
+                    logger.error(f"[지역 처리 오류] {e}", exc_info=True)
+
     def create(self, request, *args, **kwargs):
         active_count = CustomGroupBuy.objects.filter(
             seller=request.user,
@@ -57,7 +248,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 중고거래 방식 - Serializer가 이미지 처리
+        # 중고거래 방식 - Serializer가 이미지 처리, ViewSet이 지역 처리
         logger.info(f"=== CustomGroupBuy Create Request ===")
         logger.info(f"User: {request.user}")
         logger.info(f"Request data keys: {request.data.keys()}")
