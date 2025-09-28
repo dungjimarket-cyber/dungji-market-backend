@@ -78,20 +78,29 @@ class CustomGroupBuy(models.Model):
         default='single_product',
         verbose_name='가격 유형'
     )
+    products = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='상품 목록',
+        help_text='단일상품 최대 10개 [{"name": "상품명", "original_price": 100000, "discount_rate": 10}]'
+    )
+    # 하위 호환성을 위한 기존 필드 (deprecated)
     product_name = models.CharField(
         max_length=200,
         null=True, blank=True,
-        verbose_name='상품명',
-        help_text='단일상품인 경우 상품명 입력'
+        verbose_name='상품명 (구버전)',
+        help_text='(구버전 - products 필드 사용 권장)'
     )
     original_price = models.PositiveIntegerField(
         null=True, blank=True,
-        verbose_name='정가',
-        help_text='단일상품인 경우 정가 입력'
+        verbose_name='정가 (구버전)',
+        help_text='(구버전 - products 필드 사용 권장)'
     )
     discount_rate = models.PositiveIntegerField(
+        null=True, blank=True,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
-        verbose_name='할인율'
+        verbose_name='할인율 (전품목용)',
+        help_text='전품목 할인 시 사용'
     )
 
     # 인원 정보
@@ -211,16 +220,31 @@ class CustomGroupBuy(models.Model):
 
     @property
     def final_price(self):
-        """최종 가격 계산 (단일상품만)"""
+        """최종 가격 계산 (단일상품 여러 개 지원)"""
         if self.pricing_type != 'single_product':
             return None  # 전품목 할인은 가격 없음
-        if not self.original_price or not self.discount_rate:
-            return 0
-        return int(self.original_price * (100 - self.discount_rate) / 100)
+
+        # products 필드 사용 (최신 방식)
+        if self.products and len(self.products) > 0:
+            # 여러 상품의 최종 가격 리스트 반환
+            prices = []
+            for product in self.products:
+                if 'original_price' in product and 'discount_rate' in product:
+                    final = int(product['original_price'] * (100 - product['discount_rate']) / 100)
+                    prices.append(final)
+            return prices if prices else None
+
+        # 하위 호환성: 기존 필드 사용 (구버전)
+        if self.original_price and self.discount_rate:
+            return int(self.original_price * (100 - self.discount_rate) / 100)
+
+        return None
 
     @property
     def is_completed(self):
         """목표 달성 여부"""
+        if self.current_participants is None or self.target_participants is None:
+            return False
         return self.current_participants >= self.target_participants
 
     @property

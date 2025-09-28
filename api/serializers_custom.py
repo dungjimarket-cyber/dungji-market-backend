@@ -28,7 +28,7 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
 
     type_display = serializers.CharField(source='get_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    final_price = serializers.IntegerField(read_only=True)
+    final_price = serializers.SerializerMethodField()
     is_completed = serializers.BooleanField(read_only=True)
     seller_name = serializers.CharField(read_only=True)
     seller_type = serializers.CharField(read_only=True)
@@ -40,13 +40,27 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
         model = CustomGroupBuy
         fields = [
             'id', 'title', 'type', 'type_display', 'categories', 'regions', 'usage_guide',
-            'original_price', 'discount_rate', 'final_price',
+            'pricing_type', 'products', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'status', 'status_display', 'expired_at',
             'seller_name', 'seller_type',
             'primary_image', 'view_count', 'favorite_count', 'is_favorited',
             'created_at'
         ]
+
+    def get_final_price(self, obj):
+        """최종 가격 반환 (여러 상품 지원)"""
+        final_price = obj.final_price
+        if isinstance(final_price, list):
+            if len(final_price) > 0:
+                return {
+                    'min': min(final_price),
+                    'max': max(final_price),
+                    'prices': final_price
+                }
+        elif isinstance(final_price, int):
+            return final_price
+        return None
 
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
@@ -96,7 +110,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
         source='get_online_discount_type_display',
         read_only=True
     )
-    final_price = serializers.IntegerField(read_only=True)
+    final_price = serializers.SerializerMethodField()
     is_completed = serializers.BooleanField(read_only=True)
     seller_name = serializers.CharField(read_only=True)
     seller_type = serializers.CharField(read_only=True)
@@ -111,7 +125,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'type', 'type_display',
             'categories', 'regions', 'usage_guide',
-            'original_price', 'discount_rate', 'final_price',
+            'pricing_type', 'products', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'max_wait_hours', 'expired_at', 'completed_at',
             'seller_decision_deadline',
@@ -132,6 +146,20 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             'discount_valid_until', 'status',
             'view_count', 'favorite_count', 'created_at', 'updated_at'
         ]
+
+    def get_final_price(self, obj):
+        """최종 가격 반환 (여러 상품 지원)"""
+        final_price = obj.final_price
+        if isinstance(final_price, list):
+            if len(final_price) > 0:
+                return {
+                    'min': min(final_price),
+                    'max': max(final_price),
+                    'prices': final_price
+                }
+        elif isinstance(final_price, int):
+            return final_price
+        return None
 
     def get_is_favorited(self, obj):
         request = self.context.get('request')
@@ -195,7 +223,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         model = CustomGroupBuy
         fields = [
             'title', 'description', 'type', 'categories', 'region_codes', 'usage_guide',
-            'original_price', 'discount_rate',
+            'pricing_type', 'products', 'original_price', 'discount_rate',
             'target_participants', 'max_wait_hours',
             'discount_valid_days', 'allow_partial_sale',
             'online_discount_type', 'discount_url', 'discount_codes',
@@ -247,6 +275,49 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
             if category not in valid_categories:
                 raise serializers.ValidationError({
                     'categories': f'유효하지 않은 카테고리입니다: {category}'
+                })
+
+        # products 필드 검증 (단일상품 여러 개)
+        pricing_type = data.get('pricing_type', 'single_product')
+        products = data.get('products', [])
+
+        if pricing_type == 'single_product':
+            if products:
+                # products 필드 사용
+                if len(products) > 10:
+                    raise serializers.ValidationError({
+                        'products': '상품은 최대 10개까지 등록 가능합니다.'
+                    })
+                if len(products) == 0:
+                    raise serializers.ValidationError({
+                        'products': '단일상품 유형은 최소 1개 이상의 상품이 필요합니다.'
+                    })
+
+                # 각 상품 검증
+                for idx, product in enumerate(products):
+                    if not isinstance(product, dict):
+                        raise serializers.ValidationError({
+                            'products': f'상품 {idx+1}: 올바른 형식이 아닙니다.'
+                        })
+                    if 'name' not in product or not product['name']:
+                        raise serializers.ValidationError({
+                            'products': f'상품 {idx+1}: 상품명은 필수입니다.'
+                        })
+                    if 'original_price' not in product or product['original_price'] <= 0:
+                        raise serializers.ValidationError({
+                            'products': f'상품 {idx+1}: 정가는 필수이며 0보다 커야 합니다.'
+                        })
+                    if 'discount_rate' not in product or not (0 <= product['discount_rate'] <= 100):
+                        raise serializers.ValidationError({
+                            'products': f'상품 {idx+1}: 할인율은 0~100 사이여야 합니다.'
+                        })
+
+        elif pricing_type == 'all_products':
+            # 전품목 할인은 discount_rate만 필요
+            discount_rate = data.get('discount_rate')
+            if discount_rate is None:
+                raise serializers.ValidationError({
+                    'discount_rate': '전품목 할인 시 할인율은 필수입니다.'
                 })
 
         # 이미지 개수 검증
