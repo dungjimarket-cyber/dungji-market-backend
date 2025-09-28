@@ -87,8 +87,8 @@ from api.views_mypage import (
     mypage_profile, mypage_update_profile, mypage_stats,
     mypage_reviews_received, mypage_reviews_pending, mypage_create_review
 )
-from api.views.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
-from api.views.custom_image import CustomImageUploadView, CustomImageDeleteView
+from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
+from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
