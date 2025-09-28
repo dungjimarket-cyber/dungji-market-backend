@@ -251,7 +251,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomGroupBuy
         fields = [
-            'title', 'description', 'type', 'categories', 'region_codes', 'usage_guide',
+            'id', 'title', 'description', 'type', 'categories', 'region_codes', 'usage_guide',
             'pricing_type', 'products', 'original_price', 'discount_rate',
             'target_participants', 'max_wait_hours',
             'discount_valid_days', 'allow_partial_sale',
