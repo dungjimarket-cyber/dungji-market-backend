@@ -373,20 +373,12 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                         'discount_codes': '각 할인코드는 최대 50자까지 입력 가능합니다.'
                     })
 
-        # 지역 검증
+        # 지역 검증 (ViewSet에서 처리하므로 여기서는 개수만 체크)
         region_codes = data.get('region_codes', [])
-        if region_codes:
-            if len(region_codes) > 3:
-                raise serializers.ValidationError({
-                    'region_codes': '최대 3개까지 지역을 선택할 수 있습니다.'
-                })
-
-            from api.models_region import Region
-            for code in region_codes:
-                if not Region.objects.filter(code=code, is_active=True).exists():
-                    raise serializers.ValidationError({
-                        'region_codes': f'유효하지 않은 지역 코드입니다: {code}'
-                    })
+        if region_codes and len(region_codes) > 3:
+            raise serializers.ValidationError({
+                'region_codes': '최대 3개까지 지역을 선택할 수 있습니다.'
+            })
 
         # 온라인 공구 검증
         if data.get('type') == 'online':
