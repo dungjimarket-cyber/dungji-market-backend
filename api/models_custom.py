@@ -93,14 +93,15 @@ class CustomGroupBuy(models.Model):
     )
     original_price = models.PositiveIntegerField(
         null=True, blank=True,
+        validators=[MaxValueValidator(100000000)],
         verbose_name='정가 (구버전)',
-        help_text='(구버전 - products 필드 사용 권장)'
+        help_text='(구버전 - products 필드 사용 권장, 최대 1억원)'
     )
     discount_rate = models.PositiveIntegerField(
         null=True, blank=True,
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
         verbose_name='할인율 (전품목용)',
-        help_text='전품목 할인 시 사용'
+        help_text='전품목 할인 시 사용, 0~99%'
     )
 
     # 인원 정보
@@ -115,14 +116,14 @@ class CustomGroupBuy(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
     max_wait_hours = models.PositiveIntegerField(
         null=True, blank=True,
-        validators=[MinValueValidator(24), MaxValueValidator(720)],
+        validators=[MinValueValidator(1), MaxValueValidator(168)],
         verbose_name='최대 대기 시간(시간)',
-        help_text='24~720시간 (1~30일), 미설정 시 무제한'
+        help_text='1~168시간 (1시간~7일), deprecated - expired_at 사용 권장'
     )
     expired_at = models.DateTimeField(
         null=True, blank=True,
         verbose_name='만료 시간',
-        help_text='max_wait_hours 설정 시 자동 계산'
+        help_text='모집 마감 시간 (최소 1시간 이후 ~ 최대 7일 이내)'
     )
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='완료일')
     seller_decision_deadline = models.DateTimeField(
@@ -250,21 +251,27 @@ class CustomGroupBuy(models.Model):
     @property
     def seller_type(self):
         """판매자 유형"""
+        if self.seller is None:
+            return 'individual'
         return 'business' if hasattr(self.seller, 'is_business_verified') and self.seller.is_business_verified else 'individual'
 
     @property
     def seller_name(self):
         """판매자 이름"""
+        if self.seller is None:
+            return ""
         return self.seller.username
 
     @property
     def is_business_verified(self):
         """사업자 인증 여부"""
+        if self.seller is None:
+            return False
         return self.seller.is_business_verified if hasattr(self.seller, 'is_business_verified') else False
 
     def save(self, *args, **kwargs):
-        """저장 시 만료 시간 자동 계산"""
-        if not self.pk and not self.expired_at:
+        """저장 시 만료 시간 자동 계산 (deprecated - 프론트에서 expired_at 직접 전송)"""
+        if not self.pk and not self.expired_at and self.max_wait_hours:
             self.expired_at = timezone.now() + timedelta(hours=self.max_wait_hours)
 
         super().save(*args, **kwargs)

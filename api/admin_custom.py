@@ -80,7 +80,16 @@ class CustomGroupBuyAdmin(admin.ModelAdmin):
     inlines = [CustomGroupBuyImageInline, CustomGroupBuyRegionInline]
 
     def final_price(self, obj):
-        return f"{obj.final_price:,}원"
+        price = obj.final_price
+        if price is None:
+            return "-"
+        if isinstance(price, list):
+            if len(price) == 0:
+                return "-"
+            if len(price) == 1:
+                return f"{price[0]:,}원"
+            return f"{min(price):,}원 ~ {max(price):,}원"
+        return f"{price:,}원"
     final_price.short_description = '최종 가격'
 
 
