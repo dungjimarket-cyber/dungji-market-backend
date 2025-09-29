@@ -103,9 +103,12 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             count = CustomGroupBuy.objects.filter(id=instance.id).count()
             logger.info(f"[DEBUG] DB check - found {count} records with ID {instance.id}")
 
-            # DB에서 다시 조회하여 확인
-            saved_instance = CustomGroupBuy.objects.get(id=instance.id)
-            logger.info(f"[DEBUG] Saved instance exists with ID: {saved_instance.id}, Title: {saved_instance.title}")
+            # DB에서 다시 조회하여 확인 (안전하게)
+            try:
+                saved_instance = CustomGroupBuy.objects.get(id=instance.id)
+                logger.info(f"[DEBUG] Saved instance exists with ID: {saved_instance.id}, Title: {saved_instance.title}")
+            except CustomGroupBuy.DoesNotExist:
+                logger.error(f"[DEBUG] Instance with ID {instance.id} not found in DB after save!")
 
         except Exception as e:
             logger.error(f"[ERROR] perform_create failed: {str(e)}", exc_info=True)
@@ -354,8 +357,11 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             logger.info(f"[RETRIEVE] DB check - ID {pk} exists: {exists}")
 
             if exists:
-                obj = CustomGroupBuy.objects.get(id=pk)
-                logger.info(f"[RETRIEVE] Found object - ID: {obj.id}, Title: {obj.title}, Status: {obj.status}")
+                try:
+                    obj = CustomGroupBuy.objects.get(id=pk)
+                    logger.info(f"[RETRIEVE] Found object - ID: {obj.id}, Title: {obj.title}, Status: {obj.status}")
+                except CustomGroupBuy.DoesNotExist:
+                    logger.error(f"[RETRIEVE] Object exists in filter but not in get - ID: {pk}")
 
             # 기본 retrieve 호출
             response = super().retrieve(request, *args, **kwargs)
