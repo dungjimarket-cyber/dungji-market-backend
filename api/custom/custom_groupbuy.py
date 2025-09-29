@@ -45,12 +45,70 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [IsAuthenticated()]
 
+    def create(self, request, *args, **kwargs):
+        """create 메서드 오버라이드 - 에러 디버깅"""
+        from rest_framework import status
+        from rest_framework.response import Response
+
+        logger.info(f"[CREATE] Starting creation by user {request.user}")
+        logger.info(f"[CREATE] Request data: {request.data.keys()}")
+
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            logger.info(f"[CREATE] Serializer valid, calling perform_create")
+            self.perform_create(serializer)
+
+            headers = self.get_success_headers(serializer.data)
+            logger.info(f"[CREATE] Success - returning data with ID: {serializer.data.get('id')}")
+
+            # 최종 DB 확인
+            from api.models_custom import CustomGroupBuy
+            if serializer.data.get('id'):
+                exists = CustomGroupBuy.objects.filter(id=serializer.data['id']).exists()
+                logger.info(f"[CREATE] Final check - ID {serializer.data['id']} exists in DB: {exists}")
+                if not exists:
+                    return Response(
+                        {"error": "저장 실패 - 트랜잭션이 롤백되었습니다"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+        except Exception as e:
+            logger.error(f"[CREATE] Failed with error: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"생성 실패: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def perform_create(self, serializer):
         """공구 생성 시 지역 처리 - 중고거래와 동일한 로직"""
         logger.info(f"perform_create called by user: {self.request.user}")
 
-        # 공구 생성
-        instance = serializer.save(seller=self.request.user)
+        # 디버깅: 요청 데이터 확인
+        logger.info(f"[DEBUG] Request data keys: {self.request.data.keys()}")
+        logger.info(f"[DEBUG] User: {self.request.user.id} - {self.request.user.username}")
+
+        try:
+            # 공구 생성
+            logger.info(f"[DEBUG] Before save - calling serializer.save()")
+            instance = serializer.save(seller=self.request.user)
+            logger.info(f"[DEBUG] After save - instance ID: {instance.id}")
+
+            # DB 확인
+            from api.models_custom import CustomGroupBuy
+            count = CustomGroupBuy.objects.filter(id=instance.id).count()
+            logger.info(f"[DEBUG] DB check - found {count} records with ID {instance.id}")
+
+            if count == 0:
+                logger.error(f"[ERROR] CustomGroupBuy {instance.id} NOT in database!")
+                raise Exception("DB 저장 실패 - 트랜잭션 롤백됨")
+
+        except Exception as e:
+            logger.error(f"[ERROR] perform_create failed: {str(e)}", exc_info=True)
+            raise
 
         # 다중 지역 처리 (중고거래와 동일한 로직)
         regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
