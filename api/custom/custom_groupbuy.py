@@ -53,6 +53,18 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         logger.info(f"[CREATE] Starting creation by user {request.user}")
         logger.info(f"[CREATE] Request data: {request.data.keys()}")
 
+        # 활성 공구 개수 체크
+        active_count = CustomGroupBuy.objects.filter(
+            seller=request.user,
+            status__in=['recruiting', 'pending_seller']
+        ).count()
+
+        if active_count >= 10:
+            return Response(
+                {'error': '동시에 진행할 수 있는 공구는 최대 10개입니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -278,30 +290,6 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
                 except Exception as e:
                     logger.error(f"[지역 처리 오류] {e}", exc_info=True)
-
-    def create(self, request, *args, **kwargs):
-        active_count = CustomGroupBuy.objects.filter(
-            seller=request.user,
-            status__in=['recruiting', 'pending_seller']
-        ).count()
-
-        if active_count >= 10:
-            return Response(
-                {'error': '동시에 진행할 수 있는 공구는 최대 10개입니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # 중고거래 방식 - Serializer가 이미지 처리, ViewSet이 지역 처리
-        logger.info(f"=== CustomGroupBuy Create Request ===")
-        logger.info(f"User: {request.user}")
-        logger.info(f"Request data keys: {request.data.keys()}")
-        logger.info(f"Request FILES keys: {request.FILES.keys()}")
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
