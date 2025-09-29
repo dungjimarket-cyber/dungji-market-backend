@@ -479,12 +479,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
             final_check = CustomGroupBuy.objects.filter(id=groupbuy.id).exists()
             logger.info(f"[CustomGroupBuy Create] Final DB check - exists: {final_check}")
 
-            # Raw SQL로도 확인
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) FROM custom_groupbuys WHERE id = %s", [groupbuy.id])
-                count = cursor.fetchone()[0]
-                logger.info(f"[CustomGroupBuy Create] Raw SQL check - count: {count}")
-
         except Exception as e:
             logger.error(f"[CustomGroupBuy Create] Failed: {str(e)}", exc_info=True)
             raise
