@@ -129,10 +129,11 @@ REST_FRAMEWORK = {
 # JWT 설정
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # 개발 환경에서는 길게 설정
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),  # 2시간으로 단축 (보안 강화)
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # 30일로 연장 (사용자 편의)
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,  # 이전 토큰 무효화
+    'UPDATE_LAST_LOGIN': True,  # 마지막 로그인 시간 업데이트
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),

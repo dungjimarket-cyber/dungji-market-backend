@@ -438,7 +438,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        from django.db import transaction
+        from django.db import transaction, connection
         import logging
 
         logger = logging.getLogger(__name__)
@@ -446,25 +446,48 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         images_data = validated_data.pop('images', [])
         validated_data.pop('region_codes', None)  # ViewSet에서 처리 (없을 수도 있음)
 
+        logger.info(f"[CustomGroupBuy Create] Starting creation with data: {validated_data.get('title')}")
         logger.info(f"[CustomGroupBuy Create] images count: {len(images_data)}")
 
-        with transaction.atomic():
-            groupbuy = CustomGroupBuy.objects.create(
-                **validated_data
-            )
+        try:
+            with transaction.atomic():
+                logger.info(f"[CustomGroupBuy Create] Creating CustomGroupBuy object...")
+                groupbuy = CustomGroupBuy.objects.create(
+                    **validated_data
+                )
+                logger.info(f"[CustomGroupBuy Create] Created with ID: {groupbuy.id}")
 
-            # 이미지 처리 (중고거래 방식)
-            for index, image in enumerate(images_data):
-                try:
-                    groupbuy_image = CustomGroupBuyImage.objects.create(
-                        custom_groupbuy=groupbuy,
-                        image=image,
-                        is_primary=(index == 0),
-                        order_index=index
-                    )
-                    logger.info(f"이미지 업로드 완료: {groupbuy_image.id}, 순서: {index}")
-                except Exception as e:
-                    logger.error(f"이미지 업로드 실패: {e}")
+                # DB 확인
+                exists = CustomGroupBuy.objects.filter(id=groupbuy.id).exists()
+                logger.info(f"[CustomGroupBuy Create] DB check after create - exists: {exists}")
+
+                # 이미지 처리 (중고거래 방식)
+                for index, image in enumerate(images_data):
+                    try:
+                        groupbuy_image = CustomGroupBuyImage.objects.create(
+                            custom_groupbuy=groupbuy,
+                            image=image,
+                            is_primary=(index == 0),
+                            order_index=index
+                        )
+                        logger.info(f"이미지 업로드 완료: {groupbuy_image.id}, 순서: {index}")
+                    except Exception as e:
+                        logger.error(f"이미지 업로드 실패: {e}")
+
+            # 트랜잭션 커밋 후 확인
+            logger.info(f"[CustomGroupBuy Create] Transaction committed")
+            final_check = CustomGroupBuy.objects.filter(id=groupbuy.id).exists()
+            logger.info(f"[CustomGroupBuy Create] Final DB check - exists: {final_check}")
+
+            # Raw SQL로도 확인
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM custom_groupbuys WHERE id = %s", [groupbuy.id])
+                count = cursor.fetchone()[0]
+                logger.info(f"[CustomGroupBuy Create] Raw SQL check - count: {count}")
+
+        except Exception as e:
+            logger.error(f"[CustomGroupBuy Create] Failed: {str(e)}", exc_info=True)
+            raise
 
         return groupbuy
 
