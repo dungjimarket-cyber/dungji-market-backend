@@ -92,27 +92,9 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         logger.info(f"[DEBUG] Request data keys: {self.request.data.keys()}")
         logger.info(f"[DEBUG] User: {self.request.user.id} - {self.request.user.username}")
 
-        try:
-            # 공구 생성
-            logger.info(f"[DEBUG] Before save - calling serializer.save()")
-            instance = serializer.save(seller=self.request.user)
-            logger.info(f"[DEBUG] After save - instance ID: {instance.id}")
-
-            # DB 확인
-            from api.models_custom import CustomGroupBuy
-            count = CustomGroupBuy.objects.filter(id=instance.id).count()
-            logger.info(f"[DEBUG] DB check - found {count} records with ID {instance.id}")
-
-            # DB에서 다시 조회하여 확인 (안전하게)
-            try:
-                saved_instance = CustomGroupBuy.objects.get(id=instance.id)
-                logger.info(f"[DEBUG] Saved instance exists with ID: {saved_instance.id}, Title: {saved_instance.title}")
-            except CustomGroupBuy.DoesNotExist:
-                logger.error(f"[DEBUG] Instance with ID {instance.id} not found in DB after save!")
-
-        except Exception as e:
-            logger.error(f"[ERROR] perform_create failed: {str(e)}", exc_info=True)
-            raise
+        # 공구 생성
+        instance = serializer.save(seller=self.request.user)
+        logger.info(f"[DEBUG] After save - instance ID: {instance.id} - Title: {instance.title}")
 
         # 다중 지역 처리 (중고거래와 동일한 로직)
         regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
@@ -345,32 +327,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         return super().destroy(request, *args, **kwargs)
 
-    def retrieve(self, request, *args, **kwargs):
-        """단일 커스텀 특가 조회 - 디버깅 추가"""
-        pk = kwargs.get('pk')
-        logger.info(f"[RETRIEVE] Attempting to retrieve CustomGroupBuy with ID: {pk}")
-
-        try:
-            # DB에서 직접 조회
-            from api.models_custom import CustomGroupBuy
-            exists = CustomGroupBuy.objects.filter(id=pk).exists()
-            logger.info(f"[RETRIEVE] DB check - ID {pk} exists: {exists}")
-
-            if exists:
-                try:
-                    obj = CustomGroupBuy.objects.get(id=pk)
-                    logger.info(f"[RETRIEVE] Found object - ID: {obj.id}, Title: {obj.title}, Status: {obj.status}")
-                except CustomGroupBuy.DoesNotExist:
-                    logger.error(f"[RETRIEVE] Object exists in filter but not in get - ID: {pk}")
-
-            # 기본 retrieve 호출
-            response = super().retrieve(request, *args, **kwargs)
-            logger.info(f"[RETRIEVE] Success - returning data for ID: {pk}")
-            return response
-
-        except Exception as e:
-            logger.error(f"[RETRIEVE] Failed to retrieve ID {pk}: {str(e)}", exc_info=True)
-            raise
+    # retrieve 메서드는 기본 ViewSet의 것을 사용 (커스터마이징 불필요)
 
     def get_queryset(self):
         queryset = CustomGroupBuy.objects.select_related('seller').prefetch_related(
