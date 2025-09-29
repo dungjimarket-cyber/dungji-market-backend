@@ -63,17 +63,6 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             headers = self.get_success_headers(serializer.data)
             logger.info(f"[CREATE] Success - returning data with ID: {serializer.data.get('id')}")
 
-            # 최종 DB 확인
-            from api.models_custom import CustomGroupBuy
-            if serializer.data.get('id'):
-                exists = CustomGroupBuy.objects.filter(id=serializer.data['id']).exists()
-                logger.info(f"[CREATE] Final check - ID {serializer.data['id']} exists in DB: {exists}")
-                if not exists:
-                    return Response(
-                        {"error": "저장 실패 - 트랜잭션이 롤백되었습니다"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
         except Exception as e:
@@ -101,10 +90,6 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             from api.models_custom import CustomGroupBuy
             count = CustomGroupBuy.objects.filter(id=instance.id).count()
             logger.info(f"[DEBUG] DB check - found {count} records with ID {instance.id}")
-
-            if count == 0:
-                logger.error(f"[ERROR] CustomGroupBuy {instance.id} NOT in database!")
-                raise Exception("DB 저장 실패 - 트랜잭션 롤백됨")
 
         except Exception as e:
             logger.error(f"[ERROR] perform_create failed: {str(e)}", exc_info=True)

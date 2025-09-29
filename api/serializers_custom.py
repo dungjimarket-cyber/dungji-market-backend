@@ -406,9 +406,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         # 오프라인 공구 검증
         if data.get('type') == 'offline':
-            if not region_codes:
+            # regions 필드 체크 (프론트엔드는 regions로 전송)
+            regions = self.initial_data.get('regions', []) if hasattr(self, 'initial_data') else []
+            if not regions and not region_codes:
                 raise serializers.ValidationError({
-                    'region_codes': '오프라인 공구는 지역 선택이 필수입니다.'
+                    'regions': '오프라인 공구는 지역 선택이 필수입니다.'
                 })
             if not data.get('location'):
                 raise serializers.ValidationError({
@@ -442,7 +444,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         logger = logging.getLogger(__name__)
 
         images_data = validated_data.pop('images', [])
-        validated_data.pop('region_codes', [])  # ViewSet에서 처리
+        validated_data.pop('region_codes', None)  # ViewSet에서 처리 (없을 수도 있음)
 
         logger.info(f"[CustomGroupBuy Create] images count: {len(images_data)}")
 
