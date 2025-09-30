@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('api', '0068_auto_20250123_0000'),  # Adjust to your last migration
+        ('api', '0087_update_title_length'),
     ]
 
     operations = [
