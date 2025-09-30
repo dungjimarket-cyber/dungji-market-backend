@@ -40,11 +40,10 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         'transactions'  # transaction 정보도 prefetch
     ).select_related('seller', 'region')
     permission_classes = [IsAuthenticatedOrReadOnly]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]  # OrderingFilter 제거 (get_queryset에서 직접 처리)
     filterset_fields = ['brand', 'condition_grade', 'accept_offers']
     search_fields = ['model', 'description', 'brand']
-    ordering_fields = ['price', 'created_at', 'view_count', 'last_bumped_at']
-    # ordering은 get_queryset에서 처리
+    # ordering은 get_queryset에서 직접 처리
 
     def get_serializer_context(self):
         """Serializer context에 request 포함"""
@@ -66,7 +65,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 'regions__region',
                 'images',
                 'transactions'
-            ).select_related('seller', 'region').order_by('-effective_date')
+            ).select_related('seller', 'region')
 
             # 쿼리셋 상태 확인
             logger.info(f"[UsedPhoneViewSet] Queryset count: {queryset.count()}")
@@ -148,7 +147,23 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(price__lte=int(max_price))
             except ValueError:
                 pass
-        
+
+        # 정렬 처리 (list 액션인 경우)
+        if self.action == 'list':
+            # ordering 파라미터 확인
+            ordering_param = self.request.query_params.get('ordering')
+            if ordering_param and ordering_param in ['price', '-price']:
+                # 가격 정렬이 명시적으로 요청된 경우 가격으로 정렬
+                queryset = queryset.order_by(ordering_param)
+            else:
+                # 그 외의 경우 끌올 기준 정렬 (기본값)
+                # annotate가 이미 되어있지 않으면 추가
+                if not queryset.query.annotations.get('effective_date'):
+                    queryset = queryset.annotate(
+                        effective_date=Coalesce('last_bumped_at', 'created_at')
+                    )
+                queryset = queryset.order_by('-effective_date')
+
         return queryset
     
     def get_serializer_class(self):

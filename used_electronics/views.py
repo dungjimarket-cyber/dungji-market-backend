@@ -30,10 +30,9 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     """전자제품/가전 ViewSet"""
 
     permission_classes = [IsAuthenticatedOrReadOnly]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]  # OrderingFilter 제거 (get_queryset에서 직접 처리)
     search_fields = ['brand', 'model_name', 'description']
-    ordering_fields = ['price', 'created_at', 'view_count', 'offer_count', 'last_bumped_at']
-    # ordering은 get_queryset에서 처리
+    # ordering은 get_queryset에서 직접 처리
 
     def get_queryset(self):
         """쿼리셋 반환 - UsedPhone과 동일한 로직 적용"""
@@ -134,7 +133,15 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 queryset = queryset.annotate(
                     effective_date=Coalesce('last_bumped_at', 'created_at')
                 )
-            queryset = queryset.order_by('-effective_date')
+
+            # ordering 파라미터 확인
+            ordering_param = self.request.query_params.get('ordering')
+            if ordering_param and ordering_param in ['price', '-price']:
+                # 가격 정렬이 명시적으로 요청된 경우 가격으로 정렬
+                queryset = queryset.order_by(ordering_param)
+            else:
+                # 그 외의 경우 끌올 기준 정렬 (기본값)
+                queryset = queryset.order_by('-effective_date')
 
         return queryset
 
