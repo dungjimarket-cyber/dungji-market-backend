@@ -134,6 +134,10 @@ class UsedElectronics(models.Model):
     offer_count = models.IntegerField(default=0, verbose_name='제안수')
     favorite_count = models.IntegerField(default=0, verbose_name='찜수')
 
+    # ========== 끌올 관련 ==========
+    last_bumped_at = models.DateTimeField(null=True, blank=True, verbose_name='마지막 끌올')
+    bump_count = models.PositiveIntegerField(default=0, verbose_name='끌올 횟수')
+
     # ========== 타임스탬프 ==========
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='등록일')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')

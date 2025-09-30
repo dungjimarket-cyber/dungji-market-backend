@@ -1,9 +1,11 @@
 """
-통합 찜/후기 Django Admin 설정
+통합 찜/후기/끌올 Django Admin 설정
 """
 from django.contrib import admin
 from django.utils.html import format_html
-from .models_unified_simple import UnifiedFavorite, UnifiedReview
+from django.utils import timezone
+from datetime import timedelta
+from .models_unified_simple import UnifiedFavorite, UnifiedReview, UnifiedBump
 
 
 @admin.register(UnifiedFavorite)
@@ -132,6 +134,113 @@ class UnifiedReviewAdmin(admin.ModelAdmin):
         """쿼리 최적화"""
         qs = super().get_queryset(request)
         return qs.select_related('reviewer', 'reviewee')
+
+
+@admin.register(UnifiedBump)
+class UnifiedBumpAdmin(admin.ModelAdmin):
+    """통합 끌올 관리"""
+    list_display = ['id', 'user', 'item_type_display', 'item_link', 'bumped_at_display', 'bump_type_display', 'today_count']
+    list_filter = ['item_type', 'is_free', 'bumped_at']
+    search_fields = ['user__username', 'user__email', 'user__nickname']
+    date_hierarchy = 'bumped_at'
+    ordering = ['-bumped_at']
+    readonly_fields = ['bumped_at']
+
+    def item_type_display(self, obj):
+        """상품 타입 표시"""
+        if obj.item_type == 'phone':
+            return format_html('<span style="color: #2196F3;">📱 휴대폰</span>')
+        else:
+            return format_html('<span style="color: #4CAF50;">🖥️ 전자제품</span>')
+    item_type_display.short_description = '상품 타입'
+
+    def item_link(self, obj):
+        """상품 정보 및 링크"""
+        item = obj.get_item()
+        if item:
+            if obj.item_type == 'phone':
+                text = f"{item.brand} {item.model}"
+                url = f"/admin/used_phones/usedphone/{item.id}/change/"
+            else:
+                text = f"{item.brand} {item.model_name}"
+                url = f"/admin/used_electronics/usedelectronics/{item.id}/change/"
+
+            return format_html(
+                '<a href="{}" target="_blank">{} (#{}) - 끌올 {}회</a>',
+                url, text, item.id, item.bump_count
+            )
+        return f"#{obj.item_id} (삭제된 상품)"
+    item_link.short_description = '상품 정보'
+
+    def bumped_at_display(self, obj):
+        """끌올 시간 표시"""
+        now = timezone.now()
+        diff = now - obj.bumped_at
+
+        if diff < timedelta(minutes=1):
+            time_text = "방금 전"
+        elif diff < timedelta(hours=1):
+            minutes = int(diff.total_seconds() / 60)
+            time_text = f"{minutes}분 전"
+        elif diff < timedelta(days=1):
+            hours = int(diff.total_seconds() / 3600)
+            time_text = f"{hours}시간 전"
+        else:
+            days = diff.days
+            time_text = f"{days}일 전"
+
+        return format_html(
+            '{}<br><small style="color: #666;">{}</small>',
+            obj.bumped_at.strftime('%Y-%m-%d %H:%M'),
+            time_text
+        )
+    bumped_at_display.short_description = '끌올 시간'
+
+    def bump_type_display(self, obj):
+        """끌올 타입 표시"""
+        if obj.is_free:
+            return format_html('<span style="color: #4CAF50;">✅ 무료</span>')
+        else:
+            return format_html('<span style="color: #FF9800;">💳 유료</span>')
+    bump_type_display.short_description = '끌올 타입'
+
+    def today_count(self, obj):
+        """오늘 끌올 횟수"""
+        today = timezone.now().date()
+        count = UnifiedBump.objects.filter(
+            user=obj.user,
+            bumped_at__date=today,
+            is_free=True
+        ).count()
+
+        color = "#4CAF50" if count < 3 else "#F44336"
+        return format_html(
+            '<span style="color: {};">{}/3</span>',
+            color, count
+        )
+    today_count.short_description = '오늘 끌올'
+
+    def get_queryset(self, request):
+        """쿼리 최적화"""
+        qs = super().get_queryset(request)
+        return qs.select_related('user')
+
+    actions = ['reset_today_bumps']
+
+    def reset_today_bumps(self, request, queryset):
+        """선택한 유저의 오늘 끌올 초기화 (테스트용)"""
+        users = set(bump.user for bump in queryset)
+        today = timezone.now().date()
+
+        for user in users:
+            UnifiedBump.objects.filter(
+                user=user,
+                bumped_at__date=today,
+                is_free=True
+            ).delete()
+
+        self.message_user(request, f"{len(users)}명의 오늘 끌올 기록을 초기화했습니다.")
+    reset_today_bumps.short_description = "선택한 유저의 오늘 끌올 초기화"
 
 
 # Admin 사이트 헤더 커스터마이징 (선택사항)

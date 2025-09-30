@@ -1,10 +1,11 @@
 """
-중고거래 통합 모델 (찜, 후기) - 간단한 버전
+중고거래 통합 모델 (찜, 후기, 끌올) - 간단한 버전
 기존 구조 그대로 유지하면서 타입 구분자만 추가
 """
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import F
 
 User = get_user_model()
 
@@ -195,6 +196,60 @@ class UnifiedReport(models.Model):
         if not self.item_type or not self.item_id:
             return None
 
+        if self.item_type == 'phone':
+            from used_phones.models import UsedPhone
+            return UsedPhone.objects.filter(id=self.item_id).first()
+        elif self.item_type == 'electronics':
+            from used_electronics.models import UsedElectronics
+            return UsedElectronics.objects.filter(id=self.item_id).first()
+        return None
+
+
+class UnifiedBump(models.Model):
+    """
+    통합 끌올 기록 모델
+    - 휴대폰, 전자제품 등 모든 중고거래 상품의 끌올 기록
+    - 기본: 하루 3회 무료 끌올
+    - 확장: 향후 유료 끌올 지원 가능
+    """
+    ITEM_TYPE_CHOICES = [
+        ('phone', '휴대폰'),
+        ('electronics', '전자제품'),
+        # 향후 확장 시 여기에 추가
+        # ('fashion', '패션'),
+        # ('car', '자동차'),
+    ]
+
+    # 필수 필드
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bump_history', verbose_name='사용자')
+
+    # 상품 정보 (다형성)
+    item_type = models.CharField(max_length=20, choices=ITEM_TYPE_CHOICES, verbose_name='상품타입')
+    item_id = models.PositiveIntegerField(db_index=True, verbose_name='상품ID')
+
+    # 끌올 정보
+    bumped_at = models.DateTimeField(auto_now_add=True, verbose_name='끌올시간')
+
+    # 유료/무료 구분 (향후 확장용)
+    is_free = models.BooleanField(default=True, verbose_name='무료여부')
+
+    class Meta:
+        db_table = 'unified_bumps'
+        verbose_name = '통합 끌올'
+        verbose_name_plural = '통합 끌올 관리'
+        ordering = ['-bumped_at']
+        indexes = [
+            models.Index(fields=['user', '-bumped_at']),  # 유저별 끌올 이력
+            models.Index(fields=['item_type', 'item_id', '-bumped_at']),  # 상품별 끌올 이력
+            models.Index(fields=['user', 'bumped_at']),  # 일별 카운트용
+        ]
+
+    def __str__(self):
+        item_type_display = dict(self.ITEM_TYPE_CHOICES).get(self.item_type, self.item_type)
+        return f"{self.user.username} - {item_type_display} #{self.item_id} - {self.bumped_at.strftime('%Y-%m-%d %H:%M')}"
+
+    def get_item(self):
+        """실제 상품 객체 반환"""
         if self.item_type == 'phone':
             from used_phones.models import UsedPhone
             return UsedPhone.objects.filter(id=self.item_id).first()

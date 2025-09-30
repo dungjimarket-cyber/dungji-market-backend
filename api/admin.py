@@ -35,9 +35,9 @@ from .forms import UserCreationForm, UserChangeForm
 # 추가 어드민 클래스들 import (RemoteSalesCertification 포함)
 from .admin_extra import *
 
-# 통합 찜/후기 모델 import 및 등록
+# 통합 찜/후기/끌올 모델 import 및 등록
 try:
-    from .models_unified_simple import UnifiedFavorite, UnifiedReview
+    from .models_unified_simple import UnifiedFavorite, UnifiedReview, UnifiedBump
     from .admin_unified import UnifiedFavoriteAdmin, UnifiedReviewAdmin
     # admin_unified에서 이미 등록하므로 여기서는 import만
 except ImportError:

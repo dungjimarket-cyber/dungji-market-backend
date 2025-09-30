@@ -112,7 +112,11 @@ class UsedPhone(models.Model):
     # 거래 완료 관련 필드
     seller_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='판매자 완료 시간')
     buyer_completed_at = models.DateTimeField(null=True, blank=True, verbose_name='구매자 완료 시간')
-    
+
+    # 끌올 관련 필드
+    last_bumped_at = models.DateTimeField(null=True, blank=True, verbose_name='마지막 끌올')
+    bump_count = models.PositiveIntegerField(default=0, verbose_name='끌올 횟수')
+
     # 타임스탬프
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
