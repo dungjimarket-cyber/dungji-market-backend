@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import F
+from django.views.decorators.csrf import csrf_exempt
 from datetime import timedelta
 from .models_unified_simple import UnifiedBump
 from used_phones.models import UsedPhone
@@ -22,6 +23,7 @@ def get_bump_status(request, item_type, item_id):
     """
     끌올 가능 상태 조회
     GET /api/bump/{item_type}/{item_id}/status/
+    Version: 2025-01-30-v2
     """
     try:
         # 상품 존재 여부 확인

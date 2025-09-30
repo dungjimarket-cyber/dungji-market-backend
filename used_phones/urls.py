@@ -2,6 +2,7 @@
 Used Phones URL Configuration
 """
 from django.urls import path, include
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.routers import DefaultRouter
 from .views import (
     UsedPhoneViewSet, UsedPhoneOfferViewSet, UsedPhoneFavoriteViewSet,
@@ -27,7 +28,7 @@ urlpatterns = [
 
     # 끌올 관련 URLs
     path('phones/<int:item_id>/bump/status/', lambda request, item_id: get_bump_status(request, 'phone', item_id), name='phone-bump-status'),
-    path('phones/<int:item_id>/bump/', lambda request, item_id: perform_bump(request, 'phone', item_id), name='phone-bump'),
+    path('phones/<int:item_id>/bump/', csrf_exempt(lambda request, item_id: perform_bump(request, 'phone', item_id)), name='phone-bump'),
     path('bump/today-count/', get_today_bump_count, name='bump-today-count'),
 
     path('', include(router.urls)),  # router.urls는 마지막에
