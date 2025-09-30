@@ -49,15 +49,7 @@ def get_bump_status(request, item_type, item_id):
                 'status': item.status
             }, status=status.HTTP_200_OK)
 
-        # 오늘 사용한 무료 끌올 횟수
-        today = timezone.now().date()
-        today_count = UnifiedBump.objects.filter(
-            user=request.user,
-            bumped_at__date=today,
-            is_free=True
-        ).count()
-
-        # 마지막 끌올 시간 체크 (1시간 쿨다운)
+        # 마지막 끌올 시간 체크 (24시간 쿨다운)
         last_bump = UnifiedBump.objects.filter(
             item_type=item_type,
             item_id=item_id
@@ -67,28 +59,24 @@ def get_bump_status(request, item_type, item_id):
         reason = None
         next_available_at = None
 
-        # 하루 3회 제한 체크
-        if today_count >= 3:
-            can_bump = False
-            reason = '오늘의 무료 끌올을 모두 사용했습니다.'
-            # 내일 자정
-            tomorrow = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            next_available_at = tomorrow.isoformat()
-
-        # 쿨다운 체크 (1시간)
-        elif last_bump:
+        # 24시간 쿨다운 체크
+        if last_bump:
             time_passed = timezone.now() - last_bump.bumped_at
-            if time_passed < timedelta(hours=1):
+            if time_passed < timedelta(hours=24):
                 can_bump = False
-                remaining = timedelta(hours=1) - time_passed
-                minutes = int(remaining.total_seconds() / 60)
-                reason = f'{minutes}분 후에 끌올 가능합니다.'
-                next_available_at = (last_bump.bumped_at + timedelta(hours=1)).isoformat()
+                remaining = timedelta(hours=24) - time_passed
+                hours = int(remaining.total_seconds() / 3600)
+                minutes = int((remaining.total_seconds() % 3600) / 60)
+                if hours > 0:
+                    reason = f'{hours}시간 {minutes}분 후에 끌올 가능합니다.'
+                else:
+                    reason = f'{minutes}분 후에 끌올 가능합니다.'
+                next_available_at = (last_bump.bumped_at + timedelta(hours=24)).isoformat()
 
         return Response({
             'can_bump': can_bump,
             'bump_type': 'free',
-            'remaining_free_bumps_today': 3 - today_count,
+            'remaining_free_bumps_today': 1 if can_bump else 0,
             'next_bump_available_at': next_available_at,
             'total_bump_count': item.bump_count,
             'last_bumped_at': item.last_bumped_at.isoformat() if item.last_bumped_at else None,
@@ -102,7 +90,7 @@ def get_bump_status(request, item_type, item_id):
             return Response({
                 'can_bump': True,
                 'bump_type': 'free',
-                'remaining_free_bumps_today': 3,
+                'remaining_free_bumps_today': 1,
                 'next_bump_available_at': None,
                 'total_bump_count': 0,
                 'last_bumped_at': None,
@@ -138,21 +126,7 @@ def perform_bump(request, item_type, item_id):
         if item.status != 'active':
             return Response({'error': '판매중 상품만 끌올 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 끌올 가능 여부 체크
-        today = timezone.now().date()
-        today_count = UnifiedBump.objects.filter(
-            user=request.user,
-            bumped_at__date=today,
-            is_free=True
-        ).count()
-
-        if today_count >= 3:
-            return Response({
-                'error': '오늘의 무료 끌올을 모두 사용했습니다.',
-                'remaining_free_bumps_today': 0
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # 쿨다운 체크
+        # 24시간 쿨다운 체크
         last_bump = UnifiedBump.objects.filter(
             item_type=item_type,
             item_id=item_id
@@ -160,12 +134,18 @@ def perform_bump(request, item_type, item_id):
 
         if last_bump:
             time_passed = timezone.now() - last_bump.bumped_at
-            if time_passed < timedelta(hours=1):
-                remaining = timedelta(hours=1) - time_passed
-                minutes = int(remaining.total_seconds() / 60)
+            if time_passed < timedelta(hours=24):
+                remaining = timedelta(hours=24) - time_passed
+                hours = int(remaining.total_seconds() / 3600)
+                minutes = int((remaining.total_seconds() % 3600) / 60)
+                if hours > 0:
+                    error_msg = f'{hours}시간 {minutes}분 후에 끌올 가능합니다.'
+                else:
+                    error_msg = f'{minutes}분 후에 끌올 가능합니다.'
+
                 return Response({
-                    'error': f'{minutes}분 후에 끌올 가능합니다.',
-                    'next_available_at': (last_bump.bumped_at + timedelta(hours=1)).isoformat()
+                    'error': error_msg,
+                    'next_bump_available_at': (last_bump.bumped_at + timedelta(hours=24)).isoformat()
                 }, status=status.HTTP_400_BAD_REQUEST)
 
         # 끌올 실행
@@ -199,8 +179,8 @@ def perform_bump(request, item_type, item_id):
             'success': True,
             'message': '끌올이 완료되었습니다.',
             'bump_type': 'free',
-            'remaining_free_bumps_today': 2 - today_count,
-            'next_bump_available_at': (now + timedelta(hours=1)).isoformat(),
+            'remaining_free_bumps_today': 0,
+            'next_bump_available_at': (now + timedelta(hours=24)).isoformat(),
             'total_bump_count': item.bump_count,
             'bumped_at': now.isoformat()
         })
@@ -231,8 +211,8 @@ def get_today_bump_count(request):
 
         return Response({
             'today_count': count,
-            'remaining': 3 - count,
-            'max_free_per_day': 3
+            'remaining': 1 - count,
+            'max_free_per_day': 1
         })
 
     except Exception as e:
