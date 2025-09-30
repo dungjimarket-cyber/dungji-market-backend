@@ -36,7 +36,7 @@ def get_bump_status(request, item_type, item_id):
             return Response({'error': '상품을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
         # 본인 상품인지 확인
-        if item.seller_id != request.user.id:
+        if item.seller.id != request.user.id:
             return Response({'error': '본인의 상품만 끌올할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
 
         # 활성 상태 확인
@@ -118,7 +118,7 @@ def perform_bump(request, item_type, item_id):
             return Response({'error': '상품을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
         # 본인 상품인지 확인
-        if item.seller_id != request.user.id:
+        if item.seller.id != request.user.id:
             return Response({'error': '본인의 상품만 끌올할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
 
         # 활성 상태 확인
