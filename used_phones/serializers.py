@@ -94,7 +94,8 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
             'condition_description', 'battery_status', 'status', 'view_count',
             'favorite_count', 'offer_count', 'region_name', 'regions', 'images',
             'is_favorite', 'created_at', 'body_only', 'has_box', 'has_charger',
-            'has_earphones', 'meeting_place', 'is_modified', 'buyer', 'transaction_id', 'has_review'
+            'has_earphones', 'meeting_place', 'is_modified', 'buyer', 'transaction_id', 'has_review',
+            'last_bumped_at', 'bump_count'
         ]
     
     def get_region_name(self, obj):
@@ -266,7 +267,8 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
                   'meeting_place', 'status', 'view_count', 'favorite_count',
                   'offer_count', 'sold_at', 'created_at', 'updated_at',
                   'images', 'is_favorite', 'region_name', 'regions',
-                  'buyer_id', 'buyer', 'transaction_id', 'final_price', 'final_offer_price']
+                  'buyer_id', 'buyer', 'transaction_id', 'final_price', 'final_offer_price',
+                  'last_bumped_at', 'bump_count']
         read_only_fields = ['id', 'seller', 'view_count', 'favorite_count',
                            'offer_count', 'created_at', 'updated_at']
     

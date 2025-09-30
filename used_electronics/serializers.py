@@ -80,7 +80,8 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             'purchase_period', 'status',
             'images', 'seller', 'regions', 'view_count', 'offer_count',
             'favorite_count', 'is_favorited', 'is_mine', 'has_my_offer',
-            'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review', 'created_at'
+            'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review',
+            'created_at', 'last_bumped_at', 'bump_count'
         ]
 
     def get_regions(self, obj):
@@ -213,7 +214,8 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
             'seller', 'images', 'regions',
             'is_favorited', 'is_mine', 'has_my_offer',
-            'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review'
+            'buyer', 'buyer_id', 'transaction_id', 'final_price', 'has_review',
+            'last_bumped_at', 'bump_count'
         ]
         read_only_fields = ['seller', 'view_count', 'offer_count', 'favorite_count']
 
