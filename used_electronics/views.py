@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Exists, OuterRef
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from .models import (
     UsedElectronics, ElectronicsImage, ElectronicsOffer,
@@ -31,8 +32,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['brand', 'model_name', 'description']
-    ordering_fields = ['price', 'created_at', 'view_count', 'offer_count']
-    ordering = ['-created_at']
+    ordering_fields = ['price', 'created_at', 'view_count', 'offer_count', 'last_bumped_at']
+    # ordering은 get_queryset에서 처리
 
     def get_queryset(self):
         """쿼리셋 반환 - UsedPhone과 동일한 로직 적용"""
@@ -42,7 +43,9 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             logger.info(f"[UsedElectronicsViewSet] Action: {self.action}")
             logger.info(f"[UsedElectronicsViewSet] Including sold items in queryset")
 
-            queryset = UsedElectronics.objects.exclude(status='deleted')
+            queryset = UsedElectronics.objects.exclude(status='deleted').annotate(
+                effective_date=Coalesce('last_bumped_at', 'created_at')
+            )
 
             # 쿼리셋 상태 확인
             logger.info(f"[UsedElectronicsViewSet] Queryset count: {queryset.count()}")
@@ -123,6 +126,15 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         # 내 상품만 보기 (판매자용)
         if self.action == 'my_list':
             queryset = UsedElectronics.objects.filter(seller=self.request.user)
+
+        # 끌올 기준 정렬 (list 액션인 경우)
+        if self.action == 'list':
+            # annotate가 이미 되어있지 않으면 추가
+            if not hasattr(queryset, 'effective_date'):
+                queryset = queryset.annotate(
+                    effective_date=Coalesce('last_bumped_at', 'created_at')
+                )
+            queryset = queryset.order_by('-effective_date')
 
         return queryset
 
@@ -224,7 +236,9 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     def my_list(self, request):
         """내 상품 목록"""
         # my_list는 내 상품이므로 모든 status를 포함해야 함
-        queryset = UsedElectronics.objects.filter(seller=request.user)
+        queryset = UsedElectronics.objects.filter(seller=request.user).annotate(
+            effective_date=Coalesce('last_bumped_at', 'created_at')
+        )
 
         # 관련 데이터 미리 로드
         queryset = queryset.select_related('seller')
@@ -235,8 +249,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        # 최신순으로 정렬
-        queryset = queryset.order_by('-created_at')
+        # 끌올 우선, 최신순으로 정렬
+        queryset = queryset.order_by('-effective_date')
 
         page = self.paginate_queryset(queryset)
         if page is not None:

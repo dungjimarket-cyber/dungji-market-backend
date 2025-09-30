@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, F, Avg, Count
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 import logging
@@ -42,8 +43,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['brand', 'condition_grade', 'accept_offers']
     search_fields = ['model', 'description', 'brand']
-    ordering_fields = ['price', 'created_at', 'view_count']
-    ordering = ['-created_at']
+    ordering_fields = ['price', 'created_at', 'view_count', 'last_bumped_at']
+    # ordering은 get_queryset에서 처리
 
     def get_serializer_context(self):
         """Serializer context에 request 포함"""
@@ -59,11 +60,13 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             logger.info(f"[UsedPhoneViewSet] Action: {self.action}")
             logger.info(f"[UsedPhoneViewSet] Including sold items in queryset")
 
-            queryset = UsedPhone.objects.exclude(status='deleted').prefetch_related(
+            queryset = UsedPhone.objects.exclude(status='deleted').annotate(
+                effective_date=Coalesce('last_bumped_at', 'created_at')
+            ).prefetch_related(
                 'regions__region',
                 'images',
                 'transactions'
-            ).select_related('seller', 'region')
+            ).select_related('seller', 'region').order_by('-effective_date')
 
             # 쿼리셋 상태 확인
             logger.info(f"[UsedPhoneViewSet] Queryset count: {queryset.count()}")
@@ -589,12 +592,14 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         
         queryset = UsedPhone.objects.filter(
             seller=request.user
-        ).exclude(status='deleted').prefetch_related('images', 'offers', 'transactions').select_related('region')
-        
+        ).exclude(status='deleted').annotate(
+            effective_date=Coalesce('last_bumped_at', 'created_at')
+        ).prefetch_related('images', 'offers', 'transactions').select_related('region')
+
         if status_filter:
             queryset = queryset.filter(status=status_filter)
-        
-        queryset = queryset.order_by('-created_at')
+
+        queryset = queryset.order_by('-effective_date')
         
         # 페이지네이션 적용
         page = self.paginate_queryset(queryset)
@@ -1357,7 +1362,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         
-        queryset = queryset.order_by('-created_at')
+        queryset = queryset.order_by('-last_bumped_at', '-created_at')
         
         # 제안 데이터 직렬화
         offers_data = []
@@ -1404,7 +1409,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         if phone_id:
             queryset = queryset.filter(phone__id=phone_id)
         
-        queryset = queryset.order_by('-created_at')
+        queryset = queryset.order_by('-last_bumped_at', '-created_at')
         
         # 제안 데이터 직렬화
         offers_data = []
