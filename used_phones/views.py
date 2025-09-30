@@ -1376,8 +1376,8 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         
         if status_filter:
             queryset = queryset.filter(status=status_filter)
-        
-        queryset = queryset.order_by('-last_bumped_at', '-created_at')
+
+        queryset = queryset.order_by('-created_at')
         
         # 제안 데이터 직렬화
         offers_data = []
@@ -1423,8 +1423,8 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
         
         if phone_id:
             queryset = queryset.filter(phone__id=phone_id)
-        
-        queryset = queryset.order_by('-last_bumped_at', '-created_at')
+
+        queryset = queryset.order_by('-created_at')
         
         # 제안 데이터 직렬화
         offers_data = []
