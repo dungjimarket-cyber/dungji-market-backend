@@ -95,7 +95,18 @@ def get_bump_status(request, item_type, item_id):
 
     except Exception as e:
         logger.error(f"Bump status error: {e}")
-        return Response({'error': '상태 조회 중 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        error_detail = str(e)
+        if 'UnifiedBump' in error_detail and 'does not exist' in error_detail:
+            return Response({
+                'can_bump': True,
+                'bump_type': 'free',
+                'remaining_free_bumps_today': 3,
+                'next_bump_available_at': None,
+                'total_bump_count': 0,
+                'last_bumped_at': None,
+                'reason': '마이그레이션 대기중'
+            })
+        return Response({'error': f'상태 조회 중 오류: {error_detail}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -194,7 +205,11 @@ def perform_bump(request, item_type, item_id):
 
     except Exception as e:
         logger.error(f"Perform bump error: {e}")
-        return Response({'error': '끌올 처리 중 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        error_detail = str(e)
+        if 'UnifiedBump' in error_detail and 'does not exist' in error_detail:
+            return Response({'error': '끌올 기능이 아직 준비 중입니다. 마이그레이션이 필요합니다.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({'error': f'끌올 처리 중 오류: {error_detail}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
