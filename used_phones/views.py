@@ -41,7 +41,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['brand', 'condition_grade', 'accept_offers']
-    search_fields = ['model', 'description']
+    search_fields = ['model', 'description', 'brand']
     ordering_fields = ['price', 'created_at', 'view_count']
     ordering = ['-created_at']
 
