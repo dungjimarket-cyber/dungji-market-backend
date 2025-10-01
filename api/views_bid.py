@@ -325,21 +325,23 @@ class BidViewSet(viewsets.ModelViewSet):
                     except:
                         pass
             
-            # 알림 생성
-            from api.models import Notification
+            # 알림 생성 (인앱 + 푸시)
+            from api.utils.notification_helper import send_groupbuy_notification
             if decision == 'confirmed':
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=bid.seller,
                     groupbuy=bid.groupbuy,
                     notification_type='sale_confirmed',
-                    message=f"{bid.groupbuy.title} 공구의 판매를 확정했습니다. 구매자 정보를 확인하세요."
+                    message=f"{bid.groupbuy.title} 공구의 판매를 확정했습니다. 구매자 정보를 확인하세요.",
+                    push_title="판매 확정 알림"
                 )
             else:
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=bid.seller,
                     groupbuy=bid.groupbuy,
                     notification_type='sale_cancelled',
-                    message=f"{bid.groupbuy.title} 공구의 판매를 포기했습니다."
+                    message=f"{bid.groupbuy.title} 공구의 판매를 포기했습니다.",
+                    push_title="판매 취소 알림"
                 )
             
             # 모든 참여자와 판매자가 결정을 완료했는지 확인

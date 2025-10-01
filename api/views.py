@@ -3355,12 +3355,24 @@ class GroupBuyViewSet(ModelViewSet):
                 bid.is_selected = True
                 bid.status = 'selected'
                 bid.save()
-                
+
                 # 공구 상태를 final_selection_buyers로 변경
                 if groupbuy.status == 'bidding':
                     groupbuy.status = 'final_selection_buyers'
                     groupbuy.save()
-                
+
+                    # 모든 참여자에게 구매 확정 대기 알림
+                    from api.utils.notification_helper import send_groupbuy_notification
+                    participants = groupbuy.participation_set.all()
+                    for participation in participants:
+                        send_groupbuy_notification(
+                            user=participation.user,
+                            groupbuy=groupbuy,
+                            notification_type='buyer_decision_required',
+                            message=f"{groupbuy.title}의 최종 판매자가 결정되었습니다. 12시간 내 구매 확정/포기를 선택해주세요",
+                            push_title="구매 확정 요청"
+                        )
+
                 return Response({
                     'message': f'{bid.seller.username}님을 낙찰자로 선정했습니다.',
                     'bid': {
@@ -3692,21 +3704,23 @@ class ParticipationViewSet(ModelViewSet):
             participation.final_decision = decision
             participation.save()
             
-            # 알림 생성
-            from .models import Notification
+            # 알림 생성 (인앱 + 푸시)
+            from api.utils.notification_helper import send_groupbuy_notification
             if decision == 'confirmed':
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=participation.user,
                     groupbuy=participation.groupbuy,
                     notification_type='purchase_confirmed',
-                    message=f"{participation.groupbuy.title} 공구를 구매확정하셨습니다. 판매자 최종선택이 진행됩니다."
+                    message=f"{participation.groupbuy.title} 공구를 구매확정하셨습니다. 판매자 최종선택이 진행됩니다.",
+                    push_title="구매 확정 알림"
                 )
             else:
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=participation.user,
                     groupbuy=participation.groupbuy,
                     notification_type='purchase_cancelled',
-                    message=f"{participation.groupbuy.title} 공구의 구매를 포기했습니다."
+                    message=f"{participation.groupbuy.title} 공구의 구매를 포기했습니다.",
+                    push_title="구매 취소 알림"
                 )
             
             # 모든 참여자와 판매자가 결정을 완료했는지 확인

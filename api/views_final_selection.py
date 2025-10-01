@@ -104,13 +104,20 @@ def buyer_final_decision(request, groupbuy_id):
             # 알림 발송
             if decision == 'confirmed':
                 message = f"{groupbuy.title} 공구를 구매확정하셨습니다. 판매자 최종선택이 진행됩니다."
+                notif_type = 'purchase_confirmed'
+                push_title = "구매 확정 알림"
             else:
                 message = f"{groupbuy.title} 공구를 구매포기하셨습니다."
-            
-            Notification.objects.create(
+                notif_type = 'purchase_cancelled'
+                push_title = "구매 취소 알림"
+
+            from api.utils.notification_helper import send_groupbuy_notification
+            send_groupbuy_notification(
                 user=user,
                 groupbuy=groupbuy,
-                message=message
+                notification_type=notif_type,
+                message=message,
+                push_title=push_title
             )
             
             # 모든 구매자가 최종선택을 완료했는지 확인
@@ -253,16 +260,23 @@ def seller_final_decision(request, groupbuy_id):
                             logger.error(f"입찰권 환불 실패: {str(e)}")
                             # 환불 실패해도 계속 진행
             
-            # 알림 발송
+            # 알림 발송 (인앱 + 푸시)
             if decision == 'confirmed':
                 message = f"{groupbuy.title} 공구를 판매확정하셨습니다. 구매자 정보는 마이페이지에서 확인하세요."
+                notif_type = 'sale_confirmed'
+                push_title = "판매 확정 알림"
             else:
                 message = f"{groupbuy.title} 공구를 판매포기하셨습니다.{penalty_message}"
-            
-            Notification.objects.create(
+                notif_type = 'sale_cancelled'
+                push_title = "판매 취소 알림"
+
+            from api.utils.notification_helper import send_groupbuy_notification
+            send_groupbuy_notification(
                 user=user,
                 groupbuy=groupbuy,
-                message=message
+                notification_type=notif_type,
+                message=message,
+                push_title=push_title
             )
             
             # 판매자 최종선택 완료 처리
@@ -483,7 +497,8 @@ def check_buyer_decisions_completed(groupbuy):
                         user=highest_bid.seller,
                         groupbuy=groupbuy,
                         notification_type='bid_selected',
-                        message=f"축하합니다! {groupbuy.title} 견적에 최종 선정되셨습니다"
+                        message=f"축하합니다! {groupbuy.title} 견적에 최종 선정되셨습니다",
+                        push_title="견적 선정 알림"
                     )
 
                     # 선정되지 않은 다른 제안자들에게 알림
@@ -497,7 +512,8 @@ def check_buyer_decisions_completed(groupbuy):
                             user=bid.seller,
                             groupbuy=groupbuy,
                             notification_type='bid_rejected',
-                            message=f"아쉽게도 {groupbuy.title} 견적에서 다른 판매자가 선정되었습니다"
+                            message=f"아쉽게도 {groupbuy.title} 견적에서 다른 판매자가 선정되었습니다",
+                            push_title="견적 결과 알림"
                         )
             
             # 판매자 최종선택 단계로 전환
@@ -511,8 +527,9 @@ def check_buyer_decisions_completed(groupbuy):
                 send_groupbuy_notification(
                     user=winning_bid.seller,
                     groupbuy=groupbuy,
-                    notification_type='seller_decision_started',
-                    message=f"{groupbuy.title} 구매자 최종선택이 완료되었습니다. 6시간 내 판매 확정/포기를 선택해주세요 (현재 {confirmed_count}/{total_count}명 확정)"
+                    notification_type='seller_decision_required',
+                    message=f"{groupbuy.title} 구매자 최종선택이 완료되었습니다. 6시간 내 판매 확정/포기를 선택해주세요 (현재 {confirmed_count}/{total_count}명 확정)",
+                    push_title="판매 확정 요청"
                 )
         else:
             # 구매 확정자가 없으면 공구 취소
@@ -526,8 +543,9 @@ def check_buyer_decisions_completed(groupbuy):
                 send_groupbuy_notification(
                     user=bid.seller,
                     groupbuy=groupbuy,
-                    notification_type='all_cancelled',
-                    message=f"{groupbuy.title}이 구매자 전원 포기로 취소되었습니다"
+                    notification_type='groupbuy_cancelled',
+                    message=f"{groupbuy.title}이 구매자 전원 포기로 취소되었습니다",
+                    push_title="공구 취소 알림"
                 )
 
 
@@ -598,18 +616,29 @@ def check_seller_decision_completed(groupbuy):
             groupbuy.save()
             
             # 거래 시작 알림
-            message = f"{groupbuy.title} 거래가 확정되었습니다. 거래 후기를 작성해주세요"
+            from api.utils.notification_helper import send_groupbuy_notification
 
             # 구매 확정한 참여자들에게 알림
-            from api.utils.notification_helper import send_groupbuy_notification
             confirmed_participations = groupbuy.participation_set.filter(final_decision='confirmed')
+            confirmed_count = confirmed_participations.count()
+
             for participation in confirmed_participations:
                 send_groupbuy_notification(
                     user=participation.user,
                     groupbuy=groupbuy,
-                    notification_type='deal_confirmed_buyer',
-                    message=message
+                    notification_type='trade_confirmed_buyer',
+                    message=f"{groupbuy.title} 거래가 확정되었습니다. 판매자 정보를 확인하시고 거래를 진행해주세요",
+                    push_title="거래 확정 알림"
                 )
+
+            # 판매자에게 알림
+            send_groupbuy_notification(
+                user=winning_bid.seller,
+                groupbuy=groupbuy,
+                notification_type='trade_confirmed_seller',
+                message=f"{groupbuy.title} 최종 판매가 확정되었습니다. {confirmed_count}명의 구매자 정보를 확인하시고 거래를 진행해주세요",
+                push_title="거래 확정 알림"
+            )
         else:
             # 공구 취소
             groupbuy.status = 'cancelled'
