@@ -163,5 +163,5 @@ def send_used_trade_notification(
         item_type=item_type,
         item_id=item_id,
         push_title=push_title or "거래 알림",
-        push_data={'type': 'used_trade'}
+        push_data={'type': 'used'}
     )

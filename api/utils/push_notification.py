@@ -77,6 +77,12 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
             "Content-Type": "application/json; UTF-8",
         }
 
+        # 알림 타입에 따라 URL 결정
+        if data and data.get('type') == 'used':
+            link_url = "https://www.dungjimarket.com/used/mypage"
+        else:
+            link_url = "https://www.dungjimarket.com/mypage"
+
         payload = {
             "message": {
                 "token": token,
@@ -87,7 +93,7 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
                 "data": data or {},
                 "webpush": {
                     "fcm_options": {
-                        "link": settings.FRONTEND_URL or "https://dungjimarket.com"
+                        "link": link_url
                     },
                     "notification": {
                         "icon": "/icons/icon-192x192.png",
