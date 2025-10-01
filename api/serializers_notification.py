@@ -33,7 +33,8 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'user', 'user_name', 'groupbuy', 'groupbuy_title', 
-            'message', 'created_at', 'is_read'
+            'id', 'user', 'user_name', 'groupbuy', 'groupbuy_title',
+            'message', 'notification_type', 'item_type', 'item_id',
+            'created_at', 'is_read'
         ]
         read_only_fields = ['user', 'groupbuy', 'created_at']
