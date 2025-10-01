@@ -1093,25 +1093,123 @@ class Badge(models.Model):
 
 class Notification(models.Model):
     NOTIFICATION_TYPES = [
+        # 공구 알림
         ('reminder', '리마인더'),
         ('success', '성공/최종선정'),
         ('failure', '실패/취소'),
         ('info', '정보/상태변경'),
+        ('bid_selected', '견적 최종 선정'),
+        ('bid_rejected', '견적 탈락'),
+        ('buyer_decision_started', '구매 확정 대기'),
+        ('seller_decision_started', '판매 확정 대기'),
+        ('all_cancelled', '공구 취소'),
+        ('deal_confirmed_seller', '거래 확정 (판매자)'),
+        ('deal_confirmed_buyer', '거래 확정 (구매자)'),
+
+        # 중고거래 알림
+        ('offer_received', '가격 제안 수신'),
+        ('offer_accepted', '가격 제안 수락'),
+        ('trade_cancelled', '거래 취소'),
+        ('trade_completed', '거래 완료'),
+
+        # 마케팅 알림
+        ('marketing', '마케팅/이벤트'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE)
-    message = models.TextField()
-    notification_type = models.CharField(
-        max_length=30, 
-        choices=NOTIFICATION_TYPES, 
-        default='info'
+    ITEM_TYPE_CHOICES = [
+        ('groupbuy', '공구'),
+        ('phone', '휴대폰'),
+        ('electronics', '전자제품'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications', verbose_name='사용자')
+
+    # 공구용 (기존)
+    groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, blank=True, verbose_name='공구')
+
+    # 중고거래용 (추가)
+    item_type = models.CharField(
+        max_length=20,
+        choices=ITEM_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name='아이템 타입'
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_read = models.BooleanField(default=False)
+    item_id = models.PositiveIntegerField(null=True, blank=True, verbose_name='아이템 ID')
+
+    message = models.TextField(verbose_name='메시지')
+    notification_type = models.CharField(
+        max_length=30,
+        choices=NOTIFICATION_TYPES,
+        default='info',
+        verbose_name='알림 타입'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    is_read = models.BooleanField(default=False, verbose_name='읽음 여부')
+
+    class Meta:
+        verbose_name = '알림'
+        verbose_name_plural = '알림 관리'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['user', 'is_read']),
+        ]
 
     def __str__(self):
-        return f"{self.message[:50]}..."
+        return f"{self.user.username}: {self.message[:50]}..."
+
+
+class NotificationSetting(models.Model):
+    """
+    사용자별 알림 설정
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='notification_settings', verbose_name='사용자')
+
+    # 거래 알림 (공구 + 중고거래 통합)
+    trade_notifications = models.BooleanField(default=True, verbose_name='거래 알림')
+
+    # 광고/마케팅 알림
+    marketing_notifications = models.BooleanField(default=False, verbose_name='마케팅 알림')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+
+    class Meta:
+        verbose_name = '알림 설정'
+        verbose_name_plural = '알림 설정 관리'
+
+    def __str__(self):
+        return f"{self.user.username}의 알림 설정"
+
+
+class PushToken(models.Model):
+    """
+    푸시 알림 토큰 관리
+    """
+    PLATFORM_CHOICES = [
+        ('ios', 'iOS'),
+        ('android', 'Android'),
+        ('web', 'Web'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_tokens', verbose_name='사용자')
+    token = models.CharField(max_length=255, unique=True, verbose_name='푸시 토큰')
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, verbose_name='플랫폼')
+    is_active = models.BooleanField(default=True, verbose_name='활성 상태')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일')
+
+    class Meta:
+        verbose_name = '푸시 토큰'
+        verbose_name_plural = '푸시 토큰 관리'
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.platform} - {self.token[:20]}..."
+
 
 class Wishlist(models.Model):
     """찜하기 기능을 위한 모델"""
