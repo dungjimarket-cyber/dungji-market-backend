@@ -1132,7 +1132,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     item_type='phone',
                     item_id=phone.id,
                     notification_type='trade_completed',
-                    message=f"{phone.model_name} 거래가 완료되었습니다. 거래 후기를 작성해주세요",
+                    message=f"{phone.model_name} 거래가 완료되었습니다. 후기를 남겨보세요",
                     push_title="거래 완료"
                 )
 
