@@ -87,7 +87,9 @@ jobs:
           # Firebase 서비스 계정 키를 .env에 추가
           if [ ! -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
             echo "" >> ~/dungji-market-backend/.env
-            echo "FIREBASE_SERVICE_ACCOUNT='${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'" >> ~/dungji-market-backend/.env
+            cat >> ~/dungji-market-backend/.env << 'FIREBASE_EOF'
+FIREBASE_SERVICE_ACCOUNT='${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+FIREBASE_EOF
             echo "✅ Firebase credentials added to .env"
           fi
 
