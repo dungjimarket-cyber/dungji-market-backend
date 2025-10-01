@@ -7,13 +7,39 @@ import logging
 import requests
 from django.conf import settings
 from typing import Optional, Dict, Any
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+import os
 
 logger = logging.getLogger(__name__)
 
 
+def get_access_token():
+    """
+    Firebase Service Account를 사용하여 Access Token 생성
+    """
+    try:
+        service_account_path = os.path.join(settings.BASE_DIR, 'firebase-service-account.json')
+
+        if not os.path.exists(service_account_path):
+            logger.warning("firebase-service-account.json not found. Skipping push notification.")
+            return None
+
+        credentials = service_account.Credentials.from_service_account_file(
+            service_account_path,
+            scopes=['https://www.googleapis.com/auth/firebase.messaging']
+        )
+
+        credentials.refresh(Request())
+        return credentials.token
+    except Exception as e:
+        logger.error(f"Error getting access token: {str(e)}")
+        return None
+
+
 def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, Any]] = None) -> bool:
     """
-    FCM을 통해 푸시 알림 발송 (Android/Web)
+    FCM HTTP v1 API를 통해 푸시 알림 발송 (Android/Web/iOS)
 
     Args:
         token: FCM 디바이스 토큰
@@ -25,40 +51,43 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
         bool: 발송 성공 여부
     """
     try:
-        # FCM 서버 키가 없으면 스킵
-        server_key = getattr(settings, 'FCM_SERVER_KEY', None)
-        if not server_key:
-            logger.warning("FCM_SERVER_KEY not configured. Skipping push notification.")
+        access_token = get_access_token()
+        if not access_token:
             return False
 
-        url = "https://fcm.googleapis.com/fcm/send"
+        project_id = "dungji-market-7c0e0"
+        url = f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
+
         headers = {
-            "Authorization": f"Bearer {server_key}",
-            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json; UTF-8",
         }
 
         payload = {
-            "to": token,
-            "notification": {
-                "title": title,
-                "body": body,
-                "icon": "/icons/icon-192x192.png",
-                "badge": "/icons/icon-96x96.png",
-                "click_action": settings.FRONTEND_URL or "https://dungji-market.com",
-            },
-            "data": data or {},
+            "message": {
+                "token": token,
+                "notification": {
+                    "title": title,
+                    "body": body,
+                },
+                "data": data or {},
+                "webpush": {
+                    "fcm_options": {
+                        "link": settings.FRONTEND_URL or "https://dungjimarket.com"
+                    },
+                    "notification": {
+                        "icon": "/icons/icon-192x192.png",
+                        "badge": "/icons/icon-96x96.png"
+                    }
+                }
+            }
         }
 
         response = requests.post(url, headers=headers, json=payload, timeout=10)
 
         if response.status_code == 200:
-            result = response.json()
-            if result.get('success', 0) > 0:
-                logger.info(f"FCM push sent successfully to {token[:20]}...")
-                return True
-            else:
-                logger.error(f"FCM push failed: {result}")
-                return False
+            logger.info(f"FCM push sent successfully to {token[:20]}...")
+            return True
         else:
             logger.error(f"FCM request failed: {response.status_code} - {response.text}")
             return False

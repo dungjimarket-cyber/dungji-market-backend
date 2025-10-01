@@ -23,3 +23,6 @@ whitenoise==6.9.0
 xlsxwriter==3.2.5
 qrcode==7.4.2
 beautifulsoup4==4.12.3
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0

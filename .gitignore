@@ -2,6 +2,9 @@
 *.pem
 key.pem
 
+# Firebase Service Account
+firebase-service-account.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
