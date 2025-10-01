@@ -17,18 +17,32 @@ logger = logging.getLogger(__name__)
 def get_access_token():
     """
     Firebase Service Account를 사용하여 Access Token 생성
+    환경변수 또는 파일에서 읽기
     """
     try:
-        service_account_path = os.path.join(settings.BASE_DIR, 'firebase-service-account.json')
+        # 1. 환경변수에서 읽기 (Vercel 등 클라우드 환경)
+        service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
 
-        if not os.path.exists(service_account_path):
-            logger.warning("firebase-service-account.json not found. Skipping push notification.")
-            return None
+        if service_account_json:
+            logger.info("Using Firebase credentials from environment variable")
+            service_account_info = json.loads(service_account_json)
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=['https://www.googleapis.com/auth/firebase.messaging']
+            )
+        else:
+            # 2. 파일에서 읽기 (로컬 개발 환경)
+            service_account_path = os.path.join(settings.BASE_DIR, 'firebase-service-account.json')
 
-        credentials = service_account.Credentials.from_service_account_file(
-            service_account_path,
-            scopes=['https://www.googleapis.com/auth/firebase.messaging']
-        )
+            if not os.path.exists(service_account_path):
+                logger.warning("Firebase credentials not found in environment or file. Skipping push notification.")
+                return None
+
+            logger.info("Using Firebase credentials from file")
+            credentials = service_account.Credentials.from_service_account_file(
+                service_account_path,
+                scopes=['https://www.googleapis.com/auth/firebase.messaging']
+            )
 
         credentials.refresh(Request())
         return credentials.token
