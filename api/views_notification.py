@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
-from .models import Notification
+from .models import Notification, NotificationSetting, PushToken
 from .serializers_notification import NotificationSerializer
 import logging
 
@@ -58,3 +58,104 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """모든 알림을 읽음 처리합니다."""
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({'status': 'all notifications marked as read'})
+
+    @action(detail=False, methods=['get', 'patch'], url_path='settings')
+    def notification_settings(self, request):
+        """
+        알림 설정 조회/수정
+        GET: 현재 알림 설정 조회
+        PATCH: 알림 설정 수정
+        """
+        # 설정이 없으면 생성
+        settings, created = NotificationSetting.objects.get_or_create(user=request.user)
+
+        if request.method == 'GET':
+            return Response({
+                'trade_notifications': settings.trade_notifications,
+                'marketing_notifications': settings.marketing_notifications
+            })
+
+        elif request.method == 'PATCH':
+            # 거래 알림 설정
+            if 'trade_notifications' in request.data:
+                settings.trade_notifications = request.data['trade_notifications']
+
+            # 마케팅 알림 설정
+            if 'marketing_notifications' in request.data:
+                settings.marketing_notifications = request.data['marketing_notifications']
+
+            settings.save()
+
+            return Response({
+                'message': '알림 설정이 업데이트되었습니다.',
+                'trade_notifications': settings.trade_notifications,
+                'marketing_notifications': settings.marketing_notifications
+            })
+
+    @action(detail=False, methods=['post'], url_path='register-token')
+    def register_push_token(self, request):
+        """
+        푸시 토큰 등록
+        FCM/APNs 디바이스 토큰을 등록합니다.
+        """
+        token = request.data.get('token')
+        platform = request.data.get('platform')  # 'ios', 'android', 'web'
+
+        if not token:
+            return Response(
+                {'error': '토큰이 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if platform not in ['ios', 'android', 'web']:
+            return Response(
+                {'error': '잘못된 플랫폼입니다. (ios, android, web 중 선택)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 기존 토큰이 있으면 업데이트, 없으면 생성
+        push_token, created = PushToken.objects.update_or_create(
+            token=token,
+            defaults={
+                'user': request.user,
+                'platform': platform,
+                'is_active': True
+            }
+        )
+
+        action_text = '등록' if created else '업데이트'
+        logger.info(f"Push token {action_text}: user={request.user.id}, platform={platform}")
+
+        return Response({
+            'message': f'푸시 토큰이 {action_text}되었습니다.',
+            'token_id': push_token.id
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='unregister-token')
+    def unregister_push_token(self, request):
+        """
+        푸시 토큰 비활성화
+        로그아웃 시 호출
+        """
+        token = request.data.get('token')
+
+        if not token:
+            return Response(
+                {'error': '토큰이 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 토큰 비활성화
+        updated = PushToken.objects.filter(
+            token=token,
+            user=request.user
+        ).update(is_active=False)
+
+        if updated:
+            logger.info(f"Push token deactivated: user={request.user.id}")
+            return Response({'message': '푸시 토큰이 비활성화되었습니다.'})
+        else:
+            return Response(
+                {'error': '토큰을 찾을 수 없습니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )

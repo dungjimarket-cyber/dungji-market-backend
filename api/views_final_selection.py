@@ -478,10 +478,12 @@ def check_buyer_decisions_completed(groupbuy):
                     logger.info(f"GroupBuy {groupbuy.id}: 낙찰자 선정 완료 - Bid {highest_bid.id} (금액: {highest_bid.amount}원)")
 
                     # 선정 알림 발송
-                    Notification.objects.create(
+                    from api.utils.notification_helper import send_groupbuy_notification
+                    send_groupbuy_notification(
                         user=highest_bid.seller,
                         groupbuy=groupbuy,
-                        message=f"축하합니다! {groupbuy.title} 공구에 선정되셨습니다. 판매 확정/포기를 선택해주세요."
+                        notification_type='bid_selected',
+                        message=f"축하합니다! {groupbuy.title} 견적에 최종 선정되셨습니다"
                     )
 
                     # 선정되지 않은 다른 제안자들에게 알림
@@ -491,10 +493,11 @@ def check_buyer_decisions_completed(groupbuy):
                     ).exclude(id=highest_bid.id)
 
                     for bid in other_bids:
-                        Notification.objects.create(
+                        send_groupbuy_notification(
                             user=bid.seller,
                             groupbuy=groupbuy,
-                            message=f"아쉽지만 {groupbuy.title} 공구에 선정되지 않았습니다."
+                            notification_type='bid_rejected',
+                            message=f"아쉽게도 {groupbuy.title} 견적에서 다른 판매자가 선정되었습니다"
                         )
             
             # 판매자 최종선택 단계로 전환
@@ -505,10 +508,11 @@ def check_buyer_decisions_completed(groupbuy):
             # 선정된 판매자에게 최종선택 알림
             winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
             if winning_bid:
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=winning_bid.seller,
                     groupbuy=groupbuy,
-                    message=f"{groupbuy.title} 공구의 판매자 최종 선택이 시작되었습니다. 6시간 내에 판매 확정/포기를 선택해주세요. (구매확정: {confirmed_count}/{total_count}명)"
+                    notification_type='seller_decision_started',
+                    message=f"{groupbuy.title} 구매자 최종선택이 완료되었습니다. 6시간 내 판매 확정/포기를 선택해주세요 (현재 {confirmed_count}/{total_count}명 확정)"
                 )
         else:
             # 구매 확정자가 없으면 공구 취소
@@ -519,10 +523,11 @@ def check_buyer_decisions_completed(groupbuy):
             # 모든 입찰자에게 취소 알림
             all_bids = Bid.objects.filter(groupbuy=groupbuy)
             for bid in all_bids:
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=bid.seller,
                     groupbuy=groupbuy,
-                    message=f"{groupbuy.title} 공구가 구매자 전원 포기로 취소되었습니다."
+                    notification_type='all_cancelled',
+                    message=f"{groupbuy.title}이 구매자 전원 포기로 취소되었습니다"
                 )
 
 
@@ -593,14 +598,16 @@ def check_seller_decision_completed(groupbuy):
             groupbuy.save()
             
             # 거래 시작 알림
-            message = f"{groupbuy.title} 공구가 거래중 상태로 전환되었습니다. 판매자 연락처를 확인하세요!"
-            
+            message = f"{groupbuy.title} 거래가 확정되었습니다. 거래 후기를 작성해주세요"
+
             # 구매 확정한 참여자들에게 알림
+            from api.utils.notification_helper import send_groupbuy_notification
             confirmed_participations = groupbuy.participation_set.filter(final_decision='confirmed')
             for participation in confirmed_participations:
-                Notification.objects.create(
+                send_groupbuy_notification(
                     user=participation.user,
                     groupbuy=groupbuy,
+                    notification_type='deal_confirmed_buyer',
                     message=message
                 )
         else:

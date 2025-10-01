@@ -386,6 +386,17 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         electronics.offer_count = unique_buyers_count
         electronics.save(update_fields=['offer_count'])
 
+        # 판매자에게 가격 제안 수신 알림
+        from api.utils.notification_helper import send_used_trade_notification
+        send_used_trade_notification(
+            user=electronics.seller,
+            item_type='electronics',
+            item_id=electronics.id,
+            notification_type='offer_received',
+            message=f"{electronics.title}에 {offered_price:,}원 가격 제안이 도착했습니다",
+            push_title="가격 제안 알림"
+        )
+
         # 즉시구매인 경우 자동으로 거래중 상태로 전환
         if is_instant_purchase:
             # 제안 자동 수락
@@ -687,6 +698,17 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         electronics.sold_at = now
         electronics.save()
 
+        # 구매자에게 거래 완료 알림
+        from api.utils.notification_helper import send_used_trade_notification
+        send_used_trade_notification(
+            user=transaction.buyer,
+            item_type='electronics',
+            item_id=electronics.id,
+            notification_type='trade_completed',
+            message=f"{electronics.title} 거래가 완료되었습니다. 거래 후기를 작성해주세요",
+            push_title="거래 완료"
+        )
+
         return Response({
             'message': '거래가 완료되었습니다.',
             'status': 'completed',
@@ -792,6 +814,17 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 )
 
             # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
+
+            # 구매자에게 가격 제안 수락 알림
+            from api.utils.notification_helper import send_used_trade_notification
+            send_used_trade_notification(
+                user=offer.buyer,
+                item_type='electronics',
+                item_id=offer.electronics.id,
+                notification_type='offer_accepted',
+                message=f"{offer.electronics.title} 가격 제안이 수락되었습니다",
+                push_title="가격 제안 수락"
+            )
         else:
             return Response(
                 {'error': '잘못된 액션입니다.'},
@@ -1090,6 +1123,29 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             # 제안 상태도 초기화
             accepted_offer.status = 'cancelled'
             accepted_offer.save()
+
+            # 상대방에게 거래 취소 알림
+            from api.utils.notification_helper import send_used_trade_notification
+            if is_buyer:
+                # 구매자가 취소 → 판매자에게 알림
+                send_used_trade_notification(
+                    user=electronics.seller,
+                    item_type='electronics',
+                    item_id=electronics.id,
+                    notification_type='trade_cancelled',
+                    message=f"{electronics.title} 거래가 취소되었습니다",
+                    push_title="거래 취소"
+                )
+            else:
+                # 판매자가 취소 → 구매자에게 알림
+                send_used_trade_notification(
+                    user=accepted_offer.buyer,
+                    item_type='electronics',
+                    item_id=electronics.id,
+                    notification_type='trade_cancelled',
+                    message=f"{electronics.title} 거래가 취소되었습니다",
+                    push_title="거래 취소"
+                )
 
             return Response({'message': '거래가 취소되었습니다.'})
         except Exception as e:

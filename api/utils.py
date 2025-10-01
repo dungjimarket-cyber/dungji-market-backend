@@ -52,30 +52,30 @@ def update_groupbuy_status(groupbuy):
             
             # 구매자들에게만 알림 보내기
             try:
-                from .models import Notification
+                from .utils.notification_helper import send_groupbuy_notification
                 for participant in groupbuy.participants.all():
-                    Notification.objects.create(
+                    send_groupbuy_notification(
                         user=participant,
                         groupbuy=groupbuy,
-                        notification_type='buyer_selection_start',
-                        message=f"{groupbuy.title} 공구의 구매자 최종 선택이 시작되었습니다. 12시간 내에 구매 확정/포기를 선택해주세요."
+                        notification_type='buyer_decision_started',
+                        message=f"{groupbuy.title} 견적이 최종 선정되었습니다. 12시간 내 구매 확정/포기를 선택해주세요"
                     )
-                
-                # 낙찰자에게 알림
-                Notification.objects.create(
+
+                # 최종선정된 판매자에게 알림
+                send_groupbuy_notification(
                     user=winning_bid.seller,
                     groupbuy=groupbuy,
-                    notification_type='bid_winner',
-                    message=f"축하합니다! {groupbuy.title} 공구에 선정되셨습니다. 구매자들의 최종 선택 후 판매 확정을 진행해주세요."
+                    notification_type='bid_selected',
+                    message=f"축하합니다! {groupbuy.title} 견적에 최종 선정되셨습니다"
                 )
-                
-                # 낙찰되지 않은 입찰자들에게 알림
+
+                # 선정되지 않은 판매자들에게 알림
                 for bid in bids.exclude(id=winning_bid.id):
-                    Notification.objects.create(
+                    send_groupbuy_notification(
                         user=bid.seller,
                         groupbuy=groupbuy,
-                        notification_type='bid_not_selected',
-                        message=f"{groupbuy.title} 공구에 선정되지 않으셨습니다. (선정된 지원금: {winning_bid.amount:,}원)"
+                        notification_type='bid_rejected',
+                        message=f"아쉽게도 {groupbuy.title} 견적에서 다른 판매자가 선정되었습니다"
                     )
             except Exception as e:
                 print(f"알림 생성 중 오류: {e}")

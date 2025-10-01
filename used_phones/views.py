@@ -417,6 +417,17 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
 
         phone.offer_count = unique_buyers_count
         phone.save(update_fields=['offer_count'])
+
+        # 판매자에게 가격 제안 수신 알림
+        from api.utils.notification_helper import send_used_trade_notification
+        send_used_trade_notification(
+            user=phone.seller,
+            item_type='phone',
+            item_id=phone.id,
+            notification_type='offer_received',
+            message=f"{phone.title}에 {offered_price:,}원 가격 제안이 도착했습니다",
+            push_title="가격 제안 알림"
+        )
         
         # 즉시구매인 경우 자동으로 거래중 상태로 전환
         if is_instant_purchase:
@@ -1114,6 +1125,17 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 phone.sold_at = timezone.now()
                 phone.save(update_fields=['status', 'sold_at'])
 
+                # 구매자에게 거래 완료 알림
+                from api.utils.notification_helper import send_used_trade_notification
+                send_used_trade_notification(
+                    user=accepted_offer.buyer,
+                    item_type='phone',
+                    item_id=phone.id,
+                    notification_type='trade_completed',
+                    message=f"{phone.title} 거래가 완료되었습니다. 거래 후기를 작성해주세요",
+                    push_title="거래 완료"
+                )
+
                 return Response({
                     'message': '거래가 완료되었습니다.',
                     'status': 'completed',
@@ -1262,6 +1284,29 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         if transaction:
             transaction.status = 'cancelled'
             transaction.save(update_fields=['status'])
+
+        # 상대방에게 거래 취소 알림
+        from api.utils.notification_helper import send_used_trade_notification
+        if is_buyer:
+            # 구매자가 취소 → 판매자에게 알림
+            send_used_trade_notification(
+                user=phone.seller,
+                item_type='phone',
+                item_id=phone.id,
+                notification_type='trade_cancelled',
+                message=f"{phone.title} 거래가 취소되었습니다",
+                push_title="거래 취소"
+            )
+        else:
+            # 판매자가 취소 → 구매자에게 알림
+            send_used_trade_notification(
+                user=accepted_offer.buyer,
+                item_type='phone',
+                item_id=phone.id,
+                notification_type='trade_cancelled',
+                message=f"{phone.title} 거래가 취소되었습니다",
+                push_title="거래 취소"
+            )
 
         # 취소 처리
         if is_buyer:
@@ -1495,6 +1540,17 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 )
 
             # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
+
+            # 구매자에게 가격 제안 수락 알림
+            from api.utils.notification_helper import send_used_trade_notification
+            send_used_trade_notification(
+                user=offer.buyer,
+                item_type='phone',
+                item_id=offer.phone.id,
+                notification_type='offer_accepted',
+                message=f"{offer.phone.title} 가격 제안이 수락되었습니다",
+                push_title="가격 제안 수락"
+            )
         else:
             return Response(
                 {'error': '올바른 응답 유형을 선택해주세요. (accept만 가능)'},
