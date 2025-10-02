@@ -881,11 +881,17 @@ class Participation(models.Model):
 
     def save(self, *args, **kwargs):
         # 동일한 상품의 공구 중복 참여 방지
-        if Participation.objects.filter(
+        duplicate_check = Participation.objects.filter(
             user=self.user,
             groupbuy__product=self.groupbuy.product,
             groupbuy__status__in=['recruiting', 'bidding']
-        ).exists():
+        )
+
+        # 기존 레코드 업데이트인 경우 자기 자신 제외
+        if self.pk:
+            duplicate_check = duplicate_check.exclude(pk=self.pk)
+
+        if duplicate_check.exists():
             from django.core.exceptions import ValidationError
             raise ValidationError("이미 동일한 상품의 공구에 참여중입니다.")
             
