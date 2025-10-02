@@ -781,36 +781,22 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             offer.electronics.status = 'trading'
             offer.electronics.save(update_fields=['status'])
 
-            # 기존 거래가 있는지 확인 (OneToOneField 때문에 하나만 존재 가능)
-            try:
-                existing_transaction = ElectronicsTransaction.objects.get(
-                    electronics=offer.electronics
-                )
-                # 기존 거래가 취소 상태인 경우 재사용
-                if existing_transaction.status == 'cancelled':
-                    existing_transaction.buyer = offer.buyer
-                    existing_transaction.seller = offer.electronics.seller
-                    existing_transaction.final_price = offer.offer_price
-                    existing_transaction.status = 'in_progress'
-                    existing_transaction.cancelled_by = None
-                    existing_transaction.cancellation_reason = ''
-                    existing_transaction.cancellation_detail = ''
-                    existing_transaction.save()
-                else:
-                    # 이미 진행중인 거래가 있으면 에러
-                    return Response(
-                        {'error': '이미 진행중인 거래가 있습니다.'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except ElectronicsTransaction.DoesNotExist:
-                # 거래가 없으면 새로 생성
+            # 기존 trading 상태 트랜잭션이 있는지 확인 (같은 제안에 대해서만)
+            existing_trading = ElectronicsTransaction.objects.filter(
+                electronics=offer.electronics,
+                offer=offer,  # 같은 제안에 대한 거래만 확인
+                status='in_progress'
+            ).first()
+
+            if not existing_trading:
+                # 취소된 트랜잭션이 있더라도 새로운 트랜잭션 생성
                 ElectronicsTransaction.objects.create(
                     electronics=offer.electronics,
-                    offer=offer,  # offer 연결 추가
+                    offer=offer,
                     seller=offer.electronics.seller,
                     buyer=offer.buyer,
-                    final_price=offer.offer_price,  # 전자제품은 offer_price
-                    status='in_progress'  # 전자제품은 in_progress
+                    final_price=offer.offer_price,
+                    status='in_progress'
                 )
 
             # 다른 pending 제안들은 그대로 유지 (나중에 다시 수락 가능)
