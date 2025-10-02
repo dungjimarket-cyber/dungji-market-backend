@@ -96,15 +96,16 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
             for key, value in data.items():
                 payload_data[key] = str(value)
 
-        # 필수 필드 추가
+        # URL 추가
         payload_data['url'] = link_url
-        payload_data['title'] = title
-        payload_data['body'] = body
 
         payload = {
             "message": {
                 "token": token,
-                # notification 필드 제거: Service Worker에서만 처리하여 중복 방지
+                "notification": {
+                    "title": title,
+                    "body": body,
+                },
                 "data": payload_data,
                 "webpush": {
                     "fcm_options": {
