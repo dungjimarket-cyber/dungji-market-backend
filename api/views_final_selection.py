@@ -459,95 +459,95 @@ def check_buyer_decisions_completed(groupbuy):
         # 구매자들의 최종선택 확인
         participations = Participation.objects.filter(groupbuy=groupbuy)
         buyer_decisions_completed = all(p.final_decision != 'pending' for p in participations)
-    
-    if buyer_decisions_completed:
-        confirmed_count = participations.filter(final_decision='confirmed').count()
-        total_count = participations.count()
 
-        if confirmed_count > 0:
-            # 이미 선정된 낙찰자가 있는지 확인
-            winning_bid = Bid.objects.filter(
-                groupbuy=groupbuy,
-                status='selected',
-                is_selected=True
-            ).first()
+        if buyer_decisions_completed:
+            confirmed_count = participations.filter(final_decision='confirmed').count()
+            total_count = participations.count()
 
-            if winning_bid:
-                # 이미 낙찰자가 선정되어 있으면 그대로 유지
-                logger.info(f"GroupBuy {groupbuy.id}: 기존 낙찰자 유지 - Bid {winning_bid.id} (판매자: {winning_bid.seller.username}, 금액: {winning_bid.amount}원)")
-            else:
-                # 예외 상황: 낙찰자가 없는 경우에만 선정 (정상적인 경우 발생하지 않아야 함)
-                logger.warning(f"GroupBuy {groupbuy.id}: 낙찰자가 없어 재선정 필요 - 비정상 상황")
-
-                highest_bid = Bid.objects.filter(
+            if confirmed_count > 0:
+                # 이미 선정된 낙찰자가 있는지 확인
+                winning_bid = Bid.objects.filter(
                     groupbuy=groupbuy,
-                    status='pending'
-                ).order_by('-amount', 'created_at').first()
+                    status='selected',
+                    is_selected=True
+                ).first()
 
-                if highest_bid:
-                    highest_bid.is_selected = True
-                    highest_bid.status = 'selected'
-                    highest_bid.save()
-                    winning_bid = highest_bid
+                if winning_bid:
+                    # 이미 낙찰자가 선정되어 있으면 그대로 유지
+                    logger.info(f"GroupBuy {groupbuy.id}: 기존 낙찰자 유지 - Bid {winning_bid.id} (판매자: {winning_bid.seller.username}, 금액: {winning_bid.amount}원)")
+                else:
+                    # 예외 상황: 낙찰자가 없는 경우에만 선정 (정상적인 경우 발생하지 않아야 함)
+                    logger.warning(f"GroupBuy {groupbuy.id}: 낙찰자가 없어 재선정 필요 - 비정상 상황")
 
-                    logger.info(f"GroupBuy {groupbuy.id}: 낙찰자 선정 완료 - Bid {highest_bid.id} (금액: {highest_bid.amount}원)")
-
-                    # 선정 알림 발송
-                    from api.utils.notification_helper import send_groupbuy_notification
-                    send_groupbuy_notification(
-                        user=highest_bid.seller,
-                        groupbuy=groupbuy,
-                        notification_type='bid_selected',
-                        message=f"축하합니다! {groupbuy.title} 견적에 최종 선정되셨습니다",
-                        push_title="견적 선정 알림"
-                    )
-
-                    # 선정되지 않은 다른 제안자들에게 알림
-                    other_bids = Bid.objects.filter(
+                    highest_bid = Bid.objects.filter(
                         groupbuy=groupbuy,
                         status='pending'
-                    ).exclude(id=highest_bid.id)
+                    ).order_by('-amount', 'created_at').first()
 
-                    for bid in other_bids:
+                    if highest_bid:
+                        highest_bid.is_selected = True
+                        highest_bid.status = 'selected'
+                        highest_bid.save()
+                        winning_bid = highest_bid
+
+                        logger.info(f"GroupBuy {groupbuy.id}: 낙찰자 선정 완료 - Bid {highest_bid.id} (금액: {highest_bid.amount}원)")
+
+                        # 선정 알림 발송
+                        from api.utils.notification_helper import send_groupbuy_notification
                         send_groupbuy_notification(
-                            user=bid.seller,
+                            user=highest_bid.seller,
                             groupbuy=groupbuy,
-                            notification_type='bid_rejected',
-                            message=f"아쉽게도 {groupbuy.title} 견적에서 다른 판매자가 선정되었습니다",
-                            push_title="견적 결과 알림"
+                            notification_type='bid_selected',
+                            message=f"축하합니다! {groupbuy.title} 견적에 최종 선정되셨습니다",
+                            push_title="견적 선정 알림"
                         )
-            
-            # 판매자 최종선택 단계로 전환
-            groupbuy.status = 'final_selection_seller'
-            groupbuy.seller_selection_end = timezone.now() + timezone.timedelta(hours=6)
-            groupbuy.save()
-            
-            # 선정된 판매자에게 최종선택 알림
-            winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
-            if winning_bid:
-                send_groupbuy_notification(
-                    user=winning_bid.seller,
-                    groupbuy=groupbuy,
-                    notification_type='seller_decision_required',
-                    message=f"{groupbuy.title} 구매자 최종선택이 완료되었습니다. 6시간 내 판매 확정/포기를 선택해주세요 (현재 {confirmed_count}/{total_count}명 확정)",
-                    push_title="판매 확정 요청"
-                )
-        else:
-            # 구매 확정자가 없으면 공구 취소
-            groupbuy.status = 'cancelled'
-            groupbuy.cancellation_reason = '참여자 전원 구매포기로 인한 공구 취소'
-            groupbuy.save()
-            
-            # 모든 입찰자에게 취소 알림
-            all_bids = Bid.objects.filter(groupbuy=groupbuy)
-            for bid in all_bids:
-                send_groupbuy_notification(
-                    user=bid.seller,
-                    groupbuy=groupbuy,
-                    notification_type='groupbuy_cancelled',
-                    message=f"{groupbuy.title}이 구매자 전원 포기로 취소되었습니다",
-                    push_title="공구 취소 알림"
-                )
+
+                        # 선정되지 않은 다른 제안자들에게 알림
+                        other_bids = Bid.objects.filter(
+                            groupbuy=groupbuy,
+                            status='pending'
+                        ).exclude(id=highest_bid.id)
+
+                        for bid in other_bids:
+                            send_groupbuy_notification(
+                                user=bid.seller,
+                                groupbuy=groupbuy,
+                                notification_type='bid_rejected',
+                                message=f"아쉽게도 {groupbuy.title} 견적에서 다른 판매자가 선정되었습니다",
+                                push_title="견적 결과 알림"
+                            )
+
+                # 판매자 최종선택 단계로 전환
+                groupbuy.status = 'final_selection_seller'
+                groupbuy.seller_selection_end = timezone.now() + timezone.timedelta(hours=6)
+                groupbuy.save()
+
+                # 선정된 판매자에게 최종선택 알림
+                winning_bid = Bid.objects.filter(groupbuy=groupbuy, status='selected').first()
+                if winning_bid:
+                    send_groupbuy_notification(
+                        user=winning_bid.seller,
+                        groupbuy=groupbuy,
+                        notification_type='seller_decision_required',
+                        message=f"{groupbuy.title} 구매자 최종선택이 완료되었습니다. 6시간 내 판매 확정/포기를 선택해주세요 (현재 {confirmed_count}/{total_count}명 확정)",
+                        push_title="판매 확정 요청"
+                    )
+            else:
+                # 구매 확정자가 없으면 공구 취소
+                groupbuy.status = 'cancelled'
+                groupbuy.cancellation_reason = '참여자 전원 구매포기로 인한 공구 취소'
+                groupbuy.save()
+
+                # 모든 입찰자에게 취소 알림
+                all_bids = Bid.objects.filter(groupbuy=groupbuy)
+                for bid in all_bids:
+                    send_groupbuy_notification(
+                        user=bid.seller,
+                        groupbuy=groupbuy,
+                        notification_type='groupbuy_cancelled',
+                        message=f"{groupbuy.title}이 구매자 전원 포기로 취소되었습니다",
+                        push_title="공구 취소 알림"
+                    )
     except Exception as e:
         logger.error(f"check_buyer_decisions_completed 오류: {str(e)}")
         # 알림 발송 실패해도 계속 진행
