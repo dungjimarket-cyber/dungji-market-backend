@@ -20,7 +20,7 @@ class PopupAdmin(admin.ModelAdmin):
     list_filter = [
         'is_active', 'popup_type', 'show_on_main', 'show_on_groupbuy_list',
         'show_on_groupbuy_detail', 'show_on_used_list', 'show_on_used_detail',
-        'show_on_mypage', 'show_on_mobile',
+        'show_on_mypage', 'show_on_mobile', 'hide_on_twa_app', 'show_only_on_twa_app',
         'start_date', 'end_date', 'created_at'
     ]
     
@@ -46,9 +46,10 @@ class PopupAdmin(admin.ModelAdmin):
                 ('show_on_main', 'show_on_mypage'),
                 ('show_on_groupbuy_list', 'show_on_groupbuy_detail'),
                 ('show_on_used_list', 'show_on_used_detail'),
-                'show_on_mobile'
+                'show_on_mobile',
+                ('hide_on_twa_app', 'show_only_on_twa_app')
             ),
-            'description': '팝업을 표시할 페이지를 선택하세요. 여러 페이지 동시 선택 가능.'
+            'description': '팝업을 표시할 페이지를 선택하세요. 여러 페이지 동시 선택 가능. TWA 앱 설정: 웹에서만 표시 또는 앱에서만 표시를 선택할 수 있습니다.'
         }),
         ('표시 위치 및 크기', {
             'fields': (
