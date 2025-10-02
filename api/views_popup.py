@@ -17,6 +17,39 @@ from .serializers_popup import (
 from .permissions import IsAdminRole
 
 
+def is_twa_app(request):
+    """
+    TWA(Trusted Web Activity) 앱 여부 감지
+
+    User-Agent와 Referrer를 통해 Play Store TWA 앱인지 판단
+    """
+    user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+    referrer = request.META.get('HTTP_REFERER', '')
+
+    # android-app:// referrer는 확실한 TWA 표시
+    if 'android-app://' in referrer:
+        return True
+
+    # User-Agent에서 WebView 표시 확인
+    # TWA는 Chrome WebView 기반이므로 'wv' 포함
+    if 'wv' in user_agent:
+        return True
+
+    # 추가 패턴: Android + Chrome + Mobile 조합
+    # 일반 모바일 브라우저와 구분하기 위해 더 엄격한 조건 사용
+    is_android = 'android' in user_agent
+    is_chrome = 'chrome' in user_agent
+    is_mobile = 'mobile' in user_agent
+
+    # WebView 특성: Version/ 태그 확인
+    has_version = 'version/' in user_agent
+
+    if is_android and is_chrome and is_mobile and has_version:
+        return True
+
+    return False
+
+
 class PopupViewSet(viewsets.ModelViewSet):
     """팝업 뷰셋"""
     
@@ -98,6 +131,15 @@ class PopupViewSet(viewsets.ModelViewSet):
             popups = popups.filter(show_on_used_detail=True)
         elif page_type == 'mypage':
             popups = popups.filter(show_on_mypage=True)
+
+        # TWA 앱 필터링
+        is_twa = is_twa_app(request)
+        if is_twa:
+            # TWA 앱에서는 hide_on_twa_app=True인 팝업 제외
+            popups = popups.exclude(hide_on_twa_app=True)
+        else:
+            # 웹에서는 show_only_on_twa_app=True인 팝업 제외
+            popups = popups.exclude(show_only_on_twa_app=True)
 
         # 우선순위 정렬
         popups = popups.order_by('-priority', '-created_at')
