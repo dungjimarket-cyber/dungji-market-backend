@@ -19,7 +19,7 @@ from .models import (
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
     Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog,
-    Notification
+    Notification, PushToken, NotificationSetting
 )
 from .models_payment import Payment, RefundRequest
 from .models_verification import BusinessNumberVerification
@@ -2316,4 +2316,24 @@ class NotificationAdmin(admin.ModelAdmin):
     def message_preview(self, obj):
         return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
     message_preview.short_description = '메시지'
+
+
+@admin.register(PushToken)
+class PushTokenAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'platform', 'token_preview', 'is_active', 'created_at', 'updated_at']
+    list_filter = ['platform', 'is_active', 'created_at']
+    search_fields = ['user__username', 'user__nickname', 'token']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-updated_at']
+
+    def token_preview(self, obj):
+        return obj.token[:30] + '...' if len(obj.token) > 30 else obj.token
+    token_preview.short_description = 'FCM Token'
+
+
+@admin.register(NotificationSetting)
+class NotificationSettingAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'trade_notifications', 'marketing_notifications']
+    list_filter = ['trade_notifications', 'marketing_notifications']
+    search_fields = ['user__username', 'user__nickname']
 
