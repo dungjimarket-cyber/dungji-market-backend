@@ -23,25 +23,16 @@ def is_twa_app(request):
 
     User-Agent와 Referrer를 통해 Play Store TWA 앱인지 판단
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
     user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
     referrer = request.META.get('HTTP_REFERER', '')
 
-    # 디버깅 로그
-    logger.info(f"[TWA Detection] User-Agent: {user_agent}")
-    logger.info(f"[TWA Detection] Referrer: {referrer}")
-
     # android-app:// referrer는 확실한 TWA 표시
     if 'android-app://' in referrer:
-        logger.info("[TWA Detection] Result: True (android-app referrer)")
         return True
 
     # User-Agent에서 WebView 표시 확인
     # TWA는 Chrome WebView 기반이므로 'wv' 포함
     if 'wv' in user_agent:
-        logger.info("[TWA Detection] Result: True (wv in user agent)")
         return True
 
     # Samsung Browser 패턴 확인
@@ -50,28 +41,16 @@ def is_twa_app(request):
     is_samsung = 'samsungbrowser' in user_agent
 
     if is_android and is_samsung:
-        # Samsung Browser는 일반 브라우저와 TWA 앱 구분이 어려움
-        # 하지만 앱 패키지로 실행되면 보통 Version/ 태그가 없음
-        # 또는 AppleWebKit만 있고 Chrome이 없음
-        has_chrome = 'chrome' in user_agent
-
-        # Samsung Browser + Android면 TWA로 간주
-        # (일반 Samsung Browser로 웹 접속 시에는 보통 Mobile 태그가 더 명확함)
-        logger.info(f"[TWA Detection] Result: True (Samsung Browser on Android, has_chrome={has_chrome})")
         return True
 
     # 추가 패턴: Android + Chrome + Mobile 조합
     is_chrome = 'chrome' in user_agent
     is_mobile = 'mobile' in user_agent
-
-    # WebView 특성: Version/ 태그 확인
     has_version = 'version/' in user_agent
 
     if is_android and is_chrome and is_mobile and has_version:
-        logger.info(f"[TWA Detection] Result: True (android+chrome+mobile+version)")
         return True
 
-    logger.info(f"[TWA Detection] Result: False (is_android={is_android}, is_chrome={is_chrome}, is_mobile={is_mobile}, has_version={has_version}, is_samsung={is_samsung})")
     return False
 
 
@@ -180,20 +159,7 @@ class PopupViewSet(viewsets.ModelViewSet):
             popups = popups.exclude(id__in=hidden_week)
 
         serializer = PopupListSerializer(popups, many=True)
-
-        # 디버그 정보 포함 (개발용)
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
-        referrer = request.META.get('HTTP_REFERER', '')
-
-        return Response({
-            'results': serializer.data,
-            'debug_info': {
-                'is_twa_detected': is_twa,
-                'user_agent': user_agent,
-                'referrer': referrer,
-                'total_popups': len(serializer.data)
-            }
-        })
+        return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def debug_popups(self, request):
