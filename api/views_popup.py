@@ -44,9 +44,23 @@ def is_twa_app(request):
         logger.info("[TWA Detection] Result: True (wv in user agent)")
         return True
 
-    # 추가 패턴: Android + Chrome + Mobile 조합
-    # 일반 모바일 브라우저와 구분하기 위해 더 엄격한 조건 사용
+    # Samsung Browser 패턴 확인
+    # Samsung Browser는 TWA 앱으로 실행될 때 특정 패턴을 가짐
     is_android = 'android' in user_agent
+    is_samsung = 'samsungbrowser' in user_agent
+
+    if is_android and is_samsung:
+        # Samsung Browser는 일반 브라우저와 TWA 앱 구분이 어려움
+        # 하지만 앱 패키지로 실행되면 보통 Version/ 태그가 없음
+        # 또는 AppleWebKit만 있고 Chrome이 없음
+        has_chrome = 'chrome' in user_agent
+
+        # Samsung Browser + Android면 TWA로 간주
+        # (일반 Samsung Browser로 웹 접속 시에는 보통 Mobile 태그가 더 명확함)
+        logger.info(f"[TWA Detection] Result: True (Samsung Browser on Android, has_chrome={has_chrome})")
+        return True
+
+    # 추가 패턴: Android + Chrome + Mobile 조합
     is_chrome = 'chrome' in user_agent
     is_mobile = 'mobile' in user_agent
 
@@ -57,7 +71,7 @@ def is_twa_app(request):
         logger.info(f"[TWA Detection] Result: True (android+chrome+mobile+version)")
         return True
 
-    logger.info(f"[TWA Detection] Result: False (is_android={is_android}, is_chrome={is_chrome}, is_mobile={is_mobile}, has_version={has_version})")
+    logger.info(f"[TWA Detection] Result: False (is_android={is_android}, is_chrome={is_chrome}, is_mobile={is_mobile}, has_version={has_version}, is_samsung={is_samsung})")
     return False
 
 
