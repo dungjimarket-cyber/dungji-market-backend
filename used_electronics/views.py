@@ -636,14 +636,23 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
         electronics.status = 'trading'
         electronics.save()
 
-        # 거래 생성 (offer 연결)
-        ElectronicsTransaction.objects.create(
+        # 기존 trading 상태 트랜잭션이 있는지 확인 (같은 제안에 대해서만)
+        existing_trading = ElectronicsTransaction.objects.filter(
             electronics=electronics,
-            offer=offer,  # offer 연결 추가
-            seller=electronics.seller,
-            buyer=offer.buyer,
-            final_price=offer.offer_price
-        )
+            offer=offer,  # 같은 제안에 대한 거래만 확인
+            status='in_progress'
+        ).first()
+
+        if not existing_trading:
+            # 취소된 트랜잭션이 있더라도 새로운 트랜잭션 생성
+            ElectronicsTransaction.objects.create(
+                electronics=electronics,
+                offer=offer,
+                seller=electronics.seller,
+                buyer=offer.buyer,
+                final_price=offer.offer_price,
+                status='in_progress'
+            )
 
         return Response({'message': '제안을 수락했습니다.'})
 
