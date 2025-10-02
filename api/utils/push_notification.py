@@ -103,13 +103,14 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
             }
         }
 
+        logger.info(f"Sending FCM to token: {token[:30]}... with title: {title}")
         response = requests.post(url, headers=headers, json=payload, timeout=10)
 
         if response.status_code == 200:
-            logger.info(f"FCM push sent successfully to {token[:20]}...")
+            logger.info(f"✅ FCM SUCCESS - Status: {response.status_code}, Response: {response.text[:200]}")
             return True
         else:
-            logger.error(f"FCM request failed: {response.status_code} - {response.text}")
+            logger.error(f"❌ FCM FAILED - Status: {response.status_code}, Response: {response.text}")
             return False
 
     except requests.exceptions.Timeout:
