@@ -78,8 +78,14 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
         }
 
         # 알림 타입에 따라 URL 결정
-        if data and data.get('type') == 'used':
-            link_url = "https://www.dungjimarket.com/used/mypage"
+        if data:
+            notification_type = data.get('type')
+            if notification_type == 'used':
+                link_url = "https://www.dungjimarket.com/used/mypage"
+            elif notification_type == 'groupbuy':
+                link_url = "https://www.dungjimarket.com/mypage"
+            else:
+                link_url = "https://www.dungjimarket.com/mypage"
         else:
             link_url = "https://www.dungjimarket.com/mypage"
 
@@ -96,8 +102,14 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
                         "link": link_url
                     },
                     "notification": {
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/icon-96x96.png"
+                        "icon": "https://www.dungjimarket.com/logos/dunji_logo.jpg",
+                        "badge": "https://www.dungjimarket.com/logos/dunji_logo.jpg"
+                    }
+                },
+                "android": {
+                    "notification": {
+                        "icon": "https://www.dungjimarket.com/logos/dunji_logo.jpg",
+                        "color": "#4F46E5"
                     }
                 }
             }
