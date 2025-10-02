@@ -18,7 +18,8 @@ from .models import (
     TelecomProductDetail, ElectronicsProductDetail, RentalProductDetail,
     SubscriptionProductDetail, StandardProductDetail, ProductCustomField,
     ProductCustomValue, ParticipantConsent, PhoneVerification, Banner, Event,
-    Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog
+    Review, NoShowReport, BidToken, BidTokenPurchase, BidTokenAdjustmentLog,
+    Notification
 )
 from .models_payment import Payment, RefundRequest
 from .models_verification import BusinessNumberVerification
@@ -2302,4 +2303,17 @@ class RefundRequestAdmin(admin.ModelAdmin):
         )
         self.message_user(request, f'{updated}건의 환불 요청을 거부했습니다.')
     reject_refund.short_description = "선택된 환불 요청 거부"
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'notification_type', 'item_type', 'message_preview', 'is_read', 'created_at']
+    list_filter = ['notification_type', 'item_type', 'is_read', 'created_at']
+    search_fields = ['user__username', 'user__nickname', 'message']
+    readonly_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def message_preview(self, obj):
+        return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
+    message_preview.short_description = '메시지'
 
