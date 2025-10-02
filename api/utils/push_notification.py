@@ -89,6 +89,10 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
         else:
             link_url = "https://www.dungjimarket.com/mypage"
 
+        # data 페이로드에 URL 추가 (앱에서 사용)
+        payload_data = data or {}
+        payload_data['url'] = link_url
+
         payload = {
             "message": {
                 "token": token,
@@ -96,7 +100,7 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
                     "title": title,
                     "body": body,
                 },
-                "data": data or {},
+                "data": payload_data,
                 "webpush": {
                     "fcm_options": {
                         "link": link_url
@@ -109,7 +113,8 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
                 "android": {
                     "notification": {
                         "icon": "https://www.dungjimarket.com/logos/dunji_logo.jpg",
-                        "color": "#4F46E5"
+                        "color": "#4F46E5",
+                        "click_action": "FLUTTER_NOTIFICATION_CLICK"
                     }
                 }
             }
