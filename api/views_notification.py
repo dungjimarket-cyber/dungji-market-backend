@@ -6,7 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import Notification, NotificationSetting, PushToken
 from .serializers_notification import NotificationSerializer
-from .utils.push_notification import send_push_notification
+from .utils.push_notification import send_fcm_push
 import logging
 
 logger = logging.getLogger(__name__)
@@ -201,7 +201,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
             for push_token in push_tokens:
                 try:
                     # FCM 푸시 전송
-                    result = send_push_notification(
+                    result = send_fcm_push(
                         token=push_token.token,
                         title="테스트 알림",
                         body="FCM 푸시 알림이 정상적으로 작동합니다!",
