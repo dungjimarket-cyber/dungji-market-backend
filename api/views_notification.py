@@ -98,6 +98,11 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """
         푸시 토큰 등록
         FCM/APNs 디바이스 토큰을 등록합니다.
+
+        플랫폼당 1개의 토큰만 유지합니다.
+        - Web: 브라우저당 1개
+        - Android: 앱 1개
+        - iOS: 앱 1개
         """
         token = request.data.get('token')
         platform = request.data.get('platform')  # 'ios', 'android', 'web'
@@ -114,7 +119,16 @@ class NotificationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 기존 토큰이 있으면 업데이트, 없으면 생성
+        # 같은 사용자 + 플랫폼의 기존 토큰 삭제 (중복 방지)
+        deleted_count = PushToken.objects.filter(
+            user=request.user,
+            platform=platform
+        ).exclude(token=token).delete()[0]
+
+        if deleted_count > 0:
+            logger.info(f"Deleted {deleted_count} old tokens for user={request.user.id}, platform={platform}")
+
+        # 새 토큰 등록 (이미 같은 토큰이 있으면 업데이트)
         push_token, created = PushToken.objects.update_or_create(
             token=token,
             defaults={
@@ -125,11 +139,12 @@ class NotificationViewSet(viewsets.ModelViewSet):
         )
 
         action_text = '등록' if created else '업데이트'
-        logger.info(f"Push token {action_text}: user={request.user.id}, platform={platform}")
+        logger.info(f"Push token {action_text}: user={request.user.id}, platform={platform}, token={token[:30]}...")
 
         return Response({
             'message': f'푸시 토큰이 {action_text}되었습니다.',
-            'token_id': push_token.id
+            'token_id': push_token.id,
+            'platform': platform
         }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='unregister-token')
