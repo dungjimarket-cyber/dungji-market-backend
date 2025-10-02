@@ -176,7 +176,13 @@ class Popup(models.Model):
         verbose_name='모바일 표시',
         help_text='모바일 환경에서 팝업 표시'
     )
-    
+
+    hide_on_twa_app = models.BooleanField(
+        default=False,
+        verbose_name='TWA 앱에서 숨김',
+        help_text='Play Store 앱(TWA)에서 팝업을 표시하지 않음'
+    )
+
     # 사용자 옵션
     show_today_close = models.BooleanField(
         default=True,
