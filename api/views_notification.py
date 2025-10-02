@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import Notification, NotificationSetting, PushToken
 from .serializers_notification import NotificationSerializer
+from .utils.push_notification import send_push_notification
 import logging
 
 logger = logging.getLogger(__name__)
@@ -159,3 +160,82 @@ class NotificationViewSet(viewsets.ModelViewSet):
                 {'error': '토큰을 찾을 수 없습니다.'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    @action(detail=False, methods=['post'], url_path='test-push')
+    def test_push_notification(self, request):
+        """
+        FCM 푸시 알림 테스트 엔드포인트
+        특정 사용자 또는 현재 로그인한 사용자에게 테스트 푸시를 전송합니다.
+
+        Body: { "username": "seller10" } (선택사항)
+        """
+        try:
+            # username 파라미터가 있으면 해당 사용자에게, 없으면 현재 사용자에게
+            target_username = request.data.get('username')
+
+            if target_username:
+                from .models import User
+                try:
+                    target_user = User.objects.get(username=target_username)
+                except User.DoesNotExist:
+                    return Response({
+                        'error': f'사용자 "{target_username}"를 찾을 수 없습니다.'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            else:
+                target_user = request.user
+
+            # 대상 사용자의 활성 푸시 토큰 찾기
+            push_tokens = PushToken.objects.filter(
+                user=target_user,
+                is_active=True
+            )
+
+            if not push_tokens.exists():
+                return Response({
+                    'error': 'FCM 토큰이 등록되어 있지 않습니다.',
+                    'detail': f'사용자 "{target_user.username}"에게 등록된 활성 토큰이 없습니다.',
+                    'target_user': target_user.username
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            results = []
+            for push_token in push_tokens:
+                try:
+                    # FCM 푸시 전송
+                    result = send_push_notification(
+                        token=push_token.token,
+                        title="테스트 알림",
+                        body="FCM 푸시 알림이 정상적으로 작동합니다!",
+                        data={'test': 'true', 'type': 'test'}
+                    )
+
+                    results.append({
+                        'token_id': push_token.id,
+                        'platform': push_token.platform,
+                        'success': True,
+                        'result': result
+                    })
+                    logger.info(f"Test push sent successfully to user={request.user.id}, token={push_token.id}")
+
+                except Exception as e:
+                    results.append({
+                        'token_id': push_token.id,
+                        'platform': push_token.platform,
+                        'success': False,
+                        'error': str(e)
+                    })
+                    logger.error(f"Test push failed for user={request.user.id}, token={push_token.id}: {str(e)}")
+
+            return Response({
+                'message': f'{len(results)}개의 토큰에 테스트 푸시를 전송했습니다.',
+                'target_user': target_user.username,
+                'results': results,
+                'total_tokens': len(results),
+                'successful': sum(1 for r in results if r['success'])
+            })
+
+        except Exception as e:
+            logger.error(f"Test push notification error: {str(e)}")
+            return Response({
+                'error': '푸시 알림 전송 중 오류가 발생했습니다.',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
