@@ -23,16 +23,25 @@ def is_twa_app(request):
 
     User-Agent와 Referrer를 통해 Play Store TWA 앱인지 판단
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
     referrer = request.META.get('HTTP_REFERER', '')
 
+    # 디버깅 로그
+    logger.info(f"[TWA Detection] User-Agent: {user_agent}")
+    logger.info(f"[TWA Detection] Referrer: {referrer}")
+
     # android-app:// referrer는 확실한 TWA 표시
     if 'android-app://' in referrer:
+        logger.info("[TWA Detection] Result: True (android-app referrer)")
         return True
 
     # User-Agent에서 WebView 표시 확인
     # TWA는 Chrome WebView 기반이므로 'wv' 포함
     if 'wv' in user_agent:
+        logger.info("[TWA Detection] Result: True (wv in user agent)")
         return True
 
     # 추가 패턴: Android + Chrome + Mobile 조합
@@ -45,8 +54,10 @@ def is_twa_app(request):
     has_version = 'version/' in user_agent
 
     if is_android and is_chrome and is_mobile and has_version:
+        logger.info(f"[TWA Detection] Result: True (android+chrome+mobile+version)")
         return True
 
+    logger.info(f"[TWA Detection] Result: False (is_android={is_android}, is_chrome={is_chrome}, is_mobile={is_mobile}, has_version={has_version})")
     return False
 
 
