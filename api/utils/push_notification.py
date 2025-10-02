@@ -93,28 +93,18 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
         payload_data = data or {}
         payload_data['url'] = link_url
 
+        # data에 title, body 추가 (Service Worker에서 사용)
+        payload_data['title'] = title
+        payload_data['body'] = body
+
         payload = {
             "message": {
                 "token": token,
-                "notification": {
-                    "title": title,
-                    "body": body,
-                },
+                # notification 필드 제거: Service Worker에서만 처리하여 중복 방지
                 "data": payload_data,
                 "webpush": {
                     "fcm_options": {
                         "link": link_url
-                    },
-                    "notification": {
-                        "icon": "https://www.dungjimarket.com/logos/dunji_logo.jpg",
-                        "badge": "https://www.dungjimarket.com/logos/dunji_logo.jpg"
-                    }
-                },
-                "android": {
-                    "notification": {
-                        "icon": "https://www.dungjimarket.com/logos/dunji_logo.jpg",
-                        "color": "#4F46E5",
-                        "click_action": "FLUTTER_NOTIFICATION_CLICK"
                     }
                 }
             }
