@@ -89,11 +89,15 @@ def send_fcm_push(token: str, title: str, body: str, data: Optional[Dict[str, An
         else:
             link_url = "https://www.dungjimarket.com/mypage"
 
-        # data 페이로드에 URL 추가 (앱에서 사용)
-        payload_data = data or {}
-        payload_data['url'] = link_url
+        # data 페이로드 준비 (모든 값은 문자열이어야 함)
+        payload_data = {}
+        if data:
+            # 기존 data의 모든 값을 문자열로 변환
+            for key, value in data.items():
+                payload_data[key] = str(value)
 
-        # data에 title, body 추가 (Service Worker에서 사용)
+        # 필수 필드 추가
+        payload_data['url'] = link_url
         payload_data['title'] = title
         payload_data['body'] = body
 
