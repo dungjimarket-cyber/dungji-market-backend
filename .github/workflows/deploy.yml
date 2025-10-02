@@ -84,12 +84,10 @@ jobs:
             echo "Using existing .env file on server"
           fi
 
-          # Firebase 서비스 계정 키를 .env에 추가
+          # Firebase 서비스 계정 키를 .env에 추가 (Base64 디코딩)
           if [ ! -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
             echo "" >> ~/dungji-market-backend/.env
-            cat >> ~/dungji-market-backend/.env << 'FIREBASE_EOF'
-FIREBASE_SERVICE_ACCOUNT='${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-FIREBASE_EOF
+            echo 'FIREBASE_SERVICE_ACCOUNT=${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' >> ~/dungji-market-backend/.env
             echo "✅ Firebase credentials added to .env"
           fi
 
