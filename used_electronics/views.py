@@ -1115,10 +1115,17 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             transaction.cancellation_detail = custom_reason if custom_reason else ''
             transaction.save()
 
-            # return_to_sale이 True인 경우 상품을 다시 활성으로 (판매자/구매자 모두)
-            if return_to_sale:
+            # 취소 처리
+            if is_buyer:
+                # 구매자가 취소 - 상품은 자동으로 판매중으로
                 electronics.status = 'active'
-                electronics.save()
+                electronics.save(update_fields=['status'])
+            else:
+                # 판매자가 취소
+                if return_to_sale:
+                    # 판매중으로 전환
+                    electronics.status = 'active'
+                    electronics.save(update_fields=['status'])
 
             # 제안 상태도 초기화
             accepted_offer.status = 'cancelled'
