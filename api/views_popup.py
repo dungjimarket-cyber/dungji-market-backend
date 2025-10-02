@@ -166,7 +166,20 @@ class PopupViewSet(viewsets.ModelViewSet):
             popups = popups.exclude(id__in=hidden_week)
 
         serializer = PopupListSerializer(popups, many=True)
-        return Response(serializer.data)
+
+        # 디버그 정보 포함 (개발용)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        referrer = request.META.get('HTTP_REFERER', '')
+
+        return Response({
+            'results': serializer.data,
+            'debug_info': {
+                'is_twa_detected': is_twa,
+                'user_agent': user_agent,
+                'referrer': referrer,
+                'total_popups': len(serializer.data)
+            }
+        })
     
     @action(detail=False, methods=['get'])
     def debug_popups(self, request):
