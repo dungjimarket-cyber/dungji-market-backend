@@ -455,9 +455,10 @@ def check_buyer_decisions_completed(groupbuy):
     모든 구매자의 최종선택이 완료되었는지 확인하고
     완료된 경우 자동으로 최고 입찰자를 낙찰자로 선택 후 판매자 최종선택 단계로 전환
     """
-    # 구매자들의 최종선택 확인
-    participations = Participation.objects.filter(groupbuy=groupbuy)
-    buyer_decisions_completed = all(p.final_decision != 'pending' for p in participations)
+    try:
+        # 구매자들의 최종선택 확인
+        participations = Participation.objects.filter(groupbuy=groupbuy)
+        buyer_decisions_completed = all(p.final_decision != 'pending' for p in participations)
     
     if buyer_decisions_completed:
         confirmed_count = participations.filter(final_decision='confirmed').count()
@@ -547,6 +548,9 @@ def check_buyer_decisions_completed(groupbuy):
                     message=f"{groupbuy.title}이 구매자 전원 포기로 취소되었습니다",
                     push_title="공구 취소 알림"
                 )
+    except Exception as e:
+        logger.error(f"check_buyer_decisions_completed 오류: {str(e)}")
+        # 알림 발송 실패해도 계속 진행
 
 
 @api_view(['GET'])

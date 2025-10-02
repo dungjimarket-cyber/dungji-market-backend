@@ -425,7 +425,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
             item_type='phone',
             item_id=phone.id,
             notification_type='offer_received',
-            message=f"{phone.model}에 {offered_price:,}원 가격 제안이 도착했습니다",
+            message=f"{phone.brand} {phone.model}에 {offered_price:,}원 가격 제안이 도착했습니다",
             push_title="가격 제안 알림"
         )
         
@@ -1132,7 +1132,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                     item_type='phone',
                     item_id=phone.id,
                     notification_type='trade_completed',
-                    message=f"{phone.model} 거래가 완료되었습니다. 후기를 남겨보세요",
+                    message=f"{phone.brand} {phone.model} 거래가 완료되었습니다. 후기를 남겨보세요",
                     push_title="거래 완료"
                 )
 
@@ -1294,7 +1294,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 item_type='phone',
                 item_id=phone.id,
                 notification_type='trade_cancelled',
-                message=f"{phone.model} 거래가 취소되었습니다",
+                message=f"{phone.brand} {phone.model} 거래가 취소되었습니다",
                 push_title="거래 취소"
             )
         else:
@@ -1304,7 +1304,7 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
                 item_type='phone',
                 item_id=phone.id,
                 notification_type='trade_cancelled',
-                message=f"{phone.model} 거래가 취소되었습니다",
+                message=f"{phone.brand} {phone.model} 거래가 취소되었습니다",
                 push_title="거래 취소"
             )
 
@@ -1548,7 +1548,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
                 item_type='phone',
                 item_id=offer.phone.id,
                 notification_type='offer_accepted',
-                message=f"{offer.phone.model} 가격 제안이 수락되었습니다",
+                message=f"{offer.phone.brand} {offer.phone.model} 가격 제안이 수락되었습니다",
                 push_title="가격 제안 수락"
             )
         else:
