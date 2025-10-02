@@ -880,25 +880,29 @@ class Participation(models.Model):
         return f"{self.user.username} - {self.groupbuy.title} {leader_mark}"
 
     def save(self, *args, **kwargs):
-        # 동일한 상품의 공구 중복 참여 방지
-        duplicate_check = Participation.objects.filter(
-            user=self.user,
-            groupbuy__product=self.groupbuy.product,
-            groupbuy__status__in=['recruiting', 'bidding']
-        )
+        # 삭제 플래그만 업데이트하는 경우 중복 체크 건너뛰기
+        skip_validation = kwargs.pop('skip_duplicate_check', False)
 
-        # 기존 레코드 업데이트인 경우 자기 자신 제외
-        if self.pk:
-            duplicate_check = duplicate_check.exclude(pk=self.pk)
+        if not skip_validation:
+            # 동일한 상품의 공구 중복 참여 방지
+            duplicate_check = Participation.objects.filter(
+                user=self.user,
+                groupbuy__product=self.groupbuy.product,
+                groupbuy__status__in=['recruiting', 'bidding']
+            )
 
-        if duplicate_check.exists():
-            from django.core.exceptions import ValidationError
-            raise ValidationError("이미 동일한 상품의 공구에 참여중입니다.")
-            
+            # 기존 레코드 업데이트인 경우 자기 자신 제외
+            if self.pk:
+                duplicate_check = duplicate_check.exclude(pk=self.pk)
+
+            if duplicate_check.exists():
+                from django.core.exceptions import ValidationError
+                raise ValidationError("이미 동일한 상품의 공구에 참여중입니다.")
+
         # 참여 닉네임 자동 저장 (새로 생성되는 것인 경우에만)
         if not self.pk and not self.nickname and self.user:
             self.nickname = self.user.username
-            
+
         super().save(*args, **kwargs)
 
     def can_leave(self):

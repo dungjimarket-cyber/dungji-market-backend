@@ -2379,7 +2379,7 @@ class GroupBuyViewSet(ModelViewSet):
             if participation:
                 # 실제 삭제가 아닌 플래그 설정 (나중에 기록 추적 가능)
                 participation.is_deleted_by_user = True
-                participation.save()
+                participation.save(skip_duplicate_check=True)
                 return Response({'message': '취소된 공구가 목록에서 제거되었습니다.'})
             else:
                 return Response(
