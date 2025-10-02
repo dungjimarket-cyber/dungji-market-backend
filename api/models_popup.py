@@ -179,8 +179,14 @@ class Popup(models.Model):
 
     hide_on_twa_app = models.BooleanField(
         default=False,
-        verbose_name='TWA 앱에서 숨김',
-        help_text='Play Store 앱(TWA)에서 팝업을 표시하지 않음'
+        verbose_name='웹에서만 표시',
+        help_text='Play Store 앱(TWA)에서 팝업을 표시하지 않음 (웹에서만 표시)'
+    )
+
+    show_only_on_twa_app = models.BooleanField(
+        default=False,
+        verbose_name='앱에서만 표시',
+        help_text='Play Store 앱(TWA)에서만 팝업을 표시 (웹에서는 숨김)'
     )
 
     # 사용자 옵션
