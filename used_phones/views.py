@@ -31,6 +31,32 @@ from .serializers import (
     UsedPhonePenaltySerializer, UserRatingSerializer
 )
 
+# 브랜드 한글 변환 매핑
+BRAND_KOR_MAP = {
+    'Apple': '애플',
+    'Samsung': '삼성',
+    'LG': 'LG',
+    'Google': '구글',
+    'Xiaomi': '샤오미',
+    'Oppo': '오포',
+    'Vivo': '비보',
+    'OnePlus': '원플러스',
+    'Huawei': '화웨이',
+    'Motorola': '모토로라',
+    'Nokia': '노키아',
+    'Sony': '소니',
+    'Asus': '에이수스',
+    'Lenovo': '레노버',
+    'ZTE': 'ZTE',
+    'Realme': '리얼미',
+    'Nothing': '낫씽',
+    'Other': '기타',
+}
+
+def get_brand_kor(brand_eng):
+    """브랜드 영문을 한글로 변환"""
+    return BRAND_KOR_MAP.get(brand_eng, brand_eng)
+
 
 class UsedPhoneViewSet(viewsets.ModelViewSet):
     """Used Phone ViewSet"""
@@ -420,12 +446,13 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
 
         # 판매자에게 가격 제안 수신 알림
         from api.utils.notification_helper import send_used_trade_notification
+        brand_kor = get_brand_kor(phone.brand)
         send_used_trade_notification(
             user=phone.seller,
             item_type='phone',
             item_id=phone.id,
             notification_type='offer_received',
-            message=f"{phone.brand} {phone.model}에 {offered_price:,}원 가격 제안이 도착했습니다",
+            message=f"{brand_kor} {phone.model}에 {offered_price:,}원 가격 제안이 도착했습니다",
             push_title="가격 제안 알림"
         )
         
