@@ -87,7 +87,7 @@ class UsedElectronics(models.Model):
     purchase_period = models.CharField(max_length=50, blank=True, verbose_name='구매시기')
     usage_period = models.CharField(max_length=50, blank=True, verbose_name='사용기간')
     is_unused = models.BooleanField(default=False, verbose_name='미개봉')
-    condition_grade = models.CharField(max_length=1, choices=CONDITION_CHOICES, verbose_name='상태등급')
+    condition_grade = models.CharField(max_length=10, choices=CONDITION_CHOICES, verbose_name='상태등급')
 
     # ========== 구성품 ==========
     has_box = models.BooleanField(default=False, verbose_name='박스포함')
