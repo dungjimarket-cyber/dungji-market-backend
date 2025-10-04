@@ -2083,13 +2083,9 @@ class GroupBuyViewSet(ModelViewSet):
         
         if user.role == 'buyer':
             # 구매자가 참여한 공구 중 final_selection_buyers 상태인 공구
-            # 단, 포기한 공구는 제외
             pending = self.get_queryset().filter(
                 participants=user,
                 status='final_selection_buyers'
-            ).exclude(
-                participation__user=user,
-                participation__final_decision='cancelled'
             ).distinct()
         elif user.role == 'seller':
             # 판매자가 낙찰된 공구 중 final_selection_seller 상태인 공구
@@ -2102,9 +2098,23 @@ class GroupBuyViewSet(ModelViewSet):
             ).distinct()
         else:
             pending = self.get_queryset().none()
-        
+
+        # Serialize하고 각 공구에 사용자의 final_decision 추가
+        from .models import GroupBuyParticipation
         serializer = self.get_serializer(pending, many=True)
-        return Response(serializer.data)
+        result = []
+        for gb_data in serializer.data:
+            if user.role == 'buyer':
+                # 구매자의 participation에서 final_decision 가져오기
+                participation = GroupBuyParticipation.objects.filter(
+                    groupbuy_id=gb_data['id'],
+                    user=user
+                ).first()
+                if participation:
+                    gb_data['my_final_decision'] = participation.final_decision
+            result.append(gb_data)
+
+        return Response(result)
         
     @action(detail=False, methods=['get'])
     def purchase_confirmed(self, request):
