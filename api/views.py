@@ -2103,13 +2103,15 @@ class GroupBuyViewSet(ModelViewSet):
         from .models import GroupBuyParticipation
         serializer = self.get_serializer(pending, many=True)
         result = []
-        for gb_data in serializer.data:
+
+        # QuerySet을 리스트로 변환하여 인덱스 접근 가능하게 함
+        pending_list = list(pending)
+
+        for idx, gb_data in enumerate(serializer.data):
             if user.role == 'buyer':
-                # 구매자의 participation에서 final_decision 가져오기
-                participation = GroupBuyParticipation.objects.filter(
-                    groupbuy_id=gb_data['id'],
-                    user=user
-                ).first()
+                # 원본 객체에서 직접 participation 가져오기
+                groupbuy = pending_list[idx]
+                participation = groupbuy.participation_set.filter(user=user).first()
                 if participation:
                     gb_data['my_final_decision'] = participation.final_decision
             result.append(gb_data)
