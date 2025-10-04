@@ -36,7 +36,9 @@ class UsedElectronics(models.Model):
 
     # 카테고리 선택
     SUBCATEGORY_CHOICES = [
-        ('laptop', '노트북/컴퓨터'),
+        ('laptop', '컴퓨터/노트북'),
+        ('pc_parts', 'PC주요부품'),
+        ('peripherals', 'PC주변기기'),
         ('tv', 'TV/모니터'),
         ('game', '게임기'),
         ('camera', '카메라'),
