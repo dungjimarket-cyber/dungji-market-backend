@@ -2100,7 +2100,7 @@ class GroupBuyViewSet(ModelViewSet):
             pending = self.get_queryset().none()
 
         # Serialize하고 각 공구에 사용자의 final_decision 추가
-        from .models import GroupBuyParticipation
+        from .models import Participation
         serializer = self.get_serializer(pending, many=True)
         result = []
 
