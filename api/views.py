@@ -2082,11 +2082,14 @@ class GroupBuyViewSet(ModelViewSet):
         user = request.user
         
         if user.role == 'buyer':
-            # 구매자가 참여한 공구 중 final_selection_buyers 상태인 모든 공구
-            # 선택 여부와 관계없이 12시간 동안 이 카테고리에 유지
+            # 구매자가 참여한 공구 중 final_selection_buyers 상태인 공구
+            # 단, 포기한 공구는 제외
             pending = self.get_queryset().filter(
                 participants=user,
                 status='final_selection_buyers'
+            ).exclude(
+                participation__user=user,
+                participation__final_decision='cancelled'
             ).distinct()
         elif user.role == 'seller':
             # 판매자가 낙찰된 공구 중 final_selection_seller 상태인 공구
