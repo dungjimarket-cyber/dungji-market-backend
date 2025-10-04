@@ -47,8 +47,9 @@ class UsedElectronics(models.Model):
         ('etc', '기타'),
     ]
 
-    # 상태 등급 (휴대폰과 동일)
+    # 상태 등급
     CONDITION_CHOICES = [
+        ('unopened', '미개봉'),
         ('S', 'S급'),
         ('A', 'A급'),
         ('B', 'B급'),
