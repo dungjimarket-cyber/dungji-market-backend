@@ -622,6 +622,8 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
     # 추가 정보 필드들 (backward compatibility)
     phone_brand = serializers.SerializerMethodField()
     phone_model = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()  # 전자제품용
+    itemType = serializers.CharField(source='item_type', read_only=True)  # 프론트엔드 호환
 
     class Meta:
         model = UnifiedReview
@@ -629,7 +631,7 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
             'id', 'transaction', 'transaction_id', 'reviewer', 'reviewer_username', 'reviewer_nickname',
             'reviewee', 'reviewee_username', 'reviewee_nickname', 'rating', 'comment',
             'is_punctual', 'is_friendly', 'is_honest', 'is_fast_response',
-            'phone_brand', 'phone_model', 'item_type', 'is_from_buyer',
+            'phone_brand', 'phone_model', 'product_name', 'item_type', 'itemType', 'is_from_buyer',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'reviewer', 'reviewee', 'item_type', 'created_at', 'updated_at']
@@ -652,6 +654,14 @@ class UsedPhoneReviewSerializer(serializers.ModelSerializer):
                 return transaction.phone.model
             elif hasattr(transaction, 'electronics'):
                 return transaction.electronics.model_name
+        return None
+
+    def get_product_name(self, obj):
+        """전자제품 전체 이름 (브랜드 + 모델)"""
+        transaction = obj.get_transaction()
+        if transaction and hasattr(transaction, 'electronics'):
+            electronics = transaction.electronics
+            return f"{electronics.brand} {electronics.model_name}"
         return None
 
     def validate(self, data):

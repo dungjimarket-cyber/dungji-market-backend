@@ -165,7 +165,11 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
         return None
 
     def get_has_review(self, obj):
-        """구매자가 후기를 작성했는지 여부"""
+        """현재 사용자가 후기를 작성했는지 여부"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
         if obj.status == 'sold':
             from .models import ElectronicsTransaction
             from api.models_unified_simple import UnifiedReview
@@ -176,11 +180,11 @@ class ElectronicsListSerializer(serializers.ModelSerializer):
             ).first()
 
             if transaction:
-                # 구매자가 후기를 작성했는지 확인
+                # 현재 사용자가 후기를 작성했는지 확인
                 return UnifiedReview.objects.filter(
                     item_type='electronics',
                     transaction_id=transaction.id,
-                    reviewer=transaction.buyer
+                    reviewer=request.user
                 ).exists()
         return False
 
@@ -300,7 +304,11 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
         return None
 
     def get_has_review(self, obj):
-        """구매자가 후기를 작성했는지 여부"""
+        """현재 사용자가 후기를 작성했는지 여부"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
         if obj.status == 'sold':
             from .models import ElectronicsTransaction
             from api.models_unified_simple import UnifiedReview
@@ -311,11 +319,11 @@ class ElectronicsDetailSerializer(serializers.ModelSerializer):
             ).first()
 
             if transaction:
-                # 구매자가 후기를 작성했는지 확인
+                # 현재 사용자가 후기를 작성했는지 확인
                 return UnifiedReview.objects.filter(
                     item_type='electronics',
                     transaction_id=transaction.id,
-                    reviewer=transaction.buyer
+                    reviewer=request.user
                 ).exists()
         return False
 
