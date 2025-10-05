@@ -1251,9 +1251,12 @@ def withdraw_user(request):
         })
         
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
         logger.error(f"회원 탈퇴 오류: {str(e)}")
+        logger.error(f"상세 에러: {error_detail}")
         return Response(
-            {'error': '회원 탈퇴 처리 중 오류가 발생했습니다.'},
+            {'error': f'회원 탈퇴 처리 중 오류가 발생했습니다: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
