@@ -1204,6 +1204,7 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             main_image = electronics.images.filter(is_primary=True).first() or electronics.images.first()
             offers_data.append({
                 'id': offer.id,
+                'type': 'electronics',  # 타입 구분자 추가
                 'electronics': {
                     'id': electronics.id,
                     'brand': electronics.brand,

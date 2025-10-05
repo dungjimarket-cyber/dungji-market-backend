@@ -1459,6 +1459,7 @@ class UsedPhoneOfferViewSet(viewsets.ModelViewSet):
 
             offers_data.append({
                 'id': offer.id,
+                'type': 'phone',  # 타입 구분자 추가
                 'phone': {
                     'id': phone.id,
                     'title': f"{phone.brand} {phone.model}",
