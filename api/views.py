@@ -151,9 +151,49 @@ def create_sns_user(request):
             
             # 닉네임 업데이트 (비어있거나 자동 생성된 닉네임인 경우만)
             if name and (not user.nickname or user.nickname.startswith('참새') or user.nickname.startswith('어미새')):
-                logger.info(f"사용자({user.id})의 닉네임 업데이트: {user.nickname} -> {name}")
-                user.nickname = name
-                user.first_name = name
+                from django.db.models import Q
+                import re
+
+                # 중복 체크
+                new_nickname = name
+                if User.objects.filter(nickname=new_nickname).exclude(id=user.id).exists():
+                    logger.info(f"사용자({user.id}) 닉네임 '{new_nickname}' 중복 감지, 번호 붙이기")
+
+                    # 해당 닉네임으로 시작하는 모든 닉네임 찾기
+                    existing_nicknames = User.objects.filter(
+                        Q(nickname__startswith=new_nickname)
+                    ).exclude(id=user.id).values_list('nickname', flat=True)
+
+                    # 사용된 번호들 추출
+                    used_numbers = []
+                    if new_nickname in existing_nicknames:
+                        used_numbers.append(0)
+
+                    pattern = re.compile(rf'^{re.escape(new_nickname)}(\d+)$')
+                    for nickname in existing_nicknames:
+                        if nickname:
+                            match = pattern.match(nickname)
+                            if match:
+                                used_numbers.append(int(match.group(1)))
+
+                    # 가장 작은 사용 가능한 번호 찾기
+                    if not used_numbers:
+                        next_number = 1
+                    else:
+                        used_numbers.sort()
+                        next_number = 1
+                        for num in used_numbers:
+                            if num == next_number:
+                                next_number += 1
+                            else:
+                                break
+
+                    new_nickname = f"{name}{next_number}"
+                    logger.info(f"사용자({user.id}) 닉네임 중복 해결: {name} → {new_nickname}")
+
+                logger.info(f"사용자({user.id})의 닉네임 업데이트: {user.nickname} -> {new_nickname}")
+                user.nickname = new_nickname
+                user.first_name = new_nickname
                 
             user.save()
             # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
@@ -238,52 +278,96 @@ def create_sns_user(request):
         # role이 명시적으로 전달된 경우에만 새 사용자 생성
         logger.info(f"새 사용자 생성: email={email}, sns_type={sns_type}, sns_id={sns_id}, role={role}")
         logger.info(f"새 사용자 프로필 이미지: {profile_image}")
-        
-        # 카카오 간편가입 시 자동 닉네임 생성
-        if sns_type == 'kakao' and (not name or name == ''):
-            
-            # 역할에 따른 닉네임 프리픽스 설정
-            if role == 'seller':
-                nickname_prefix = '어미새'
+
+        # 닉네임 중복 체크 및 자동 생성 로직
+        from django.db.models import Q
+        import re
+
+        # 카카오 간편가입 시 닉네임 처리
+        if sns_type == 'kakao':
+            # 카카오에서 닉네임을 제공하지 않은 경우 - 자동 생성
+            if not name or name == '':
+                # 역할에 따른 닉네임 프리픽스 설정
+                if role == 'seller':
+                    nickname_prefix = '어미새'
+                else:
+                    nickname_prefix = '참새'
+
+                # 순차적인 번호 생성을 위해 현재 해당 프리픽스를 가진 사용자들의 번호 확인
+                existing_nicknames = User.objects.filter(
+                    Q(nickname__startswith=nickname_prefix)
+                ).values_list('nickname', flat=True)
+
+                # 사용된 번호들 추출
+                used_numbers = []
+                pattern = re.compile(rf'^{nickname_prefix}(\d+)$')
+
+                for nickname in existing_nicknames:
+                    if nickname:  # nickname이 None이 아닌 경우만 처리
+                        match = pattern.match(nickname)
+                        if match:
+                            used_numbers.append(int(match.group(1)))
+
+                # 가장 작은 사용 가능한 번호 찾기
+                if not used_numbers:
+                    next_number = 1
+                else:
+                    # 1부터 시작해서 빈 번호 찾기
+                    used_numbers.sort()
+                    next_number = 1
+                    for num in used_numbers:
+                        if num == next_number:
+                            next_number += 1
+                        else:
+                            break
+
+                generated_nickname = f"{nickname_prefix}{next_number}"
+                name = generated_nickname
+
+                logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}, role: {role}")
+
+            # 카카오에서 닉네임을 제공한 경우 - 중복 체크 후 번호 붙이기
             else:
-                nickname_prefix = '참새'
-            
-            # 순차적인 번호 생성을 위해 현재 해당 프리픽스를 가진 사용자들의 번호 확인
-            from django.db.models import Q
-            import re
-            
-            # 참새로 시작하는 닉네임들 찾기 (nickname 필드 사용)
-            existing_nicknames = User.objects.filter(
-                Q(nickname__startswith=nickname_prefix)
-            ).values_list('nickname', flat=True)
-            
-            # 사용된 번호들 추출
-            used_numbers = []
-            pattern = re.compile(rf'^{nickname_prefix}(\d+)$')
-            
-            for nickname in existing_nicknames:
-                if nickname:  # nickname이 None이 아닌 경우만 처리
-                    match = pattern.match(nickname)
-                    if match:
-                        used_numbers.append(int(match.group(1)))
-            
-            # 가장 작은 사용 가능한 번호 찾기
-            if not used_numbers:
-                next_number = 1
-            else:
-                # 1부터 시작해서 빈 번호 찾기
-                used_numbers.sort()
-                next_number = 1
-                for num in used_numbers:
-                    if num == next_number:
-                        next_number += 1
+                original_name = name
+                # 동일한 닉네임이 이미 존재하는지 확인
+                if User.objects.filter(nickname=name).exists():
+                    logger.info(f"카카오 닉네임 '{name}' 중복 감지, 번호 붙이기 시작")
+
+                    # 해당 닉네임으로 시작하는 모든 닉네임 찾기
+                    existing_nicknames = User.objects.filter(
+                        Q(nickname__startswith=name)
+                    ).values_list('nickname', flat=True)
+
+                    # 사용된 번호들 추출 (예: "둥지" → "둥지1", "둥지2" 등)
+                    used_numbers = []
+                    # 정확히 원본 닉네임인 경우도 0번으로 간주
+                    if name in existing_nicknames:
+                        used_numbers.append(0)
+
+                    # 숫자가 붙은 닉네임들 추출
+                    pattern = re.compile(rf'^{re.escape(name)}(\d+)$')
+                    for nickname in existing_nicknames:
+                        if nickname:
+                            match = pattern.match(nickname)
+                            if match:
+                                used_numbers.append(int(match.group(1)))
+
+                    # 가장 작은 사용 가능한 번호 찾기
+                    if not used_numbers:
+                        next_number = 1
                     else:
-                        break
-            
-            generated_nickname = f"{nickname_prefix}{next_number}"
-            name = generated_nickname
-            
-            logger.info(f"카카오 간편가입 자동 닉네임 생성: {name}, role: {role}")
+                        used_numbers.sort()
+                        next_number = 1
+                        for num in used_numbers:
+                            if num == next_number:
+                                next_number += 1
+                            else:
+                                break
+
+                    name = f"{original_name}{next_number}"
+                    logger.info(f"카카오 닉네임 중복 해결: {original_name} → {name}")
+                else:
+                    logger.info(f"카카오 닉네임 '{name}' 사용 가능, 그대로 사용")
         
         # 전화번호 확인 로그
         if phone_number:
