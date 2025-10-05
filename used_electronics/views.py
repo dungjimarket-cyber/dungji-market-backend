@@ -1229,10 +1229,11 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='my-trading', permission_classes=[IsAuthenticated])
     def my_trading_items(self, request):
-        """구매자의 거래중 목록 조회"""
-        # 현재 사용자가 구매자이고 accepted 상태인 제안들 찾기
+        """판매자/구매자의 거래중 목록 조회"""
+        # 현재 사용자가 구매자이거나 판매자인 accepted 상태 제안들 찾기
+        from django.db.models import Q
         accepted_offers = ElectronicsOffer.objects.filter(
-            buyer=request.user,
+            Q(buyer=request.user) | Q(electronics__seller=request.user),
             status='accepted'
         ).select_related('electronics', 'electronics__seller').prefetch_related('electronics__images')
 
@@ -1254,21 +1255,23 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
                 # 리뷰 작성 여부 확인 (에러 방지)
                 has_review = False
                 try:
+                    # sold 상태일 때만 리뷰 작성 가능
                     if electronics.status == 'sold':
-                        # transaction이 있으면 transaction_id로, 없으면 offer_id로 체크
                         if transaction:
                             has_review = UnifiedReview.objects.filter(
                                 item_type='electronics',
                                 transaction_id=transaction.id,
                                 reviewer=request.user
                             ).exists()
+                            print(f"[DEBUG] Electronics {electronics.id} sold status - has_review: {has_review}")
                         else:
-                            # transaction이 없는 경우 - offer와 연결된 리뷰 체크
-                            # UnifiedReview는 transaction_id를 사용하므로,
-                            # offer로 생성된 임시 transaction을 찾거나 offer 자체로는 체크 불가
-                            # 따라서 has_review를 False로 유지 (평가대기로 표시)
+                            # transaction이 없는 경우는 평가대기로 표시
                             has_review = False
                             print(f"[DEBUG] No transaction for electronics {electronics.id}, marking as pending review")
+                    else:
+                        # trading 상태는 리뷰 작성 불가
+                        has_review = False
+                        print(f"[DEBUG] Electronics {electronics.id} in trading status, review not available yet")
                 except Exception as e:
                     print(f"[ERROR] Failed to check review status: {e}")
                     has_review = False
