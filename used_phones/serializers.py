@@ -579,14 +579,31 @@ class UsedPhoneTransactionSerializer(serializers.ModelSerializer):
     phone_model = serializers.CharField(source='phone.model', read_only=True)
     seller_username = serializers.CharField(source='seller.username', read_only=True)
     buyer_username = serializers.CharField(source='buyer.username', read_only=True)
+    seller_nickname = serializers.CharField(source='seller.nickname', read_only=True)
+    buyer_nickname = serializers.CharField(source='buyer.nickname', read_only=True)
+    has_review = serializers.SerializerMethodField()
+
+    def get_has_review(self, obj):
+        """현재 사용자가 이 거래에 대해 후기를 작성했는지 확인"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        from api.models_unified_simple import UnifiedReview
+        # 현재 사용자가 작성한 후기 중 이 거래에 대한 후기가 있는지 확인
+        return UnifiedReview.objects.filter(
+            item_type='phone',
+            transaction_id=obj.id,
+            reviewer=request.user
+        ).exists()
 
     class Meta:
         model = UsedPhoneTransaction
         fields = [
-            'id', 'phone', 'phone_model', 'offer', 'seller', 'seller_username',
-            'buyer', 'buyer_username', 'status', 'seller_confirmed', 'buyer_confirmed',
+            'id', 'phone', 'phone_model', 'offer', 'seller', 'seller_username', 'seller_nickname',
+            'buyer', 'buyer_username', 'buyer_nickname', 'status', 'seller_confirmed', 'buyer_confirmed',
             'seller_confirmed_at', 'buyer_confirmed_at', 'final_price',
-            'meeting_date', 'meeting_location', 'created_at', 'updated_at', 'completed_at'
+            'meeting_date', 'meeting_location', 'created_at', 'updated_at', 'completed_at', 'has_review'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'completed_at']
 
