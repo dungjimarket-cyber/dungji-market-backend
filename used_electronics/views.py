@@ -181,6 +181,24 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
             return ElectronicsCreateUpdateSerializer
         return ElectronicsListSerializer
 
+    def create(self, request, *args, **kwargs):
+        """상품 등록 - 프로필 체크 추가"""
+        # 프로필 필수 정보 체크
+        user = request.user
+        missing_fields = []
+        if not user.phone_number:
+            missing_fields.append('연락처')
+        if not user.address_region:
+            missing_fields.append('활동지역')
+
+        if missing_fields:
+            return Response(
+                {'error': f'중고거래를 위해서는 {", ".join(missing_fields)} 정보가 필요합니다. 마이페이지에서 등록해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return super().create(request, *args, **kwargs)
+
     def retrieve(self, request, *args, **kwargs):
         """상세 조회 - 조회수 증가"""
         # 직접 쿼리로 sold 상태도 포함하여 조회 (500 에러 수정)
@@ -323,6 +341,20 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def offer(self, request, pk=None):
         """가격 제안"""
+        # 프로필 필수 정보 체크
+        user = request.user
+        missing_fields = []
+        if not user.phone_number:
+            missing_fields.append('연락처')
+        if not user.address_region:
+            missing_fields.append('활동지역')
+
+        if missing_fields:
+            return Response(
+                {'error': f'가격 제안을 위해서는 {", ".join(missing_fields)} 정보가 필요합니다. 마이페이지에서 등록해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         electronics = self.get_object()
 
         # 거래중인 상품에는 제안 불가

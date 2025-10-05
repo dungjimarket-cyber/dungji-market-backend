@@ -204,11 +204,25 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         logger.info(f"=== UsedPhone Create Request ===")
         logger.info(f"User: {request.user}")
         logger.info(f"Request data keys: {request.data.keys()}")
-        
+
+        # 프로필 필수 정보 체크
+        user = request.user
+        missing_fields = []
+        if not user.phone_number:
+            missing_fields.append('연락처')
+        if not user.address_region:
+            missing_fields.append('활동지역')
+
+        if missing_fields:
+            return Response(
+                {'error': f'중고거래를 위해서는 {", ".join(missing_fields)} 정보가 필요합니다. 마이페이지에서 등록해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # regions 데이터 확인
         regions = request.data.getlist('regions') if hasattr(request.data, 'getlist') else request.data.get('regions', [])
         logger.info(f"Regions data: {regions}")
-        
+
         # 시리얼라이저에 regions 데이터 전달
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -354,15 +368,29 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def offer(self, request, pk=None):
         """가격 제안하기"""
+        # 프로필 필수 정보 체크
+        user = request.user
+        missing_fields = []
+        if not user.phone_number:
+            missing_fields.append('연락처')
+        if not user.address_region:
+            missing_fields.append('활동지역')
+
+        if missing_fields:
+            return Response(
+                {'error': f'가격 제안을 위해서는 {", ".join(missing_fields)} 정보가 필요합니다. 마이페이지에서 등록해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         phone = self.get_object()
-        
+
         # 거래중인 상품에는 제안 불가
         if phone.status == 'trading':
             return Response(
                 {'error': '거래중인 상품에는 제안할 수 없습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 본인 상품에는 제안 불가
         if phone.seller == request.user:
             return Response(
