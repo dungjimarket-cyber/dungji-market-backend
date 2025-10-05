@@ -585,7 +585,7 @@ class CustomNoShowReport(models.Model):
         return self.status == 'pending'
 
     class Meta:
-        db_table = 'custom_noshow_report'
+        db_table = 'custom_noshow_reports'  # 마이그레이션과 일치
         verbose_name = '커스텀 노쇼 신고'
         verbose_name_plural = '커스텀 노쇼 신고 관리'
         ordering = ['-created_at']
@@ -639,7 +639,7 @@ class CustomPenalty(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
-        db_table = 'custom_penalty'
+        db_table = 'custom_penalties'  # 마이그레이션과 일치
         verbose_name = '커스텀 노쇼 패널티'
         verbose_name_plural = '커스텀 노쇼 패널티 관리'
         ordering = ['-created_at', '-start_date']
