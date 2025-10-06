@@ -17,6 +17,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, Region, GroupBuy, Participation, Partner
 from .models_verification import EmailVerification, PhoneVerification
 from .models_nickname import NicknameChangeHistory
+from used_phones.models import UsedPhone
+from used_electronics.models import UsedElectronics
 from .utils.s3_utils import upload_file_to_s3
 from .utils.resend_sender import ResendSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
@@ -1233,7 +1235,24 @@ def withdraw_user(request):
                 {'error': '진행 중인 생성 공구가 있어 탈퇴할 수 없습니다. 공구 종료 후 다시 시도해주세요.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        # 진행 중인 중고거래 확인
+        active_used_phones = UsedPhone.objects.filter(
+            seller=user,
+            status__in=['available', 'trading']
+        ).exists()
+
+        active_used_electronics = UsedElectronics.objects.filter(
+            seller=user,
+            status__in=['available', 'trading']
+        ).exists()
+
+        if active_used_phones or active_used_electronics:
+            return Response(
+                {'error': '진행 중인 중고거래가 있어 탈퇴할 수 없습니다. 거래를 완료하거나 삭제한 후 다시 시도해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # 카카오 사용자인 경우 연결 끊기
         if user.sns_type == 'kakao' and user.sns_id:
             kakao_unlink_success = kakao_unlink(user.sns_id)
