@@ -151,11 +151,11 @@ class UsedPhoneListSerializer(serializers.ModelSerializer):
         return self.get_final_price(obj)
 
     def get_offer_count(self, obj):
-        """실시간으로 pending 상태의 유니크한 구매자 수 계산"""
+        """전체 제안 수 계산 (취소된 제안 제외)"""
         from .models import UsedPhoneOffer
         return UsedPhoneOffer.objects.filter(
             phone=obj,
-            status='pending'
+            status__in=['pending', 'accepted']
         ).values('buyer').distinct().count()
 
     def get_buyer(self, obj):
@@ -257,6 +257,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     transaction_id = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
     final_offer_price = serializers.SerializerMethodField()  # final_price 별칭
+    offer_count = serializers.SerializerMethodField()  # 동적 계산
 
     class Meta:
         model = UsedPhone
@@ -270,7 +271,7 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
                   'buyer_id', 'buyer', 'transaction_id', 'final_price', 'final_offer_price',
                   'last_bumped_at', 'bump_count']
         read_only_fields = ['id', 'seller', 'view_count', 'favorite_count',
-                           'offer_count', 'created_at', 'updated_at']
+                           'created_at', 'updated_at']
     
     def get_region_name(self, obj):
         """지역 이름 반환 - 안전하게 처리"""
@@ -380,6 +381,14 @@ class UsedPhoneDetailSerializer(serializers.ModelSerializer):
     def get_final_offer_price(self, obj):
         """get_final_price의 별칭 - 프론트엔드 호환성"""
         return self.get_final_price(obj)
+
+    def get_offer_count(self, obj):
+        """전체 제안 수 계산 (취소된 제안 제외)"""
+        from .models import UsedPhoneOffer
+        return UsedPhoneOffer.objects.filter(
+            phone=obj,
+            status__in=['pending', 'accepted']
+        ).values('buyer').distinct().count()
 
 
 class UsedPhoneCreateSerializer(serializers.ModelSerializer):
