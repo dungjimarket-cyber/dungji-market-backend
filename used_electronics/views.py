@@ -62,8 +62,8 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """쿼리셋 반환 - UsedPhone과 동일한 로직 적용"""
-        # list와 retrieve 액션은 sold 포함 (조회는 가능)
-        if self.action in ['list', 'retrieve']:
+        # list, retrieve, 조회 관련 액션은 sold 포함 (조회는 가능)
+        if self.action in ['list', 'retrieve', 'my_offer', 'active_offers_count', 'offer_count', 'offers']:
             # 디버깅 로그 추가
             logger.info(f"[UsedElectronicsViewSet] Action: {self.action}")
             logger.info(f"[UsedElectronicsViewSet] Including sold items in queryset")

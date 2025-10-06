@@ -79,8 +79,8 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """지역 필터링 추가"""
-        # list와 retrieve 액션은 sold 포함 (조회는 가능)
-        if self.action in ['list', 'retrieve']:
+        # list, retrieve, 조회 관련 액션은 sold 포함 (조회는 가능)
+        if self.action in ['list', 'retrieve', 'my_offer', 'active_offers_count', 'offer_count', 'offers']:
             # 디버깅 로그 추가
             logger.info(f"[UsedPhoneViewSet] Action: {self.action}")
             logger.info(f"[UsedPhoneViewSet] Including sold items in queryset")
