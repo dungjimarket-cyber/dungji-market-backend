@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('used_electronics', '0010_change_transaction_to_foreignkey'),
+        ('used_electronics', '0008_change_transaction_to_foreignkey'),
     ]
 
     operations = [

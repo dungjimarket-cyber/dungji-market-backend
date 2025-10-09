@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('used_electronics', '0011_add_bump_fields'),
+        ('used_electronics', '0009_add_bump_fields'),
     ]
 
     operations = [
