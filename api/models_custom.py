@@ -398,8 +398,13 @@ class CustomGroupBuyImage(models.Model):
         related_name='images',
         verbose_name='공구'
     )
-    # DB에는 image_url만 있음 (마이그레이션 0083 참조)
-    image_url = models.TextField(verbose_name='이미지 URL')
+    image = models.ImageField(
+        upload_to='custom_groupbuys/%Y/%m/%d/',
+        blank=True,
+        null=True,
+        verbose_name='이미지'
+    )
+    image_url = models.TextField(verbose_name='이미지 URL', blank=True)
     is_primary = models.BooleanField(default=False, verbose_name='대표 이미지')
     order_index = models.PositiveIntegerField(default=0, verbose_name='순서')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
