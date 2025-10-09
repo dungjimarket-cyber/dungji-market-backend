@@ -419,6 +419,30 @@ class CustomGroupBuyImage(models.Model):
     def __str__(self):
         return f"{self.custom_groupbuy.title} - 이미지 {self.order_index + 1}"
 
+    def save(self, *args, **kwargs):
+        """S3 업로드 시 URL 업데이트 (중고거래와 동일)"""
+        from django.conf import settings
+
+        try:
+            logger.info(f"CustomGroupBuyImage save: 이미지 처리 시작")
+            logger.info(f"USE_S3: {getattr(settings, 'USE_S3', False)}")
+
+            super().save(*args, **kwargs)
+
+            # S3 사용 시 URL 업데이트 (중고거래 방식)
+            if settings.USE_S3 and self.image:
+                if hasattr(self.image, 'url'):
+                    self.image_url = self.image.url
+                    logger.info(f"이미지 URL: {self.image_url}")
+
+                    # URL만 업데이트 (무한 루프 방지)
+                    super().save(update_fields=['image_url'])
+
+        except Exception as e:
+            logger.error(f"CustomGroupBuyImage save 오류: {e}")
+            # 오류가 있어도 저장은 완료
+            super().save(*args, **kwargs)
+
 
 class CustomParticipant(models.Model):
     """참여자"""
