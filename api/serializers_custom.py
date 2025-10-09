@@ -18,29 +18,15 @@ class CustomGroupBuyImageSerializer(serializers.ModelSerializer):
     """공구 이미지 시리얼라이저"""
 
     imageUrl = serializers.SerializerMethodField()
-    thumbnailUrl = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomGroupBuyImage
-        fields = ['id', 'image', 'image_url', 'imageUrl', 'thumbnail', 'thumbnail_url', 'thumbnailUrl',
-                  'is_primary', 'order_index', 'width', 'height', 'file_size', 'created_at']
-        read_only_fields = ['id', 'image_url', 'thumbnail_url', 'width', 'height', 'file_size', 'created_at']
+        fields = ['id', 'image_url', 'imageUrl', 'is_primary', 'order_index', 'created_at']
+        read_only_fields = ['id', 'image_url', 'created_at']
 
     def get_imageUrl(self, obj):
         """프론트엔드 호환성을 위한 imageUrl 필드"""
-        if obj.image_url:
-            return obj.image_url
-        elif obj.image:
-            return obj.image.url if hasattr(obj.image, 'url') else None
-        return None
-
-    def get_thumbnailUrl(self, obj):
-        """프론트엔드 호환성을 위한 thumbnailUrl 필드"""
-        if obj.thumbnail_url:
-            return obj.thumbnail_url
-        elif obj.thumbnail:
-            return obj.thumbnail.url if hasattr(obj.thumbnail, 'url') else None
-        return self.get_imageUrl(obj)
+        return obj.image_url if obj.image_url else None
 
 
 class CustomGroupBuyListSerializer(serializers.ModelSerializer):
@@ -85,16 +71,10 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
-            if primary_image.image_url:
-                return primary_image.image_url
-            elif primary_image.image:
-                return primary_image.image.url if hasattr(primary_image.image, 'url') else None
+            return primary_image.image_url if primary_image.image_url else None
         first_image = obj.images.first()
         if first_image:
-            if first_image.image_url:
-                return first_image.image_url
-            elif first_image.image:
-                return first_image.image.url if hasattr(first_image.image, 'url') else None
+            return first_image.image_url if first_image.image_url else None
         return None
 
     def get_is_favorited(self, obj):

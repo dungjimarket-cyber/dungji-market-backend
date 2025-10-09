@@ -398,15 +398,10 @@ class CustomGroupBuyImage(models.Model):
         related_name='images',
         verbose_name='공구'
     )
-    image = models.ImageField(upload_to='custom_groupbuys/%Y/%m/%d/', verbose_name='이미지')
-    image_url = models.URLField(max_length=500, blank=True, verbose_name='이미지 URL')
-    thumbnail = models.ImageField(upload_to='custom_groupbuys/thumbs/%Y/%m/%d/', null=True, blank=True, verbose_name='썸네일')
-    thumbnail_url = models.URLField(max_length=500, blank=True, null=True, verbose_name='썸네일 URL')
+    # DB에는 image_url만 있음 (마이그레이션 0083 참조)
+    image_url = models.TextField(verbose_name='이미지 URL')
     is_primary = models.BooleanField(default=False, verbose_name='대표 이미지')
-    order_index = models.IntegerField(default=0, verbose_name='순서')
-    width = models.IntegerField(null=True, blank=True, verbose_name='가로크기')
-    height = models.IntegerField(null=True, blank=True, verbose_name='세로크기')
-    file_size = models.IntegerField(null=True, blank=True, verbose_name='파일크기')
+    order_index = models.PositiveIntegerField(default=0, verbose_name='순서')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
 
     class Meta:
