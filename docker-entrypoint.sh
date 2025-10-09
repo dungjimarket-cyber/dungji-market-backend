@@ -25,6 +25,10 @@ service cron status
 echo "Current cron jobs:"
 crontab -l
 
+# Migration history 정리 (renumbered migrations 처리)
+echo "Fixing migration history..."
+python /app/fix_migrations.py || echo "Migration history fix failed, but continuing..."
+
 # Django migrations 실행
 echo "Running Django migrations..."
 echo "================================================"
