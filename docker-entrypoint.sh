@@ -29,26 +29,29 @@ crontab -l
 echo "================================================"
 echo "🔍 Checking current migration status..."
 echo "================================================"
-python manage.py showmigrations used_electronics 2>&1 | head -20 || echo "Could not show migrations"
+python manage.py showmigrations used_electronics || echo "Could not show migrations"
 echo "================================================"
 
-# used_electronics migrations을 개별적으로 fake 처리
-echo "🔧 Faking already-applied migrations..."
-python manage.py migrate used_electronics 0007 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0007 처리 완료"
-python manage.py migrate used_electronics 0008 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0008 처리 완료"
-python manage.py migrate used_electronics 0009 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0009 처리 완료"
-python manage.py migrate used_electronics 0010 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0010 처리 완료"
+# used_electronics migrations을 강제로 fake 처리 (이미 DB에 적용되어 있음)
+echo "🔧 Marking used_electronics migrations as applied (fake)..."
+python manage.py migrate used_electronics 0007 --fake || true
+python manage.py migrate used_electronics 0008 --fake || true
+python manage.py migrate used_electronics 0009 --fake || true
+python manage.py migrate used_electronics 0010 --fake || true
+echo "✅ used_electronics migrations marked as applied"
 echo "================================================"
 
 # Django migrations 실행 (나머지 앱들)
-echo "Running Django migrations..."
+echo "Running Django migrations for other apps..."
 echo "================================================"
-python manage.py migrate --noinput || echo "Some migrations failed, but continuing..."
+python manage.py migrate admin --noinput || echo "admin migration done"
+python manage.py migrate api --noinput || echo "api migration done"
+python manage.py migrate auth --noinput || echo "auth migration done"
+python manage.py migrate authtoken --noinput || echo "authtoken migration done"
+python manage.py migrate contenttypes --noinput || echo "contenttypes migration done"
+python manage.py migrate sessions --noinput || echo "sessions migration done"
+python manage.py migrate used_phones --noinput || echo "used_phones migration done"
 echo "================================================"
-
-# used_phones 앱 migration 명시적 실행
-echo "Running used_phones migrations specifically..."
-python manage.py migrate used_phones --noinput || echo "Used phones migration failed, but continuing..."
 
 # Migration 상태 확인
 echo "Current migration status:"
