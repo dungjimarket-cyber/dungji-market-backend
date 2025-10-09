@@ -233,7 +233,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'type', 'categories', 'region_codes', 'usage_guide',
             'pricing_type', 'products', 'original_price', 'discount_rate',
-            'target_participants', 'max_wait_hours',
+            'target_participants', 'max_wait_hours', 'expired_at',
             'discount_valid_days', 'allow_partial_sale',
             'online_discount_type', 'discount_url', 'discount_codes',
             'location', 'location_detail', 'phone_number',
@@ -428,6 +428,16 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         logger.info(f"[CustomGroupBuy Create] images count: {len(images_data)}")
 
+        # 단일상품일 때 구버전 필드에도 복사 (Admin 가독성)
+        pricing_type = validated_data.get('pricing_type', 'single_product')
+        products = validated_data.get('products', [])
+
+        if pricing_type == 'single_product' and products and len(products) > 0:
+            first_product = products[0]
+            validated_data['original_price'] = first_product.get('original_price')
+            validated_data['discount_rate'] = first_product.get('discount_rate')
+            logger.info(f"[단일상품] 구버전 필드에 복사 - 정가: {validated_data['original_price']}, 할인율: {validated_data['discount_rate']}")
+
         with transaction.atomic():
             groupbuy = CustomGroupBuy.objects.create(
                 **validated_data
@@ -458,6 +468,16 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         validated_data.pop('region_codes', None)  # ViewSet에서 처리
 
         logger.info(f"[CustomGroupBuy Update] images: {len(images_data) if images_data else 0}")
+
+        # 단일상품일 때 구버전 필드에도 복사 (Admin 가독성)
+        pricing_type = validated_data.get('pricing_type', instance.pricing_type)
+        products = validated_data.get('products', instance.products)
+
+        if pricing_type == 'single_product' and products and len(products) > 0:
+            first_product = products[0]
+            validated_data['original_price'] = first_product.get('original_price')
+            validated_data['discount_rate'] = first_product.get('discount_rate')
+            logger.info(f"[단일상품] 구버전 필드에 복사 - 정가: {validated_data['original_price']}, 할인율: {validated_data['discount_rate']}")
 
         with transaction.atomic():
             # 기본 필드 업데이트
