@@ -419,6 +419,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from django.db import transaction
+        from api.services.image_service import ImageService
         import logging
 
         logger = logging.getLogger(__name__)
@@ -443,23 +444,29 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 **validated_data
             )
 
-            # 이미지 처리 (중고거래 방식)
+            # 이미지 처리 (image_url만 저장 - ImageService 사용)
             for index, image in enumerate(images_data):
                 try:
+                    # 이미지를 S3에 업로드하고 URL 받기
+                    image_url = ImageService.upload_to_s3(image, folder='custom_groupbuys')
+                    logger.info(f"[이미지 업로드] S3 URL: {image_url}")
+
+                    # URL만 DB에 저장
                     groupbuy_image = CustomGroupBuyImage.objects.create(
                         custom_groupbuy=groupbuy,
-                        image=image,
+                        image_url=image_url,
                         is_primary=(index == 0),
                         order_index=index
                     )
-                    logger.info(f"이미지 업로드 완료: {groupbuy_image.id}, 순서: {index}")
+                    logger.info(f"[이미지 저장 완료] ID: {groupbuy_image.id}, 순서: {index}")
                 except Exception as e:
-                    logger.error(f"이미지 업로드 실패: {e}")
+                    logger.error(f"[이미지 처리 실패] index={index}, error={e}", exc_info=True)
 
         return groupbuy
 
     def update(self, instance, validated_data):
         from django.db import transaction
+        from api.services.image_service import ImageService
         import logging
 
         logger = logging.getLogger(__name__)
@@ -485,23 +492,36 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 setattr(instance, attr, value)
             instance.save()
 
-            # 이미지 업데이트 (중고거래 방식)
+            # 이미지 업데이트 (image_url만 저장 - ImageService 사용)
             if images_data is not None:
-                # 기존 이미지 삭제
-                instance.images.all().delete()
+                # 기존 이미지 S3에서 삭제
+                old_images = instance.images.all()
+                for old_image in old_images:
+                    try:
+                        ImageService.delete_from_s3(old_image.image_url)
+                    except Exception as e:
+                        logger.warning(f"[기존 이미지 삭제 실패] {old_image.image_url}: {e}")
+
+                # 기존 이미지 DB에서 삭제
+                old_images.delete()
 
                 # 새 이미지 생성
                 for index, image in enumerate(images_data):
                     try:
+                        # 이미지를 S3에 업로드하고 URL 받기
+                        image_url = ImageService.upload_to_s3(image, folder='custom_groupbuys')
+                        logger.info(f"[이미지 업로드] S3 URL: {image_url}")
+
+                        # URL만 DB에 저장
                         groupbuy_image = CustomGroupBuyImage.objects.create(
                             custom_groupbuy=instance,
-                            image=image,
+                            image_url=image_url,
                             is_primary=(index == 0),
                             order_index=index
                         )
-                        logger.info(f"이미지 업로드 완료: {groupbuy_image.id}, 순서: {index}")
+                        logger.info(f"[이미지 저장 완료] ID: {groupbuy_image.id}, 순서: {index}")
                     except Exception as e:
-                        logger.error(f"이미지 업로드 실패: {e}")
+                        logger.error(f"[이미지 처리 실패] index={index}, error={e}", exc_info=True)
 
         return instance
 

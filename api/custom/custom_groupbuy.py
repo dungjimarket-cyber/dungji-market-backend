@@ -51,7 +51,15 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         from rest_framework.response import Response
 
         logger.info(f"[CREATE] Starting creation by user {request.user}")
-        logger.info(f"[CREATE] Request data: {request.data.keys()}")
+        logger.info(f"[CREATE] Request data keys: {request.data.keys()}")
+        logger.info(f"[CREATE] Request FILES keys: {request.FILES.keys()}")
+        logger.info(f"[CREATE] Request content_type: {request.content_type}")
+
+        # 이미지 파일 상세 로깅
+        images = request.FILES.getlist('images')
+        logger.info(f"[CREATE] Images from FILES.getlist: {len(images)} files")
+        for idx, img in enumerate(images):
+            logger.info(f"[CREATE] Image {idx}: name={img.name}, size={img.size}, content_type={img.content_type}")
 
         # 활성 공구 개수 체크
         active_count = CustomGroupBuy.objects.filter(
@@ -67,9 +75,13 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         try:
             serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
+            logger.info(f"[CREATE] Serializer initial_data keys: {serializer.initial_data.keys() if hasattr(serializer, 'initial_data') else 'N/A'}")
 
-            logger.info(f"[CREATE] Serializer valid, calling perform_create")
+            serializer.is_valid(raise_exception=True)
+            logger.info(f"[CREATE] Serializer validated_data keys: {serializer.validated_data.keys()}")
+            logger.info(f"[CREATE] Images in validated_data: {len(serializer.validated_data.get('images', []))}")
+
+            logger.info(f"[CREATE] Calling perform_create")
             self.perform_create(serializer)
 
             # 생성된 instance를 DetailSerializer로 다시 직렬화 (중고거래 방식)
@@ -93,15 +105,11 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """공구 생성 시 지역 처리 - 중고거래와 동일한 로직"""
-        logger.info(f"perform_create called by user: {self.request.user}")
-
-        # 디버깅: 요청 데이터 확인
-        logger.info(f"[DEBUG] Request data keys: {self.request.data.keys()}")
-        logger.info(f"[DEBUG] User: {self.request.user.id} - {self.request.user.username}")
+        logger.info(f"[PERFORM_CREATE] Called by user: {self.request.user}")
 
         # 공구 생성
         instance = serializer.save(seller=self.request.user)
-        logger.info(f"[DEBUG] After save - instance ID: {instance.id} - Title: {instance.title}")
+        logger.info(f"[PERFORM_CREATE] Instance created - ID: {instance.id}, Title: {instance.title}")
 
         # 다중 지역 처리 (중고거래와 동일한 로직)
         regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
