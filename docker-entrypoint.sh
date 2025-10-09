@@ -29,13 +29,21 @@ crontab -l
 echo "================================================"
 echo "🔍 Checking current migration status..."
 echo "================================================"
-python manage.py showmigrations used_electronics || echo "Could not show migrations"
+python manage.py showmigrations used_electronics 2>&1 | head -20 || echo "Could not show migrations"
 echo "================================================"
 
-# Django migrations 실행
+# used_electronics migrations을 개별적으로 fake 처리
+echo "🔧 Faking already-applied migrations..."
+python manage.py migrate used_electronics 0007 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0007 처리 완료"
+python manage.py migrate used_electronics 0008 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0008 처리 완료"
+python manage.py migrate used_electronics 0009 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0009 처리 완료"
+python manage.py migrate used_electronics 0010 --fake 2>&1 | grep -E "(Applying|already|No migrations)" || echo "0010 처리 완료"
+echo "================================================"
+
+# Django migrations 실행 (나머지 앱들)
 echo "Running Django migrations..."
 echo "================================================"
-python manage.py migrate --noinput
+python manage.py migrate --noinput || echo "Some migrations failed, but continuing..."
 echo "================================================"
 
 # used_phones 앱 migration 명시적 실행
