@@ -232,8 +232,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                     try:
                         CustomGroupBuyImage.objects.create(
                             custom_groupbuy=instance,
-                            image=image,
-                            order=index
+                            image=image
                         )
                     except Exception as e:
                         logger.error(f"[이미지 수정] 이미지 저장 실패: {e}")
@@ -246,23 +245,17 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                     deleted_count = deleted.count()
                     deleted.delete()
                     logger.info(f"[이미지 수정] {deleted_count}개 이미지 삭제 (유지: {len(existing_ids)}개)")
-
-                    # 유지된 이미지들의 순서 재정렬
-                    for idx, img_id in enumerate(existing_ids):
-                        CustomGroupBuyImage.objects.filter(id=img_id).update(order=idx)
                 else:
                     # existing_image_ids가 비어있으면 모든 기존 이미지 삭제
                     deleted_count = CustomGroupBuyImage.objects.filter(custom_groupbuy=instance).delete()[0]
                     logger.info(f"[이미지 수정] 모든 기존 이미지 삭제: {deleted_count}개")
 
                 # 새 이미지 추가
-                existing_count = len(existing_image_ids) if existing_image_ids else 0
                 for index, image in enumerate(new_images):
                     try:
                         CustomGroupBuyImage.objects.create(
                             custom_groupbuy=instance,
-                            image=image,
-                            order=existing_count + index  # 기존 이미지 다음 순서
+                            image=image
                         )
                         logger.info(f"[이미지 수정] 새 이미지 추가 {index + 1}/{len(new_images)}")
                     except Exception as e:
