@@ -25,73 +25,18 @@ service cron status
 echo "Current cron jobs:"
 crontab -l
 
-# Migration history 정리 (renumbered migrations 처리)
-echo "Fixing migration history with direct SQL..."
-python manage.py shell <<EOF
-from django.db import connection
-with connection.cursor() as cursor:
-    # 0007: 0010_electronicsdeletepenalty → 0007_electronicsdeletepenalty
-    cursor.execute("""
-        INSERT INTO django_migrations (app, name, applied)
-        SELECT 'used_electronics', '0007_electronicsdeletepenalty', NOW()
-        WHERE EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0010_electronicsdeletepenalty'
-        )
-        AND NOT EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0007_electronicsdeletepenalty'
-        );
-    """)
-
-    # 0008: 0010_change_transaction_to_foreignkey → 0008_change_transaction_to_foreignkey
-    cursor.execute("""
-        INSERT INTO django_migrations (app, name, applied)
-        SELECT 'used_electronics', '0008_change_transaction_to_foreignkey', NOW()
-        WHERE EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0010_change_transaction_to_foreignkey'
-        )
-        AND NOT EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0008_change_transaction_to_foreignkey'
-        );
-    """)
-
-    # 0009: 0011_add_bump_fields → 0009_add_bump_fields
-    cursor.execute("""
-        INSERT INTO django_migrations (app, name, applied)
-        SELECT 'used_electronics', '0009_add_bump_fields', NOW()
-        WHERE EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0011_add_bump_fields'
-        )
-        AND NOT EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0009_add_bump_fields'
-        );
-    """)
-
-    # 0010: 0012_update_condition_grade_choices → 0010_update_condition_grade_choices
-    cursor.execute("""
-        INSERT INTO django_migrations (app, name, applied)
-        SELECT 'used_electronics', '0010_update_condition_grade_choices', NOW()
-        WHERE EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0012_update_condition_grade_choices'
-        )
-        AND NOT EXISTS (
-            SELECT 1 FROM django_migrations
-            WHERE app = 'used_electronics' AND name = '0010_update_condition_grade_choices'
-        );
-    """)
-    print("✅ Migration history fixed")
-EOF
+# Migration 상태 확인
+echo "================================================"
+echo "🔍 Checking current migration status..."
+echo "================================================"
+python manage.py showmigrations used_electronics || echo "Could not show migrations"
+echo "================================================"
 
 # Django migrations 실행
 echo "Running Django migrations..."
 echo "================================================"
-python manage.py migrate --noinput || echo "Migration failed, but continuing..."
+python manage.py migrate --noinput
+echo "================================================"
 
 # used_phones 앱 migration 명시적 실행
 echo "Running used_phones migrations specifically..."
