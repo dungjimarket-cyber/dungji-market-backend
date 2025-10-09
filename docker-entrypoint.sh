@@ -26,8 +26,67 @@ echo "Current cron jobs:"
 crontab -l
 
 # Migration history 정리 (renumbered migrations 처리)
-echo "Fixing migration history..."
-python /app/fix_migrations.py || echo "Migration history fix failed, but continuing..."
+echo "Fixing migration history with direct SQL..."
+python manage.py shell <<EOF
+from django.db import connection
+with connection.cursor() as cursor:
+    # 0007: 0010_electronicsdeletepenalty → 0007_electronicsdeletepenalty
+    cursor.execute("""
+        INSERT INTO django_migrations (app, name, applied)
+        SELECT 'used_electronics', '0007_electronicsdeletepenalty', NOW()
+        WHERE EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0010_electronicsdeletepenalty'
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0007_electronicsdeletepenalty'
+        );
+    """)
+
+    # 0008: 0010_change_transaction_to_foreignkey → 0008_change_transaction_to_foreignkey
+    cursor.execute("""
+        INSERT INTO django_migrations (app, name, applied)
+        SELECT 'used_electronics', '0008_change_transaction_to_foreignkey', NOW()
+        WHERE EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0010_change_transaction_to_foreignkey'
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0008_change_transaction_to_foreignkey'
+        );
+    """)
+
+    # 0009: 0011_add_bump_fields → 0009_add_bump_fields
+    cursor.execute("""
+        INSERT INTO django_migrations (app, name, applied)
+        SELECT 'used_electronics', '0009_add_bump_fields', NOW()
+        WHERE EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0011_add_bump_fields'
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0009_add_bump_fields'
+        );
+    """)
+
+    # 0010: 0012_update_condition_grade_choices → 0010_update_condition_grade_choices
+    cursor.execute("""
+        INSERT INTO django_migrations (app, name, applied)
+        SELECT 'used_electronics', '0010_update_condition_grade_choices', NOW()
+        WHERE EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0012_update_condition_grade_choices'
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM django_migrations
+            WHERE app = 'used_electronics' AND name = '0010_update_condition_grade_choices'
+        );
+    """)
+    print("✅ Migration history fixed")
+EOF
 
 # Django migrations 실행
 echo "Running Django migrations..."
