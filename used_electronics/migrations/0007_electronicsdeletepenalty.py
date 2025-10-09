@@ -1,8 +1,25 @@
 # Generated manually for ElectronicsDeletePenalty model
 
 from django.conf import settings
-from django.db import migrations, models
+from django.db import migrations, models, connection
 import django.db.models.deletion
+
+
+def check_and_create_table(apps, schema_editor):
+    """테이블이 없을 때만 생성"""
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'electronics_delete_penalties'
+            );
+        """)
+        table_exists = cursor.fetchone()[0]
+
+    if not table_exists:
+        # 테이블이 없으면 생성
+        ElectronicsDeletePenalty = apps.get_model('used_electronics', 'ElectronicsDeletePenalty')
+        schema_editor.create_model(ElectronicsDeletePenalty)
 
 
 class Migration(migrations.Migration):
@@ -13,6 +30,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # 먼저 모델 정의
         migrations.CreateModel(
             name='ElectronicsDeletePenalty',
             fields=[
@@ -31,3 +49,21 @@ class Migration(migrations.Migration):
             },
         ),
     ]
+
+    def apply(self, project_state, schema_editor, collect_sql=False):
+        """테이블이 이미 존재하면 스킵"""
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'electronics_delete_penalties'
+                );
+            """)
+            table_exists = cursor.fetchone()[0]
+
+        if table_exists:
+            # 테이블이 이미 존재하면 마이그레이션 기록만 추가하고 스킵
+            return project_state
+        else:
+            # 테이블이 없으면 정상 실행
+            return super().apply(project_state, schema_editor, collect_sql)
