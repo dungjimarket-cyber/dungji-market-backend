@@ -26,6 +26,9 @@ class CustomGroupBuyImageSerializer(serializers.ModelSerializer):
 
     def get_imageUrl(self, obj):
         """프론트엔드 호환성을 위한 imageUrl 필드"""
+        # ImageField 우선, 없으면 image_url 폴백
+        if obj.image:
+            return obj.image.url
         return obj.image_url if obj.image_url else None
 
 
@@ -58,7 +61,11 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
         """최종 가격 반환 (여러 상품 지원)"""
         final_price = obj.final_price
         if isinstance(final_price, list):
-            if len(final_price) > 0:
+            if len(final_price) == 1:
+                # 상품이 1개면 숫자로 반환 (목록 호환성)
+                return final_price[0]
+            elif len(final_price) > 1:
+                # 여러 개면 범위 반환
                 return {
                     'min': min(final_price),
                     'max': max(final_price),
@@ -71,9 +78,15 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
     def get_primary_image(self, obj):
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
+            # ImageField 우선, 없으면 image_url 폴백
+            if primary_image.image:
+                return primary_image.image.url
             return primary_image.image_url if primary_image.image_url else None
         first_image = obj.images.first()
         if first_image:
+            # ImageField 우선, 없으면 image_url 폴백
+            if first_image.image:
+                return first_image.image.url
             return first_image.image_url if first_image.image_url else None
         return None
 
@@ -159,7 +172,11 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
         """최종 가격 반환 (여러 상품 지원)"""
         final_price = obj.final_price
         if isinstance(final_price, list):
-            if len(final_price) > 0:
+            if len(final_price) == 1:
+                # 상품이 1개면 숫자로 반환 (목록 호환성)
+                return final_price[0]
+            elif len(final_price) > 1:
+                # 여러 개면 범위 반환
                 return {
                     'min': min(final_price),
                     'max': max(final_price),
