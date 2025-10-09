@@ -46,7 +46,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
-        """create 메서드 오버라이드 - 에러 디버깅"""
+        """create 메서드 오버라이드 - 에러 디버깅 + DetailSerializer 반환"""
         from rest_framework import status
         from rest_framework.response import Response
 
@@ -72,10 +72,17 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             logger.info(f"[CREATE] Serializer valid, calling perform_create")
             self.perform_create(serializer)
 
-            headers = self.get_success_headers(serializer.data)
-            logger.info(f"[CREATE] Success - returning data with ID: {serializer.data.get('id')}")
+            # 생성된 instance를 DetailSerializer로 다시 직렬화 (중고거래 방식)
+            instance = serializer.instance
+            detail_serializer = CustomGroupBuyDetailSerializer(
+                instance,
+                context={'request': request}
+            )
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+            headers = self.get_success_headers(detail_serializer.data)
+            logger.info(f"[CREATE] Success - returning data with ID: {detail_serializer.data.get('id')}")
+
+            return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
         except Exception as e:
             logger.error(f"[CREATE] Failed with error: {str(e)}", exc_info=True)

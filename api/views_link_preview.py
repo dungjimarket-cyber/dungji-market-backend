@@ -44,14 +44,20 @@ def get_link_preview(request):
     try:
         metadata = LinkPreviewService.extract_metadata(url)
 
-        if 'error' in metadata:
-            return Response(metadata, status=status.HTTP_400_BAD_REQUEST)
-
+        # error 키가 있어도 200 OK 반환 (링크 자체는 유효하므로)
+        # warning 키로 변경되었으므로 항상 200 OK
         return Response(metadata, status=status.HTTP_200_OK)
 
     except Exception as e:
         logger.error(f'Link preview API error: {str(e)}')
+        # 예외 발생해도 빈 메타데이터 반환 (등록은 계속 진행)
         return Response(
-            {'error': '미리보기 생성 중 오류가 발생했습니다'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                'title': '',
+                'description': '',
+                'image': '',
+                'url': url,
+                'warning': '미리보기 생성 실패'
+            },
+            status=status.HTTP_200_OK
         )
