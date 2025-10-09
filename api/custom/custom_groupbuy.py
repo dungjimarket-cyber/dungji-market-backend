@@ -74,14 +74,8 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            # FormData의 images를 명시적으로 추출 (DRF가 자동으로 ListField로 변환 안 함)
-            data = request.data.copy()
-            images = request.FILES.getlist('images')
-            if images:
-                data.setlist('images', images)
-                logger.info(f"[CREATE] Manually added {len(images)} images to data")
-
-            serializer = self.get_serializer(data=data)
+            # DRF가 request.data에서 자동으로 파일 처리 (중고거래와 동일)
+            serializer = self.get_serializer(data=request.data)
             logger.info(f"[CREATE] Serializer initial_data keys: {serializer.initial_data.keys() if hasattr(serializer, 'initial_data') else 'N/A'}")
 
             serializer.is_valid(raise_exception=True)
@@ -327,16 +321,9 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         logger.info(f"Request data keys: {request.data.keys()}")
         logger.info(f"Request FILES keys: {request.FILES.keys()}")
 
-        # FormData의 images를 명시적으로 추출 (create와 동일)
-        data = request.data.copy()
-        images = request.FILES.getlist('images')
-        if images:
-            data.setlist('images', images)
-            logger.info(f"[UPDATE] Manually added {len(images)} images to data")
-
-        # data를 request.data 대신 사용
+        # DRF가 request.data에서 자동으로 파일 처리 (중고거래와 동일)
         partial = kwargs.pop('partial', False)
-        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
