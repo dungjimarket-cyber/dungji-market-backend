@@ -54,9 +54,22 @@ sleep 10
 echo "Checking service status..."
 docker-compose -f docker-compose.prod.yml ps
 
-# Run migrations
-echo "Running database migrations..."
-docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate
+# Run migrations (fake used_electronics migrations first, then migrate other apps)
+echo "🔄 Running database migrations..."
+echo "🔧 Faking used_electronics migrations (already applied in DB)..."
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate used_electronics 0007 --fake || echo "0007 fake done"
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate used_electronics 0008 --fake || echo "0008 fake done"
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate used_electronics 0009 --fake || echo "0009 fake done"
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate used_electronics 0010 --fake || echo "0010 fake done"
+
+echo "Running migrations for other apps..."
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate admin
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate api
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate auth
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate authtoken
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate contenttypes
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate sessions
+docker-compose -f docker-compose.prod.yml exec -T web python manage.py migrate used_phones
 
 # Collect static files
 echo "Collecting static files..."
