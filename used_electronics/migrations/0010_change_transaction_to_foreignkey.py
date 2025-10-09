@@ -9,7 +9,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('used_electronics', '0006_electronicstradecancellation'),
+        ('used_electronics', '0007_electronicsdeletepenalty'),
+        ('used_electronics', '0009_update_condition_grade_choices'),
     ]
 
     operations = [
