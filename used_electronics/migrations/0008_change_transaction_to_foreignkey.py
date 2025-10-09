@@ -13,14 +13,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Step 1: Remove the old OneToOneField
-        migrations.RemoveField(
-            model_name='electronicstransaction',
-            name='electronics',
-        ),
-
-        # Step 2: Add new ForeignKey field
-        migrations.AddField(
+        # Step 1: Change OneToOneField to ForeignKey (preserves data)
+        migrations.AlterField(
             model_name='electronicstransaction',
             name='electronics',
             field=models.ForeignKey(
@@ -28,10 +22,9 @@ class Migration(migrations.Migration):
                 related_name='transactions',
                 to='used_electronics.usedelectronics'
             ),
-            preserve_default=False,
         ),
 
-        # Step 3: Add offer field
+        # Step 2: Add offer field
         migrations.AddField(
             model_name='electronicstransaction',
             name='offer',
