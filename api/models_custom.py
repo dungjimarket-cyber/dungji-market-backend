@@ -406,7 +406,7 @@ class CustomGroupBuyImage(models.Model):
     )
     image_url = models.TextField(verbose_name='이미지 URL', blank=True)
     is_primary = models.BooleanField(default=False, verbose_name='대표 이미지')
-    order_index = models.IntegerField(default=0, verbose_name='순서')
+    order_index = models.PositiveIntegerField(default=0, verbose_name='순서')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일')
 
     class Meta:
