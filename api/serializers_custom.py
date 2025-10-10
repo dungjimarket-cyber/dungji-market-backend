@@ -561,21 +561,22 @@ class CustomParticipantSerializer(serializers.ModelSerializer):
     """참여자 시리얼라이저"""
 
     user_name = serializers.CharField(source='user.username', read_only=True)
-    groupbuy_title = serializers.CharField(source='custom_groupbuy.title', read_only=True)
+    custom_groupbuy = CustomGroupBuyListSerializer(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    discount_valid_until = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = CustomParticipant
         fields = [
-            'id', 'user', 'user_name', 'custom_groupbuy', 'groupbuy_title',
+            'id', 'user', 'user_name', 'custom_groupbuy',
             'participated_at', 'participation_code',
             'discount_code', 'discount_url',
-            'discount_used', 'discount_used_at',
+            'discount_used', 'discount_used_at', 'discount_valid_until',
             'status', 'status_display'
         ]
         read_only_fields = [
             'id', 'user', 'participated_at', 'participation_code',
-            'discount_code', 'discount_url'
+            'discount_code', 'discount_url', 'discount_valid_until'
         ]
 
 
