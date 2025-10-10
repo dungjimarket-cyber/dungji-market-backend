@@ -324,9 +324,21 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 # 값이 실제로 변경되는지 체크
                 try:
                     if field == 'discount_codes':
+                        # JSON 문자열로 전송된 경우 파싱
+                        if isinstance(new_value, str):
+                            import json
+                            new_value = json.loads(new_value)
+
+                        # 빈 배열은 무시 (프론트엔드에서 기본값으로 보냄)
+                        if not new_value or len(new_value) == 0:
+                            continue
+
                         # 리스트 비교 (순서 무관, 타입 안전)
-                        current_set = set(str(x) for x in (current_value or []))
-                        new_set = set(str(x) for x in (new_value or []))
+                        current_set = set(str(x).strip() for x in (current_value or []) if x)
+                        new_set = set(str(x).strip() for x in (new_value or []) if x)
+
+                        logger.info(f"할인코드 비교 - 현재: {current_set}, 새로운: {new_set}")
+
                         if current_set != new_set:
                             return Response(
                                 {'error': f'{field_name}은(는) 수정할 수 없습니다.'},
@@ -340,7 +352,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                                 status=status.HTTP_400_BAD_REQUEST
                             )
                 except Exception as e:
-                    logger.error(f"필드 비교 오류 ({field}): {e}")
+                    logger.error(f"필드 비교 오류 ({field}): {e}", exc_info=True)
                     # 비교 실패 시 변경으로 간주하고 막음
                     return Response(
                         {'error': f'{field_name}은(는) 수정할 수 없습니다.'},
