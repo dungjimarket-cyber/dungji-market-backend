@@ -530,6 +530,52 @@ class CustomParticipantViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('-participated_at')
 
+    @action(detail=True, methods=['get'])
+    def qr_code(self, request, pk=None):
+        """오프라인 공구 할인코드 QR 생성"""
+        from django.http import HttpResponse
+        import qrcode
+        from io import BytesIO
+
+        participant = self.get_object()
+        groupbuy = participant.custom_groupbuy
+
+        # 오프라인 공구만 QR 생성 가능
+        if groupbuy.type != 'offline':
+            return Response(
+                {'error': '오프라인 공구만 QR 코드를 생성할 수 있습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 할인코드 발급된 경우만
+        if not participant.discount_code:
+            return Response(
+                {'error': '할인코드가 발급되지 않았습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # QR 데이터: 참여코드|할인코드|공구ID
+        qr_data = f"{participant.participation_code}|{participant.discount_code}|{groupbuy.id}"
+
+        # QR 코드 생성
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # PNG 이미지로 반환
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+
+        return HttpResponse(buffer.getvalue(), content_type='image/png')
+
     @action(detail=True, methods=['post'])
     def mark_used(self, request, pk=None):
         participant = self.get_object()
