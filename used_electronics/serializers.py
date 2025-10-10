@@ -470,6 +470,13 @@ class ElectronicsCreateUpdateSerializer(serializers.ModelSerializer):
             if existing_image_ids:
                 # 기존 이미지 중 existing_image_ids에 없는 것만 삭제
                 instance.images.exclude(id__in=existing_image_ids).delete()
+
+                # 유지된 이미지들의 순서 재정렬 (휴대폰과 동일)
+                for idx, img_id in enumerate(existing_image_ids):
+                    ElectronicsImage.objects.filter(id=img_id).update(
+                        order=idx,
+                        is_primary=(idx == 0)
+                    )
             else:
                 # existing_image_ids가 없으면 모든 기존 이미지 삭제
                 instance.images.all().delete()

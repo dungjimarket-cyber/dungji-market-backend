@@ -248,14 +248,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                     deleted.delete()
                     logger.info(f"[이미지 수정] {deleted_count}개 이미지 삭제 (유지: {len(existing_ids)}개)")
 
-                    # 유지된 이미지들의 순서 및 대표 이미지 재설정
-                    # Phase 1: Set all to temporary negative values to avoid unique constraint violation
-                    for idx, img_id in enumerate(existing_ids):
-                        CustomGroupBuyImage.objects.filter(id=img_id).update(
-                            order_index=-(idx + 1)  # Temporary negative values
-                        )
-
-                    # Phase 2: Set correct positive values
+                    # 유지된 이미지들의 순서 재정렬 (휴대폰과 동일)
                     for idx, img_id in enumerate(existing_ids):
                         CustomGroupBuyImage.objects.filter(id=img_id).update(
                             order_index=idx,
