@@ -267,7 +267,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
             'discount_valid_days', 'allow_partial_sale',
             'online_discount_type', 'discount_url', 'discount_codes',
             'location', 'location_detail', 'phone_number',
-            'images'
+            'images', 'new_images', 'existing_image_ids'
         ]
 
     def validate(self, data):
