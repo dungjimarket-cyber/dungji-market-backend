@@ -494,18 +494,19 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                     deleted.delete()
                     logger.info(f"[이미지 삭제] {deleted_count}개 삭제 (유지: {len(existing_ids)}개)")
 
-                    # 유지된 이미지들의 순서만 재정렬 (is_primary는 건드리지 않음)
+                    # 유지된 이미지들의 순서 재정렬 + 대표사진 설정
                     # unique constraint 충돌 방지를 위해 bulk_update 사용
                     images_to_update = []
                     for idx, img_id in enumerate(existing_ids):
                         img = CustomGroupBuyImage.objects.get(id=img_id)
                         img.order_index = idx
+                        img.is_primary = (idx == 0)  # 첫 번째 이미지를 대표사진으로
                         images_to_update.append(img)
-                        logger.info(f"[순서 재정렬 준비] ID {img_id} → order_index={idx}")
+                        logger.info(f"[순서 재정렬 준비] ID {img_id} → order_index={idx}, is_primary={idx == 0}")
 
                     # 한 번에 업데이트 (충돌 방지)
-                    CustomGroupBuyImage.objects.bulk_update(images_to_update, ['order_index'])
-                    logger.info(f"[순서 재정렬 완료] {len(images_to_update)}개 이미지")
+                    CustomGroupBuyImage.objects.bulk_update(images_to_update, ['order_index', 'is_primary'])
+                    logger.info(f"[순서 재정렬 완료] {len(images_to_update)}개 이미지 (대표사진: {existing_ids[0] if existing_ids else 'N/A'})")
                 else:
                     # existing_image_ids가 없으면 모든 기존 이미지 삭제
                     deleted_count = instance.images.all().delete()[0]
