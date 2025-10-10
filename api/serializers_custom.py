@@ -238,6 +238,19 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         max_length=10,
         help_text="최대 10개의 이미지를 업로드할 수 있습니다."
     )
+    new_images = serializers.ListField(
+        child=serializers.ImageField(),
+        write_only=True,
+        required=False,
+        max_length=10,
+        help_text="수정 시 새로 추가할 이미지 (전자제품/휴대폰 호환)"
+    )
+    existing_image_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        help_text="수정 시 유지할 기존 이미지 ID 목록 (전자제품/휴대폰 호환)"
+    )
     region_codes = serializers.ListField(
         child=serializers.CharField(),
         write_only=True,
@@ -484,10 +497,13 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         logger = logging.getLogger(__name__)
 
-        images_data = validated_data.pop('images', None)
+        # 이미지 관련 데이터 추출 (전자제품 방식)
+        images_data = validated_data.pop('images', None)  # 기존 방식 호환
+        new_images_data = validated_data.pop('new_images', None)
+        existing_image_ids = validated_data.pop('existing_image_ids', None)
         validated_data.pop('region_codes', None)  # ViewSet에서 처리
 
-        logger.info(f"[CustomGroupBuy Update] images: {len(images_data) if images_data else 0}")
+        logger.info(f"[CustomGroupBuy Update] images: {len(images_data) if images_data else 0}, new_images: {len(new_images_data) if new_images_data else 0}, existing_ids: {len(existing_image_ids) if existing_image_ids else 0}")
 
         # 단일상품일 때 구버전 필드에도 복사 (Admin 가독성)
         pricing_type = validated_data.get('pricing_type', instance.pricing_type)
@@ -505,9 +521,42 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 setattr(instance, attr, value)
             instance.save()
 
-            # 이미지 업데이트 (중고폰 방식과 동일)
-            if images_data is not None:
-                # 기존 이미지 삭제
+            # 이미지 업데이트 - 전자제품/휴대폰 방식
+            if new_images_data is not None or existing_image_ids is not None:
+                # 유지할 이미지와 삭제할 이미지 구분
+                if existing_image_ids:
+                    # 기존 이미지 중 existing_image_ids에 없는 것만 삭제
+                    instance.images.exclude(id__in=existing_image_ids).delete()
+
+                    # 유지된 이미지들의 순서 재정렬 (전자제품과 동일)
+                    for idx, img_id in enumerate(existing_image_ids):
+                        CustomGroupBuyImage.objects.filter(id=img_id).update(
+                            order_index=idx,
+                            is_primary=(idx == 0)
+                        )
+                else:
+                    # existing_image_ids가 없으면 모든 기존 이미지 삭제
+                    instance.images.all().delete()
+
+                # 새 이미지 추가
+                if new_images_data:
+                    # 기존 이미지의 최대 order_index 값 찾기
+                    from django.db.models import Max
+                    max_order = instance.images.aggregate(max_order=Max('order_index'))['max_order'] or -1
+
+                    for idx, image in enumerate(new_images_data):
+                        try:
+                            CustomGroupBuyImage.objects.create(
+                                custom_groupbuy=instance,
+                                image=image,
+                                is_primary=(max_order == -1 and idx == 0),  # 기존 이미지가 없으면 첫 번째를 primary로
+                                order_index=max_order + idx + 1
+                            )
+                            logger.info(f"[이미지 저장 완료] 새 이미지 {idx + 1}/{len(new_images_data)}")
+                        except Exception as e:
+                            logger.error(f"[이미지 처리 실패] index={idx}, error={e}", exc_info=True)
+            elif images_data is not None:
+                # 기존 방식 호환 (images 필드로 온 경우)
                 instance.images.all().delete()
 
                 # 새 이미지 생성

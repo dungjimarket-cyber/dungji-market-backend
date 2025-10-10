@@ -205,75 +205,13 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                     logger.error(f"[지역 처리 오류] {e}", exc_info=True)
 
     def perform_update(self, serializer):
-        """공구 수정 시 이미지 및 지역 처리 - 중고거래와 동일한 로직"""
+        """공구 수정 시 지역 처리 - 이미지는 serializer에서 처리"""
         logger.info(f"perform_update called by user: {self.request.user}")
 
         instance = serializer.save()
 
-        # 이미지 처리 - 기존 이미지 유지 + 새 이미지 추가 방식 (중고폰과 동일)
-        from api.models_custom import CustomGroupBuyImage
-
-        existing_image_ids = self.request.data.getlist('existing_image_ids') if hasattr(self.request.data, 'getlist') else []
-        new_images = self.request.FILES.getlist('new_images') if 'new_images' in self.request.FILES else []
-
-        # 이미지 변경이 있는 경우만 처리
-        if existing_image_ids or new_images or 'images' in self.request.FILES:
-            logger.info(f"[이미지 수정] 시작 - 유지: {len(existing_image_ids)}개, 새 이미지: {len(new_images)}개")
-
-            # 기존 방식 (images 필드)과의 호환성 유지
-            if 'images' in self.request.FILES:
-                # 기존 방식: 모든 이미지 재등록
-                logger.info(f"[이미지 수정] 기존 방식으로 처리 (전체 재등록)")
-                deleted_count = CustomGroupBuyImage.objects.filter(custom_groupbuy=instance).delete()[0]
-                logger.info(f"[이미지 수정] {deleted_count}개 기존 이미지 삭제")
-
-                images_data = self.request.FILES.getlist('images')
-                for index, image in enumerate(images_data):
-                    try:
-                        CustomGroupBuyImage.objects.create(
-                            custom_groupbuy=instance,
-                            image=image,
-                            is_primary=(index == 0),
-                            order_index=index
-                        )
-                    except Exception as e:
-                        logger.error(f"[이미지 수정] 이미지 저장 실패: {e}")
-            else:
-                # 새로운 방식: 선택적 유지 + 추가
-                # 유지하지 않을 이미지만 삭제
-                if existing_image_ids:
-                    existing_ids = [int(id) for id in existing_image_ids if id]
-                    deleted = CustomGroupBuyImage.objects.filter(custom_groupbuy=instance).exclude(id__in=existing_ids)
-                    deleted_count = deleted.count()
-                    deleted.delete()
-                    logger.info(f"[이미지 수정] {deleted_count}개 이미지 삭제 (유지: {len(existing_ids)}개)")
-
-                    # 유지된 이미지들의 순서 재정렬 (휴대폰과 동일)
-                    for idx, img_id in enumerate(existing_ids):
-                        CustomGroupBuyImage.objects.filter(id=img_id).update(
-                            order_index=idx,
-                            is_primary=(idx == 0)  # 첫 번째만 대표 이미지
-                        )
-                else:
-                    # existing_image_ids가 비어있으면 모든 기존 이미지 삭제
-                    deleted_count = CustomGroupBuyImage.objects.filter(custom_groupbuy=instance).delete()[0]
-                    logger.info(f"[이미지 수정] 모든 기존 이미지 삭제: {deleted_count}개")
-
-                # 새 이미지 추가
-                existing_count = len(existing_image_ids) if existing_image_ids else 0
-                for index, image in enumerate(new_images):
-                    try:
-                        CustomGroupBuyImage.objects.create(
-                            custom_groupbuy=instance,
-                            image=image,
-                            is_primary=(existing_count == 0 and index == 0),  # 기존 이미지가 없고 첫 번째면 대표
-                            order_index=existing_count + index  # 기존 이미지 다음 순서
-                        )
-                        logger.info(f"[이미지 수정] 새 이미지 추가 {index + 1}/{len(new_images)}")
-                    except Exception as e:
-                        logger.error(f"[이미지 수정] 새 이미지 저장 실패: {e}")
-
-            logger.info(f"[이미지 수정] 완료")
+        # 이미지 처리는 serializer의 update 메서드에서 처리
+        # (전자제품/휴대폰과 동일하게 serializer에 통합)
 
         # 지역 데이터가 있으면 업데이트
         regions_data = self.request.data.getlist('regions') if hasattr(self.request.data, 'getlist') else self.request.data.get('regions', [])
