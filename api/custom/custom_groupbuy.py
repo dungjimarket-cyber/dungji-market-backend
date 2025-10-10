@@ -632,17 +632,14 @@ class CustomParticipantViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_200_OK
             )
 
-        participant.discount_used = True
-        participant.discount_used_at = timezone.now()
-        participant.verified_by = request.user
-        participant.save()
-
+        # 검증만 하고 사용 처리는 하지 않음 (프론트에서 toggle_used API를 별도로 호출)
         return Response({
             'valid': True,
             'message': '할인코드가 검증되었습니다.',
             'user_name': participant.user.username,
             'participation_code': participant.participation_code,
-            'verified_at': participant.discount_used_at
+            'discount_used': participant.discount_used,
+            'discount_used_at': participant.discount_used_at
         })
 
 
