@@ -545,54 +545,42 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 setattr(instance, attr, value)
             instance.save()
 
-            # 이미지 업데이트 - 전자제품/휴대폰 방식
+            # 이미지 업데이트 - 중고거래 방식 (is_primary는 건드리지 않음)
             if new_images_data is not None or existing_image_ids is not None:
                 logger.info(f"[이미지 수정 시작] existing_image_ids: {existing_image_ids}, new_images: {len(new_images_data) if new_images_data else 0}")
 
                 # 유지할 이미지와 삭제할 이미지 구분
                 if existing_image_ids:
-                    # 기존 이미지 상태 확인
-                    before_images = list(instance.images.all().values('id', 'order_index', 'is_primary'))
-                    logger.info(f"[수정 전 이미지] {before_images}")
+                    # 정수 변환
+                    existing_ids = [int(id) for id in existing_image_ids if id]
 
                     # 기존 이미지 중 existing_image_ids에 없는 것만 삭제
-                    deleted = instance.images.exclude(id__in=existing_image_ids)
-                    deleted_ids = list(deleted.values_list('id', flat=True))
+                    deleted = instance.images.exclude(id__in=existing_ids)
+                    deleted_count = deleted.count()
                     deleted.delete()
-                    logger.info(f"[삭제된 이미지 ID] {deleted_ids}")
+                    logger.info(f"[이미지 삭제] {deleted_count}개 삭제 (유지: {len(existing_ids)}개)")
 
-                    # 유지된 이미지들의 순서 재정렬 (전자제품과 동일)
-                    logger.info(f"[순서 재정렬 시작] existing_image_ids 순서: {existing_image_ids}")
-                    for idx, img_id in enumerate(existing_image_ids):
-                        logger.info(f"[재정렬] ID {img_id} → order_index={idx}, is_primary={idx == 0}")
-                        CustomGroupBuyImage.objects.filter(id=img_id).update(
-                            order_index=idx,
-                            is_primary=(idx == 0)
-                        )
-
-                    # 재정렬 후 상태 확인
-                    after_images = list(instance.images.all().values('id', 'order_index', 'is_primary'))
-                    logger.info(f"[재정렬 후 이미지] {after_images}")
+                    # 유지된 이미지들의 순서만 재정렬 (is_primary는 건드리지 않음)
+                    for idx, img_id in enumerate(existing_ids):
+                        CustomGroupBuyImage.objects.filter(id=img_id).update(order_index=idx)
+                        logger.info(f"[순서 재정렬] ID {img_id} → order_index={idx}")
                 else:
                     # existing_image_ids가 없으면 모든 기존 이미지 삭제
                     deleted_count = instance.images.all().delete()[0]
                     logger.info(f"[모든 기존 이미지 삭제] {deleted_count}개")
 
                 # 새 이미지 추가
+                existing_count = len(existing_image_ids) if existing_image_ids else 0
                 if new_images_data:
-                    # 기존 이미지의 최대 order_index 값 찾기
-                    from django.db.models import Max
-                    max_order = instance.images.aggregate(max_order=Max('order_index'))['max_order'] or -1
-
                     for idx, image in enumerate(new_images_data):
                         try:
                             CustomGroupBuyImage.objects.create(
                                 custom_groupbuy=instance,
                                 image=image,
-                                is_primary=(max_order == -1 and idx == 0),  # 기존 이미지가 없으면 첫 번째를 primary로
-                                order_index=max_order + idx + 1
+                                is_primary=(existing_count == 0 and idx == 0),  # 기존 이미지가 없고 첫 번째면 primary
+                                order_index=existing_count + idx  # 기존 이미지 다음 순서
                             )
-                            logger.info(f"[이미지 저장 완료] 새 이미지 {idx + 1}/{len(new_images_data)}")
+                            logger.info(f"[새 이미지 추가] {idx + 1}/{len(new_images_data)}")
                         except Exception as e:
                             logger.error(f"[이미지 처리 실패] index={idx}, error={e}", exc_info=True)
             elif images_data is not None:
