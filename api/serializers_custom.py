@@ -43,12 +43,11 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
     seller_type = serializers.CharField(read_only=True)
     primary_image = serializers.SerializerMethodField()
     is_favorited = serializers.SerializerMethodField()
-    regions = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomGroupBuy
         fields = [
-            'id', 'title', 'type', 'type_display', 'categories', 'regions', 'usage_guide',
+            'id', 'title', 'type', 'type_display', 'categories', 'location', 'usage_guide',
             'pricing_type', 'products', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'status', 'status_display', 'expired_at',
@@ -99,28 +98,6 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
-    def get_regions(self, obj):
-        region_links = CustomGroupBuyRegion.objects.filter(
-            custom_groupbuy=obj
-        ).select_related('region', 'region__parent')
-
-        result = []
-        for region_link in region_links:
-            region = region_link.region
-            if region:
-                display_name = region.name
-                if region.parent:
-                    parent_name = region.parent.name
-                    display_name = f"{parent_name} {region.name}"
-
-                result.append({
-                    'code': region.code,
-                    'name': region.name,
-                    'full_name': display_name
-                })
-
-        return result
-
 
 class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
     """공구 상세 시리얼라이저"""
@@ -139,13 +116,12 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
     images = CustomGroupBuyImageSerializer(many=True, read_only=True)
     is_favorited = serializers.SerializerMethodField()
     is_participated = serializers.SerializerMethodField()
-    regions = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomGroupBuy
         fields = [
             'id', 'title', 'description', 'type', 'type_display',
-            'categories', 'regions', 'usage_guide',
+            'categories', 'location', 'location_detail', 'usage_guide',
             'pricing_type', 'products', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'max_wait_hours', 'expired_at', 'completed_at',
@@ -154,7 +130,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             'allow_partial_sale',
             'seller', 'seller_name', 'seller_type', 'is_business_verified',
             'online_discount_type', 'online_discount_type_display',
-            'location', 'location_detail', 'phone_number',
+            'phone_number',
             'meta_title', 'meta_image', 'meta_description', 'meta_price',
             'status', 'status_display',
             'view_count', 'favorite_count',
@@ -205,28 +181,6 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
-    def get_regions(self, obj):
-        region_links = CustomGroupBuyRegion.objects.filter(
-            custom_groupbuy=obj
-        ).select_related('region', 'region__parent')
-
-        result = []
-        for region_link in region_links:
-            region = region_link.region
-            if region:
-                display_name = region.name
-                if region.parent:
-                    parent_name = region.parent.name
-                    display_name = f"{parent_name} {region.name}"
-
-                result.append({
-                    'code': region.code,
-                    'name': region.name,
-                    'full_name': display_name
-                })
-
-        return result
-
 
 class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
     """공구 생성 시리얼라이저"""
@@ -251,17 +205,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         required=False,
         help_text="수정 시 유지할 기존 이미지 ID 목록 (전자제품/휴대폰 호환)"
     )
-    region_codes = serializers.ListField(
-        child=serializers.CharField(),
-        write_only=True,
-        required=False,
-        help_text='지역 코드 목록 (최대 3개)'
-    )
 
     class Meta:
         model = CustomGroupBuy
         fields = [
-            'id', 'title', 'description', 'type', 'categories', 'region_codes', 'usage_guide',
+            'id', 'title', 'description', 'type', 'categories', 'usage_guide',
             'pricing_type', 'products', 'original_price', 'discount_rate',
             'target_participants', 'max_wait_hours', 'expired_at',
             'discount_valid_days', 'allow_partial_sale',
@@ -398,12 +346,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                         'discount_codes': '각 할인코드는 최대 50자까지 입력 가능합니다.'
                     })
 
-        # 지역 검증 (ViewSet에서 처리하므로 여기서는 개수만 체크)
-        region_codes = data.get('region_codes', [])
-        if region_codes and len(region_codes) > 3:
-            raise serializers.ValidationError({
-                'region_codes': '최대 3개까지 지역을 선택할 수 있습니다.'
-            })
 
         # update 시 instance 값 참조
         current_type = data.get('type', self.instance.type if is_update else None)
@@ -435,12 +377,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         # 오프라인 공구 검증 (생성 시에만 검증, 수정 시에는 type이 없으므로 스킵)
         if current_type == 'offline' and not is_update:
-            # regions 필드 체크 (프론트엔드는 regions로 전송)
-            regions = self.initial_data.get('regions', []) if hasattr(self, 'initial_data') else []
-            if not regions and not region_codes:
-                raise serializers.ValidationError({
-                    'regions': '오프라인 공구는 지역 선택이 필수입니다.'
-                })
             if not data.get('location'):
                 raise serializers.ValidationError({
                     'location': '오프라인 공구는 매장 위치가 필수입니다.'
@@ -474,7 +410,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         logger = logging.getLogger(__name__)
 
         images_data = validated_data.pop('images', [])
-        validated_data.pop('region_codes', None)  # ViewSet에서 처리 (없을 수도 있음)
 
         logger.info(f"[CustomGroupBuy Create] images count: {len(images_data)}")
 
@@ -525,7 +460,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         images_data = validated_data.pop('images', None)  # 기존 방식 호환
         new_images_data = validated_data.pop('new_images', None)
         existing_image_ids = validated_data.pop('existing_image_ids', None)
-        validated_data.pop('region_codes', None)  # ViewSet에서 처리
 
         logger.info(f"[CustomGroupBuy Update] images: {len(images_data) if images_data else 0}, new_images: {len(new_images_data) if new_images_data else 0}, existing_ids: {existing_image_ids}")
 
