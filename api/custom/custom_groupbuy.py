@@ -308,6 +308,45 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # 항상 수정 불가능한 필드들 - 값이 실제로 변경될 때만 막음
+        restricted_fields = {
+            'type': '온/오프라인 유형',
+            'target_participants': '목표 인원',
+            'discount_codes': '할인코드'
+        }
+
+        for field, field_name in restricted_fields.items():
+            if field in request.data:
+                # 현재 값과 비교
+                current_value = getattr(instance, field)
+                new_value = request.data.get(field)
+
+                # 값이 실제로 변경되는지 체크
+                try:
+                    if field == 'discount_codes':
+                        # 리스트 비교 (순서 무관, 타입 안전)
+                        current_set = set(str(x) for x in (current_value or []))
+                        new_set = set(str(x) for x in (new_value or []))
+                        if current_set != new_set:
+                            return Response(
+                                {'error': f'{field_name}은(는) 수정할 수 없습니다.'},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                    else:
+                        # 일반 값 비교
+                        if str(current_value) != str(new_value):
+                            return Response(
+                                {'error': f'{field_name}은(는) 수정할 수 없습니다.'},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                except Exception as e:
+                    logger.error(f"필드 비교 오류 ({field}): {e}")
+                    # 비교 실패 시 변경으로 간주하고 막음
+                    return Response(
+                        {'error': f'{field_name}은(는) 수정할 수 없습니다.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
         # 참여자가 있을 때는 제목, 상세설명, 이용안내만 수정 가능
         if instance.current_participants > 0:
             allowed_fields = ['title', 'description', 'usage_guide']

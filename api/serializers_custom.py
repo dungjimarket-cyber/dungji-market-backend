@@ -497,6 +497,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         logger = logging.getLogger(__name__)
 
+        # 수정 불가능한 필드 제거 (방어적 처리)
+        validated_data.pop('type', None)
+        validated_data.pop('target_participants', None)
+        validated_data.pop('discount_codes', None)
+
         # 이미지 관련 데이터 추출 (전자제품 방식)
         images_data = validated_data.pop('images', None)  # 기존 방식 호환
         new_images_data = validated_data.pop('new_images', None)
