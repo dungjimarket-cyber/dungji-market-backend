@@ -270,7 +270,21 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
             'images', 'new_images', 'existing_image_ids'
         ]
 
+    def __init__(self, *args, **kwargs):
+        """수정 시 수정 불가 필드를 optional로 변경"""
+        super().__init__(*args, **kwargs)
+
+        # update 시에는 수정 불가 필드들을 optional로 만듦
+        if self.instance is not None:
+            # instance가 있으면 update 모드
+            self.fields['type'].required = False
+            self.fields['target_participants'].required = False
+            self.fields['discount_codes'].required = False
+
     def validate(self, data):
+        # update 모드인지 확인 (instance가 있으면 update)
+        is_update = self.instance is not None
+
         # 제목 길이 검증
         title = data.get('title', '')
         if len(title) > 50:
@@ -390,8 +404,12 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 'region_codes': '최대 3개까지 지역을 선택할 수 있습니다.'
             })
 
-        # 온라인 공구 검증
-        if data.get('type') == 'online':
+        # update 시 instance 값 참조
+        current_type = data.get('type', self.instance.type if is_update else None)
+        current_target_participants = data.get('target_participants', self.instance.target_participants if is_update else 0)
+
+        # 온라인 공구 검증 (생성 시에만 검증, 수정 시에는 type이 없으므로 스킵)
+        if current_type == 'online' and not is_update:
             if not data.get('online_discount_type'):
                 raise serializers.ValidationError({
                     'online_discount_type': '온라인 공구는 할인 제공 방식이 필수입니다.'
@@ -409,13 +427,13 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         'discount_codes': '할인코드 제공 시 코드가 필수입니다.'
                     })
-                if len(codes) < data.get('target_participants', 0):
+                if len(codes) < current_target_participants:
                     raise serializers.ValidationError({
                         'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다.'
                     })
 
-        # 오프라인 공구 검증
-        if data.get('type') == 'offline':
+        # 오프라인 공구 검증 (생성 시에만 검증, 수정 시에는 type이 없으므로 스킵)
+        if current_type == 'offline' and not is_update:
             # regions 필드 체크 (프론트엔드는 regions로 전송)
             regions = self.initial_data.get('regions', []) if hasattr(self, 'initial_data') else []
             if not regions and not region_codes:
@@ -440,9 +458,9 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'discount_codes': '오프라인 공구는 할인코드가 필수입니다.'
                 })
-            if len(codes) < data.get('target_participants', 0):
+            if len(codes) < current_target_participants:
                 raise serializers.ValidationError({
-                    'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다. (필요: {data.get("target_participants")}, 보유: {len(codes)})'
+                    'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다. (필요: {current_target_participants}, 보유: {len(codes)})'
                 })
 
         return data

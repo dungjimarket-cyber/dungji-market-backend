@@ -280,6 +280,11 @@ class CustomGroupBuy(models.Model):
         """공구 완료 처리"""
         from django.db import transaction
 
+        # 이미 완료된 경우 중복 실행 방지
+        if self.status == 'completed':
+            logger.warning(f"공구 이미 완료됨: {self.title}")
+            return
+
         with transaction.atomic():
             self.status = 'completed'
             self.completed_at = timezone.now()
@@ -317,7 +322,6 @@ class CustomGroupBuy(models.Model):
                 if self.online_discount_type in ['code_only', 'both']:
                     participant.discount_code = self.discount_codes[i]
 
-                participant.discount_valid_until = self.discount_valid_until
                 participant.save()
 
         elif self.type == 'offline':
@@ -329,7 +333,6 @@ class CustomGroupBuy(models.Model):
 
             for i, participant in enumerate(participants):
                 participant.discount_code = self.discount_codes[i]
-                participant.discount_valid_until = self.discount_valid_until
                 participant.save()
 
         logger.info(f"할인 발급 완료: {self.title} ({participant_count}명)")
@@ -383,6 +386,20 @@ class CustomGroupBuy(models.Model):
         # 최소 인원 체크
         if self.current_participants < 1:
             raise ValidationError('최소 1명 이상 참여해야 조기 종료할 수 있습니다.')
+
+        # 할인코드 부족 사전 체크 (온라인: code_only/both, 오프라인: 항상)
+        participant_count = self.current_participants
+        if self.type == 'online':
+            if self.online_discount_type in ['code_only', 'both']:
+                if len(self.discount_codes) < participant_count:
+                    raise ValidationError(
+                        f'할인코드가 부족하여 조기 종료할 수 없습니다. (필요: {participant_count}, 보유: {len(self.discount_codes)})'
+                    )
+        elif self.type == 'offline':
+            if len(self.discount_codes) < participant_count:
+                raise ValidationError(
+                    f'할인코드가 부족하여 조기 종료할 수 없습니다. (필요: {participant_count}, 보유: {len(self.discount_codes)})'
+                )
 
         # 즉시 완료 처리
         self.complete_groupbuy()
