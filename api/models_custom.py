@@ -414,7 +414,6 @@ class CustomGroupBuyImage(models.Model):
         verbose_name = '공구 이미지'
         verbose_name_plural = '공구 이미지 관리'
         ordering = ['order_index']
-        unique_together = [('custom_groupbuy', 'order_index')]
 
     def __str__(self):
         return f"{self.custom_groupbuy.title} - 이미지 {self.order_index + 1}"
