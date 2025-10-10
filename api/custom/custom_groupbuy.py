@@ -318,15 +318,35 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-        # 중고거래 방식 - Serializer가 이미지 처리
+        # FormData 배열 파싱 (전자제품/휴대폰 방식)
         logger.info(f"=== CustomGroupBuy Update Request ===")
         logger.info(f"User: {request.user}")
         logger.info(f"Request data keys: {request.data.keys()}")
         logger.info(f"Request FILES keys: {request.FILES.keys()}")
 
+        # FormData 배열 수동 파싱 (지역 처리와 동일)
+        data_copy = request.data.copy()
+
+        # existing_image_ids 배열 파싱
+        if hasattr(request.data, 'getlist'):
+            existing_ids = request.data.getlist('existing_image_ids')
+            if existing_ids:
+                # 문자열을 정수로 변환
+                try:
+                    data_copy['existing_image_ids'] = [int(img_id) for img_id in existing_ids if img_id]
+                    logger.info(f"[FormData 파싱] existing_image_ids: {data_copy['existing_image_ids']}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"[existing_image_ids 파싱 실패] {e}")
+
+            # new_images 배열 파싱
+            new_images = request.FILES.getlist('new_images')
+            if new_images:
+                data_copy['new_images'] = new_images
+                logger.info(f"[FormData 파싱] new_images: {len(new_images)}개")
+
         # DRF가 request.data에서 자동으로 파일 처리 (중고거래와 동일)
         partial = kwargs.pop('partial', False)
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(instance, data=data_copy, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
