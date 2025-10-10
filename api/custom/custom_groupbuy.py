@@ -2,6 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db.models import Q, F
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -530,15 +532,27 @@ class CustomParticipantViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('-participated_at')
 
-    @action(detail=True, methods=['get'])
+    @action(
+        detail=True,
+        methods=['get'],
+        authentication_classes=[JWTAuthentication, SessionAuthentication],
+        permission_classes=[IsAuthenticated]
+    )
     def qr_code(self, request, pk=None):
-        """오프라인 공구 할인코드 QR 생성"""
+        """오프라인 공구 할인코드 QR 생성 (세션/JWT 인증 모두 지원)"""
         from django.http import HttpResponse
         import qrcode
         from io import BytesIO
 
         participant = self.get_object()
         groupbuy = participant.custom_groupbuy
+
+        # 본인 확인
+        if participant.user != request.user:
+            return Response(
+                {'error': '본인의 QR 코드만 조회할 수 있습니다.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # 오프라인 공구만 QR 생성 가능
         if groupbuy.type != 'offline':
