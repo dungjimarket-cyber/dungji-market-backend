@@ -306,29 +306,30 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 'usage_guide': '이용안내는 최대 1,000자까지 입력 가능합니다.'
             })
 
-        # 카테고리 검증
-        categories = data.get('categories', [])
-        if not categories:
-            raise serializers.ValidationError({
-                'categories': '최소 1개 이상의 카테고리를 선택해주세요.'
-            })
-        if len(categories) > 5:
-            raise serializers.ValidationError({
-                'categories': '카테고리는 최대 5개까지 선택 가능합니다.'
-            })
-        if len(set(categories)) != len(categories):
-            raise serializers.ValidationError({
-                'categories': '중복된 카테고리가 있습니다.'
-            })
-
-        # 유효한 카테고리인지 검증
-        from api.models_custom import CustomGroupBuy
-        valid_categories = [choice[0] for choice in CustomGroupBuy.CATEGORY_CHOICES]
-        for category in categories:
-            if category not in valid_categories:
+        # 카테고리 검증 (전송된 경우만)
+        categories = data.get('categories')
+        if categories is not None:
+            if not categories:
                 raise serializers.ValidationError({
-                    'categories': f'유효하지 않은 카테고리입니다: {category}'
+                    'categories': '최소 1개 이상의 카테고리를 선택해주세요.'
                 })
+            if len(categories) > 5:
+                raise serializers.ValidationError({
+                    'categories': '카테고리는 최대 5개까지 선택 가능합니다.'
+                })
+            if len(set(categories)) != len(categories):
+                raise serializers.ValidationError({
+                    'categories': '중복된 카테고리가 있습니다.'
+                })
+
+            # 유효한 카테고리인지 검증
+            from api.models_custom import CustomGroupBuy
+            valid_categories = [choice[0] for choice in CustomGroupBuy.CATEGORY_CHOICES]
+            for category in categories:
+                if category not in valid_categories:
+                    raise serializers.ValidationError({
+                        'categories': f'유효하지 않은 카테고리입니다: {category}'
+                    })
 
         # products 필드 검증 (단일상품 여러 개)
         pricing_type = data.get('pricing_type', 'single_product')
