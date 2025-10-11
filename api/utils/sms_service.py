@@ -27,7 +27,7 @@ def log_sms(phone_number: str, message_type: str, message_content: str,
 
 class SMSService:
     """SMS 발송 서비스
-    
+
     실제 구현 시 다음 서비스 중 하나를 선택하여 구현:
     - AWS SNS
     - Twilio
@@ -35,12 +35,38 @@ class SMSService:
     - 솔루션박스 (한국)
     - LG U+ SMS API (한국)
     """
-    
+
     def __init__(self):
         self.provider = getattr(settings, 'SMS_PROVIDER', 'mock')
         self.api_key = getattr(settings, 'SMS_API_KEY', '')
         self.api_secret = getattr(settings, 'SMS_API_SECRET', '')
         self.sender_number = getattr(settings, 'SMS_SENDER_NUMBER', '1234-5678')
+
+    @staticmethod
+    def calculate_sms_length(message: str) -> int:
+        """SMS 메시지 바이트 길이 계산 (EUC-KR 기준)
+
+        알리고 API는 EUC-KR 인코딩 사용:
+        - 한글: 2바이트
+        - 영문/숫자/기호: 1바이트
+        """
+        try:
+            # EUC-KR로 인코딩하여 실제 바이트 길이 계산
+            return len(message.encode('euc-kr'))
+        except UnicodeEncodeError:
+            # 인코딩 불가능한 문자가 있으면 UTF-8 길이로 근사치 계산
+            return len(message.encode('utf-8'))
+
+    @staticmethod
+    def get_message_type(message: str) -> str:
+        """메시지 길이에 따라 SMS 타입 자동 선택
+
+        Returns:
+            'SMS': 90바이트 이하 (단문)
+            'LMS': 90바이트 초과 (장문, 최대 2000바이트)
+        """
+        byte_length = SMSService.calculate_sms_length(message)
+        return 'LMS' if byte_length > 90 else 'SMS'
         
     def send_verification_code(self, phone_number: str, code: str) -> Tuple[bool, Optional[str]]:
         """인증 코드 SMS 발송
@@ -52,7 +78,8 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        message = f"[둥지마켓] 인증번호는 {code}입니다. 3분 이내에 입력해주세요."
+        # 90바이트 이하로 최적화 (약 30바이트)
+        message = f"[둥지마켓] 인증번호: {code}"
 
         try:
             if self.provider == 'mock':
@@ -84,15 +111,15 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://dungjimarket.com')
-        my_deals_url = f"{frontend_url}/custom-deals/my"
+        # 90바이트 이하로 최적화 (약 77바이트)
+        # 제목이 길 경우 자동으로 잘림
+        max_title_length = 20  # 한글 10자 (20바이트)
+        short_title = title[:max_title_length] if len(title) > max_title_length else title
 
         message = (
-            f"[둥지마켓] 공구 마감 완료!\n"
-            f"{title}\n"
-            f"참여하신 공구가 마감되었어요!\n"
-            f"* 할인혜택과 사용기간을 꼭 확인하세요\n"
-            f"바로가기: {my_deals_url}"
+            f"[둥지마켓] 공구마감!\n"
+            f"{short_title}\n"
+            f"할인정보: dungjimarket.com/my"
         )
 
         try:
@@ -156,24 +183,16 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://dungjimarket.com')
-        manage_url = f"{frontend_url}/custom-deals/my"
-
-        # 가격/할인율 정보
-        if final_price:
-            price_info = f"최종가: {final_price:,}원"
-        elif discount_rate:
-            price_info = f"할인율: {discount_rate}%"
-        else:
-            price_info = ""
+        # 90바이트 이하로 최적화 (약 86바이트)
+        # 제목이 길 경우 자동으로 잘림
+        max_title_length = 16  # 한글 8자 (16바이트) - 판매자용은 더 짧게
+        short_title = title[:max_title_length] if len(title) > max_title_length else title
 
         message = (
-            f"[둥지마켓] 공구 마감 알림 (판매자)\n"
-            f"{title}\n"
-            f"참여자: {participants_count}명\n"
-            f"{price_info}\n"
-            f"참여자에게 할인정보가 전달되었습니다.\n"
-            f"관리: {manage_url}"
+            f"[둥지마켓] 공구마감\n"
+            f"{short_title}\n"
+            f"참여:{participants_count}명\n"
+            f"참여정보: dungjimarket.com/my"
         )
 
         try:
@@ -224,15 +243,30 @@ class SMSService:
         logger.info(f"[MOCK SMS] To: {phone_number}, Message: {message}")
         return True, None
     
-    def _send_aligo_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
-        """알리고 SMS API 실제 구현"""
+    def _send_aligo_sms(self, phone_number: str, message: str, title: str = '[둥지마켓]') -> Tuple[bool, Optional[str]]:
+        """알리고 SMS API 실제 구현
+
+        Args:
+            phone_number: 수신자 전화번호
+            message: 메시지 내용
+            title: LMS 제목 (LMS인 경우에만 사용)
+        """
         import requests
-        
+
         # 개발 모드에서는 Mock 사용
         if settings.DEBUG and not getattr(settings, 'USE_REAL_SMS', False):
-            logger.info(f"[알리고 개발모드] To: {phone_number}, Message: {message}")
+            msg_type = self.get_message_type(message)
+            byte_length = self.calculate_sms_length(message)
+            logger.info(f"[알리고 개발모드] To: {phone_number}, Type: {msg_type}, Length: {byte_length}bytes")
+            logger.info(f"[알리고 개발모드] Message: {message}")
             return True, None
-        
+
+        # 메시지 길이에 따라 SMS/LMS 자동 선택
+        msg_type = self.get_message_type(message)
+        byte_length = self.calculate_sms_length(message)
+
+        logger.info(f"SMS 발송 시작: Type={msg_type}, Length={byte_length}bytes, To={phone_number}")
+
         url = "https://apis.aligo.in/send/"
         data = {
             'key': self.api_key,
@@ -240,16 +274,19 @@ class SMSService:
             'sender': self.sender_number,
             'receiver': phone_number.replace('-', ''),  # 하이픈 제거
             'msg': message,
-            'msg_type': 'SMS',
-            'title': '[둥지마켓] 인증번호'
+            'msg_type': msg_type,  # 자동 선택된 타입 사용
         }
-        
+
+        # LMS인 경우에만 제목 추가
+        if msg_type == 'LMS':
+            data['title'] = title
+
         try:
             response = requests.post(url, data=data)
             result = response.json()
-            
+
             if result.get('result_code') == '1':
-                logger.info(f"SMS 발송 성공: {phone_number}")
+                logger.info(f"SMS 발송 성공: {phone_number} (Type: {msg_type}, {byte_length}bytes)")
                 return True, None
             else:
                 error_msg = result.get('message', 'SMS 발송 실패')

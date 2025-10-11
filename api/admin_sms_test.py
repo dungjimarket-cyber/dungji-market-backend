@@ -69,7 +69,18 @@ def sms_test_view(request):
                     user=None,
                     custom_groupbuy=None
                 )
-                message_preview = f"[둥지마켓] 공구 마감 완료!\n{test_title}\n참여하신 공구가 마감되었어요!\n* 할인혜택과 사용기간을 꼭 확인하세요\n바로가기: {my_deals_url}"
+
+                # 실제 발송되는 메시지 계산
+                message_content = (
+                    f"[둥지마켓] 공구 마감 완료!\n"
+                    f"{test_title}\n"
+                    f"참여하신 공구가 마감되었어요!\n"
+                    f"* 할인혜택과 사용기간을 꼭 확인하세요\n"
+                    f"바로가기: {my_deals_url}"
+                )
+                byte_length = sms_service.calculate_sms_length(message_content)
+                msg_type = sms_service.get_message_type(message_content)
+                message_preview = f"{message_content}\n\n[발송 정보: {msg_type} / {byte_length}바이트]"
 
             elif sms_type == 'groupbuy_seller':
                 # 공구 마감 알림 발송 (판매자용)
