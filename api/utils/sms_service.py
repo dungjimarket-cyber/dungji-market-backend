@@ -84,11 +84,15 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://dungjimarket.com')
+        my_deals_url = f"{frontend_url}/custom-deals/my"
+
         message = (
             f"[둥지마켓] 공구 마감 완료!\n"
             f"{title}\n"
             f"참여하신 공구가 마감되었어요!\n"
-            f"※ 할인혜택과 사용기간을 꼭 확인하세요"
+            f"* 할인혜택과 사용기간을 꼭 확인하세요\n"
+            f"바로가기: {my_deals_url}"
         )
 
         try:

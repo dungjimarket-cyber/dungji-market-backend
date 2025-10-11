@@ -345,17 +345,17 @@ class CustomGroupBuy(models.Model):
 
         for participant in participants:
             # 전화번호가 있는 참여자에게만 발송
-            if hasattr(participant.user, 'phone') and participant.user.phone:
+            if hasattr(participant.user, 'phone_number') and participant.user.phone_number:
                 try:
                     success, error = sms_service.send_custom_groupbuy_completion(
-                        phone_number=participant.user.phone,
+                        phone_number=participant.user.phone_number,
                         title=self.title,
                         user=participant.user,
                         custom_groupbuy=self
                     )
                     if success:
                         sms_success_count += 1
-                        logger.info(f"SMS 발송 성공: {participant.user.username} ({participant.user.phone})")
+                        logger.info(f"SMS 발송 성공: {participant.user.username} ({participant.user.phone_number})")
                     else:
                         sms_fail_count += 1
                         logger.warning(f"SMS 발송 실패: {participant.user.username} - {error}")

@@ -58,14 +58,18 @@ def sms_test_view(request):
 
             elif sms_type == 'groupbuy':
                 # 공구 마감 알림 발송
+                from django.conf import settings
                 test_title = "[테스트] 둥지마켓 공구 테스트"
+                frontend_url = getattr(settings, 'FRONTEND_URL', 'https://dungjimarket.com')
+                my_deals_url = f"{frontend_url}/custom-deals/my"
+
                 success, error = sms_service.send_custom_groupbuy_completion(
                     phone_number=normalized_phone,
                     title=test_title,
                     user=None,
                     custom_groupbuy=None
                 )
-                message_preview = f"[둥지마켓] 공구 마감 완료!\n{test_title}\n참여하신 공구가 마감되었어요!\n※ 할인혜택과 사용기간을 꼭 확인하세요"
+                message_preview = f"[둥지마켓] 공구 마감 완료!\n{test_title}\n참여하신 공구가 마감되었어요!\n* 할인혜택과 사용기간을 꼭 확인하세요\n바로가기: {my_deals_url}"
 
             else:  # custom
                 # 직접 입력 메시지 발송
