@@ -20,13 +20,4 @@ class Migration(migrations.Migration):
             name='bump_count',
             field=models.PositiveIntegerField(default=0, verbose_name='총 끌올 횟수'),
         ),
-        migrations.AlterField(
-            model_name='unifiedbump',
-            name='item_type',
-            field=models.CharField(
-                choices=[('phone', '휴대폰'), ('electronics', '전자제품'), ('custom_groupbuy', '커스텀공구')],
-                max_length=20,
-                verbose_name='상품타입'
-            ),
-        ),
     ]
