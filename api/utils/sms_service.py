@@ -23,16 +23,16 @@ class SMSService:
         
     def send_verification_code(self, phone_number: str, code: str) -> Tuple[bool, Optional[str]]:
         """인증 코드 SMS 발송
-        
+
         Args:
             phone_number: 수신자 전화번호
             code: 6자리 인증 코드
-            
+
         Returns:
             (성공여부, 에러메시지)
         """
         message = f"[둥지마켓] 인증번호는 {code}입니다. 3분 이내에 입력해주세요."
-        
+
         try:
             if self.provider == 'mock':
                 return self._send_mock_sms(phone_number, message)
@@ -45,9 +45,43 @@ class SMSService:
             else:
                 logger.error(f"Unknown SMS provider: {self.provider}")
                 return False, "SMS 서비스 설정 오류"
-                
+
         except Exception as e:
             logger.error(f"SMS 발송 실패: {e}", exc_info=True)
+            return False, "SMS 발송 중 오류가 발생했습니다."
+
+    def send_custom_groupbuy_completion(self, phone_number: str, title: str) -> Tuple[bool, Optional[str]]:
+        """커스텀 공구 마감 알림 SMS 발송
+
+        Args:
+            phone_number: 수신자 전화번호
+            title: 공구 상품명
+
+        Returns:
+            (성공여부, 에러메시지)
+        """
+        message = (
+            f"[둥지마켓] 공구 마감 완료!\n"
+            f"{title}\n"
+            f"참여하신 공구가 마감되었어요!\n"
+            f"✅ 할인혜택과 사용기간을 꼭 확인하세요"
+        )
+
+        try:
+            if self.provider == 'mock':
+                return self._send_mock_sms(phone_number, message)
+            elif self.provider == 'aligo':
+                return self._send_aligo_sms(phone_number, message)
+            elif self.provider == 'twilio':
+                return self._send_twilio_sms(phone_number, message)
+            elif self.provider == 'aws_sns':
+                return self._send_aws_sns_sms(phone_number, message)
+            else:
+                logger.error(f"Unknown SMS provider: {self.provider}")
+                return False, "SMS 서비스 설정 오류"
+
+        except Exception as e:
+            logger.error(f"커스텀 공구 마감 알림 SMS 발송 실패: {e}", exc_info=True)
             return False, "SMS 발송 중 오류가 발생했습니다."
     
     def _send_mock_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:

@@ -303,6 +303,7 @@ class CustomGroupBuy(models.Model):
     def issue_discounts(self):
         """할인코드/링크 발급"""
         from django.core.exceptions import ValidationError
+        from api.utils.sms_service import SMSService
 
         participants = self.participants.filter(status='confirmed')
         participant_count = participants.count()
@@ -336,6 +337,34 @@ class CustomGroupBuy(models.Model):
                 participant.save()
 
         logger.info(f"할인 발급 완료: {self.title} ({participant_count}명)")
+
+        # SMS 알림 발송 (참여자들에게만)
+        sms_service = SMSService()
+        sms_success_count = 0
+        sms_fail_count = 0
+
+        for participant in participants:
+            # 전화번호가 있는 참여자에게만 발송
+            if hasattr(participant.user, 'phone') and participant.user.phone:
+                try:
+                    success, error = sms_service.send_custom_groupbuy_completion(
+                        phone_number=participant.user.phone,
+                        title=self.title
+                    )
+                    if success:
+                        sms_success_count += 1
+                        logger.info(f"SMS 발송 성공: {participant.user.username} ({participant.user.phone})")
+                    else:
+                        sms_fail_count += 1
+                        logger.warning(f"SMS 발송 실패: {participant.user.username} - {error}")
+                except Exception as e:
+                    sms_fail_count += 1
+                    logger.error(f"SMS 발송 예외: {participant.user.username} - {str(e)}")
+            else:
+                sms_fail_count += 1
+                logger.warning(f"전화번호 없음: {participant.user.username}")
+
+        logger.info(f"SMS 알림 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
 
     def check_expiration(self):
         """기간 만료 체크"""
