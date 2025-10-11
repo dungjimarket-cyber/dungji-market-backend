@@ -1,0 +1,53 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block content %}
+{{ block.super }}
+
+<style>
+    .sms-test-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .sms-test-card h2 {
+        color: white;
+        margin: 0 0 10px 0;
+        font-size: 18px;
+    }
+    .sms-test-card p {
+        color: rgba(255, 255, 255, 0.9);
+        margin: 0 0 15px 0;
+        font-size: 14px;
+    }
+    .sms-test-btn {
+        display: inline-block;
+        background: white;
+        color: #667eea;
+        padding: 10px 20px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        transition: transform 0.2s;
+    }
+    .sms-test-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        color: #667eea;
+    }
+</style>
+
+<div class="sms-test-card">
+    <h2>📱 SMS 테스트 발송</h2>
+    <p>실제 SMS 발송을 테스트하고 발송 내역을 확인할 수 있습니다.</p>
+    <a href="{% url 'admin_sms_test' %}" class="sms-test-btn">
+        🚀 SMS 테스트 하기
+    </a>
+    <a href="/admin/api/smslog/" class="sms-test-btn" style="margin-left: 10px;">
+        📋 발송 내역 보기
+    </a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,270 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+<style>
+    .sms-test-container {
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+    }
+
+    .sms-test-form {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .form-group input[type="text"],
+    .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .form-group input[type="text"]:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #417690;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .btn-primary {
+        background-color: #417690;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background-color: #2f5a70;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background-color: #5a6268;
+    }
+
+    .alert {
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 4px;
+        display: none;
+    }
+
+    .alert-success {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+
+    .alert-error {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+
+    .message-preview {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-left: 4px solid #417690;
+        font-size: 13px;
+        white-space: pre-line;
+    }
+
+    .loading {
+        display: none;
+        text-align: center;
+        margin-top: 10px;
+    }
+
+    .spinner {
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #417690;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .info-box {
+        background-color: #e7f3ff;
+        border-left: 4px solid #2196F3;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+
+    .info-box h3 {
+        margin: 0 0 10px 0;
+        color: #1976D2;
+        font-size: 16px;
+    }
+
+    .info-box ul {
+        margin: 5px 0;
+        padding-left: 20px;
+    }
+
+    .info-box li {
+        margin: 5px 0;
+        color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sms-test-container">
+    <h1>📱 SMS 테스트 발송</h1>
+
+    <div class="info-box">
+        <h3>ℹ️ 안내사항</h3>
+        <ul>
+            <li><strong>실제 SMS가 발송됩니다</strong> (1건당 약 8원)</li>
+            <li>개발 모드(USE_REAL_SMS=False)에서는 로그만 남고 실제 발송되지 않습니다</li>
+            <li>발송 내역은 "SMS 발송 내역" 메뉴에서 확인할 수 있습니다</li>
+        </ul>
+    </div>
+
+    <div class="sms-test-form">
+        <form id="smsTestForm" method="post">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="sms_type">메시지 유형:</label>
+                <select id="sms_type" name="sms_type" required>
+                    <option value="groupbuy">공구 마감 알림</option>
+                    <option value="verification">인증번호</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="phone_number">수신자 전화번호:</label>
+                <input
+                    type="text"
+                    id="phone_number"
+                    name="phone_number"
+                    placeholder="010-1234-5678"
+                    required
+                    pattern="^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$"
+                />
+                <small style="color: #666;">형식: 010-1234-5678 (하이픈 있어도 됨)</small>
+            </div>
+
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary">
+                    📤 SMS 발송
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="window.location.href='/admin/api/smslog/'">
+                    📋 발송 내역 보기
+                </button>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>발송 중...</p>
+            </div>
+        </form>
+
+        <div id="alert" class="alert"></div>
+    </div>
+</div>
+
+<script>
+document.getElementById('smsTestForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const form = this;
+    const formData = new FormData(form);
+    const loading = document.getElementById('loading');
+    const alert = document.getElementById('alert');
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    // 로딩 표시
+    loading.style.display = 'block';
+    alert.style.display = 'none';
+    submitBtn.disabled = true;
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        loading.style.display = 'none';
+        submitBtn.disabled = false;
+
+        if (data.success) {
+            alert.className = 'alert alert-success';
+            alert.innerHTML = `
+                <strong>✅ 발송 성공!</strong><br>
+                ${data.message}
+                ${data.preview ? '<div class="message-preview"><strong>발송된 메시지:</strong><br>' + data.preview + '</div>' : ''}
+            `;
+        } else {
+            alert.className = 'alert alert-error';
+            alert.innerHTML = `
+                <strong>❌ 발송 실패</strong><br>
+                ${data.error}
+            `;
+        }
+        alert.style.display = 'block';
+
+        // 성공 시 폼 초기화
+        if (data.success) {
+            form.querySelector('#phone_number').value = '';
+        }
+    })
+    .catch(error => {
+        loading.style.display = 'none';
+        submitBtn.disabled = false;
+        alert.className = 'alert alert-error';
+        alert.innerHTML = `
+            <strong>❌ 오류 발생</strong><br>
+            ${error.message}
+        `;
+        alert.style.display = 'block';
+    });
+});
+</script>
+{% endblock %}

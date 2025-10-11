@@ -90,6 +90,7 @@ from api.views_mypage import (
 )
 from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
 from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
+from api.admin_sms_test import sms_test_view
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -116,6 +117,7 @@ router.register(r'custom-favorites', CustomFavoriteViewSet, basename='custom-fav
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('admin/sms-test/', sms_test_view, name='admin_sms_test'),
     path('api/auth/', include([
         path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
         path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
