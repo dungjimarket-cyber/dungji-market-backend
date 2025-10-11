@@ -137,7 +137,88 @@ class SMSService:
             )
 
             return False, error_msg
-    
+
+    def send_custom_groupbuy_completion_seller(self, phone_number: str, title: str,
+                                               participants_count: int, final_price: int = None,
+                                               discount_rate: int = None,
+                                               user=None, custom_groupbuy=None) -> Tuple[bool, Optional[str]]:
+        """커스텀 공구 마감 알림 SMS 발송 (판매자용)
+
+        Args:
+            phone_number: 판매자 전화번호
+            title: 공구 상품명
+            participants_count: 참여자 수
+            final_price: 최종 가격 (단일상품인 경우)
+            discount_rate: 할인율 (전품목 할인인 경우)
+            user: 판매자 User 객체 (로그용, optional)
+            custom_groupbuy: 관련 CustomGroupBuy 객체 (로그용, optional)
+
+        Returns:
+            (성공여부, 에러메시지)
+        """
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'https://dungjimarket.com')
+        manage_url = f"{frontend_url}/custom-deals/my"
+
+        # 가격/할인율 정보
+        if final_price:
+            price_info = f"최종가: {final_price:,}원"
+        elif discount_rate:
+            price_info = f"할인율: {discount_rate}%"
+        else:
+            price_info = ""
+
+        message = (
+            f"[둥지마켓] 공구 마감 알림 (판매자)\n"
+            f"{title}\n"
+            f"참여자: {participants_count}명\n"
+            f"{price_info}\n"
+            f"참여자에게 할인정보가 전달되었습니다.\n"
+            f"관리: {manage_url}"
+        )
+
+        try:
+            if self.provider == 'mock':
+                success, error = self._send_mock_sms(phone_number, message)
+            elif self.provider == 'aligo':
+                success, error = self._send_aligo_sms(phone_number, message)
+            elif self.provider == 'twilio':
+                success, error = self._send_twilio_sms(phone_number, message)
+            elif self.provider == 'aws_sns':
+                success, error = self._send_aws_sns_sms(phone_number, message)
+            else:
+                logger.error(f"Unknown SMS provider: {self.provider}")
+                success, error = False, "SMS 서비스 설정 오류"
+
+            # 발송 내역 로그 저장
+            log_sms(
+                phone_number=phone_number,
+                message_type='groupbuy_completion_seller',
+                message_content=message,
+                status='success' if success else 'failed',
+                error_message=error,
+                user=user,
+                custom_groupbuy=custom_groupbuy
+            )
+
+            return success, error
+
+        except Exception as e:
+            error_msg = "SMS 발송 중 오류가 발생했습니다."
+            logger.error(f"판매자 공구 마감 알림 SMS 발송 실패: {e}", exc_info=True)
+
+            # 예외 발생 시에도 로그 저장
+            log_sms(
+                phone_number=phone_number,
+                message_type='groupbuy_completion_seller',
+                message_content=message,
+                status='failed',
+                error_message=str(e),
+                user=user,
+                custom_groupbuy=custom_groupbuy
+            )
+
+            return False, error_msg
+
     def _send_mock_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
         """개발용 Mock SMS 발송"""
         logger.info(f"[MOCK SMS] To: {phone_number}, Message: {message}")

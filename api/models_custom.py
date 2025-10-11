@@ -368,6 +368,42 @@ class CustomGroupBuy(models.Model):
 
         logger.info(f"SMS 알림 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
 
+        # 판매자에게도 SMS 발송
+        if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
+            try:
+                # 가격 정보 준비
+                final_price = None
+                discount_rate = None
+
+                if self.pricing_type == 'single_product':
+                    # 단일상품: 최종 가격 사용 (첫 번째 상품 가격)
+                    if self.final_price:
+                        if isinstance(self.final_price, list) and len(self.final_price) > 0:
+                            final_price = self.final_price[0]
+                        elif isinstance(self.final_price, int):
+                            final_price = self.final_price
+                else:
+                    # 전품목 할인: 할인율 사용
+                    discount_rate = self.discount_rate
+
+                success, error = sms_service.send_custom_groupbuy_completion_seller(
+                    phone_number=self.seller.phone_number,
+                    title=self.title,
+                    participants_count=participant_count,
+                    final_price=final_price,
+                    discount_rate=discount_rate,
+                    user=self.seller,
+                    custom_groupbuy=self
+                )
+                if success:
+                    logger.info(f"판매자 SMS 발송 성공: {self.seller.username} ({self.seller.phone_number})")
+                else:
+                    logger.warning(f"판매자 SMS 발송 실패: {self.seller.username} - {error}")
+            except Exception as e:
+                logger.error(f"판매자 SMS 발송 예외: {self.seller.username} - {str(e)}")
+        else:
+            logger.warning(f"판매자 전화번호 없음: {self.seller.username}")
+
     def check_expiration(self):
         """기간 만료 체크"""
         if self.status != 'recruiting':
@@ -722,6 +758,7 @@ class SMSLog(models.Model):
     MESSAGE_TYPE_CHOICES = [
         ('verification', '인증번호'),
         ('groupbuy_completion', '공구 마감 알림'),
+        ('groupbuy_completion_seller', '공구 마감 알림 (판매자)'),
         ('custom', '기타'),
     ]
 
