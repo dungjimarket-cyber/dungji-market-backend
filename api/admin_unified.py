@@ -150,8 +150,12 @@ class UnifiedBumpAdmin(admin.ModelAdmin):
         """상품 타입 표시"""
         if obj.item_type == 'phone':
             return format_html('<span style="color: #2196F3;">📱 휴대폰</span>')
-        else:
+        elif obj.item_type == 'electronics':
             return format_html('<span style="color: #4CAF50;">🖥️ 전자제품</span>')
+        elif obj.item_type == 'custom_groupbuy':
+            return format_html('<span style="color: #FF5722;">🎯 커스텀공구</span>')
+        else:
+            return obj.get_item_type_display()
     item_type_display.short_description = '상품 타입'
 
     def item_link(self, obj):
@@ -161,9 +165,14 @@ class UnifiedBumpAdmin(admin.ModelAdmin):
             if obj.item_type == 'phone':
                 text = f"{item.brand} {item.model}"
                 url = f"/admin/used_phones/usedphone/{item.id}/change/"
-            else:
+            elif obj.item_type == 'electronics':
                 text = f"{item.brand} {item.model_name}"
                 url = f"/admin/used_electronics/usedelectronics/{item.id}/change/"
+            elif obj.item_type == 'custom_groupbuy':
+                text = item.title
+                url = f"/admin/api/customgroupbuy/{item.id}/change/"
+            else:
+                return f"#{obj.item_id} (알 수 없는 타입)"
 
             return format_html(
                 '<a href="{0}" target="_blank">{1} (#{2}) - 끌올 {3}회</a>',
