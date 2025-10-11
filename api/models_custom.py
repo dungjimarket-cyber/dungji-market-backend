@@ -250,10 +250,10 @@ class CustomGroupBuy(models.Model):
 
     @property
     def seller_name(self):
-        """판매자 이름"""
+        """판매자 닉네임"""
         if self.seller is None:
             return ""
-        return self.seller.username
+        return self.seller.nickname if hasattr(self.seller, 'nickname') and self.seller.nickname else self.seller.username
 
     @property
     def is_business_verified(self):
