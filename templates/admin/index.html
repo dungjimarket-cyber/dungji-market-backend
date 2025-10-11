@@ -1,9 +1,8 @@
-{% extends "admin/index.html" %}
-{% load static %}
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
 
-{% block content %}
+{% block extrastyle %}
 {{ block.super }}
-
 <style>
     .sms-test-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -37,17 +36,210 @@
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         color: #667eea;
     }
+
+    /* 카테고리 스타일 */
+    .category-section {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .category-section h2 {
+        color: #333;
+        border-bottom: 2px solid #417690;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+    .category-groupbuy h2 {
+        border-color: #28a745;
+    }
+    .category-custom h2 {
+        border-color: #ffc107;
+    }
+    .category-used h2 {
+        border-color: #17a2b8;
+    }
+    .category-system h2 {
+        border-color: #6c757d;
+    }
+
+    #content-main .module {
+        display: none;
+    }
+    .category-section .module {
+        display: block !important;
+        background: white;
+        margin-bottom: 0;
+    }
 </style>
+{% endblock %}
 
-<div class="sms-test-card">
-    <h2>📱 SMS 테스트 발송</h2>
-    <p>실제 SMS 발송을 테스트하고 발송 내역을 확인할 수 있습니다.</p>
-    <a href="{% url 'admin_sms_test' %}" class="sms-test-btn">
-        🚀 SMS 테스트 하기
-    </a>
-    <a href="/admin/api/smslog/" class="sms-test-btn" style="margin-left: 10px;">
-        📋 발송 내역 보기
-    </a>
+{% block content %}
+<div id="content-main">
+
+    <!-- SMS 테스트 카드 -->
+    <div class="sms-test-card">
+        <h2>📱 SMS 테스트 발송</h2>
+        <p>실제 SMS 발송을 테스트하고 발송 내역을 확인할 수 있습니다.</p>
+        <a href="{% url 'admin_sms_test' %}" class="sms-test-btn">
+            🚀 SMS 테스트 하기
+        </a>
+        <a href="/admin/api/smslog/" class="sms-test-btn" style="margin-left: 10px;">
+            📋 발송 내역 보기
+        </a>
+    </div>
+
+    {% if app_list %}
+        <!-- 1. 공구견적 -->
+        <div class="category-section category-groupbuy">
+            <h2>🎯 공구견적 (Group Purchase)</h2>
+            <div class="module">
+                <table>
+                    <caption>
+                        <a href="/admin/api/">공구견적 관리</a>
+                    </caption>
+                    {% for app in app_list %}
+                        {% for model in app.models %}
+                            {% if 'groupbuy' in model.admin_url or 'bid' in model.admin_url or 'product' in model.admin_url or 'category' in model.admin_url %}
+                                <tr class="model-{{ model.object_name|lower }}">
+                                    {% if model.admin_url %}
+                                        <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
+                                    {% else %}
+                                        <th scope="row">{{ model.name }}</th>
+                                    {% endif %}
+
+                                    {% if model.add_url %}
+                                        <td><a href="{{ model.add_url }}" class="addlink">{% trans 'Add' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+
+                                    {% if model.admin_url %}
+                                        <td><a href="{{ model.admin_url }}" class="changelink">{% trans 'Change' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+
+        <!-- 2. 커스텀공구 -->
+        <div class="category-section category-custom">
+            <h2>⚡ 커스텀공구 (Custom Deal)</h2>
+            <div class="module">
+                <table>
+                    <caption>
+                        <a href="/admin/api/">커스텀공구 관리</a>
+                    </caption>
+                    {% for app in app_list %}
+                        {% for model in app.models %}
+                            {% if 'custom' in model.admin_url %}
+                                <tr class="model-{{ model.object_name|lower }}">
+                                    {% if model.admin_url %}
+                                        <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
+                                    {% else %}
+                                        <th scope="row">{{ model.name }}</th>
+                                    {% endif %}
+
+                                    {% if model.add_url %}
+                                        <td><a href="{{ model.add_url }}" class="addlink">{% trans 'Add' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+
+                                    {% if model.admin_url %}
+                                        <td><a href="{{ model.admin_url }}" class="changelink">{% trans 'Change' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. 중고거래 -->
+        <div class="category-section category-used">
+            <h2>📱 중고거래 (Used Market)</h2>
+            <div class="module">
+                <table>
+                    <caption>
+                        <a href="/admin/used_phones/">중고거래 관리</a>
+                    </caption>
+                    {% for app in app_list %}
+                        {% for model in app.models %}
+                            {% if 'usedphone' in model.admin_url or 'electronics' in model.admin_url or 'unified' in model.admin_url %}
+                                <tr class="model-{{ model.object_name|lower }}">
+                                    {% if model.admin_url %}
+                                        <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
+                                    {% else %}
+                                        <th scope="row">{{ model.name }}</th>
+                                    {% endif %}
+
+                                    {% if model.add_url %}
+                                        <td><a href="{{ model.add_url }}" class="addlink">{% trans 'Add' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+
+                                    {% if model.admin_url %}
+                                        <td><a href="{{ model.admin_url }}" class="changelink">{% trans 'Change' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+
+        <!-- 4. 시스템 관리 -->
+        <div class="category-section category-system">
+            <h2>⚙️ 시스템 관리</h2>
+            <div class="module">
+                <table>
+                    <caption>
+                        <a href="/admin/">시스템 관리</a>
+                    </caption>
+                    {% for app in app_list %}
+                        {% for model in app.models %}
+                            {% if 'custom' not in model.admin_url and 'groupbuy' not in model.admin_url and 'bid' not in model.admin_url and 'product' not in model.admin_url and 'category' not in model.admin_url and 'usedphone' not in model.admin_url and 'electronics' not in model.admin_url and 'unified' not in model.admin_url %}
+                                <tr class="model-{{ model.object_name|lower }}">
+                                    {% if model.admin_url %}
+                                        <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
+                                    {% else %}
+                                        <th scope="row">{{ model.name }}</th>
+                                    {% endif %}
+
+                                    {% if model.add_url %}
+                                        <td><a href="{{ model.add_url }}" class="addlink">{% trans 'Add' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+
+                                    {% if model.admin_url %}
+                                        <td><a href="{{ model.admin_url }}" class="changelink">{% trans 'Change' %}</a></td>
+                                    {% else %}
+                                        <td>&nbsp;</td>
+                                    {% endif %}
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+
+    {% else %}
+        <p>{% trans "You don't have permission to view or edit anything." %}</p>
+    {% endif %}
 </div>
-
 {% endblock %}

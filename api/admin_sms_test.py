@@ -29,11 +29,19 @@ def sms_test_view(request):
     if request.method == "POST":
         phone_number = request.POST.get('phone_number', '').strip()
         sms_type = request.POST.get('sms_type', 'groupbuy')
+        custom_message = request.POST.get('custom_message', '').strip()
 
         if not phone_number:
             return JsonResponse({
                 'success': False,
                 'error': '전화번호를 입력해주세요.'
+            })
+
+        # 직접 입력인 경우 메시지 확인
+        if sms_type == 'custom' and not custom_message:
+            return JsonResponse({
+                'success': False,
+                'error': '메시지 내용을 입력해주세요.'
             })
 
         # 전화번호 정규화
@@ -47,7 +55,8 @@ def sms_test_view(request):
                 code = str(random.randint(100000, 999999))
                 success, error = sms_service.send_verification_code(normalized_phone, code)
                 message_preview = f"[둥지마켓] 인증번호는 {code}입니다. 3분 이내에 입력해주세요."
-            else:
+
+            elif sms_type == 'groupbuy':
                 # 공구 마감 알림 발송
                 test_title = "[테스트] 둥지마켓 공구 테스트"
                 success, error = sms_service.send_custom_groupbuy_completion(
@@ -56,7 +65,32 @@ def sms_test_view(request):
                     user=None,
                     custom_groupbuy=None
                 )
-                message_preview = f"[둥지마켓] 공구 마감 완료!\n{test_title}\n참여하신 공구가 마감되었어요!\n✅ 할인혜택과 사용기간을 꼭 확인하세요"
+                message_preview = f"[둥지마켓] 공구 마감 완료!\n{test_title}\n참여하신 공구가 마감되었어요!\n※ 할인혜택과 사용기간을 꼭 확인하세요"
+
+            else:  # custom
+                # 직접 입력 메시지 발송
+                from api.utils.sms_service import log_sms
+
+                # Mock SMS 발송 (알리고 API 직접 호출)
+                if sms_service.provider == 'mock':
+                    success, error = sms_service._send_mock_sms(normalized_phone, custom_message)
+                elif sms_service.provider == 'aligo':
+                    success, error = sms_service._send_aligo_sms(normalized_phone, custom_message)
+                else:
+                    success, error = sms_service._send_mock_sms(normalized_phone, custom_message)
+
+                # 로그 저장
+                log_sms(
+                    phone_number=normalized_phone,
+                    message_type='custom',
+                    message_content=custom_message,
+                    status='success' if success else 'failed',
+                    error_message=error,
+                    user=None,
+                    custom_groupbuy=None
+                )
+
+                message_preview = custom_message
 
             if success:
                 return JsonResponse({

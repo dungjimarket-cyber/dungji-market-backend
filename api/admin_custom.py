@@ -38,7 +38,7 @@ class CustomGroupBuyAdmin(admin.ModelAdmin):
     search_fields = ['title', 'seller__username', 'seller__email']
     readonly_fields = [
         'created_at', 'updated_at', 'completed_at',
-        'seller_decision_deadline', 'discount_valid_until',
+        'seller_decision_deadline',
         'current_participants', 'view_count', 'favorite_count',
         'final_price', 'is_completed', 'seller_type', 'seller_name', 'is_business_verified'
     ]

@@ -28,18 +28,46 @@
     }
 
     .form-group input[type="text"],
-    .form-group select {
+    .form-group select,
+    .form-group textarea {
         width: 100%;
-        padding: 10px;
+        padding: 12px;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .form-group select {
+        height: 46px;
+    }
+
+    .form-group textarea {
+        min-height: 120px;
+        resize: vertical;
+        font-family: inherit;
     }
 
     .form-group input[type="text"]:focus,
-    .form-group select:focus {
+    .form-group select:focus,
+    .form-group textarea:focus {
         outline: none;
         border-color: #417690;
+    }
+
+    .custom-message-container {
+        display: none;
+    }
+
+    .custom-message-container.active {
+        display: block;
+    }
+
+    .char-count {
+        text-align: right;
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
     }
 
     .btn-group {
@@ -172,7 +200,21 @@
                 <select id="sms_type" name="sms_type" required>
                     <option value="groupbuy">공구 마감 알림</option>
                     <option value="verification">인증번호</option>
+                    <option value="custom">직접 입력</option>
                 </select>
+            </div>
+
+            <div class="form-group custom-message-container" id="customMessageContainer">
+                <label for="custom_message">메시지 내용:</label>
+                <textarea
+                    id="custom_message"
+                    name="custom_message"
+                    placeholder="발송할 메시지를 입력하세요&#10;※ 이모티콘은 자동으로 제거됩니다"
+                ></textarea>
+                <div class="char-count">
+                    <span id="charCount">0</span> / 90자 (한글 기준)
+                </div>
+                <small style="color: #666;">※ SMS는 이모티콘을 지원하지 않습니다. 입력 시 자동으로 제거됩니다.</small>
             </div>
 
             <div class="form-group">
@@ -208,6 +250,42 @@
 </div>
 
 <script>
+// 이모티콘 제거 함수
+function removeEmojis(text) {
+    // 이모티콘, 특수문자, 그림문자 제거 (기본 한글, 영문, 숫자, 기본 특수문자만 허용)
+    return text.replace(/[^\u0000-\u007F\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\s\n\r.,!?()-]/g, '');
+}
+
+// 메시지 유형 변경 시 직접 입력 영역 표시/숨김
+document.getElementById('sms_type').addEventListener('change', function() {
+    const customContainer = document.getElementById('customMessageContainer');
+    const customMessage = document.getElementById('custom_message');
+
+    if (this.value === 'custom') {
+        customContainer.classList.add('active');
+        customMessage.setAttribute('required', 'required');
+    } else {
+        customContainer.classList.remove('active');
+        customMessage.removeAttribute('required');
+        customMessage.value = '';
+    }
+});
+
+// 메시지 입력 시 이모티콘 제거 및 글자수 카운트
+document.getElementById('custom_message').addEventListener('input', function() {
+    // 이모티콘 제거
+    const cleaned = removeEmojis(this.value);
+    if (cleaned !== this.value) {
+        const cursorPos = this.selectionStart;
+        this.value = cleaned;
+        this.setSelectionRange(cursorPos, cursorPos);
+    }
+
+    // 글자수 카운트
+    document.getElementById('charCount').textContent = this.value.length;
+});
+
+// 폼 제출
 document.getElementById('smsTestForm').addEventListener('submit', function(e) {
     e.preventDefault();
 
