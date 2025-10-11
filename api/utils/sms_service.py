@@ -111,7 +111,7 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        # 90바이트 이하로 최적화 (약 77바이트)
+        # 90바이트 이하로 최적화 (약 90바이트)
         # 제목이 길 경우 자동으로 잘림
         max_title_length = 20  # 한글 10자 (20바이트)
         short_title = title[:max_title_length] if len(title) > max_title_length else title
@@ -119,7 +119,7 @@ class SMSService:
         message = (
             f"[둥지마켓] 공구마감!\n"
             f"{short_title}\n"
-            f"할인정보: dungjimarket.com/my"
+            f"할인정보: dungjimarket.com/custom-deals/my"
         )
 
         try:
@@ -183,16 +183,16 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        # 90바이트 이하로 최적화 (약 86바이트)
+        # 90바이트 이하로 최적화 (약 89바이트)
         # 제목이 길 경우 자동으로 잘림
-        max_title_length = 16  # 한글 8자 (16바이트) - 판매자용은 더 짧게
+        max_title_length = 12  # 한글 6자 (12바이트) - 판매자용은 더 짧게
         short_title = title[:max_title_length] if len(title) > max_title_length else title
 
         message = (
             f"[둥지마켓] 공구마감\n"
             f"{short_title}\n"
             f"참여:{participants_count}명\n"
-            f"참여정보: dungjimarket.com/my"
+            f"확인: dungjimarket.com/custom-deals/my"
         )
 
         try:

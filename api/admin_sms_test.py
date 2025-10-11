@@ -70,13 +70,12 @@ def sms_test_view(request):
                     custom_groupbuy=None
                 )
 
-                # 실제 발송되는 메시지 계산
+                # 실제 발송되는 메시지와 동일하게 표시
+                short_title = test_title[:20] if len(test_title) > 20 else test_title
                 message_content = (
-                    f"[둥지마켓] 공구 마감 완료!\n"
-                    f"{test_title}\n"
-                    f"참여하신 공구가 마감되었어요!\n"
-                    f"* 할인혜택과 사용기간을 꼭 확인하세요\n"
-                    f"바로가기: {my_deals_url}"
+                    f"[둥지마켓] 공구마감!\n"
+                    f"{short_title}\n"
+                    f"할인정보: dungjimarket.com/custom-deals/my"
                 )
                 byte_length = sms_service.calculate_sms_length(message_content)
                 msg_type = sms_service.get_message_type(message_content)
@@ -98,7 +97,18 @@ def sms_test_view(request):
                     user=None,
                     custom_groupbuy=None
                 )
-                message_preview = f"[둥지마켓] 공구 마감 알림 (판매자)\n{test_title}\n참여자: {test_participants}명\n최종가: {test_price:,}원\n참여자에게 할인정보가 전달되었습니다.\n관리: {getattr(settings, 'FRONTEND_URL', 'https://dungjimarket.com')}/custom-deals/my"
+
+                # 실제 발송되는 메시지와 동일하게 표시
+                short_title = test_title[:12] if len(test_title) > 12 else test_title
+                message_content = (
+                    f"[둥지마켓] 공구마감\n"
+                    f"{short_title}\n"
+                    f"참여:{test_participants}명\n"
+                    f"확인: dungjimarket.com/custom-deals/my"
+                )
+                byte_length = sms_service.calculate_sms_length(message_content)
+                msg_type = sms_service.get_message_type(message_content)
+                message_preview = f"{message_content}\n\n[발송 정보: {msg_type} / {byte_length}바이트]"
 
             else:  # custom
                 # 직접 입력 메시지 발송
