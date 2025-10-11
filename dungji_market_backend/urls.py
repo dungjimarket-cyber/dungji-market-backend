@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.routers import DefaultRouter
 from api.views import (
     CategoryViewSet, ProductViewSet, GroupBuyViewSet,
@@ -302,7 +303,7 @@ urlpatterns = [
 
     # 커스텀 공구 끌올 API
     path('api/custom-groupbuys/<int:item_id>/bump/status/', lambda request, item_id: get_bump_status(request, 'custom_groupbuy', item_id), name='custom-groupbuy-bump-status'),
-    path('api/custom-groupbuys/<int:item_id>/bump/', lambda request, item_id: perform_bump(request, 'custom_groupbuy', item_id), name='custom-groupbuy-bump'),
+    path('api/custom-groupbuys/<int:item_id>/bump/', csrf_exempt(lambda request, item_id: perform_bump(request, 'custom_groupbuy', item_id)), name='custom-groupbuy-bump'),
 
     # 링크 미리보기 API
     path('api/link-preview/', get_link_preview, name='link_preview'),
