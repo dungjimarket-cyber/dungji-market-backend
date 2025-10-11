@@ -7,7 +7,8 @@ from api.models_custom import (
     CustomGroupBuyImage,
     CustomParticipant,
     CustomFavorite,
-    CustomGroupBuyRegion
+    CustomGroupBuyRegion,
+    CustomNoShowReport
 )
 from django.contrib.auth import get_user_model
 
@@ -589,3 +590,85 @@ class CustomFavoriteSerializer(serializers.ModelSerializer):
         model = CustomFavorite
         fields = ['id', 'custom_groupbuy', 'groupbuy', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class CustomNoShowReportSerializer(serializers.ModelSerializer):
+    """커스텀 공구 노쇼 신고 시리얼라이저"""
+    reporter_name = serializers.CharField(source='reporter.username', read_only=True)
+    reported_user_name = serializers.CharField(source='reported_user.username', read_only=True)
+    reported_user_nickname = serializers.CharField(source='reported_user.nickname', read_only=True)
+    reported_user_phone = serializers.CharField(source='reported_user.phone_number', read_only=True)
+    custom_groupbuy_title = serializers.CharField(source='custom_groupbuy.title', read_only=True)
+
+    class Meta:
+        model = CustomNoShowReport
+        fields = ['id', 'reporter', 'reporter_name', 'reported_user', 'reported_user_name',
+                 'reported_user_nickname', 'reported_user_phone',
+                 'custom_groupbuy', 'custom_groupbuy_title', 'participant', 'report_type',
+                 'content', 'evidence_image', 'evidence_image_2', 'evidence_image_3',
+                 'status', 'admin_comment', 'created_at',
+                 'updated_at', 'processed_at', 'processed_by', 'edit_count',
+                 'last_edited_at', 'noshow_buyers']
+        read_only_fields = ['id', 'reporter', 'status', 'admin_comment', 'created_at',
+                           'updated_at', 'processed_at', 'processed_by', 'edit_count',
+                           'last_edited_at']
+
+    def validate(self, data):
+        """유효성 검사"""
+        user = self.context['request'].user
+        custom_groupbuy = data.get('custom_groupbuy')
+        reported_user = data.get('reported_user')
+        report_type = data.get('report_type')
+
+        # 자기 자신 신고 방지
+        if user == reported_user:
+            raise serializers.ValidationError({
+                'reported_user': '자기 자신을 신고할 수 없습니다.'
+            })
+
+        # 신고 유형별 검증
+        if report_type == 'buyer_noshow':
+            # 구매자 노쇼: 판매자가 구매자를 신고
+            # 커스텀 공구에서는 판매자가 공구 생성자인지 확인
+            if custom_groupbuy.seller != user:
+                raise serializers.ValidationError({
+                    'report_type': '구매자 노쇼는 판매자(공구 생성자)만 신고할 수 있습니다.'
+                })
+
+            # 신고 대상이 참여자인지 확인
+            participant = CustomParticipant.objects.filter(
+                user=reported_user,
+                custom_groupbuy=custom_groupbuy,
+                status='confirmed'
+            ).first()
+
+            if not participant:
+                raise serializers.ValidationError({
+                    'reported_user': '신고 대상이 해당 공구 참여자가 아닙니다.'
+                })
+
+            data['participant'] = participant
+
+        elif report_type == 'seller_noshow':
+            # 판매자 노쇼: 구매자가 판매자를 신고
+            # 신고자가 참여자인지 확인
+            participant = CustomParticipant.objects.filter(
+                user=user,
+                custom_groupbuy=custom_groupbuy,
+                status='confirmed'
+            ).first()
+
+            if not participant:
+                raise serializers.ValidationError({
+                    'custom_groupbuy': '해당 공구에 참여하지 않았습니다.'
+                })
+
+            # 신고 대상이 판매자인지 확인
+            if custom_groupbuy.seller != reported_user:
+                raise serializers.ValidationError({
+                    'reported_user': '신고 대상이 판매자가 아닙니다.'
+                })
+
+            data['participant'] = participant
+
+        return data

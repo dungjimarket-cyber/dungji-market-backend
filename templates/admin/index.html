@@ -100,7 +100,7 @@
                     </caption>
                     {% for app in app_list %}
                         {% for model in app.models %}
-                            {% if 'groupbuy' in model.admin_url or 'bid' in model.admin_url or 'product' in model.admin_url or 'category' in model.admin_url %}
+                            {% if 'groupbuy' in model.admin_url or 'bid' in model.admin_url or 'category' in model.admin_url %}
                                 <tr class="model-{{ model.object_name|lower }}">
                                     {% if model.admin_url %}
                                         <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
@@ -137,7 +137,7 @@
                     </caption>
                     {% for app in app_list %}
                         {% for model in app.models %}
-                            {% if 'custom' in model.admin_url %}
+                            {% if 'custom' in model.admin_url or 'product' in model.admin_url %}
                                 <tr class="model-{{ model.object_name|lower }}">
                                     {% if model.admin_url %}
                                         <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
@@ -211,7 +211,7 @@
                     </caption>
                     {% for app in app_list %}
                         {% for model in app.models %}
-                            {% if 'custom' not in model.admin_url and 'groupbuy' not in model.admin_url and 'bid' not in model.admin_url and 'product' not in model.admin_url and 'category' not in model.admin_url and 'usedphone' not in model.admin_url and 'electronics' not in model.admin_url and 'unified' not in model.admin_url %}
+                            {% if 'custom' not in model.admin_url and 'groupbuy' not in model.admin_url and 'bid' not in model.admin_url and 'category' not in model.admin_url and 'product' not in model.admin_url and 'usedphone' not in model.admin_url and 'electronics' not in model.admin_url and 'unified' not in model.admin_url %}
                                 <tr class="model-{{ model.object_name|lower }}">
                                     {% if model.admin_url %}
                                         <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
