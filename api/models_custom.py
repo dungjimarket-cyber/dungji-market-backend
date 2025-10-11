@@ -36,14 +36,7 @@ class CustomGroupBuy(models.Model):
         ('both', '할인링크 + 할인코드'),
     ]
 
-    DISCOUNT_VALID_DAYS_CHOICES = [
-        (3, '3일'),
-        (7, '7일'),
-        (14, '14일'),
-        (30, '30일'),
-        (60, '60일'),
-        (90, '90일'),
-    ]
+    # 할인 유효기간 choices 제거 (1~60일 자유 입력)
 
     # 커스텀 특가 전용 카테고리
     CATEGORY_CHOICES = [
@@ -132,12 +125,12 @@ class CustomGroupBuy(models.Model):
         help_text='기간 만료 시 인원 미달인 경우 24시간'
     )
 
-    # 할인 유효기간
+    # 할인 유효기간 (1~60일 자유 입력)
     discount_valid_days = models.PositiveIntegerField(
         null=True, blank=True,
-        choices=DISCOUNT_VALID_DAYS_CHOICES,
+        validators=[MinValueValidator(1), MaxValueValidator(60)],
         verbose_name='할인 유효기간',
-        help_text='할인코드/링크 사용 가능 기간'
+        help_text='할인코드/링크 사용 가능 기간 (1~60일)'
     )
     discount_valid_until = models.DateTimeField(null=True, blank=True, verbose_name='할인 만료일')
 
