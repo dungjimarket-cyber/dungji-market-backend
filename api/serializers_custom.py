@@ -131,6 +131,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             'allow_partial_sale',
             'seller', 'seller_name', 'seller_type', 'is_business_verified',
             'online_discount_type', 'online_discount_type_display',
+            'discount_url', 'discount_codes',  # ← 할인 정보 추가
             'phone_number',
             'meta_title', 'meta_image', 'meta_description', 'meta_price',
             'status', 'status_display',
