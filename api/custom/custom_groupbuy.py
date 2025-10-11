@@ -63,15 +63,15 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         for idx, img in enumerate(images):
             logger.info(f"[CREATE] Image {idx}: name={img.name}, size={img.size}, content_type={img.content_type}")
 
-        # 활성 공구 개수 체크
+        # 활성 공구 개수 체크 (한 번에 하나만 등록 가능)
         active_count = CustomGroupBuy.objects.filter(
             seller=request.user,
             status__in=['recruiting', 'pending_seller']
         ).count()
 
-        if active_count >= 10:
+        if active_count >= 1:
             return Response(
-                {'error': '동시에 진행할 수 있는 공구는 최대 10개입니다.'},
+                {'error': '이미 진행 중인 공구가 있습니다. 기존 공구가 마감된 후 등록할 수 있습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
