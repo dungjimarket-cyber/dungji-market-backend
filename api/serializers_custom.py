@@ -566,7 +566,7 @@ class CustomParticipantSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.username', read_only=True)
     custom_groupbuy = CustomGroupBuyListSerializer(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    discount_valid_until = serializers.DateTimeField(read_only=True)
+    discount_valid_until = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomParticipant
@@ -581,6 +581,10 @@ class CustomParticipantSerializer(serializers.ModelSerializer):
             'id', 'user', 'participated_at', 'participation_code',
             'discount_code', 'discount_url', 'discount_valid_until'
         ]
+
+    def get_discount_valid_until(self, obj):
+        """공구의 할인 유효기간 반환"""
+        return obj.custom_groupbuy.discount_valid_until
 
 
 class CustomFavoriteSerializer(serializers.ModelSerializer):

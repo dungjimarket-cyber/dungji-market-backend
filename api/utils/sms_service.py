@@ -100,7 +100,7 @@ class SMSService:
 
     def send_custom_groupbuy_completion(self, phone_number: str, title: str,
                                        user=None, custom_groupbuy=None) -> Tuple[bool, Optional[str]]:
-        """커스텀 공구 마감 알림 SMS 발송
+        """커스텀 공구 마감 알림 SMS 발송 (구매자용)
 
         Args:
             phone_number: 수신자 전화번호
@@ -111,15 +111,16 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        # 90바이트 이하로 최적화 (약 90바이트)
+        # 90바이트 이하로 최적화 (약 79바이트)
         # 제목이 길 경우 자동으로 잘림
-        max_title_length = 20  # 한글 10자 (20바이트)
+        max_title_length = 12  # 한글 6자 (12바이트)
         short_title = title[:max_title_length] if len(title) > max_title_length else title
 
         message = (
             f"[둥지마켓] 공구마감!\n"
             f"{short_title}\n"
-            f"할인정보: dungjimarket.com/custom-deals/my"
+            f"할인정보를 확인해주세요\n"
+            f"dungjimarket.com/my"
         )
 
         try:
@@ -183,16 +184,16 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
-        # 90바이트 이하로 최적화 (약 89바이트)
+        # 90바이트 이하로 최적화 (약 79바이트)
         # 제목이 길 경우 자동으로 잘림
-        max_title_length = 12  # 한글 6자 (12바이트) - 판매자용은 더 짧게
+        max_title_length = 12  # 한글 6자 (12바이트)
         short_title = title[:max_title_length] if len(title) > max_title_length else title
 
         message = (
-            f"[둥지마켓] 공구마감\n"
+            f"[둥지마켓] 공구마감!\n"
             f"{short_title}\n"
-            f"참여:{participants_count}명\n"
-            f"확인: dungjimarket.com/custom-deals/my"
+            f"참여자 정보를 확인해주세요\n"
+            f"dungjimarket.com/my"
         )
 
         try:
