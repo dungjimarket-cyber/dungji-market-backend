@@ -65,12 +65,12 @@ class NoticeAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'category_badge', 'title_display', 'author',
         'is_pinned_display', 'show_in_main_display', 'show_in_groupbuy_display',
-        'show_in_used_display', 'display_type',
+        'show_in_used_display', 'show_in_custom_display', 'display_type',
         'is_published_display', 'view_count', 'published_at', 'created_at'
     ]
     list_filter = [
         'category', 'is_pinned', 'show_in_main', 'show_in_groupbuy',
-        'show_in_used', 'display_type',
+        'show_in_used', 'show_in_custom', 'display_type',
         'is_published', 'created_at', 'published_at'
     ]
     search_fields = ['title', 'content', 'summary']
@@ -92,7 +92,7 @@ class NoticeAdmin(admin.ModelAdmin):
         }),
         ('공지사항 게시판 탭 설정', {
             'fields': (
-                ('show_in_main', 'show_in_groupbuy', 'show_in_used'),
+                ('show_in_main', 'show_in_groupbuy', 'show_in_used', 'show_in_custom'),
             ),
             'description': '공지사항 게시판(/notices)에서 어느 탭에 표시할지 선택합니다. 체크된 탭에 공지가 나타납니다. 여러 탭에 동시 표시 가능합니다.'
         }),
@@ -197,7 +197,16 @@ class NoticeAdmin(admin.ModelAdmin):
             )
         return '-'
     show_in_used_display.short_description = "중고"
-    
+
+    def show_in_custom_display(self, obj):
+        """커스텀 공구 노출 상태 표시"""
+        if obj.show_in_custom:
+            return format_html(
+                '<span style="color: #ff5722;">✅ 커스텀</span>'
+            )
+        return '-'
+    show_in_custom_display.short_description = "커스텀"
+
     def is_published_display(self, obj):
         """게시 상태 표시"""
         if obj.is_published:

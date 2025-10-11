@@ -125,7 +125,13 @@ class Notice(models.Model):
         verbose_name='중고거래 목록',
         help_text='중고거래 목록 페이지에 노출'
     )
-    
+
+    show_in_custom = models.BooleanField(
+        default=False,
+        verbose_name='커스텀 공구 목록',
+        help_text='커스텀 공구 목록 페이지에 노출'
+    )
+
     DISPLAY_TYPE_CHOICES = [
         ('banner', '배너 이미지'),
         ('text', '텍스트 공지'),

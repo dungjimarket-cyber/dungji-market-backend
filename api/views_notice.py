@@ -32,7 +32,7 @@ class NoticeViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """권한 설정"""
-        if self.action in ['list', 'retrieve', 'main', 'groupbuy', 'used', 'pinned', 'recent', 'categories']:
+        if self.action in ['list', 'retrieve', 'main', 'groupbuy', 'used', 'custom', 'pinned', 'recent', 'categories']:
             permission_classes = [AllowAny]
         elif self.action in ['create_comment', 'update_comment', 'delete_comment']:
             permission_classes = [IsAuthenticated]
@@ -209,7 +209,32 @@ class NoticeViewSet(viewsets.ModelViewSet):
             'banners': banners[:3],  # 최대 3개 배너
             'texts': texts[:2],  # 최대 2개 텍스트 공지
         })
-    
+
+    @action(detail=False, methods=['get'])
+    def custom(self, request):
+        """커스텀 공구 목록 페이지 상단 노출 공지사항 (상단고정된 것만)"""
+        queryset = self.get_queryset().filter(
+            show_in_custom=True,
+            is_pinned=True  # 페이지 상단에는 고정된 공지만 표시
+        ).order_by('-published_at')
+
+        # display_type별로 분류
+        banners = []
+        texts = []
+
+        for notice in queryset:
+            serializer_data = NoticeListSerializer(notice).data
+
+            if notice.display_type in ['banner', 'both']:
+                banners.append(serializer_data)
+            if notice.display_type in ['text', 'both']:
+                texts.append(serializer_data)
+
+        return Response({
+            'banners': banners[:3],  # 최대 3개 배너
+            'texts': texts[:2],  # 최대 2개 텍스트 공지
+        })
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def create_comment(self, request, pk=None):
         """댓글 작성"""
