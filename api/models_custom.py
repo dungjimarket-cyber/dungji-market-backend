@@ -349,7 +349,9 @@ class CustomGroupBuy(models.Model):
                 try:
                     success, error = sms_service.send_custom_groupbuy_completion(
                         phone_number=participant.user.phone,
-                        title=self.title
+                        title=self.title,
+                        user=participant.user,
+                        custom_groupbuy=self
                     )
                     if success:
                         sms_success_count += 1
@@ -712,3 +714,70 @@ class CustomPenalty(models.Model):
         verbose_name = '커스텀 노쇼 패널티'
         verbose_name_plural = '커스텀 노쇼 패널티 관리'
         ordering = ['-created_at', '-start_date']
+
+
+class SMSLog(models.Model):
+    """SMS 발송 내역"""
+
+    MESSAGE_TYPE_CHOICES = [
+        ('verification', '인증번호'),
+        ('groupbuy_completion', '공구 마감 알림'),
+        ('custom', '기타'),
+    ]
+
+    STATUS_CHOICES = [
+        ('success', '발송 성공'),
+        ('failed', '발송 실패'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sms_logs',
+        verbose_name='수신자'
+    )
+    phone_number = models.CharField(max_length=20, verbose_name='전화번호')
+    message_type = models.CharField(
+        max_length=30,
+        choices=MESSAGE_TYPE_CHOICES,
+        verbose_name='메시지 유형'
+    )
+    message_content = models.TextField(verbose_name='메시지 내용')
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        verbose_name='발송 상태'
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='오류 메시지'
+    )
+
+    # 관련 모델 (optional)
+    custom_groupbuy = models.ForeignKey(
+        CustomGroupBuy,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sms_logs',
+        verbose_name='관련 공구'
+    )
+
+    sent_at = models.DateTimeField(auto_now_add=True, verbose_name='발송 시간')
+
+    class Meta:
+        db_table = 'sms_log'
+        verbose_name = 'SMS 발송 내역'
+        verbose_name_plural = 'SMS 발송 내역'
+        ordering = ['-sent_at']
+        indexes = [
+            models.Index(fields=['-sent_at']),
+            models.Index(fields=['status']),
+            models.Index(fields=['message_type']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_status_display()}] {self.phone_number} - {self.get_message_type_display()} ({self.sent_at.strftime('%Y-%m-%d %H:%M')})"

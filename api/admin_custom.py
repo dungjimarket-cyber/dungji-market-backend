@@ -8,7 +8,8 @@ from api.models_custom import (
     CustomFavorite,
     CustomGroupBuyRegion,
     CustomNoShowReport,
-    CustomPenalty
+    CustomPenalty,
+    SMSLog
 )
 
 
@@ -376,3 +377,63 @@ class CustomPenaltyAdmin(admin.ModelAdmin):
                 count += 1
         self.message_user(request, f"{count}개의 패널티를 활성화했습니다.")
     activate_penalties.short_description = '선택한 패널티 활성화'
+
+
+@admin.register(SMSLog)
+class SMSLogAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'get_user_display', 'phone_number', 'message_type',
+        'status', 'get_groupbuy_display', 'sent_at'
+    ]
+    list_filter = ['status', 'message_type', 'sent_at']
+    search_fields = [
+        'phone_number', 'user__username', 'user__email',
+        'custom_groupbuy__title', 'message_content'
+    ]
+    readonly_fields = [
+        'user', 'phone_number', 'message_type', 'message_content',
+        'status', 'error_message', 'custom_groupbuy', 'sent_at'
+    ]
+    date_hierarchy = 'sent_at'
+
+    fieldsets = (
+        ('수신자 정보', {
+            'fields': ('user', 'phone_number')
+        }),
+        ('메시지 정보', {
+            'fields': ('message_type', 'message_content')
+        }),
+        ('발송 결과', {
+            'fields': ('status', 'error_message', 'sent_at')
+        }),
+        ('관련 정보', {
+            'fields': ('custom_groupbuy',),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def has_add_permission(self, request):
+        """SMS 로그는 시스템에서만 생성 가능"""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """SMS 로그는 수정 불가"""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """SMS 로그는 삭제 가능 (관리자만)"""
+        return request.user.is_superuser
+
+    def get_user_display(self, obj):
+        if obj.user:
+            return f"{obj.user.username}"
+        return "-"
+    get_user_display.short_description = '수신자'
+    get_user_display.admin_order_field = 'user__username'
+
+    def get_groupbuy_display(self, obj):
+        if obj.custom_groupbuy:
+            return f"{obj.custom_groupbuy.title}"
+        return "-"
+    get_groupbuy_display.short_description = '관련 공구'
+    get_groupbuy_display.admin_order_field = 'custom_groupbuy__title'

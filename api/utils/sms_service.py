@@ -4,6 +4,27 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
+def log_sms(phone_number: str, message_type: str, message_content: str,
+            status: str, error_message: Optional[str] = None,
+            user=None, custom_groupbuy=None):
+    """SMS 발송 내역을 DB에 저장"""
+    try:
+        from api.models_custom import SMSLog
+
+        SMSLog.objects.create(
+            user=user,
+            phone_number=phone_number,
+            message_type=message_type,
+            message_content=message_content,
+            status=status,
+            error_message=error_message,
+            custom_groupbuy=custom_groupbuy
+        )
+    except Exception as e:
+        logger.error(f"SMS 로그 저장 실패: {e}", exc_info=True)
+
+
 class SMSService:
     """SMS 발송 서비스
     
@@ -50,12 +71,15 @@ class SMSService:
             logger.error(f"SMS 발송 실패: {e}", exc_info=True)
             return False, "SMS 발송 중 오류가 발생했습니다."
 
-    def send_custom_groupbuy_completion(self, phone_number: str, title: str) -> Tuple[bool, Optional[str]]:
+    def send_custom_groupbuy_completion(self, phone_number: str, title: str,
+                                       user=None, custom_groupbuy=None) -> Tuple[bool, Optional[str]]:
         """커스텀 공구 마감 알림 SMS 발송
 
         Args:
             phone_number: 수신자 전화번호
             title: 공구 상품명
+            user: 수신자 User 객체 (로그용, optional)
+            custom_groupbuy: 관련 CustomGroupBuy 객체 (로그용, optional)
 
         Returns:
             (성공여부, 에러메시지)
@@ -69,20 +93,46 @@ class SMSService:
 
         try:
             if self.provider == 'mock':
-                return self._send_mock_sms(phone_number, message)
+                success, error = self._send_mock_sms(phone_number, message)
             elif self.provider == 'aligo':
-                return self._send_aligo_sms(phone_number, message)
+                success, error = self._send_aligo_sms(phone_number, message)
             elif self.provider == 'twilio':
-                return self._send_twilio_sms(phone_number, message)
+                success, error = self._send_twilio_sms(phone_number, message)
             elif self.provider == 'aws_sns':
-                return self._send_aws_sns_sms(phone_number, message)
+                success, error = self._send_aws_sns_sms(phone_number, message)
             else:
                 logger.error(f"Unknown SMS provider: {self.provider}")
-                return False, "SMS 서비스 설정 오류"
+                success, error = False, "SMS 서비스 설정 오류"
+
+            # 발송 내역 로그 저장
+            log_sms(
+                phone_number=phone_number,
+                message_type='groupbuy_completion',
+                message_content=message,
+                status='success' if success else 'failed',
+                error_message=error,
+                user=user,
+                custom_groupbuy=custom_groupbuy
+            )
+
+            return success, error
 
         except Exception as e:
+            error_msg = "SMS 발송 중 오류가 발생했습니다."
             logger.error(f"커스텀 공구 마감 알림 SMS 발송 실패: {e}", exc_info=True)
-            return False, "SMS 발송 중 오류가 발생했습니다."
+
+            # 예외 발생 시에도 로그 저장
+            log_sms(
+                phone_number=phone_number,
+                message_type='groupbuy_completion',
+                message_content=message,
+                status='failed',
+                error_message=str(e),
+                user=user,
+                custom_groupbuy=custom_groupbuy
+            )
+
+            return False, error_msg
     
     def _send_mock_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
         """개발용 Mock SMS 발송"""
