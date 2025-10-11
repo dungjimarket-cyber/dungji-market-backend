@@ -314,8 +314,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         participant = CustomParticipant.objects.filter(
             custom_groupbuy=groupbuy,
-            user=user,
-            status='confirmed'
+            user=user
         ).first()
 
         if not participant:
@@ -341,8 +340,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             groupbuy = CustomGroupBuy.objects.select_for_update().get(pk=groupbuy.pk)
 
-            participant.status = 'cancelled'
-            participant.save()
+            participant.delete()
 
             groupbuy.current_participants = F('current_participants') - 1
             groupbuy.save(update_fields=['current_participants'])
