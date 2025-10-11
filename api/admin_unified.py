@@ -37,7 +37,7 @@ class UnifiedFavoriteAdmin(admin.ModelAdmin):
                 url = f"/admin/used_electronics/usedelectronics/{item.id}/change/"
 
             return format_html(
-                '<a href="{}" target="_blank">{} (#{}) - {:,}원</a>',
+                '<a href="{0}" target="_blank">{1} (#{2}) - {3:,}원</a>',
                 url, text, item.id, item.price
             )
         return f"#{obj.item_id} (삭제된 상품)"
@@ -124,7 +124,7 @@ class UnifiedReviewAdmin(admin.ModelAdmin):
                 url = f"/admin/used_electronics/electronicstransaction/{transaction.id}/change/"
 
             return format_html(
-                '<a href="{}" target="_blank">거래 #{} - {} ({:,}원)</a>',
+                '<a href="{0}" target="_blank">거래 #{1} - {2} ({3:,}원)</a>',
                 url, transaction.id, text, transaction.final_price
             )
         return f"거래 #{obj.transaction_id} (정보 없음)"
@@ -166,7 +166,7 @@ class UnifiedBumpAdmin(admin.ModelAdmin):
                 url = f"/admin/used_electronics/usedelectronics/{item.id}/change/"
 
             return format_html(
-                '<a href="{}" target="_blank">{} (#{}) - 끌올 {}회</a>',
+                '<a href="{0}" target="_blank">{1} (#{2}) - 끌올 {3}회</a>',
                 url, text, item.id, item.bump_count
             )
         return f"#{obj.item_id} (삭제된 상품)"
