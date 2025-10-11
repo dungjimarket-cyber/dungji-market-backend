@@ -195,6 +195,10 @@ class CustomGroupBuy(models.Model):
     view_count = models.PositiveIntegerField(default=0, verbose_name='조회수')
     favorite_count = models.PositiveIntegerField(default=0, verbose_name='찜 수')
 
+    # 끌올 정보 (UnifiedBump와 연동)
+    last_bumped_at = models.DateTimeField(null=True, blank=True, verbose_name='마지막 끌올 시간')
+    bump_count = models.PositiveIntegerField(default=0, verbose_name='총 끌올 횟수')
+
     class Meta:
         db_table = 'custom_groupbuy'
         verbose_name = '커스텀 특가'

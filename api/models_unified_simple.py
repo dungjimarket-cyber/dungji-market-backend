@@ -215,6 +215,7 @@ class UnifiedBump(models.Model):
     ITEM_TYPE_CHOICES = [
         ('phone', '휴대폰'),
         ('electronics', '전자제품'),
+        ('custom_groupbuy', '커스텀공구'),
         # 향후 확장 시 여기에 추가
         # ('fashion', '패션'),
         # ('car', '자동차'),
@@ -256,6 +257,9 @@ class UnifiedBump(models.Model):
         elif self.item_type == 'electronics':
             from used_electronics.models import UsedElectronics
             return UsedElectronics.objects.filter(id=self.item_id).first()
+        elif self.item_type == 'custom_groupbuy':
+            from api.models_custom import CustomGroupBuy
+            return CustomGroupBuy.objects.filter(id=self.item_id).first()
         return None
 
 

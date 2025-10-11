@@ -31,6 +31,9 @@ def get_bump_status(request, item_type, item_id):
             item = UsedPhone.objects.filter(id=item_id).first()
         elif item_type == 'electronics':
             item = UsedElectronics.objects.filter(id=item_id).first()
+        elif item_type == 'custom_groupbuy':
+            from api.models_custom import CustomGroupBuy
+            item = CustomGroupBuy.objects.filter(id=item_id).first()
         else:
             return Response({'error': '잘못된 상품 타입입니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -42,12 +45,20 @@ def get_bump_status(request, item_type, item_id):
             return Response({'error': '본인의 상품만 끌올할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
 
         # 활성 상태 확인
-        if item.status != 'active':
-            return Response({
-                'can_bump': False,
-                'reason': '판매중 상품만 끌올 가능합니다.',
-                'status': item.status
-            }, status=status.HTTP_200_OK)
+        if item_type in ['phone', 'electronics']:
+            if item.status != 'active':
+                return Response({
+                    'can_bump': False,
+                    'reason': '판매중 상품만 끌올 가능합니다.',
+                    'status': item.status
+                }, status=status.HTTP_200_OK)
+        elif item_type == 'custom_groupbuy':
+            if item.status != 'recruiting':
+                return Response({
+                    'can_bump': False,
+                    'reason': '모집중인 공구만 끌올 가능합니다.',
+                    'status': item.status
+                }, status=status.HTTP_200_OK)
 
         # 마지막 끌올 시간 체크 (24시간 쿨다운)
         last_bump = UnifiedBump.objects.filter(
@@ -112,6 +123,9 @@ def perform_bump(request, item_type, item_id):
             item = UsedPhone.objects.filter(id=item_id).first()
         elif item_type == 'electronics':
             item = UsedElectronics.objects.filter(id=item_id).first()
+        elif item_type == 'custom_groupbuy':
+            from api.models_custom import CustomGroupBuy
+            item = CustomGroupBuy.objects.filter(id=item_id).first()
         else:
             return Response({'error': '잘못된 상품 타입입니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -123,8 +137,12 @@ def perform_bump(request, item_type, item_id):
             return Response({'error': '본인의 상품만 끌올할 수 있습니다.'}, status=status.HTTP_403_FORBIDDEN)
 
         # 활성 상태 확인
-        if item.status != 'active':
-            return Response({'error': '판매중 상품만 끌올 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        if item_type in ['phone', 'electronics']:
+            if item.status != 'active':
+                return Response({'error': '판매중 상품만 끌올 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        elif item_type == 'custom_groupbuy':
+            if item.status != 'recruiting':
+                return Response({'error': '모집중인 공구만 끌올 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # 24시간 쿨다운 체크
         last_bump = UnifiedBump.objects.filter(
@@ -163,8 +181,14 @@ def perform_bump(request, item_type, item_id):
                 last_bumped_at=now,
                 bump_count=F('bump_count') + 1
             )
-        else:
+        elif item_type == 'electronics':
             UsedElectronics.objects.filter(id=item_id).update(
+                last_bumped_at=now,
+                bump_count=F('bump_count') + 1
+            )
+        elif item_type == 'custom_groupbuy':
+            from api.models_custom import CustomGroupBuy
+            CustomGroupBuy.objects.filter(id=item_id).update(
                 last_bumped_at=now,
                 bump_count=F('bump_count') + 1
             )
@@ -172,8 +196,11 @@ def perform_bump(request, item_type, item_id):
         # 업데이트된 상품 정보 다시 조회
         if item_type == 'phone':
             item = UsedPhone.objects.get(id=item_id)
-        else:
+        elif item_type == 'electronics':
             item = UsedElectronics.objects.get(id=item_id)
+        elif item_type == 'custom_groupbuy':
+            from api.models_custom import CustomGroupBuy
+            item = CustomGroupBuy.objects.get(id=item_id)
 
         return Response({
             'success': True,

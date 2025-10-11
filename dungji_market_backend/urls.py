@@ -64,6 +64,7 @@ from api.views_custom_noshow import CustomNoShowReportViewSet, check_custom_nosh
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
 from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check, check_custom_groupbuys_cron
+from api.views_bump import get_bump_status, perform_bump
 from api.views_partner import (
     partner_login, dashboard_summary, ReferralRecordListView, referral_link,
     account_info, update_account, PartnerSettlementListView, request_settlement,
@@ -298,6 +299,10 @@ urlpatterns = [
 
     # 커스텀 특가 카테고리 API
     path('api/custom/categories/', get_custom_categories, name='custom_categories'),
+
+    # 커스텀 공구 끌올 API
+    path('api/custom-groupbuys/<int:item_id>/bump/status/', lambda request, item_id: get_bump_status(request, 'custom_groupbuy', item_id), name='custom-groupbuy-bump-status'),
+    path('api/custom-groupbuys/<int:item_id>/bump/', lambda request, item_id: perform_bump(request, 'custom_groupbuy', item_id), name='custom-groupbuy-bump'),
 
     # 링크 미리보기 API
     path('api/link-preview/', get_link_preview, name='link_preview'),
