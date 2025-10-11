@@ -116,8 +116,8 @@ router.register(r'custom-participants', CustomParticipantViewSet, basename='cust
 router.register(r'custom-favorites', CustomFavoriteViewSet, basename='custom-favorite')
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('admin/sms-test/', sms_test_view, name='admin_sms_test'),
+    path('admin/', admin.site.urls),
     path('api/auth/', include([
         path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
         path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
