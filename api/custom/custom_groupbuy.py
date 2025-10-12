@@ -63,6 +63,32 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         for idx, img in enumerate(images):
             logger.info(f"[CREATE] Image {idx}: name={img.name}, size={img.size}, content_type={img.content_type}")
 
+        # 활성 패널티 체크
+        from api.models_custom import CustomPenalty
+        from django.utils import timezone
+        active_penalty = CustomPenalty.objects.filter(
+            user=request.user,
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).first()
+
+        if active_penalty:
+            remaining = active_penalty.end_date - timezone.now()
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            return Response(
+                {
+                    'error': f'패널티 기간 중에는 공구를 등록할 수 없습니다.',
+                    'penalty_info': {
+                        'type': active_penalty.penalty_type,
+                        'reason': active_penalty.reason,
+                        'end_date': active_penalty.end_date.isoformat(),
+                        'remaining_text': f"{hours}시간 {minutes}분 남음"
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # 활성 공구 개수 체크 (한 번에 하나만 등록 가능)
         active_count = CustomGroupBuy.objects.filter(
             seller=request.user,
@@ -268,6 +294,32 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
     def participate(self, request, pk=None):
         groupbuy = self.get_object()
         user = request.user
+
+        # 활성 패널티 체크
+        from api.models_custom import CustomPenalty
+        from django.utils import timezone
+        active_penalty = CustomPenalty.objects.filter(
+            user=user,
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).first()
+
+        if active_penalty:
+            remaining = active_penalty.end_date - timezone.now()
+            hours = int(remaining.total_seconds() // 3600)
+            minutes = int((remaining.total_seconds() % 3600) // 60)
+            return Response(
+                {
+                    'error': f'패널티 기간 중에는 공구에 참여할 수 없습니다.',
+                    'penalty_info': {
+                        'type': active_penalty.penalty_type,
+                        'reason': active_penalty.reason,
+                        'end_date': active_penalty.end_date.isoformat(),
+                        'remaining_text': f"{hours}시간 {minutes}분 남음"
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         if groupbuy.seller == user:
             return Response(
