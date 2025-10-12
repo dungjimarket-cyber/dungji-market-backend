@@ -44,13 +44,13 @@ class UnifiedFavorite(models.Model):
         return f"{self.user.username} - {item_type_display} #{self.item_id}"
 
     def get_item(self):
-        """실제 상품 객체 반환"""
+        """실제 상품 객체 반환 (삭제된 상품 제외)"""
         if self.item_type == 'phone':
             from used_phones.models import UsedPhone
-            return UsedPhone.objects.filter(id=self.item_id).first()
+            return UsedPhone.objects.filter(id=self.item_id).exclude(status='deleted').first()
         else:
             from used_electronics.models import UsedElectronics
-            return UsedElectronics.objects.filter(id=self.item_id).first()
+            return UsedElectronics.objects.filter(id=self.item_id).exclude(status='deleted').first()
 
 
 class UnifiedReview(models.Model):

@@ -36,9 +36,11 @@ class UnifiedFavoriteAdmin(admin.ModelAdmin):
                 text = f"{item.brand} {item.model_name}"
                 url = f"/admin/used_electronics/usedelectronics/{item.id}/change/"
 
+            # 가격을 미리 포맷팅
+            price_formatted = f"{item.price:,}"
             return format_html(
-                '<a href="{0}" target="_blank">{1} (#{2}) - {3:,}원</a>',
-                url, text, item.id, item.price
+                '<a href="{}" target="_blank">{} (#{}) - {}원</a>',
+                url, text, item.id, price_formatted
             )
         return f"#{obj.item_id} (삭제된 상품)"
     item_link.short_description = '상품 정보'
@@ -123,9 +125,11 @@ class UnifiedReviewAdmin(admin.ModelAdmin):
                 text = f"{item.brand} {item.model_name}"
                 url = f"/admin/used_electronics/electronicstransaction/{transaction.id}/change/"
 
+            # 가격을 미리 포맷팅
+            price_formatted = f"{transaction.final_price:,}"
             return format_html(
-                '<a href="{0}" target="_blank">거래 #{1} - {2} ({3:,}원)</a>',
-                url, transaction.id, text, transaction.final_price
+                '<a href="{}" target="_blank">거래 #{} - {} ({}원)</a>',
+                url, transaction.id, text, price_formatted
             )
         return f"거래 #{obj.transaction_id} (정보 없음)"
     transaction_info.short_description = '거래 정보'
