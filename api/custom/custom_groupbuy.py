@@ -692,6 +692,104 @@ class CustomParticipantViewSet(viewsets.ReadOnlyModelViewSet):
             'discount_used_at': participant.discount_used_at
         })
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def recent_completed(self, request):
+        """최근 종료된 커스텀 공구 조회 (노쇼신고용)
+
+        종료 후 15일 이내의 최근 3건 조회
+        판매자/구매자 구분하여 조회
+        """
+        from datetime import timedelta
+
+        user = request.user
+        limit = int(request.query_params.get('limit', 3))
+
+        # 15일 전 날짜 계산
+        cutoff_date = timezone.now() - timedelta(days=15)
+
+        logger.info(f"recent_completed called for custom groupbuy user: {user.id}")
+
+        data = []
+
+        try:
+            # 판매자인 경우: 내가 생성하고 완료된 공구
+            if hasattr(user, 'role') and user.role == 'seller':
+                groupbuys = CustomGroupBuy.objects.filter(
+                    seller=user,
+                    status='completed',
+                    completed_at__gte=cutoff_date
+                ).prefetch_related('images').order_by('-completed_at')[:limit]
+
+                for groupbuy in groupbuys:
+                    try:
+                        # 대표 이미지 가져오기
+                        primary_image = groupbuy.images.filter(is_primary=True).first()
+                        if not primary_image:
+                            primary_image = groupbuy.images.first()
+
+                        days_ago = (timezone.now() - groupbuy.completed_at).days
+
+                        data.append({
+                            'id': groupbuy.id,
+                            'title': groupbuy.title,
+                            'type': groupbuy.type,
+                            'type_display': groupbuy.get_type_display(),
+                            'primary_image': primary_image.image_url if primary_image else None,
+                            'completed_at': groupbuy.completed_at.isoformat(),
+                            'days_ago': days_ago,
+                            'current_participants': groupbuy.current_participants
+                        })
+                    except Exception as e:
+                        logger.error(f"Error processing completed groupbuy {groupbuy.id}: {e}")
+                        continue
+
+            # 구매자인 경우: 내가 참여하고 완료된 공구
+            else:
+                participants = CustomParticipant.objects.filter(
+                    user=user,
+                    status='confirmed'
+                ).select_related('custom_groupbuy').filter(
+                    custom_groupbuy__status='completed',
+                    custom_groupbuy__completed_at__gte=cutoff_date
+                ).order_by('-custom_groupbuy__completed_at')[:limit]
+
+                for participant in participants:
+                    try:
+                        groupbuy = participant.custom_groupbuy
+
+                        # 대표 이미지 가져오기
+                        primary_image = groupbuy.images.filter(is_primary=True).first()
+                        if not primary_image:
+                            primary_image = groupbuy.images.first()
+
+                        days_ago = (timezone.now() - groupbuy.completed_at).days
+
+                        data.append({
+                            'id': groupbuy.id,
+                            'title': groupbuy.title,
+                            'type': groupbuy.type,
+                            'type_display': groupbuy.get_type_display(),
+                            'primary_image': primary_image.image_url if primary_image else None,
+                            'completed_at': groupbuy.completed_at.isoformat(),
+                            'days_ago': days_ago,
+                            'current_participants': groupbuy.current_participants,
+                            'seller_name': groupbuy.seller.username,
+                            'seller_id': groupbuy.seller.id
+                        })
+                    except Exception as e:
+                        logger.error(f"Error processing participant {participant.id}: {e}")
+                        continue
+
+            logger.info(f"Found {len(data)} recent completed custom groupbuys")
+            return Response(data)
+
+        except Exception as e:
+            logger.error(f"recent_completed error: {e}", exc_info=True)
+            return Response(
+                {'error': '최근 종료된 공구 조회에 실패했습니다.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class CustomFavoriteViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CustomFavoriteSerializer
