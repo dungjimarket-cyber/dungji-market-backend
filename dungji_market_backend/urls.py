@@ -61,7 +61,7 @@ from api.views_final_selection import (
 )
 from api.views_noshow import NoShowReportViewSet, check_noshow_report_eligibility, batch_report_buyer_noshow
 from api.views_objection import NoShowObjectionViewSet, check_objection_eligibility
-from api.views_custom_noshow import CustomNoShowReportViewSet, check_custom_noshow_report_eligibility, batch_report_custom_buyer_noshow
+from api.views_custom_noshow import CustomNoShowReportViewSet, CustomPenaltyViewSet, check_custom_noshow_report_eligibility, batch_report_custom_buyer_noshow
 from api.views_banner import BannerListView, EventListView, EventDetailView, get_main_banners
 from api.views_health import health_check
 from api.views_cron import update_groupbuy_status_cron, send_reminder_notifications_cron, cron_health_check, check_custom_groupbuys_cron
@@ -112,6 +112,7 @@ router.register(r'consents', ParticipantConsentViewSet, basename='consent')
 router.register(r'noshow-reports', NoShowReportViewSet, basename='noshow-report')
 router.register(r'noshow-objections', NoShowObjectionViewSet, basename='noshow-objection')
 router.register(r'custom-noshow-reports', CustomNoShowReportViewSet, basename='custom-noshow-report')
+router.register(r'custom-penalties', CustomPenaltyViewSet, basename='custom-penalty')
 router.register(r'inquiries', InquiryViewSet, basename='inquiry')
 router.register(r'notices', NoticeViewSet, basename='notice')
 router.register(r'popups', PopupViewSet, basename='popup')

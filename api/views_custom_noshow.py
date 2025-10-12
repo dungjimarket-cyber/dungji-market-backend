@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from api.models_custom import CustomNoShowReport, CustomGroupBuy, CustomParticipant
+from api.models_custom import CustomNoShowReport, CustomGroupBuy, CustomParticipant, CustomPenalty
 from api.serializers_custom import CustomNoShowReportSerializer
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -578,3 +578,72 @@ def batch_report_custom_buyer_noshow(request):
         'success_reports': success_reports,
         'failed_reports': failed_reports
     }, status=status.HTTP_201_CREATED if success_reports else status.HTTP_400_BAD_REQUEST)
+
+
+class CustomPenaltyViewSet(ModelViewSet):
+    """
+    커스텀 공구 패널티 관리 ViewSet
+    """
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get']  # 조회만 허용
+
+    def get_queryset(self):
+        """현재 사용자의 패널티 조회"""
+        return CustomPenalty.objects.filter(user=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def check_active(self, request):
+        """
+        활성 패널티 확인
+
+        Returns:
+            {
+                "has_active_penalty": true/false,
+                "penalty": {
+                    "type": "판매거부",
+                    "reason": "사유",
+                    "count": 1,
+                    "end_date": "2025-10-31T10:43:01",
+                    "remaining_text": "455시간 8분 남음",
+                    "is_active": true
+                }
+            }
+        """
+        user = request.user
+
+        # 활성 패널티 조회
+        active_penalty = CustomPenalty.objects.filter(
+            user=user,
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).first()
+
+        if not active_penalty:
+            return Response({
+                'has_active_penalty': False,
+                'penalty': None
+            })
+
+        # 남은 시간 계산
+        remaining = active_penalty.end_date - timezone.now()
+        hours = int(remaining.total_seconds() // 3600)
+        minutes = int((remaining.total_seconds() % 3600) // 60)
+
+        # 이전 패널티 횟수 계산 (누적 횟수)
+        penalty_count = CustomPenalty.objects.filter(
+            user=user
+        ).count()
+
+        return Response({
+            'has_active_penalty': True,
+            'penalty': {
+                'type': active_penalty.penalty_type,
+                'reason': active_penalty.reason,
+                'count': penalty_count,
+                'end_date': active_penalty.end_date.isoformat(),
+                'remaining_text': f"{hours}시간 {minutes}분 남음",
+                'remaining_hours': hours,
+                'remaining_minutes': minutes,
+                'is_active': True
+            }
+        })
