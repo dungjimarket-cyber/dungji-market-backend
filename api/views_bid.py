@@ -56,16 +56,14 @@ class BidViewSet(viewsets.ModelViewSet):
         seller_category = getattr(user, 'seller_category', None)
         if not seller_category:
             return Response({
-                'error': '판매유형을 먼저 설정해주세요.',
-                'message': '마이페이지 > 설정에서 판매유형을 선택한 후 견적을 제안할 수 있습니다.',
+                'detail': '판매유형을 먼저 설정해주세요. 마이페이지 > 설정에서 판매유형을 선택한 후 견적을 제안할 수 있습니다.',
                 'redirect': '/mypage/seller/settings'
             }, status=status.HTTP_403_FORBIDDEN)
 
         # 3. telecom/rental 체크
         if seller_category not in ['telecom', 'rental']:
             return Response({
-                'error': '통신상품/렌탈서비스 판매자만 공구견적에 제안할 수 있습니다.',
-                'message': '일반사업자 및 전자제품 판매자는 커스텀공구를 이용해주세요.',
+                'detail': '통신상품/렌탈서비스 판매자만 공구견적에 제안할 수 있습니다. 일반사업자 및 전자제품 판매자는 커스텀공구를 이용해주세요.',
                 'seller_category': seller_category
             }, status=status.HTTP_403_FORBIDDEN)
 
