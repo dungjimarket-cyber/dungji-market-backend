@@ -80,10 +80,10 @@ class User(AbstractUser):
     seller_category = models.CharField(
         max_length=30,
         choices=[
+            ('general', '일반사업자(온·오프라인 도소매,요식업 등)'),
             ('telecom', '통신상품판매(휴대폰,인터넷,TV개통 등)'),
             ('rental', '렌탈서비스판매(정수기,비데,매트리스 등)'),
             ('electronics', '가전제품판매(냉장고,세탁기,컴퓨터 등)'),
-            ('general', '온/오프라인 도소매,요식업 등'),
         ],
         null=True,
         blank=True,

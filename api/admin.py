@@ -275,8 +275,8 @@ class BidTokenAdjustmentLogInline(admin.TabularInline):
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['get_user_id', 'nickname', 'email', 'role', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'date_joined']
-    list_filter = ['role', 'sns_type', 'is_active', 'is_staff', 'is_business_verified', 'date_joined']
+    list_display = ['get_user_id', 'nickname', 'email', 'role', 'seller_category', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'date_joined']
+    list_filter = ['role', 'seller_category', 'sns_type', 'is_active', 'is_staff', 'is_business_verified', 'date_joined']
     search_fields = ['username', 'email', 'business_number', 'nickname', 'phone_number', 'first_name', 'last_name', 'representative_name']
     ordering = ['-date_joined']  # 최신 가입자 순으로 정렬
     list_per_page = 50  # 50명 단위로 변경 (검색 성능 향상)
@@ -622,7 +622,7 @@ class UserAdmin(admin.ModelAdmin):
         (None, {'fields': ('username', 'email', 'role', 'password')}),
         ('가입정보', {'fields': ('sns_type', 'sns_id')}),
         ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
-        ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
+        ('사업자정보', {'fields': ('seller_category', 'business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
         ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
@@ -650,7 +650,7 @@ class UserAdmin(admin.ModelAdmin):
                 (None, {'fields': ('username', 'email', 'role', 'password')}),
                 ('가입정보', {'fields': ('sns_type', 'sns_id')}),
                 ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
-                ('사업자정보', {'fields': ('business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
+                ('사업자정보', {'fields': ('seller_category', 'business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
                 ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history')}),
                 ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
                 ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
