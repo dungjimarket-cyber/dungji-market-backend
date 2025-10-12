@@ -102,6 +102,7 @@ class SellerProfileView(APIView):
             "businessNumber": user.business_number if hasattr(user, 'business_number') else '',
             "businessVerified": user.is_business_verified if hasattr(user, 'is_business_verified') else False,  # 사업자번호 인증 상태
             "representativeName": user.representative_name if hasattr(user, 'representative_name') else '',  # 대표자명
+            "sellerCategory": user.seller_category if hasattr(user, 'seller_category') else '',  # 판매유형
             "isRemoteSales": user.is_remote_sales_enabled if hasattr(user, 'is_remote_sales_enabled') else False,
             "remoteSalesCertification": user.remote_sales_certification if hasattr(user, 'remote_sales_certification') else None,
             "remoteSalesVerified": user.remote_sales_verified if hasattr(user, 'remote_sales_verified') else False,
@@ -234,9 +235,9 @@ class SellerProfileView(APIView):
         
         # 업데이트 가능한 필드들
         allowed_fields = [
-            'nickname', 'description', 'phone', 'address', 
+            'nickname', 'description', 'phone', 'address',
             'business_number', 'is_remote_sales', 'address_region_id',
-            'profile_image', 'email', 'representative_name'
+            'profile_image', 'email', 'representative_name', 'seller_category'
         ]
         
         # 요청 데이터 필터링
