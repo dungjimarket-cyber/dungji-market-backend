@@ -3139,12 +3139,15 @@ class GroupBuyViewSet(ModelViewSet):
         
         buyers_data = []
         for participation in participations:
+            # nickname이 비어있으면 "회원_{user_id}"로 표시
+            display_nickname = participation.user.nickname if (hasattr(participation.user, 'nickname') and participation.user.nickname) else f"회원{participation.user.id}"
+
             buyer_info = {
                 'id': participation.id,
                 'user': {
                     'id': participation.user.id,
                     'email': participation.user.email,
-                    'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else participation.user.username,
+                    'nickname': display_nickname,
                     'username': participation.user.username,
                     'phone': participation.user.phone_number,  # 구매확정된 사용자는 항상 연락처 표시
                     'phone_number': participation.user.phone_number  # 호환성을 위해 두 필드 모두 제공
@@ -3708,6 +3711,9 @@ class GroupBuyViewSet(ModelViewSet):
         # 참여자 정보 구성
         participants_data = []
         for participation in participations:
+            # nickname이 비어있으면 "회원_{user_id}"로 표시
+            display_nickname = participation.user.nickname if (hasattr(participation.user, 'nickname') and participation.user.nickname) else f"회원{participation.user.id}"
+
             participant_info = {
                 'id': participation.id,
                 'user': {
@@ -3715,7 +3721,7 @@ class GroupBuyViewSet(ModelViewSet):
                     'username': participation.user.username,
                     'email': participation.user.email,
                     'phone_number': participation.user.phone_number if hasattr(participation.user, 'phone_number') else None,
-                    'nickname': participation.user.nickname if hasattr(participation.user, 'nickname') else None,
+                    'nickname': display_nickname,
                 },
                 'joined_at': participation.joined_at,
                 'is_leader': participation.is_leader,
