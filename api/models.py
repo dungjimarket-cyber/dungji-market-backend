@@ -77,6 +77,18 @@ class User(AbstractUser):
     business_number = models.CharField(max_length=20, blank=True, null=True, verbose_name='사업자등록번호')
     representative_name = models.CharField(max_length=100, blank=True, null=True, verbose_name='대표자명')
     is_remote_sales = models.BooleanField(default=False, verbose_name='비대면 판매 가능')
+    seller_category = models.CharField(
+        max_length=30,
+        choices=[
+            ('telecom', '통신상품판매(휴대폰,인터넷,TV개통 등)'),
+            ('rental', '렌탈서비스판매(정수기,비데,매트리스 등)'),
+            ('electronics', '가전제품판매(냉장고,세탁기,컴퓨터 등)'),
+            ('general', '온/오프라인 도소매,요식업 등'),
+        ],
+        null=True,
+        blank=True,
+        verbose_name='판매회원 구분'
+    )
     
     # 비대면 판매 관련 필드
     is_remote_sales_enabled = models.BooleanField(default=False, verbose_name='비대면 판매 가능 여부')

@@ -136,6 +136,7 @@ def register_user_v2(request):
         business_address = data.get('business_address', '')
         is_remote_sales_enabled = data.get('is_remote_sales_enabled', 'false').lower() == 'true'
         business_reg_image = files.get('business_reg_image')
+        seller_category = data.get('seller_category', '')
         
         # 소셜 로그인 정보
         social_provider = data.get('social_provider', '')
@@ -398,6 +399,8 @@ def register_user_v2(request):
                     user.representative_name = representative_name
                 if business_address:
                     user.address_detail = business_address
+                if seller_category:
+                    user.seller_category = seller_category
                 
                 # 사업자등록증 이미지 업로드
                 if business_reg_image:

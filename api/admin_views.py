@@ -1172,7 +1172,7 @@ def get_seller_detail_with_full_info(request, seller_id):
             'nickname': seller.nickname or seller.username,
             'email': seller.email,
             'phone_number': seller.phone_number,
-            'seller_category': seller.seller_category,
+            'seller_category': getattr(seller, 'seller_category', None),
             'is_business_verified': seller.is_business_verified,
             'business_reg_number': seller.business_reg_number or '--',
             'business_license_image': seller.business_license_image.url if seller.business_license_image else None,
