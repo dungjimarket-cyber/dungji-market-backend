@@ -563,7 +563,8 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 class CustomParticipantSerializer(serializers.ModelSerializer):
     """참여자 시리얼라이저"""
 
-    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_name = serializers.SerializerMethodField()
+    phone_number = serializers.CharField(source='user.phone_number', read_only=True)
     custom_groupbuy = CustomGroupBuyListSerializer(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     discount_valid_until = serializers.SerializerMethodField()
@@ -571,16 +572,22 @@ class CustomParticipantSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomParticipant
         fields = [
-            'id', 'user', 'user_name', 'custom_groupbuy',
+            'id', 'user', 'user_id', 'user_name', 'phone_number', 'custom_groupbuy',
             'participated_at', 'participation_code',
             'discount_code', 'discount_url',
             'discount_used', 'discount_used_at', 'discount_valid_until',
             'status', 'status_display'
         ]
         read_only_fields = [
-            'id', 'user', 'participated_at', 'participation_code',
+            'id', 'user', 'user_id', 'participated_at', 'participation_code',
             'discount_code', 'discount_url', 'discount_valid_until'
         ]
+
+    def get_user_name(self, obj):
+        """닉네임이 비어있으면 '회원{id}' 형식으로 반환"""
+        if obj.user.nickname:
+            return obj.user.nickname
+        return f"회원{obj.user.id}"
 
     def get_discount_valid_until(self, obj):
         """공구의 할인 유효기간 반환"""
