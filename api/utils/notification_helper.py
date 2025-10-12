@@ -134,6 +134,68 @@ def send_groupbuy_notification(
     )
 
 
+def send_custom_groupbuy_notification(
+    user,
+    custom_groupbuy,
+    notification_type: str,
+    message: str,
+    push_title: Optional[str] = None
+) -> Optional[Notification]:
+    """
+    커스텀 공구 알림 발송 (편의 함수)
+
+    Args:
+        user: 알림 받을 User 인스턴스
+        custom_groupbuy: CustomGroupBuy 인스턴스
+        notification_type: 알림 타입
+        message: 알림 메시지
+        push_title: 푸시 제목 (선택)
+
+    Returns:
+        Notification: 생성된 알림 인스턴스
+    """
+    try:
+        # 커스텀 공구 알림은 custom_groupbuy 필드 사용
+        settings, _ = NotificationSetting.objects.get_or_create(user=user)
+
+        # 거래 알림 체크
+        if not settings.trade_notifications:
+            logger.info(f"Trade notification disabled for user {user.id}")
+            return None
+
+        # 인앱 알림 생성
+        notification = Notification.objects.create(
+            user=user,
+            notification_type=notification_type,
+            message=message,
+            custom_groupbuy=custom_groupbuy
+        )
+
+        logger.info(f"Custom groupbuy notification created: {notification.id} for user {user.id}")
+
+        # 푸시 알림 발송
+        title = push_title or "커스텀 공구 알림"
+        body = message
+        data = {
+            'type': 'custom_groupbuy',
+            'custom_groupbuy_id': str(custom_groupbuy.id),
+            'notification_id': str(notification.id)
+        }
+
+        success_count = send_push_to_user(user, title, body, data)
+
+        if success_count > 0:
+            logger.info(f"Push sent to {success_count} devices for user {user.id}")
+        else:
+            logger.warning(f"No push sent for user {user.id} (no active tokens or push failed)")
+
+        return notification
+
+    except Exception as e:
+        logger.error(f"Error in send_custom_groupbuy_notification: {str(e)}")
+        return None
+
+
 def send_used_trade_notification(
     user,
     item_type: str,

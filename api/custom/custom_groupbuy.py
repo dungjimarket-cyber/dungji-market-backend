@@ -212,12 +212,19 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # 참여자가 있는 경우 취소 처리
         if instance.current_participants > 0:
-            return Response(
-                {'error': '참여자가 있는 공구는 삭제할 수 없습니다. 취소 처리를 이용해주세요.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            try:
+                instance.cancel(seller_user=request.user, reason='판매자가 공구를 취소했습니다.')
+                serializer = self.get_serializer(instance)
+                return Response(serializer.data)
+            except Exception as e:
+                return Response(
+                    {'error': f'취소 처리 실패: {str(e)}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
+        # 참여자가 없는 경우에만 실제 삭제
         return super().destroy(request, *args, **kwargs)
 
     # retrieve 메서드는 기본 ViewSet의 것을 사용 (커스터마이징 불필요)
@@ -454,11 +461,16 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        groupbuy.status = 'cancelled'
-        groupbuy.save()
-
-        serializer = self.get_serializer(groupbuy)
-        return Response(serializer.data)
+        # cancel() 메서드를 호출하여 참여자들에게 알림 발송
+        try:
+            groupbuy.cancel(seller_user=request.user, reason='판매자가 판매를 포기했습니다.')
+            serializer = self.get_serializer(groupbuy)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': f'취소 처리 실패: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['post', 'delete'], permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):

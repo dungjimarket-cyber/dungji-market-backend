@@ -276,6 +276,7 @@ class CustomGroupBuy(models.Model):
     def complete_groupbuy(self):
         """공구 완료 처리"""
         from django.db import transaction
+        from api.utils.notification_helper import send_custom_groupbuy_notification
 
         # 이미 완료된 경우 중복 실행 방지
         if self.status == 'completed':
@@ -295,12 +296,34 @@ class CustomGroupBuy(models.Model):
             # 할인 발급
             self.issue_discounts()
 
+            # 참여자들에게 공구 마감 알림 발송
+            participants = self.participants.filter(status='confirmed')
+            for participant in participants:
+                send_custom_groupbuy_notification(
+                    user=participant.user,
+                    custom_groupbuy=self,
+                    notification_type='custom_completed',
+                    message=f'"{self.title}" 공구가 마감되었습니다! 할인코드를 확인해주세요.',
+                    push_title='커스텀 공구 마감'
+                )
+
+            # 판매자에게도 알림
+            if self.seller:
+                send_custom_groupbuy_notification(
+                    user=self.seller,
+                    custom_groupbuy=self,
+                    notification_type='custom_completed',
+                    message=f'"{self.title}" 공구가 성공적으로 마감되었습니다! (참여자 {self.current_participants}명)',
+                    push_title='커스텀 공구 마감'
+                )
+
             logger.info(f"공구 완료: {self.title} ({self.current_participants}명)")
 
     def issue_discounts(self):
         """할인코드/링크 발급"""
         from django.core.exceptions import ValidationError
         from api.utils.sms_service import SMSService
+        from api.utils.notification_helper import send_custom_groupbuy_notification
 
         participants = self.participants.filter(status='confirmed')
         participant_count = participants.count()
@@ -322,6 +345,23 @@ class CustomGroupBuy(models.Model):
 
                 participant.save()
 
+                # 각 참여자에게 코드발급 알림
+                discount_info = ""
+                if self.online_discount_type == 'link_only':
+                    discount_info = "할인링크가 발급되었습니다"
+                elif self.online_discount_type == 'code_only':
+                    discount_info = f"할인코드({participant.discount_code})가 발급되었습니다"
+                else:  # both
+                    discount_info = f"할인코드({participant.discount_code}) 및 링크가 발급되었습니다"
+
+                send_custom_groupbuy_notification(
+                    user=participant.user,
+                    custom_groupbuy=self,
+                    notification_type='custom_code_issued',
+                    message=f'"{self.title}" {discount_info}. 마이페이지에서 확인하세요!',
+                    push_title='할인코드 발급'
+                )
+
         elif self.type == 'offline':
             if len(self.discount_codes) < participant_count:
                 logger.error(f"할인코드 부족: {self.title} - 코드:{len(self.discount_codes)} 참여자:{participant_count}")
@@ -332,6 +372,15 @@ class CustomGroupBuy(models.Model):
             for i, participant in enumerate(participants):
                 participant.discount_code = self.discount_codes[i]
                 participant.save()
+
+                # 각 참여자에게 코드발급 알림
+                send_custom_groupbuy_notification(
+                    user=participant.user,
+                    custom_groupbuy=self,
+                    notification_type='custom_code_issued',
+                    message=f'"{self.title}" 할인코드({participant.discount_code})가 발급되었습니다. 마이페이지에서 확인하세요!',
+                    push_title='할인코드 발급'
+                )
 
         logger.info(f"할인 발급 완료: {self.title} ({participant_count}명)")
 
@@ -403,6 +452,8 @@ class CustomGroupBuy(models.Model):
 
     def check_expiration(self):
         """기간 만료 체크"""
+        from api.utils.notification_helper import send_custom_groupbuy_notification
+
         if self.status != 'recruiting':
             return
 
@@ -418,6 +469,17 @@ class CustomGroupBuy(models.Model):
             if self.current_participants == 0:
                 self.status = 'expired'
                 self.save()
+
+                # 판매자에게 만료 알림
+                if self.seller:
+                    send_custom_groupbuy_notification(
+                        user=self.seller,
+                        custom_groupbuy=self,
+                        notification_type='custom_expired',
+                        message=f'"{self.title}" 공구가 기간 만료로 종료되었습니다. (참여자 0명)',
+                        push_title='커스텀 공구 종료'
+                    )
+
                 logger.info(f"공구 만료 (0명): {self.title}")
                 return
 
@@ -426,13 +488,81 @@ class CustomGroupBuy(models.Model):
                 self.status = 'pending_seller'
                 self.seller_decision_deadline = timezone.now() + timedelta(hours=24)
                 self.save()
+
+                # 판매자에게 결정 요청 알림
+                if self.seller:
+                    send_custom_groupbuy_notification(
+                        user=self.seller,
+                        custom_groupbuy=self,
+                        notification_type='info',
+                        message=f'"{self.title}" 공구의 모집 기간이 종료되었습니다. 판매 진행 여부를 24시간 내에 결정해주세요. (현재 참여자 {self.current_participants}명)',
+                        push_title='판매자 결정 필요'
+                    )
+
                 logger.info(f"판매자 결정 대기: {self.title} ({self.current_participants}명)")
                 return
 
-            # 그 외: 즉시 취소
+            # 그 외: 즉시 취소 (인원 미달)
             self.status = 'expired'
             self.save()
+
+            # 참여자들에게 만료 알림
+            participants = self.participants.filter(status='confirmed')
+            for participant in participants:
+                send_custom_groupbuy_notification(
+                    user=participant.user,
+                    custom_groupbuy=self,
+                    notification_type='custom_expired',
+                    message=f'"{self.title}" 공구가 인원 미달로 종료되었습니다.',
+                    push_title='커스텀 공구 종료'
+                )
+
+            # 판매자에게도 알림
+            if self.seller:
+                send_custom_groupbuy_notification(
+                    user=self.seller,
+                    custom_groupbuy=self,
+                    notification_type='custom_expired',
+                    message=f'"{self.title}" 공구가 기간 만료로 종료되었습니다. (참여자 {self.current_participants}/{self.target_participants}명)',
+                    push_title='커스텀 공구 종료'
+                )
+
             logger.info(f"공구 만료 (인원 미달): {self.title}")
+
+    def cancel(self, seller_user=None, reason=''):
+        """공구 취소 처리"""
+        from api.utils.notification_helper import send_custom_groupbuy_notification
+
+        # 권한 체크 (seller_user가 제공된 경우만)
+        if seller_user and self.seller != seller_user:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied('판매자만 공구를 취소할 수 있습니다.')
+
+        # 이미 취소된 경우 중복 실행 방지
+        if self.status == 'cancelled':
+            logger.warning(f"공구 이미 취소됨: {self.title}")
+            return
+
+        # 상태 변경
+        self.status = 'cancelled'
+        self.save()
+
+        # 참여자들에게 취소 알림
+        participants = self.participants.filter(status='confirmed')
+        cancel_message = f'"{self.title}" 공구가 취소되었습니다.'
+        if reason:
+            cancel_message += f' 사유: {reason}'
+
+        for participant in participants:
+            send_custom_groupbuy_notification(
+                user=participant.user,
+                custom_groupbuy=self,
+                notification_type='custom_cancelled',
+                message=cancel_message,
+                push_title='커스텀 공구 취소'
+            )
+
+        logger.info(f"공구 취소: {self.title} (참여자 {self.current_participants}명, 사유: {reason or '없음'})")
 
     def early_close(self, seller_user):
         """조기 종료 (즉시 완료)"""

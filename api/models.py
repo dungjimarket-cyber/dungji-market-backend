@@ -1128,6 +1128,12 @@ class Notification(models.Model):
         ('deal_confirmed_seller', '거래 확정 (판매자)'),
         ('deal_confirmed_buyer', '거래 확정 (구매자)'),
 
+        # 커스텀 공구 알림
+        ('custom_completed', '커스텀 공구 마감'),
+        ('custom_expired', '커스텀 공구 종료'),
+        ('custom_cancelled', '커스텀 공구 취소'),
+        ('custom_code_issued', '커스텀 할인코드 발급'),
+
         # 중고거래 알림
         ('offer_received', '가격 제안 수신'),
         ('offer_accepted', '가격 제안 수락'),
@@ -1140,6 +1146,7 @@ class Notification(models.Model):
 
     ITEM_TYPE_CHOICES = [
         ('groupbuy', '공구'),
+        ('custom', '커스텀 공구'),
         ('phone', '휴대폰'),
         ('electronics', '전자제품'),
     ]
@@ -1148,6 +1155,9 @@ class Notification(models.Model):
 
     # 공구용 (기존)
     groupbuy = models.ForeignKey(GroupBuy, on_delete=models.CASCADE, null=True, blank=True, verbose_name='공구')
+
+    # 커스텀 공구용 (추가)
+    custom_groupbuy = models.ForeignKey('CustomGroupBuy', on_delete=models.CASCADE, null=True, blank=True, verbose_name='커스텀 공구')
 
     # 중고거래용 (추가)
     item_type = models.CharField(
