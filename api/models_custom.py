@@ -99,7 +99,7 @@ class CustomGroupBuy(models.Model):
 
     # 인원 정보
     target_participants = models.PositiveIntegerField(
-        validators=[MinValueValidator(2), MaxValueValidator(10)],
+        validators=[MinValueValidator(2), MaxValueValidator(2000)],
         verbose_name='목표 인원'
     )
     current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 인원')
