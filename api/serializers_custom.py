@@ -49,7 +49,7 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
         model = CustomGroupBuy
         fields = [
             'id', 'title', 'type', 'type_display', 'categories', 'location', 'usage_guide',
-            'pricing_type', 'products', 'original_price', 'discount_rate', 'final_price',
+            'pricing_type', 'products', 'product_name', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'status', 'status_display', 'expired_at',
             'seller_name', 'seller_type',
@@ -123,7 +123,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'type', 'type_display',
             'categories', 'location', 'location_detail', 'usage_guide',
-            'pricing_type', 'products', 'original_price', 'discount_rate', 'final_price',
+            'pricing_type', 'products', 'product_name', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'max_wait_hours', 'expired_at', 'completed_at',
             'seller_decision_deadline',
