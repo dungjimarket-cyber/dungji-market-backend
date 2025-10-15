@@ -89,15 +89,15 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # 활성 공구 개수 체크 (한 번에 하나만 등록 가능)
+        # 활성 공구 개수 체크 (최대 5개까지 등록 가능)
         active_count = CustomGroupBuy.objects.filter(
             seller=request.user,
             status__in=['recruiting', 'pending_seller']
         ).count()
 
-        if active_count >= 1:
+        if active_count >= 5:
             return Response(
-                {'error': '이미 진행 중인 공구가 있습니다. 기존 공구가 마감된 후 등록할 수 있습니다.'},
+                {'error': f'최대 5개의 공구까지 동시 진행 가능합니다. (현재 {active_count}개 진행 중)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
