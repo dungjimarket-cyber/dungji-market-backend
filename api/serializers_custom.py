@@ -324,6 +324,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                     'discount_rate': '전품목 할인 시 할인율은 필수입니다.'
                 })
 
+        elif pricing_type == 'coupon_only':
+            # 쿠폰전용: 가격 정보 불필요
+            # 온라인/오프라인 모두 할인 제공 방식 선택 가능
+            pass
+
         # 이미지 개수 검증
         images = data.get('images', [])
         if images and len(images) > 10:

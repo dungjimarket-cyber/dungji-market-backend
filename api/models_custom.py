@@ -67,7 +67,11 @@ class CustomGroupBuy(models.Model):
     # 가격 정보
     pricing_type = models.CharField(
         max_length=20,
-        choices=[('single_product', '단일상품'), ('all_products', '전품목 할인')],
+        choices=[
+            ('single_product', '단일상품'),
+            ('all_products', '전품목 할인'),
+            ('coupon_only', '쿠폰전용')
+        ],
         default='single_product',
         verbose_name='가격 유형'
     )
@@ -220,7 +224,7 @@ class CustomGroupBuy(models.Model):
     def final_price(self):
         """최종 가격 계산 (단일상품 여러 개 지원)"""
         if self.pricing_type != 'single_product':
-            return None  # 전품목 할인은 가격 없음
+            return None  # 전품목 할인, 쿠폰전용은 가격 없음
 
         # products 필드 사용 (최신 방식)
         if self.products and len(self.products) > 0:
