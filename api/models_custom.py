@@ -585,19 +585,25 @@ class CustomGroupBuy(models.Model):
         if self.current_participants < 1:
             raise ValidationError('최소 1명 이상 참여해야 조기 종료할 수 있습니다.')
 
-        # 할인코드 부족 사전 체크 (온라인: code_only/both, 오프라인: 항상)
+        # 할인코드 부족 사전 체크
+        # 쿠폰 전용(coupon_only)은 참여코드만으로 동작하므로 discount_codes 체크 불필요
         participant_count = self.current_participants
-        if self.type == 'online':
-            if self.online_discount_type in ['code_only', 'both']:
+
+        # 쿠폰 전용이 아닌 경우만 체크
+        if self.pricing_type != 'coupon_only':
+            if self.type == 'online':
+                # 온라인: code_only/both만 체크
+                if self.online_discount_type in ['code_only', 'both']:
+                    if len(self.discount_codes) < participant_count:
+                        raise ValidationError(
+                            f'할인코드가 부족하여 조기 종료할 수 없습니다. (필요: {participant_count}, 보유: {len(self.discount_codes)})'
+                        )
+            elif self.type == 'offline':
+                # 오프라인: 항상 체크
                 if len(self.discount_codes) < participant_count:
                     raise ValidationError(
                         f'할인코드가 부족하여 조기 종료할 수 없습니다. (필요: {participant_count}, 보유: {len(self.discount_codes)})'
                     )
-        elif self.type == 'offline':
-            if len(self.discount_codes) < participant_count:
-                raise ValidationError(
-                    f'할인코드가 부족하여 조기 종료할 수 없습니다. (필요: {participant_count}, 보유: {len(self.discount_codes)})'
-                )
 
         # 즉시 완료 처리
         self.complete_groupbuy()
