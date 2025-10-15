@@ -678,7 +678,7 @@ class CustomParticipant(models.Model):
 
     # 할인 정보
     participation_code = models.CharField(max_length=50, unique=True, verbose_name='참여 코드')
-    discount_code = models.CharField(max_length=50, null=True, blank=True, verbose_name='할인코드')
+    discount_code = models.TextField(null=True, blank=True, verbose_name='할인코드')
     discount_url = models.TextField(null=True, blank=True, verbose_name='할인링크')
 
     # 사용 정보
