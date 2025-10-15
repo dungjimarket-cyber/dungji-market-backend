@@ -332,15 +332,36 @@ class CustomGroupBuy(models.Model):
         participants = self.participants.filter(status='confirmed')
         participant_count = participants.count()
 
-        # 쿠폰 전용은 참여코드만 있으면 되므로 discount_code/url 발급 불필요
+        # 쿠폰 전용: discount_code/url 발급 (validation 체크는 early_close에서 이미 함)
         if self.pricing_type == 'coupon_only':
-            # 참여자들에게 쿠폰 발급 알림만 발송
-            for participant in participants:
+            # 링크와 코드를 참여자에게 발급
+            for i, participant in enumerate(participants):
+                # 할인링크가 있으면 발급
+                if self.discount_url:
+                    participant.discount_url = self.discount_url
+
+                # 할인코드가 있으면 발급 (개별 코드)
+                if self.discount_codes and len(self.discount_codes) > i:
+                    participant.discount_code = self.discount_codes[i]
+
+                participant.save()
+
+                # 각 참여자에게 쿠폰발급 알림
+                discount_info = ""
+                if self.discount_url and participant.discount_code:
+                    discount_info = f"쿠폰코드({participant.discount_code}) 및 링크가 발급되었습니다"
+                elif participant.discount_code:
+                    discount_info = f"쿠폰코드({participant.discount_code})가 발급되었습니다"
+                elif self.discount_url:
+                    discount_info = "쿠폰링크가 발급되었습니다"
+                else:
+                    discount_info = "쿠폰이 발급되었습니다"
+
                 send_custom_groupbuy_notification(
                     user=participant.user,
                     custom_groupbuy=self,
                     notification_type='custom_code_issued',
-                    message=f'"{self.title}" 쿠폰이 발급되었습니다. 마이페이지에서 확인하세요!',
+                    message=f'"{self.title}" {discount_info}. 마이페이지에서 확인하세요!',
                     push_title='쿠폰 발급'
                 )
 
