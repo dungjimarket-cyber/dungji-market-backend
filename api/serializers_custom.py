@@ -338,14 +338,15 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'discount_codes': '빈 할인코드는 등록할 수 없습니다.'
                 })
-            if len(set(discount_codes)) != len(discount_codes):
-                raise serializers.ValidationError({
-                    'discount_codes': '중복된 할인코드가 있습니다.'
-                })
+            # 중복 허용 (동일한 코드를 여러 참여자에게 제공 가능)
+            # if len(set(discount_codes)) != len(discount_codes):
+            #     raise serializers.ValidationError({
+            #         'discount_codes': '중복된 할인코드가 있습니다.'
+            #     })
             for code in discount_codes:
-                if len(str(code)) > 50:
+                if len(str(code)) > 500:
                     raise serializers.ValidationError({
-                        'discount_codes': '각 할인코드는 최대 50자까지 입력 가능합니다.'
+                        'discount_codes': '각 할인코드는 최대 500자까지 입력 가능합니다.'
                     })
 
 
