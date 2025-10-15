@@ -332,6 +332,72 @@ class CustomGroupBuy(models.Model):
         participants = self.participants.filter(status='confirmed')
         participant_count = participants.count()
 
+        # 쿠폰 전용은 참여코드만 있으면 되므로 discount_code/url 발급 불필요
+        if self.pricing_type == 'coupon_only':
+            # 참여자들에게 쿠폰 발급 알림만 발송
+            for participant in participants:
+                send_custom_groupbuy_notification(
+                    user=participant.user,
+                    custom_groupbuy=self,
+                    notification_type='custom_code_issued',
+                    message=f'"{self.title}" 쿠폰이 발급되었습니다. 마이페이지에서 확인하세요!',
+                    push_title='쿠폰 발급'
+                )
+
+            logger.info(f"쿠폰 발급 완료 (coupon_only): {self.title} ({participant_count}명)")
+
+            # SMS 알림 발송 (참여자들에게)
+            sms_service = SMSService()
+            sms_success_count = 0
+            sms_fail_count = 0
+
+            for participant in participants:
+                if hasattr(participant.user, 'phone_number') and participant.user.phone_number:
+                    try:
+                        success, error = sms_service.send_custom_groupbuy_completion(
+                            phone_number=participant.user.phone_number,
+                            title=self.title,
+                            user=participant.user,
+                            custom_groupbuy=self
+                        )
+                        if success:
+                            sms_success_count += 1
+                            logger.info(f"SMS 발송 성공: {participant.user.username} ({participant.user.phone_number})")
+                        else:
+                            sms_fail_count += 1
+                            logger.warning(f"SMS 발송 실패: {participant.user.username} - {error}")
+                    except Exception as e:
+                        sms_fail_count += 1
+                        logger.error(f"SMS 발송 예외: {participant.user.username} - {str(e)}")
+                else:
+                    sms_fail_count += 1
+                    logger.warning(f"전화번호 없음: {participant.user.username}")
+
+            logger.info(f"SMS 알림 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
+
+            # 판매자에게도 SMS 발송
+            if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
+                try:
+                    success, error = sms_service.send_custom_groupbuy_completion_seller(
+                        phone_number=self.seller.phone_number,
+                        title=self.title,
+                        participants_count=participant_count,
+                        final_price=None,
+                        discount_rate=None,
+                        user=self.seller,
+                        custom_groupbuy=self
+                    )
+                    if success:
+                        logger.info(f"판매자 SMS 발송 성공: {self.seller.username} ({self.seller.phone_number})")
+                    else:
+                        logger.warning(f"판매자 SMS 발송 실패: {self.seller.username} - {error}")
+                except Exception as e:
+                    logger.error(f"판매자 SMS 발송 예외: {self.seller.username} - {str(e)}")
+            else:
+                logger.warning(f"판매자 전화번호 없음: {self.seller.username}")
+
+            return  # 쿠폰 전용은 여기서 종료
+
         if self.type == 'online':
             if self.online_discount_type in ['code_only', 'both']:
                 if len(self.discount_codes) < participant_count:
