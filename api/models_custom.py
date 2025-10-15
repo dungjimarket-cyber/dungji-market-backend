@@ -347,23 +347,26 @@ class CustomGroupBuy(models.Model):
                 participant.save()
 
                 # 각 참여자에게 쿠폰발급 알림
-                discount_info = ""
-                if self.discount_url and participant.discount_code:
-                    discount_info = f"쿠폰코드({participant.discount_code}) 및 링크가 발급되었습니다"
-                elif participant.discount_code:
-                    discount_info = f"쿠폰코드({participant.discount_code})가 발급되었습니다"
-                elif self.discount_url:
-                    discount_info = "쿠폰링크가 발급되었습니다"
-                else:
-                    discount_info = "쿠폰이 발급되었습니다"
+                try:
+                    discount_info = ""
+                    if self.discount_url and participant.discount_code:
+                        discount_info = f"쿠폰코드({participant.discount_code}) 및 링크가 발급되었습니다"
+                    elif participant.discount_code:
+                        discount_info = f"쿠폰코드({participant.discount_code})가 발급되었습니다"
+                    elif self.discount_url:
+                        discount_info = "쿠폰링크가 발급되었습니다"
+                    else:
+                        discount_info = "쿠폰이 발급되었습니다"
 
-                send_custom_groupbuy_notification(
-                    user=participant.user,
-                    custom_groupbuy=self,
-                    notification_type='custom_code_issued',
-                    message=f'"{self.title}" {discount_info}. 마이페이지에서 확인하세요!',
-                    push_title='쿠폰 발급'
-                )
+                    send_custom_groupbuy_notification(
+                        user=participant.user,
+                        custom_groupbuy=self,
+                        notification_type='custom_code_issued',
+                        message=f'"{self.title}" {discount_info}. 마이페이지에서 확인하세요!',
+                        push_title='쿠폰 발급'
+                    )
+                except Exception as e:
+                    logger.error(f"쿠폰 알림 발송 실패 ({participant.user.username}): {e}")
 
             logger.info(f"쿠폰 발급 완료 (coupon_only): {self.title} ({participant_count}명)")
 
