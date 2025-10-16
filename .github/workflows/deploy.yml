@@ -207,8 +207,8 @@ jobs:
           
           # 새 이미지 빌드 및 컨테이너 시작
           echo "🏗️  Building and starting containers..."
-          # 고정된 프로젝트 이름 사용 (기존 컨테이너를 교체)
-          PROJECT_NAME="dungji-backend"
+          # 타임스탬프를 추가하여 기존 컨테이너 우회 (permission denied 문제 해결)
+          PROJECT_NAME="dungji-backend-$(date +%s)"
           echo "Using project name: $PROJECT_NAME"
           export PROJECT_NAME
           sudo docker-compose -p $PROJECT_NAME up --build -d --force-recreate --remove-orphans
