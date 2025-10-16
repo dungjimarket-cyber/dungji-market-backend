@@ -161,8 +161,13 @@ jobs:
           # 기존 컨테이너 중지 및 정리
           echo "🛑 Stopping existing containers..."
 
-          # 0단계: 문제의 좀비 컨테이너 직접 삭제 (ID로 직접 지정)
-          echo "💀 Removing zombie containers..."
+          # 0단계: Docker 데몬 재시작으로 모든 좀비 프로세스 정리
+          echo "💀 Restarting Docker daemon to clean zombie containers..."
+          sudo systemctl restart docker
+          sleep 5
+
+          # 1.5단계: 문제의 좀비 컨테이너 직접 삭제 (ID로 직접 지정)
+          echo "💀 Removing specific zombie containers..."
           sudo docker rm -f 557d5a4285ed 2>/dev/null || true
           sudo docker rm -f dungji-market-backend 2>/dev/null || true
           sleep 2
