@@ -370,18 +370,23 @@ class CustomGroupBuy(models.Model):
             for i, participant in enumerate(participants):
                 logger.info(f"[ISSUE] 참여자 {i+1}/{participant_count} 처리 - user:{participant.user.username}")
 
-                # 할인링크가 있으면 발급
-                if self.discount_url:
-                    participant.discount_url = self.discount_url
-                    logger.info(f"[ISSUE] 할인링크 발급 - user:{participant.user.username}")
+                try:
+                    # 할인링크가 있으면 발급
+                    if self.discount_url:
+                        participant.discount_url = self.discount_url
+                        logger.info(f"[ISSUE] 할인링크 발급 - user:{participant.user.username}")
 
-                # 할인코드가 있으면 발급 (개별 코드)
-                if self.discount_codes and len(self.discount_codes) > i:
-                    participant.discount_code = self.discount_codes[i]
-                    logger.info(f"[ISSUE] 할인코드 발급 - user:{participant.user.username}, code:{self.discount_codes[i]}")
+                    # 할인코드가 있으면 발급 (개별 코드)
+                    if self.discount_codes and len(self.discount_codes) > i:
+                        participant.discount_code = self.discount_codes[i]
+                        logger.info(f"[ISSUE] 할인코드 발급 - user:{participant.user.username}, code:{self.discount_codes[i]}")
 
-                participant.save()
-                logger.info(f"[ISSUE] 참여자 저장 완료 - user:{participant.user.username}")
+                    participant.save()
+                    logger.info(f"[ISSUE] 참여자 저장 완료 - user:{participant.user.username}")
+                except Exception as e:
+                    logger.error(f"[ISSUE] 참여자 저장 실패 - user:{participant.user.username}, error:{str(e)}", exc_info=True)
+                    # 저장 실패해도 계속 진행 (다른 참여자들은 발급받을 수 있도록)
+                    continue
 
                 # 각 참여자에게 쿠폰발급 알림
                 try:
@@ -476,30 +481,34 @@ class CustomGroupBuy(models.Model):
                     )
 
             for i, participant in enumerate(participants):
-                if self.online_discount_type in ['link_only', 'both']:
-                    participant.discount_url = self.discount_url
+                try:
+                    if self.online_discount_type in ['link_only', 'both']:
+                        participant.discount_url = self.discount_url
 
-                if self.online_discount_type in ['code_only', 'both']:
-                    participant.discount_code = self.discount_codes[i]
+                    if self.online_discount_type in ['code_only', 'both']:
+                        participant.discount_code = self.discount_codes[i]
 
-                participant.save()
+                    participant.save()
 
-                # 각 참여자에게 코드발급 알림
-                discount_info = ""
-                if self.online_discount_type == 'link_only':
-                    discount_info = "할인링크가 발급되었습니다"
-                elif self.online_discount_type == 'code_only':
-                    discount_info = f"할인코드({participant.discount_code})가 발급되었습니다"
-                else:  # both
-                    discount_info = f"할인코드({participant.discount_code}) 및 링크가 발급되었습니다"
+                    # 각 참여자에게 코드발급 알림
+                    discount_info = ""
+                    if self.online_discount_type == 'link_only':
+                        discount_info = "할인링크가 발급되었습니다"
+                    elif self.online_discount_type == 'code_only':
+                        discount_info = f"할인코드({participant.discount_code})가 발급되었습니다"
+                    else:  # both
+                        discount_info = f"할인코드({participant.discount_code}) 및 링크가 발급되었습니다"
 
-                send_custom_groupbuy_notification(
-                    user=participant.user,
-                    custom_groupbuy=self,
-                    notification_type='custom_code_issued',
-                    message=f'"{self.title}" {discount_info}. 마이페이지에서 확인하세요!',
-                    push_title='할인코드 발급'
-                )
+                    send_custom_groupbuy_notification(
+                        user=participant.user,
+                        custom_groupbuy=self,
+                        notification_type='custom_code_issued',
+                        message=f'"{self.title}" {discount_info}. 마이페이지에서 확인하세요!',
+                        push_title='할인코드 발급'
+                    )
+                except Exception as e:
+                    logger.error(f"온라인 공구 참여자 저장 실패: {participant.user.username} - {str(e)}", exc_info=True)
+                    continue
 
         elif self.type == 'offline':
             if len(self.discount_codes) < participant_count:
@@ -509,17 +518,21 @@ class CustomGroupBuy(models.Model):
                 )
 
             for i, participant in enumerate(participants):
-                participant.discount_code = self.discount_codes[i]
-                participant.save()
+                try:
+                    participant.discount_code = self.discount_codes[i]
+                    participant.save()
 
-                # 각 참여자에게 코드발급 알림
-                send_custom_groupbuy_notification(
-                    user=participant.user,
-                    custom_groupbuy=self,
-                    notification_type='custom_code_issued',
-                    message=f'"{self.title}" 할인코드({participant.discount_code})가 발급되었습니다. 마이페이지에서 확인하세요!',
-                    push_title='할인코드 발급'
-                )
+                    # 각 참여자에게 코드발급 알림
+                    send_custom_groupbuy_notification(
+                        user=participant.user,
+                        custom_groupbuy=self,
+                        notification_type='custom_code_issued',
+                        message=f'"{self.title}" 할인코드({participant.discount_code})가 발급되었습니다. 마이페이지에서 확인하세요!',
+                        push_title='할인코드 발급'
+                    )
+                except Exception as e:
+                    logger.error(f"오프라인 공구 참여자 저장 실패: {participant.user.username} - {str(e)}", exc_info=True)
+                    continue
 
         logger.info(f"할인 발급 완료: {self.title} ({participant_count}명)")
 
