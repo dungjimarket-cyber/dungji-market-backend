@@ -20,8 +20,8 @@ jobs:
             set -e
 
             echo "📥 Updating code from git..."
-            # Remove existing directory and clone fresh
-            rm -rf ~/dungji-market-backend || true
+            # Remove existing directory and clone fresh (with sudo for permission issues)
+            sudo rm -rf ~/dungji-market-backend || true
             git clone https://github.com/dungjimarket-cyber/dungji-market-backend.git ~/dungji-market-backend
             cd ~/dungji-market-backend
 
