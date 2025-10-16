@@ -160,27 +160,21 @@ jobs:
           
           # 기존 컨테이너 중지 및 정리
           echo "🛑 Stopping existing containers..."
-          # docker-compose down이 실패할 수 있으므로 개별적으로 처리
+
+          # 1단계: 모든 실행중인 컨테이너 강제 종료
+          echo "🔪 Force killing ALL running containers..."
+          sudo docker ps -q | xargs -r sudo docker kill || true
+          sleep 3
+
+          # 2단계: 모든 컨테이너 강제 삭제 (실행중/중지된 것 모두)
+          echo "🗑️  Force removing ALL containers..."
+          sudo docker ps -aq | xargs -r sudo docker rm -f || true
+          sleep 2
+
+          # 3단계: docker-compose 정리 (실패해도 계속)
           sudo docker-compose stop || true
           sudo docker-compose rm -f || true
           sudo docker-compose down --remove-orphans || true
-          
-          # 모든 관련 컨테이너 강제 정리
-          echo "🧹 Cleaning up any remaining containers..."
-          # kill로 먼저 강제 종료 (stop보다 강력)
-          sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker kill || true
-          sleep 2
-          sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker rm -f || true
-
-          # 간소화된 정리 프로세스
-          echo "🧹 Cleaning up ALL dungji containers (including old timestamped ones)..."
-          # 타임스탬프가 포함된 모든 dungji 관련 컨테이너 정리 (kill 먼저)
-          sudo docker ps -a | grep -E "dungji.*backend" | awk '{print $1}' | xargs -r sudo docker kill || true
-          sleep 2
-          sudo docker ps -a | grep -E "dungji.*backend" | awk '{print $1}' | xargs -r sudo docker rm -f || true
-          sudo docker ps -a | grep dungji | awk '{print $1}' | xargs -r sudo docker kill || true
-          sleep 2
-          sudo docker ps -a | grep dungji | awk '{print $1}' | xargs -r sudo docker rm -f || true
           
           # Docker 네트워크 정리 (타임스탬프 포함된 것들도)
           echo "🧹 Cleaning up Docker networks..."
