@@ -161,14 +161,20 @@ jobs:
           # 기존 컨테이너 중지 및 정리
           echo "🛑 Stopping existing containers..."
 
+          # 0단계: 문제의 좀비 컨테이너 직접 삭제 (ID로 직접 지정)
+          echo "💀 Removing zombie containers..."
+          sudo docker rm -f 557d5a4285ed 2>/dev/null || true
+          sudo docker rm -f dungji-market-backend 2>/dev/null || true
+          sleep 2
+
           # 1단계: 모든 실행중인 컨테이너 강제 종료
           echo "🔪 Force killing ALL running containers..."
-          sudo docker ps -q | xargs -r sudo docker kill || true
+          sudo docker ps -q | xargs -r sudo docker kill 2>/dev/null || true
           sleep 3
 
           # 2단계: 모든 컨테이너 강제 삭제 (실행중/중지된 것 모두)
           echo "🗑️  Force removing ALL containers..."
-          sudo docker ps -aq | xargs -r sudo docker rm -f || true
+          sudo docker ps -aq | xargs -r sudo docker rm -f 2>/dev/null || true
           sleep 2
 
           # 3단계: docker-compose 정리 (실패해도 계속)
