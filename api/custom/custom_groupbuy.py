@@ -302,6 +302,8 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         groupbuy = self.get_object()
         user = request.user
 
+        logger.info(f"[PARTICIPATE] 시작 - user:{user.id}, groupbuy:{groupbuy.id}, title:{groupbuy.title}")
+
         # 활성 패널티 체크
         from api.models_custom import CustomPenalty
         from django.utils import timezone
@@ -312,6 +314,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         ).first()
 
         if active_penalty:
+            logger.info(f"[PARTICIPATE] 패널티 감지 - user:{user.id}")
             remaining = active_penalty.end_date - timezone.now()
             hours = int(remaining.total_seconds() // 3600)
             minutes = int((remaining.total_seconds() % 3600) // 60)
@@ -329,42 +332,67 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             )
 
         if groupbuy.seller == user:
+            logger.info(f"[PARTICIPATE] 판매자 참여 시도 - user:{user.id}")
             return Response(
                 {'error': '판매자는 자신의 공구에 참여할 수 없습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if groupbuy.status != 'recruiting':
+            logger.info(f"[PARTICIPATE] 잘못된 상태 - status:{groupbuy.status}")
             return Response(
                 {'error': '모집 중인 공구만 참여 가능합니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if CustomParticipant.objects.filter(custom_groupbuy=groupbuy, user=user).exists():
+            logger.info(f"[PARTICIPATE] 중복 참여 - user:{user.id}")
             return Response(
                 {'error': '이미 참여한 공구입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        logger.info(f"[PARTICIPATE] 기본 검증 통과 - transaction 시작")
+
         from django.db import transaction
 
-        with transaction.atomic():
-            groupbuy = CustomGroupBuy.objects.select_for_update().get(pk=groupbuy.pk)
+        try:
+            with transaction.atomic():
+                logger.info(f"[PARTICIPATE] transaction.atomic() 진입")
 
-            participant = CustomParticipant.objects.create(
-                custom_groupbuy=groupbuy,
-                user=user
+                groupbuy = CustomGroupBuy.objects.select_for_update().get(pk=groupbuy.pk)
+                logger.info(f"[PARTICIPATE] select_for_update 완료 - current:{groupbuy.current_participants}/{groupbuy.target_participants}")
+
+                participant = CustomParticipant.objects.create(
+                    custom_groupbuy=groupbuy,
+                    user=user
+                )
+                logger.info(f"[PARTICIPATE] participant 생성 완료 - id:{participant.id}, code:{participant.participation_code}")
+
+                groupbuy.current_participants = F('current_participants') + 1
+                groupbuy.save(update_fields=['current_participants'])
+                groupbuy.refresh_from_db()
+                logger.info(f"[PARTICIPATE] current_participants 증가 완료 - new:{groupbuy.current_participants}/{groupbuy.target_participants}")
+
+                if groupbuy.current_participants >= groupbuy.target_participants:
+                    logger.info(f"[PARTICIPATE] 목표 달성! complete_groupbuy() 호출")
+                    groupbuy.complete_groupbuy()
+                    logger.info(f"[PARTICIPATE] complete_groupbuy() 완료")
+                else:
+                    logger.info(f"[PARTICIPATE] 목표 미달 - 계속 모집 ({groupbuy.current_participants}/{groupbuy.target_participants})")
+
+            logger.info(f"[PARTICIPATE] transaction 커밋 완료")
+
+            serializer = CustomParticipantSerializer(participant)
+            logger.info(f"[PARTICIPATE] 성공 - 응답 반환")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"[PARTICIPATE] 예외 발생: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'참여 처리 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-            groupbuy.current_participants = F('current_participants') + 1
-            groupbuy.save(update_fields=['current_participants'])
-            groupbuy.refresh_from_db()
-
-            if groupbuy.current_participants >= groupbuy.target_participants:
-                groupbuy.complete_groupbuy()
-
-        serializer = CustomParticipantSerializer(participant)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def cancel_participation(self, request, pk=None):
