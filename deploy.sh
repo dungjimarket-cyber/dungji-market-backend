@@ -40,15 +40,22 @@ fi
 
 # Stop existing containers
 echo "Stopping existing containers..."
-docker-compose -f docker-compose.prod.yml down
+# Stop both dev and prod configurations to avoid conflicts
+docker-compose down --remove-orphans || true
+docker-compose -f docker-compose.prod.yml down --remove-orphans || true
+
+# Clean up unused Docker resources
+echo "Cleaning up unused Docker resources..."
+docker container prune -f || true
+docker network prune -f || true
 
 # Build and start containers
 echo "Building and starting containers..."
-docker-compose -f docker-compose.prod.yml up -d --build
+docker-compose -f docker-compose.prod.yml up -d --build --force-recreate
 
 # Wait for services to be ready
 echo "Waiting for services to start..."
-sleep 10
+sleep 20
 
 # Check if services are running
 echo "Checking service status..."
