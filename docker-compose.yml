@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    container_name: dungji-market-backend
+    # container_name: dungji-market-backend  # 타임스탬프 방식 사용으로 주석 처리
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
