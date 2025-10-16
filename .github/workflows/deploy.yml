@@ -178,8 +178,8 @@ jobs:
           
           # Docker 네트워크 정리 (타임스탬프 포함된 것들도)
           echo "🧹 Cleaning up Docker networks..."
-          sudo docker network ls | grep -E "dungji.*backend" | awk '{print $2}' | xargs -r sudo docker network rm || true
-          sudo docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r sudo docker network rm || true
+          sudo docker network ls | grep -E "dungji.*backend" | awk '{print $2}' | xargs -r sudo docker network rm 2>/dev/null || true
+          sudo docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r sudo docker network rm 2>/dev/null || true
           
           # 사용하지 않는 Docker 리소스 정리
           echo "🧹 Cleaning up unused Docker resources..."
