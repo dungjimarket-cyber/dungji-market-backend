@@ -8,7 +8,7 @@ services:
       - media_volume:/app/mediafiles
       - logs_volume:/app/logs
     ports:
-      - "8000:8000"
+      - "8001:8000"  # 좀비 컨테이너 우회용 임시 포트 변경
     env_file:
       - .env
     environment:
