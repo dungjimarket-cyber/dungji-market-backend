@@ -35,6 +35,55 @@ jobs:
             set -e
             cd ~/dungji-market-backend
 
+            echo "📝 Creating production .env file..."
+            cat > .env << 'EOF'
+            # Django 기본 설정
+            DEBUG=False
+            SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DJANGO_ALLOWED_HOSTS=${{ secrets.DJANGO_ALLOWED_HOSTS }}
+            DJANGO_ENV=production
+
+            # 사업자번호 검증 API 키
+            BUSINESS_VERIFICATION_API_KEY=${{ secrets.BUSINESS_VERIFICATION_API_KEY }}
+
+            # 데이터베이스 설정
+            SQL_ENGINE=django.db.backends.postgresql
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+
+            # CORS 설정
+            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
+            CSRF_TRUSTED_ORIGINS=${{ secrets.CSRF_TRUSTED_ORIGINS }}
+
+            # 서버 설정
+            PORT=8000
+            API_KEYS=${{ secrets.API_KEYS }}
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+
+            # 소셜 로그인 설정
+            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
+            KAKAO_REDIRECT_URI=${{ secrets.KAKAO_REDIRECT_URI }}
+
+            # AWS 설정
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_STORAGE_BUCKET_NAME=${{ secrets.AWS_STORAGE_BUCKET_NAME }}
+            AWS_S3_REGION_NAME=${{ secrets.AWS_S3_REGION_NAME }}
+            USE_S3=True
+
+            # 이메일 설정
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            DEFAULT_FROM_EMAIL=${{ secrets.DEFAULT_FROM_EMAIL }}
+
+            # SMS 설정
+            ALIGO_API_KEY=${{ secrets.ALIGO_API_KEY }}
+            ALIGO_USER_ID=${{ secrets.ALIGO_USER_ID }}
+            ALIGO_SENDER=${{ secrets.ALIGO_SENDER }}
+            EOF
+
             echo "🛑 Stopping all existing containers..."
             # Stop both dev and prod configurations to avoid conflicts
             sudo docker-compose down --remove-orphans || true
