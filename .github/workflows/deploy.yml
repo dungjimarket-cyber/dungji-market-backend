@@ -35,11 +35,22 @@ jobs:
             set -e
             cd ~/dungji-market-backend
 
-            echo "🛑 Stopping existing containers..."
+            echo "🛑 Stopping all existing containers..."
+            # Stop both dev and prod configurations to avoid conflicts
             sudo docker-compose down --remove-orphans || true
+            sudo docker-compose -f docker-compose.prod.yml down --remove-orphans || true
 
-            echo "🏗️ Building and starting containers..."
-            sudo docker-compose up -d --build
+            echo "🧹 Cleaning up Docker resources..."
+            sudo docker container prune -f || true
+            sudo docker network prune -f || true
+
+            echo "🏗️ Building and starting production containers..."
+            sudo docker-compose -f docker-compose.prod.yml up -d --build --force-recreate
+
+            echo "⏳ Waiting for services to start..."
+            sleep 20
+
+            echo "📊 Checking container status..."
+            sudo docker-compose -f docker-compose.prod.yml ps
 
             echo "✅ Deployment complete"
-            sudo docker ps
