@@ -20,14 +20,10 @@ jobs:
             set -e
 
             echo "📥 Updating code from git..."
-            # Clone or pull latest code
-            if [ -d "~/dungji-market-backend" ]; then
-              cd ~/dungji-market-backend
-              git pull origin main || git reset --hard origin/main
-            else
-              git clone https://github.com/dungjimarket-cyber/dungji-market-backend.git ~/dungji-market-backend
-              cd ~/dungji-market-backend
-            fi
+            # Remove existing directory and clone fresh
+            rm -rf ~/dungji-market-backend || true
+            git clone https://github.com/dungjimarket-cyber/dungji-market-backend.git ~/dungji-market-backend
+            cd ~/dungji-market-backend
 
             echo "📝 Checking .env file..."
             # Just set DEBUG=False in existing .env, keep everything else
