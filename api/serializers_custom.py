@@ -53,6 +53,7 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
             'target_participants', 'current_participants', 'is_completed',
             'status', 'status_display', 'expired_at',
             'seller_name', 'seller_type',
+            'online_discount_type',  # 할인 제공 방식 추가
             'primary_image', 'view_count', 'favorite_count', 'is_favorited',
             'created_at'
         ]
