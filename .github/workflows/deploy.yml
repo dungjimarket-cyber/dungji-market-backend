@@ -210,14 +210,15 @@ jobs:
           # 디스크 사용량 확인
           echo "💾 Checking disk usage..."
           df -h /
-
-          # 포트 8000 최종 확인
-          echo "🔍 Final port check..."
+          
+          # 포트 8000이 여전히 사용 중인지 최종 확인
           if sudo lsof -i :8000 2>/dev/null; then
-            echo "⚠️  Port 8000 still in use, attempting final cleanup..."
-            sudo lsof -i :8000
+            echo "⚠️  Port 8000 is still in use. Using alternative approach..."
+            # 컨테이너를 다른 포트로 실행하는 대안
+            export HOST_PORT=8001
+            echo "Using alternative port $HOST_PORT"
           else
-            echo "✅ Port 8000 is available"
+            export HOST_PORT=8000
           fi
           
           # 새 이미지 빌드 및 컨테이너 시작
