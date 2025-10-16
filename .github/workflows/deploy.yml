@@ -62,11 +62,21 @@ jobs:
             fi
 
             echo "🛑 Stopping all existing containers..."
+            # Force stop all containers
             sudo docker stop $(sudo docker ps -q) || true
             sudo docker rm $(sudo docker ps -aq) || true
 
+            # Kill any process using port 8000
+            echo "🔪 Killing processes on port 8000..."
+            sudo lsof -ti:8000 | xargs -r sudo kill -9 || true
+            sudo fuser -k 8000/tcp || true
+
+            # Wait a moment for ports to be released
+            sleep 3
+
             echo "🧹 Cleaning up Docker resources..."
             sudo docker system prune -f || true
+            sudo docker network prune -f || true
 
             echo "🏗️ Building and starting container (Django only, no nginx)..."
             # Use regular docker-compose but without nginx to avoid port 80 conflict
