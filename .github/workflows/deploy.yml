@@ -10,21 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Copy files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          source: "."
-          target: "~/dungji-market-backend"
-          rm: true
-          strip_components: 0
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -33,7 +18,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            cd ~/dungji-market-backend
+
+            echo "📥 Updating code from git..."
+            # Clone or pull latest code
+            if [ -d "~/dungji-market-backend" ]; then
+              cd ~/dungji-market-backend
+              git pull origin main || git reset --hard origin/main
+            else
+              git clone https://github.com/dungjimarket-cyber/dungji-market-backend.git ~/dungji-market-backend
+              cd ~/dungji-market-backend
+            fi
 
             echo "📝 Checking .env file..."
             # Just set DEBUG=False in existing .env, keep everything else
