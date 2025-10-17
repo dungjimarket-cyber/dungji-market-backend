@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    # container_name: dungji-market-backend  # 타임스탬프 방식 사용으로 주석 처리
+    container_name: dungji-backend-web  # 일관된 이름으로 권한 문제 해결
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/mediafiles
