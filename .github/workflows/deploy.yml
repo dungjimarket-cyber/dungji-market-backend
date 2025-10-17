@@ -3,89 +3,259 @@ name: Deploy Backend to EC2
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # 수동 실행 허용
+
+# 동시 실행 제한 - 이전 배포가 진행 중이면 취소하고 새로운 배포 시작
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production  # 이 설정이 queued 상태를 유발할 수 있음
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
+    - name: Checkout source
+      uses: actions/checkout@v4
 
-            echo "📥 Updating code from git..."
-            # Remove existing directory and clone fresh (with sudo for permission issues)
-            sudo rm -rf ~/dungji-market-backend || true
-            git clone https://github.com/dungjimarket-cyber/dungji-market-backend.git ~/dungji-market-backend
-            cd ~/dungji-market-backend
+    - name: Validate secrets
+      run: |
+        echo "Validating required secrets..."
+        if [ -z "${{ secrets.EC2_HOST }}" ]; then
+          echo "❌ EC2_HOST secret is not set!"
+          exit 1
+        fi
+        if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+          echo "❌ EC2_SSH_KEY secret is not set!"
+          exit 1
+        fi
+        echo "✅ All required secrets are configured"
 
-            echo "📝 Checking .env file..."
-            # Just set DEBUG=False in existing .env, keep everything else
-            if [ -f .env ]; then
-              echo "✅ .env file exists, updating DEBUG setting..."
-              sed -i 's/DEBUG=True/DEBUG=False/g' .env || true
-            else
-              echo "❌ .env file missing, creating basic one..."
-              # Copy from local .env if it exists, otherwise create minimal one
-              cat > .env << 'EOF'
-            # Django 기본 설정
-            DEBUG=False
-            SECRET_KEY=django-insecure-6yq+(hn%+5$vfx-rb3^0*s*627ei9*vls(w86ti(%!8o)@bslx
-            DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,[::1],0.0.0.0,54.180.82.238,api.dungjimarket.com
-            DJANGO_ENV=production
+    - name: Prepare files for deployment
+      run: |
+        # 배포용 임시 디렉토리 생성
+        mkdir -p deploy-files
+        # 필요한 파일만 복사 (venv, .git, .next 등 제외)
+        rsync -av --exclude='venv/' \
+                  --exclude='__pycache__/' \
+                  --exclude='*.pyc' \
+                  --exclude='*.log' \
+                  --exclude='.DS_Store' \
+                  --exclude='node_modules/' \
+                  --exclude='.env' \
+                  --exclude='*.sqlite3' \
+                  --exclude='db.sqlite3' \
+                  --exclude='server_new.log' \
+                  --exclude='.next/' \
+                  --exclude='deploy-files/' \
+                  ./ deploy-files/
+        echo "✅ Files prepared for deployment"
+        du -sh deploy-files/
+        # 디렉토리 내용 확인
+        echo "📁 Deploy files structure:"
+        ls -la deploy-files/ | head -20
+        
+    - name: Copy files to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        source: "deploy-files/*"
+        target: "~/dungji-market-backend"
+        rm: true
+        strip_components: 1
+        timeout: 120s
+        command_timeout: 5m
 
-            # 데이터베이스 설정
-            SQL_ENGINE=django.db.backends.postgresql
-            DB_NAME=dungjimarket
-            DB_USER=postgres
-            DB_PASSWORD=Hyperpets2025!
-            DB_HOST=hyper-pets-db.ctos6oueuros.ap-northeast-2.rds.amazonaws.com
-            DB_PORT=5432
+    - name: Upload .env to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # ENV_FILE이 설정되어 있으면 업데이트, 아니면 기존 파일 유지
+          if [ ! -z "${{ secrets.ENV_FILE }}" ]; then
+            echo "${{ secrets.ENV_FILE }}" > ~/dungji-market-backend/.env
+          else
+            echo "Using existing .env file on server"
+          fi
 
-            # CORS 설정
-            CORS_ALLOWED_ORIGINS=http://localhost:3000,https://www.dungjimarket.com,http://54.180.82.238:8000,https://api.dungjimarket.com,https://dungjimarket.com
-            CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://www.dungjimarket.com,http://54.180.82.238:8000,https://api.dungjimarket.com,https://dungjimarket.com
+          # Firebase 서비스 계정 키를 .env에 추가 (Base64 디코딩)
+          if [ -n "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "" >> ~/dungji-market-backend/.env
+            echo "FIREBASE_SERVICE_ACCOUNT=$(echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' | base64 -d)" >> ~/dungji-market-backend/.env
+            echo "✅ Firebase credentials added to .env"
+          fi
 
-            # 서버 설정
-            PORT=8000
-            FRONTEND_URL=https://www.dungjimarket.com
-
-            # AWS 설정
-            USE_S3=False
-            EOF
-            fi
-
-            echo "🛑 Stopping all existing containers..."
-            # Force stop all containers
-            sudo docker stop $(sudo docker ps -q) || true
-            sudo docker rm $(sudo docker ps -aq) || true
-
-            # Kill any process using port 8000
-            echo "🔪 Killing processes on port 8000..."
+    - name: Deploy application
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        timeout: 60s
+        command_timeout: 30m
+        script: |
+          set -e  # Exit on any error
+          
+          echo "🚀 Starting deployment process..."
+          cd ~/dungji-market-backend
+          
+          # 포트 8000을 사용하는 프로세스 종료
+          echo "🔍 Checking for processes using port 8000..."
+          
+          # 특정 문제 컨테이너는 이미 제거됨
+          
+          # 모든 Docker 컨테이너 중지 (포트 충돌 방지)
+          echo "Stopping all Docker containers that might use port 8000..."
+          sudo docker ps -q | xargs -r sudo docker stop || true
+          
+          # 모든 종료된 컨테이너 제거
+          echo "Removing all stopped containers..."
+          sudo docker container prune -f || true
+          
+          # netstat 대신 ss 사용 (Ubuntu에 기본 설치됨)
+          echo "Checking port usage..."
+          sudo ss -tlnp | grep :8000 || true
+          
+          # lsof로 포트 확인
+          if sudo lsof -i :8000; then
+            echo "🛑 Port 8000 is in use. Force killing processes..."
             sudo lsof -ti:8000 | xargs -r sudo kill -9 || true
-            sudo fuser -k 8000/tcp || true
+            sleep 5
+          fi
+          
+          # fuser로 추가 확인
+          sudo fuser -k 8000/tcp || true
+          sleep 2
+          
+          # 최종 확인
+          if sudo lsof -i :8000; then
+            echo "❌ ERROR: Port 8000 is still in use after cleanup!"
+            sudo lsof -i :8000
+            exit 1
+          else
+            echo "✅ Port 8000 is now available"
+          fi
 
-            # Wait a moment for ports to be released
-            sleep 3
-
-            echo "🧹 Cleaning up Docker resources..."
-            sudo docker system prune -f || true
-            sudo docker network prune -f || true
-
-            echo "🏗️ Building and starting container (Django only, no nginx)..."
-            # Use regular docker-compose but without nginx to avoid port 80 conflict
-            sudo docker-compose up -d --build --force-recreate web
-
-            echo "⏳ Waiting for service to start..."
-            sleep 15
-
-            echo "📊 Checking container status..."
-            sudo docker-compose ps
-
-            echo "✅ Simple deployment complete!"
+          # 필수 파일 확인
+          if [ ! -f .env ]; then
+            echo "❌ ERROR: .env file not found!"
+            echo "Please create .env file on the server first."
+            echo "Refer to DEPLOYMENT.md for configuration details."
+            exit 1
+          fi
+          echo "✅ Environment file found"
+          
+          if [ ! -f docker-compose.yml ]; then
+            echo "❌ ERROR: docker-compose.yml file not found!"
+            exit 1
+          fi
+          echo "✅ Docker Compose file found"
+          
+          # 기존 컨테이너 중지 및 정리
+          echo "🛑 Stopping existing containers..."
+          # docker-compose down이 실패할 수 있으므로 개별적으로 처리
+          sudo docker-compose stop || true
+          sudo docker-compose rm -f || true
+          sudo docker-compose down --remove-orphans || true
+          
+          # 모든 관련 컨테이너 강제 정리
+          echo "🧹 Cleaning up any remaining containers..."
+          # sudo를 사용하여 권한 문제 해결
+          sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker stop || true
+          sudo docker ps -a | grep dungji-market-backend | awk '{print $1}' | xargs -r sudo docker rm -f || true
+          
+          # 간소화된 정리 프로세스
+          echo "🧹 Cleaning up ALL dungji containers (including old timestamped ones)..."
+          # 타임스탬프가 포함된 모든 dungji 관련 컨테이너 정리
+          sudo docker ps -a | grep -E "dungji.*backend" | awk '{print $1}' | xargs -r sudo docker rm -f || true
+          sudo docker ps -a | grep dungji | awk '{print $1}' | xargs -r sudo docker rm -f || true
+          
+          # Docker 네트워크 정리 (타임스탬프 포함된 것들도)
+          echo "🧹 Cleaning up Docker networks..."
+          sudo docker network ls | grep -E "dungji.*backend" | awk '{print $2}' | xargs -r sudo docker network rm || true
+          sudo docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r sudo docker network rm || true
+          
+          # 사용하지 않는 Docker 리소스 정리
+          echo "🧹 Cleaning up unused Docker resources..."
+          sudo docker system prune -f || true
+          
+          # 디스크 공간 확보를 위한 추가 정리
+          echo "🧹 Deep cleaning Docker resources to free up disk space..."
+          sudo docker image prune -a -f || true
+          sudo docker volume prune -f || true
+          sudo docker builder prune -a -f || true
+          
+          # 디스크 사용량 확인
+          echo "💾 Checking disk usage..."
+          df -h /
+          
+          # 포트 8000이 여전히 사용 중인지 최종 확인
+          if sudo lsof -i :8000 2>/dev/null; then
+            echo "⚠️  Port 8000 is still in use. Using alternative approach..."
+            # 컨테이너를 다른 포트로 실행하는 대안
+            export HOST_PORT=8001
+            echo "Using alternative port $HOST_PORT"
+          else
+            export HOST_PORT=8000
+          fi
+          
+          # 새 이미지 빌드 및 컨테이너 시작
+          echo "🏗️  Building and starting containers..."
+          # 고정된 프로젝트 이름 사용 (기존 컨테이너를 교체)
+          PROJECT_NAME="dungji-backend"
+          echo "Using project name: $PROJECT_NAME"
+          export PROJECT_NAME
+          sudo docker-compose -p $PROJECT_NAME up --build -d --force-recreate --remove-orphans
+          
+          # 컨테이너 시작 대기
+          echo "⏳ Waiting for containers to be ready..."
+          sleep 10
+          
+          # 컨테이너 상태 확인
+          echo "📊 Checking container status..."
+          sudo docker-compose -p $PROJECT_NAME ps
+          
+          # 웹 서비스 확인 (간소화)
+          echo "🔍 Checking web service..."
+          if sudo docker-compose -p $PROJECT_NAME ps | grep -q "web.*Up"; then
+            echo "✅ Web container is running"
+          else
+            echo "❌ Web container is not running"
+            sudo docker-compose -p $PROJECT_NAME logs web
+            exit 1
+          fi
+          
+          # 마이그레이션 실행
+          echo "🔄 Running database migrations..."
+          sudo docker-compose -p $PROJECT_NAME exec -T web python manage.py migrate --noinput
+          
+          # 정적 파일 수집
+          echo "📦 Collecting static files..."
+          sudo docker-compose -p $PROJECT_NAME exec -T web python manage.py collectstatic --noinput
+          
+          # 최종 상태 확인
+          echo "🏥 Final health check..."
+          sudo docker-compose -p $PROJECT_NAME ps
+          
+          # 로그 출력
+          echo "📋 Recent application logs:"
+          sudo docker-compose -p $PROJECT_NAME logs --tail=20 web
+          
+          # 간단한 API 테스트 (빠른 확인)
+          echo "🧪 Testing API endpoint..."
+          sleep 5
+          if curl -f -s http://localhost:8000/api/health/ > /dev/null 2>&1; then
+            echo "✅ API health check passed"
+          else
+            echo "⚠️  API health check failed (will continue)"
+          fi
+          
+          echo "🎉 Deployment completed successfully!"
+          echo "📝 Application is running at: http://${{ secrets.EC2_HOST }}:8000"
