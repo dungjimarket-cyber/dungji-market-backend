@@ -111,6 +111,21 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
+        # 전화번호 유효성 검증
+        if not self.is_valid_phone_number(phone_number):
+            error_msg = "유효하지 않은 전화번호 형식입니다"
+            logger.warning(f"[SMS] 유효하지 않은 전화번호: {phone_number}")
+            log_sms(
+                phone_number=phone_number,
+                message_type='groupbuy_completion',
+                message_content='',
+                status='failed',
+                error_message=error_msg,
+                user=user,
+                custom_groupbuy=custom_groupbuy
+            )
+            return False, error_msg
+
         # 90바이트 이하로 최적화 (약 79바이트)
         # 제목이 길 경우 자동으로 잘림
         max_title_length = 12  # 한글 6자 (12바이트)
@@ -184,6 +199,21 @@ class SMSService:
         Returns:
             (성공여부, 에러메시지)
         """
+        # 전화번호 유효성 검증
+        if not self.is_valid_phone_number(phone_number):
+            error_msg = "유효하지 않은 전화번호 형식입니다"
+            logger.warning(f"[SMS] 유효하지 않은 전화번호: {phone_number}")
+            log_sms(
+                phone_number=phone_number,
+                message_type='groupbuy_completion_seller',
+                message_content='',
+                status='failed',
+                error_message=error_msg,
+                user=user,
+                custom_groupbuy=custom_groupbuy
+            )
+            return False, error_msg
+
         # 90바이트 이하로 최적화 (약 79바이트)
         # 제목이 길 경우 자동으로 잘림
         max_title_length = 12  # 한글 6자 (12바이트)
@@ -283,7 +313,7 @@ class SMSService:
             data['title'] = title
 
         try:
-            response = requests.post(url, data=data)
+            response = requests.post(url, data=data, timeout=10)  # 10초 타임아웃
             result = response.json()
 
             if result.get('result_code') == '1':
@@ -346,21 +376,44 @@ class SMSService:
         return self._send_mock_sms(phone_number, message)
     
     @staticmethod
+    def is_valid_phone_number(phone_number: str) -> bool:
+        """한국 전화번호 유효성 검증
+
+        Args:
+            phone_number: 검증할 전화번호
+
+        Returns:
+            유효하면 True, 아니면 False
+        """
+        import re
+
+        if not phone_number:
+            return False
+
+        # 숫자만 추출
+        phone = ''.join(filter(str.isdigit, phone_number))
+
+        # 한국 휴대폰 번호 패턴 (010, 011, 016, 017, 018, 019)
+        pattern = r'^01[0-9]\d{7,8}$'
+
+        return bool(re.match(pattern, phone))
+
+    @staticmethod
     def normalize_phone_number(phone_number: str) -> str:
         """전화번호 정규화
-        
+
         010-1234-5678 -> 01012345678
         """
         return ''.join(filter(str.isdigit, phone_number))
-    
+
     @staticmethod
     def format_phone_number(phone_number: str) -> str:
         """전화번호 포맷팅
-        
+
         01012345678 -> 010-1234-5678
         """
         phone = SMSService.normalize_phone_number(phone_number)
-        
+
         if len(phone) == 11:
             return f"{phone[:3]}-{phone[3:7]}-{phone[7:]}"
         elif len(phone) == 10:

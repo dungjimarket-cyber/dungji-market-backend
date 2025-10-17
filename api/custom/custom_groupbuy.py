@@ -589,7 +589,9 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         """최근 종료된 커스텀 공구 조회 (노쇼신고용)
 
         종료 후 15일 이내의 최근 3건 조회
-        판매자/구매자 구분하여 조회
+        - 내가 판매자인 공구: 구매자 노쇼 신고용
+        - 내가 참여자인 공구: 판매자 노쇼 신고용
+        role 무관, 관계 기반 조회
         """
         from datetime import timedelta
 
@@ -601,18 +603,19 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         logger.info(f"recent_completed called for custom groupbuy user: {user.id}")
 
+        groupbuy_ids = set()
         data = []
 
         try:
-            # 판매자인 경우: 내가 생성하고 완료된 공구
-            if hasattr(user, 'role') and user.role == 'seller':
-                groupbuys = CustomGroupBuy.objects.filter(
-                    seller=user,
-                    status='completed',
-                    completed_at__gte=cutoff_date
-                ).prefetch_related('images').order_by('-completed_at')[:limit]
+            # 1. 내가 판매자(생성자)인 완료된 공구
+            seller_groupbuys = CustomGroupBuy.objects.filter(
+                seller=user,
+                status='completed',
+                completed_at__gte=cutoff_date
+            ).prefetch_related('images').order_by('-completed_at')
 
-                for groupbuy in groupbuys:
+            for groupbuy in seller_groupbuys:
+                if groupbuy.id not in groupbuy_ids:
                     try:
                         # 대표 이미지 가져오기
                         primary_image = groupbuy.images.filter(is_primary=True).first()
@@ -629,26 +632,29 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                             'primary_image': primary_image.image_url if primary_image else None,
                             'completed_at': groupbuy.completed_at.isoformat(),
                             'days_ago': days_ago,
-                            'current_participants': groupbuy.current_participants
+                            'current_participants': groupbuy.current_participants,
+                            'is_seller': True  # 내가 판매자
                         })
+                        groupbuy_ids.add(groupbuy.id)
                     except Exception as e:
-                        logger.error(f"Error processing completed groupbuy {groupbuy.id}: {e}")
+                        logger.error(f"Error processing seller groupbuy {groupbuy.id}: {e}")
                         continue
 
-            # 구매자인 경우: 내가 참여하고 완료된 공구
-            else:
-                participants = CustomParticipant.objects.filter(
-                    user=user,
-                    status='confirmed'
-                ).select_related('custom_groupbuy').filter(
-                    custom_groupbuy__status='completed',
-                    custom_groupbuy__completed_at__gte=cutoff_date
-                ).order_by('-custom_groupbuy__completed_at')[:limit]
+            # 2. 내가 참여자인 완료된 공구 (판매자가 아닌 것만)
+            participants = CustomParticipant.objects.filter(
+                user=user,
+                status='confirmed'
+            ).select_related('custom_groupbuy').filter(
+                custom_groupbuy__status='completed',
+                custom_groupbuy__completed_at__gte=cutoff_date
+            ).exclude(
+                custom_groupbuy__seller=user  # 내가 판매자인 공구는 제외 (중복 방지)
+            ).order_by('-custom_groupbuy__completed_at')
 
-                for participant in participants:
+            for participant in participants:
+                groupbuy = participant.custom_groupbuy
+                if groupbuy.id not in groupbuy_ids:
                     try:
-                        groupbuy = participant.custom_groupbuy
-
                         # 대표 이미지 가져오기
                         primary_image = groupbuy.images.filter(is_primary=True).first()
                         if not primary_image:
@@ -666,13 +672,19 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                             'days_ago': days_ago,
                             'current_participants': groupbuy.current_participants,
                             'seller_name': groupbuy.seller.username,
-                            'seller_id': groupbuy.seller.id
+                            'seller_id': groupbuy.seller.id,
+                            'is_seller': False  # 내가 참여자
                         })
+                        groupbuy_ids.add(groupbuy.id)
                     except Exception as e:
                         logger.error(f"Error processing participant {participant.id}: {e}")
                         continue
 
-            logger.info(f"Found {len(data)} recent completed custom groupbuys")
+            # 3. 완료일 기준 정렬 후 limit 적용
+            data.sort(key=lambda x: x['completed_at'], reverse=True)
+            data = data[:limit]
+
+            logger.info(f"Found {len(data)} recent completed custom groupbuys (seller: {len([d for d in data if d.get('is_seller')])}, participant: {len([d for d in data if not d.get('is_seller')])})")
             return Response(data)
 
         except Exception as e:
