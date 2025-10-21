@@ -607,11 +607,13 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         data = []
 
         try:
-            # 1. 내가 판매자(생성자)인 완료된 공구
+            # 1. 내가 판매자(생성자)인 완료된 공구 (쿠폰전용 제외)
             seller_groupbuys = CustomGroupBuy.objects.filter(
                 seller=user,
                 status='completed',
                 completed_at__gte=cutoff_date
+            ).exclude(
+                pricing_type='coupon_only'  # 쿠폰전용은 노쇼 신고 대상 아님
             ).prefetch_related('images').order_by('-completed_at')
 
             for groupbuy in seller_groupbuys:
@@ -640,7 +642,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                         logger.error(f"Error processing seller groupbuy {groupbuy.id}: {e}")
                         continue
 
-            # 2. 내가 참여자인 완료된 공구 (판매자가 아닌 것만)
+            # 2. 내가 참여자인 완료된 공구 (판매자가 아닌 것만, 쿠폰전용 제외)
             participants = CustomParticipant.objects.filter(
                 user=user,
                 status='confirmed'
@@ -649,6 +651,8 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 custom_groupbuy__completed_at__gte=cutoff_date
             ).exclude(
                 custom_groupbuy__seller=user  # 내가 판매자인 공구는 제외 (중복 방지)
+            ).exclude(
+                custom_groupbuy__pricing_type='coupon_only'  # 쿠폰전용은 노쇼 신고 대상 아님
             ).order_by('-custom_groupbuy__completed_at')
 
             for participant in participants:

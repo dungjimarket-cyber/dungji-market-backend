@@ -126,10 +126,16 @@ class SMSService:
             )
             return False, error_msg
 
-        # 90바이트 이하로 최적화 (약 79바이트)
-        # 제목이 길 경우 자동으로 잘림
-        max_title_length = 12  # 한글 6자 (12바이트)
-        short_title = title[:max_title_length] if len(title) > max_title_length else title
+        # 90바이트 이하로 최적화 - 바이트 기반 제목 자르기
+        # 기본 텍스트 바이트 계산
+        base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/my"
+        base_bytes = self.calculate_sms_length(base_text)
+        available_bytes = 90 - base_bytes  # 제목에 사용 가능한 바이트
+
+        # 제목을 바이트 기준으로 자르기
+        short_title = title
+        while self.calculate_sms_length(short_title) > available_bytes and len(short_title) > 0:
+            short_title = short_title[:-1]
 
         message = (
             f"[둥지마켓] 공구마감!\n"
@@ -214,10 +220,16 @@ class SMSService:
             )
             return False, error_msg
 
-        # 90바이트 이하로 최적화 (약 79바이트)
-        # 제목이 길 경우 자동으로 잘림
-        max_title_length = 12  # 한글 6자 (12바이트)
-        short_title = title[:max_title_length] if len(title) > max_title_length else title
+        # 90바이트 이하로 최적화 - 바이트 기반 제목 자르기
+        # 기본 텍스트 바이트 계산
+        base_text = "[둥지마켓] 공구마감!\n\n참여자 정보를 확인해주세요\ndungjimarket.com/my"
+        base_bytes = self.calculate_sms_length(base_text)
+        available_bytes = 90 - base_bytes  # 제목에 사용 가능한 바이트
+
+        # 제목을 바이트 기준으로 자르기
+        short_title = title
+        while self.calculate_sms_length(short_title) > available_bytes and len(short_title) > 0:
+            short_title = short_title[:-1]
 
         message = (
             f"[둥지마켓] 공구마감!\n"
@@ -268,6 +280,98 @@ class SMSService:
             )
 
             return False, error_msg
+
+    def send_bulk_sms(self, phone_numbers: list, message: str, title: str = '[둥지마켓]') -> Tuple[int, int]:
+        """대량 SMS 발송 (알리고 API)
+
+        Args:
+            phone_numbers: 수신자 전화번호 리스트
+            message: 메시지 내용
+            title: LMS 제목
+
+        Returns:
+            (성공 건수, 실패 건수)
+        """
+        if not phone_numbers:
+            return 0, 0
+
+        # 전화번호 유효성 검증 및 형식 통일
+        valid_numbers = []
+        for number in phone_numbers:
+            if self.is_valid_phone_number(number):
+                valid_numbers.append(number.replace('-', ''))
+
+        if not valid_numbers:
+            logger.warning("유효한 전화번호가 없습니다")
+            return 0, len(phone_numbers)
+
+        # 알리고는 최대 1000건까지 한 번에 발송 가능
+        # 콤마로 구분하여 전송
+        receivers = ','.join(valid_numbers)
+
+        # 메시지 타입 자동 선택
+        msg_type = self.get_message_type(message)
+
+        if self.provider == 'mock':
+            logger.info(f"[MOCK BULK SMS] To: {len(valid_numbers)}명, Type: {msg_type}")
+            logger.info(f"[MOCK BULK SMS] Message: {message}")
+            return len(valid_numbers), 0
+        elif self.provider == 'aligo':
+            return self._send_aligo_bulk_sms(receivers, message, title, msg_type)
+        else:
+            # 다른 provider는 개별 발송으로 fallback
+            logger.warning(f"{self.provider}는 대량 발송 미지원, 개별 발송으로 처리")
+            success_count = 0
+            fail_count = 0
+            for number in valid_numbers:
+                success, _ = self._send_aligo_sms(number, message, title)
+                if success:
+                    success_count += 1
+                else:
+                    fail_count += 1
+            return success_count, fail_count
+
+    def _send_aligo_bulk_sms(self, receivers: str, message: str, title: str, msg_type: str) -> Tuple[int, int]:
+        """알리고 대량 SMS 발송"""
+        import requests
+
+        # 개발 모드
+        if settings.DEBUG and not getattr(settings, 'USE_REAL_SMS', False):
+            receiver_count = len(receivers.split(','))
+            logger.info(f"[알리고 대량 개발모드] {receiver_count}명, Type: {msg_type}")
+            return receiver_count, 0
+
+        url = "https://apis.aligo.in/send/"
+        data = {
+            'key': self.api_key,
+            'user_id': getattr(settings, 'ALIGO_USER_ID', ''),
+            'sender': self.sender_number,
+            'receiver': receivers,  # 콤마로 구분된 전화번호들
+            'msg': message,
+            'msg_type': msg_type,
+        }
+
+        if msg_type == 'LMS':
+            data['title'] = title
+
+        try:
+            response = requests.post(url, data=data, timeout=30)  # 대량은 30초 타임아웃
+            result = response.json()
+
+            if result.get('result_code') == '1':
+                success_count = int(result.get('success_cnt', 0))
+                fail_count = int(result.get('error_cnt', 0))
+                logger.info(f"대량 SMS 발송 완료: 성공 {success_count}건, 실패 {fail_count}건")
+                return success_count, fail_count
+            else:
+                error_msg = result.get('message', 'SMS 발송 실패')
+                logger.error(f"알리고 대량 SMS 발송 실패: {error_msg}")
+                receiver_count = len(receivers.split(','))
+                return 0, receiver_count
+        except Exception as e:
+            logger.error(f"알리고 대량 API 오류: {e}", exc_info=True)
+            receiver_count = len(receivers.split(','))
+            return 0, receiver_count
 
     def _send_mock_sms(self, phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
         """개발용 Mock SMS 발송"""

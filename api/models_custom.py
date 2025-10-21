@@ -427,37 +427,43 @@ class CustomGroupBuy(models.Model):
 
             logger.info(f"[ISSUE] 쿠폰 발급 완료 (coupon_only): {self.title} ({participant_count}명)")
 
-            # SMS 알림 발송 (참여자들에게)
-            logger.info(f"[ISSUE] SMS 발송 시작")
+            # SMS 알림 발송 (참여자들에게 - 대량 발송)
+            logger.info(f"[ISSUE] SMS 대량 발송 시작")
             sms_service = SMSService()
-            sms_success_count = 0
-            sms_fail_count = 0
 
-            for i, participant in enumerate(participants):
-                logger.info(f"[ISSUE] SMS 발송 {i+1}/{participant_count} - user:{participant.user.username}")
+            # 전화번호 수집
+            phone_numbers = []
+            for participant in participants:
                 if hasattr(participant.user, 'phone_number') and participant.user.phone_number:
-                    try:
-                        logger.info(f"[ISSUE] SMS 발송 시도 - phone:{participant.user.phone_number}")
-                        success, error = sms_service.send_custom_groupbuy_completion(
-                            phone_number=participant.user.phone_number,
-                            title=self.title,
-                            user=participant.user,
-                            custom_groupbuy=self
-                        )
-                        if success:
-                            sms_success_count += 1
-                            logger.info(f"[ISSUE] SMS 발송 성공: {participant.user.username} ({participant.user.phone_number})")
-                        else:
-                            sms_fail_count += 1
-                            logger.warning(f"[ISSUE] SMS 발송 실패: {participant.user.username} - {error}")
-                    except Exception as e:
-                        sms_fail_count += 1
-                        logger.error(f"[ISSUE] SMS 발송 예외: {participant.user.username} - {str(e)}", exc_info=True)
+                    phone_numbers.append(participant.user.phone_number)
                 else:
-                    sms_fail_count += 1
                     logger.warning(f"[ISSUE] 전화번호 없음: {participant.user.username}")
 
-            logger.info(f"[ISSUE] SMS 알림 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
+            # 대량 발송
+            if phone_numbers:
+                try:
+                    # 90바이트 메시지 생성
+                    base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/my"
+                    base_bytes = sms_service.calculate_sms_length(base_text)
+                    available_bytes = 90 - base_bytes
+
+                    short_title = self.title
+                    while sms_service.calculate_sms_length(short_title) > available_bytes and len(short_title) > 0:
+                        short_title = short_title[:-1]
+
+                    message = (
+                        f"[둥지마켓] 공구마감!\n"
+                        f"{short_title}\n"
+                        f"할인정보를 확인해주세요\n"
+                        f"dungjimarket.com/my"
+                    )
+
+                    sms_success_count, sms_fail_count = sms_service.send_bulk_sms(phone_numbers, message)
+                    logger.info(f"[ISSUE] SMS 대량 발송 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
+                except Exception as e:
+                    logger.error(f"[ISSUE] SMS 대량 발송 실패: {str(e)}", exc_info=True)
+            else:
+                logger.warning(f"[ISSUE] 발송할 전화번호 없음")
 
             # 판매자에게도 SMS 발송
             logger.info(f"[ISSUE] 판매자 SMS 발송 시작")
@@ -549,35 +555,43 @@ class CustomGroupBuy(models.Model):
 
         logger.info(f"할인 발급 완료: {self.title} ({participant_count}명)")
 
-        # SMS 알림 발송 (참여자들에게만)
+        # SMS 알림 발송 (참여자들에게 - 대량 발송)
+        logger.info(f"SMS 대량 발송 시작")
         sms_service = SMSService()
-        sms_success_count = 0
-        sms_fail_count = 0
 
+        # 전화번호 수집
+        phone_numbers = []
         for participant in participants:
-            # 전화번호가 있는 참여자에게만 발송
             if hasattr(participant.user, 'phone_number') and participant.user.phone_number:
-                try:
-                    success, error = sms_service.send_custom_groupbuy_completion(
-                        phone_number=participant.user.phone_number,
-                        title=self.title,
-                        user=participant.user,
-                        custom_groupbuy=self
-                    )
-                    if success:
-                        sms_success_count += 1
-                        logger.info(f"SMS 발송 성공: {participant.user.username} ({participant.user.phone_number})")
-                    else:
-                        sms_fail_count += 1
-                        logger.warning(f"SMS 발송 실패: {participant.user.username} - {error}")
-                except Exception as e:
-                    sms_fail_count += 1
-                    logger.error(f"SMS 발송 예외: {participant.user.username} - {str(e)}")
+                phone_numbers.append(participant.user.phone_number)
             else:
-                sms_fail_count += 1
                 logger.warning(f"전화번호 없음: {participant.user.username}")
 
-        logger.info(f"SMS 알림 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
+        # 대량 발송
+        if phone_numbers:
+            try:
+                # 90바이트 메시지 생성
+                base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/my"
+                base_bytes = sms_service.calculate_sms_length(base_text)
+                available_bytes = 90 - base_bytes
+
+                short_title = self.title
+                while sms_service.calculate_sms_length(short_title) > available_bytes and len(short_title) > 0:
+                    short_title = short_title[:-1]
+
+                message = (
+                    f"[둥지마켓] 공구마감!\n"
+                    f"{short_title}\n"
+                    f"할인정보를 확인해주세요\n"
+                    f"dungjimarket.com/my"
+                )
+
+                sms_success_count, sms_fail_count = sms_service.send_bulk_sms(phone_numbers, message)
+                logger.info(f"SMS 대량 발송 완료: {self.title} - 성공:{sms_success_count}, 실패:{sms_fail_count}")
+            except Exception as e:
+                logger.error(f"SMS 대량 발송 실패: {str(e)}", exc_info=True)
+        else:
+            logger.warning(f"발송할 전화번호 없음")
 
         # 판매자에게도 SMS 발송
         if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
@@ -692,6 +706,35 @@ class CustomGroupBuy(models.Model):
                     push_title='커스텀 공구 종료'
                 )
 
+                # 판매자에게 SMS 발송
+                from api.utils.sms_service import SMSService
+                sms_service = SMSService()
+                if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
+                    try:
+                        short_title = self.title[:20] if len(self.title) > 20 else self.title
+                        sms_message = f"[둥지마켓] {short_title} 공구가 인원미달로 종료되었습니다({self.current_participants}/{self.target_participants}명)"
+                        sms_service._send_aligo_sms(self.seller.phone_number, sms_message)
+                        logger.info(f"판매자 SMS 발송 완료 (인원미달): {self.seller.username}")
+                    except Exception as e:
+                        logger.error(f"판매자 SMS 발송 실패 (인원미달): {e}")
+
+            # 참여자들에게 SMS 발송 (대량)
+            from api.utils.sms_service import SMSService
+            sms_service = SMSService()
+            phone_numbers = []
+            for participant in participants:
+                if hasattr(participant.user, 'phone_number') and participant.user.phone_number:
+                    phone_numbers.append(participant.user.phone_number)
+
+            if phone_numbers:
+                try:
+                    short_title = self.title[:20] if len(self.title) > 20 else self.title
+                    sms_message = f"[둥지마켓] {short_title} 공구가 인원미달로 종료되었습니다"
+                    sms_success_count, sms_fail_count = sms_service.send_bulk_sms(phone_numbers, sms_message)
+                    logger.info(f"참여자 SMS 발송 완료 (인원미달): 성공 {sms_success_count}건, 실패 {sms_fail_count}건")
+                except Exception as e:
+                    logger.error(f"참여자 SMS 발송 실패 (인원미달): {e}")
+
             logger.info(f"공구 만료 (인원 미달): {self.title}")
 
     def cancel(self, seller_user=None, reason=''):
@@ -707,6 +750,9 @@ class CustomGroupBuy(models.Model):
         if self.status == 'cancelled':
             logger.warning(f"공구 이미 취소됨: {self.title}")
             return
+
+        # 판매결정 상태에서 취소하는 경우인지 확인
+        is_pending_seller_cancel = (self.status == 'pending_seller')
 
         # 상태 변경
         self.status = 'cancelled'
@@ -726,6 +772,25 @@ class CustomGroupBuy(models.Model):
                 message=cancel_message,
                 push_title='커스텀 공구 취소'
             )
+
+        # 판매결정 상태에서의 취소인 경우 참여자들에게 SMS 발송
+        if is_pending_seller_cancel:
+            from api.utils.sms_service import SMSService
+            sms_service = SMSService()
+
+            phone_numbers = []
+            for participant in participants:
+                if hasattr(participant.user, 'phone_number') and participant.user.phone_number:
+                    phone_numbers.append(participant.user.phone_number)
+
+            if phone_numbers:
+                try:
+                    short_title = self.title[:20] if len(self.title) > 20 else self.title
+                    sms_message = f"[둥지마켓] {short_title} 공구가 인원미달로 취소되었습니다"
+                    sms_success_count, sms_fail_count = sms_service.send_bulk_sms(phone_numbers, sms_message)
+                    logger.info(f"참여자 SMS 발송 완료 (판매결정 취소): 성공 {sms_success_count}건, 실패 {sms_fail_count}건")
+                except Exception as e:
+                    logger.error(f"참여자 SMS 발송 실패 (판매결정 취소): {e}")
 
         logger.info(f"공구 취소: {self.title} (참여자 {self.current_participants}명, 사유: {reason or '없음'})")
 
