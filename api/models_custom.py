@@ -231,7 +231,11 @@ class CustomGroupBuy(models.Model):
             # 여러 상품의 최종 가격 리스트 반환
             prices = []
             for product in self.products:
-                if 'original_price' in product and 'discount_rate' in product:
+                # final_price가 이미 있으면 그 값 사용 (사용자가 직접 입력한 값)
+                if 'final_price' in product and product['final_price']:
+                    prices.append(int(product['final_price']))
+                # 없으면 계산 (하위 호환성)
+                elif 'original_price' in product and 'discount_rate' in product:
                     final = int(product['original_price'] * (100 - product['discount_rate']) / 100)
                     prices.append(final)
             return prices if prices else None
