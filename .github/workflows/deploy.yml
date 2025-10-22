@@ -106,47 +106,13 @@ jobs:
           echo "🚀 Starting deployment process..."
           cd ~/dungji-market-backend
           
-          # 포트 8000을 사용하는 프로세스 종료
-          echo "🔍 Checking for processes using port 8000..."
-          
-          # 특정 문제 컨테이너는 이미 제거됨
-          
-          # 모든 Docker 컨테이너 강제 종료 (포트 충돌 방지)
-          echo "Force killing all Docker containers that might use port 8000..."
-          # kill이 stop보다 권한 문제에 더 효과적
-          sudo docker ps -q | xargs -r sudo docker kill || true
-
-          # 모든 컨테이너 강제 제거
-          echo "Force removing all containers..."
-          sudo docker ps -aq | xargs -r sudo docker rm -f || true
-
-          # 모든 종료된 컨테이너 제거
-          echo "Removing all stopped containers..."
-          sudo docker container prune -f || true
-          
-          # netstat 대신 ss 사용 (Ubuntu에 기본 설치됨)
-          echo "Checking port usage..."
-          sudo ss -tlnp | grep :8000 || true
-          
-          # lsof로 포트 확인
-          if sudo lsof -i :8000; then
-            echo "🛑 Port 8000 is in use. Force killing processes..."
-            sudo lsof -ti:8000 | xargs -r sudo kill -9 || true
-            sleep 5
-          fi
-          
-          # fuser로 추가 확인
-          sudo fuser -k 8000/tcp || true
-          sleep 2
-          
-          # 최종 확인
-          if sudo lsof -i :8000; then
-            echo "❌ ERROR: Port 8000 is still in use after cleanup!"
-            sudo lsof -i :8000
-            exit 1
-          else
-            echo "✅ Port 8000 is now available"
-          fi
+          # 배포 전 상태 확인
+          echo "🔍 Pre-deployment check..."
+          echo "Current containers:"
+          sudo docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+          echo "Port 8000 usage:"
+          sudo lsof -i :8000 || echo "Port 8000 is free"
+          echo ""
 
           # 필수 파일 확인
           if [ ! -f .env ]; then
@@ -163,47 +129,48 @@ jobs:
           fi
           echo "✅ Docker Compose file found"
           
-          # 특정 컨테이너 이름으로 기존 컨테이너 강제 정리
-          echo "🛑 Force killing and removing specific container..."
-          # container_name이 지정되어 있으므로 명확한 이름으로 정리
-          sudo docker kill dungji-backend-web 2>/dev/null || echo "Container not running"
-          sudo docker rm -f dungji-backend-web 2>/dev/null || echo "Container not found"
+          # 🔥 Nuclear cleanup: PID 레벨에서 강제 정리
+          echo "🔥 Nuclear cleanup: Killing container processes at PID level..."
 
-          # 추가 안전장치: 모든 dungji 관련 컨테이너 정리
-          echo "🧹 Cleaning up any remaining dungji containers..."
-          sudo docker ps -a --format '{{.Names}}' | grep -E 'dungji|backend' | xargs -r sudo docker kill 2>/dev/null || true
-          sudo docker ps -a --format '{{.Names}}' | grep -E 'dungji|backend' | xargs -r sudo docker rm -f 2>/dev/null || true
+          # 모든 dungji 관련 컨테이너의 PID 찾아서 kill
+          for container_id in $(sudo docker ps -aq --filter "name=dungji"); do
+            if [ ! -z "$container_id" ]; then
+              echo "Found container: $container_id"
+              PID=$(sudo docker inspect -f '{{.State.Pid}}' "$container_id" 2>/dev/null || echo "")
+              if [ ! -z "$PID" ] && [ "$PID" != "0" ]; then
+                echo "Killing PID $PID for container $container_id"
+                sudo kill -9 "$PID" 2>/dev/null || echo "PID already dead"
+              fi
+            fi
+          done
 
-          # Docker Compose로 정리 시도
-          sudo docker-compose down --remove-orphans 2>/dev/null || true
-          
-          # Docker 네트워크 정리 (타임스탬프 포함된 것들도)
-          echo "🧹 Cleaning up Docker networks..."
-          sudo docker network ls | grep -E "dungji.*backend" | awk '{print $2}' | xargs -r sudo docker network rm || true
-          sudo docker network ls | grep dungji-market-backend | awk '{print $2}' | xargs -r sudo docker network rm || true
-          
-          # 사용하지 않는 Docker 리소스 정리
-          echo "🧹 Cleaning up unused Docker resources..."
-          sudo docker system prune -f || true
-          
-          # 디스크 공간 확보를 위한 추가 정리
-          echo "🧹 Deep cleaning Docker resources to free up disk space..."
-          sudo docker image prune -a -f || true
-          sudo docker volume prune -f || true
-          sudo docker builder prune -a -f || true
-          
+          # Docker system prune으로 완전 정리 (좀비 컨테이너 포함)
+          echo "🧹 Running docker system prune (removing ALL stopped containers, networks, images)..."
+          sudo docker system prune --all --force --volumes || true
+
+          # 최종 확인
+          echo "📊 Remaining containers after cleanup:"
+          sudo docker ps -a
+
           # 디스크 사용량 확인
-          echo "💾 Checking disk usage..."
-          df -h /
-          
-          # 포트 8000이 여전히 사용 중인지 최종 확인
+          echo "💾 Disk usage after cleanup:"
+          df -h / | head -2
+
+          # 포트 8000 최종 확인 및 강제 해제
+          echo "🔍 Checking port 8000..."
           if sudo lsof -i :8000 2>/dev/null; then
-            echo "⚠️  Port 8000 is still in use. Using alternative approach..."
-            # 컨테이너를 다른 포트로 실행하는 대안
-            export HOST_PORT=8001
-            echo "Using alternative port $HOST_PORT"
+            echo "⚠️  Port 8000 still in use, force killing..."
+            sudo fuser -k 8000/tcp || true
+            sleep 2
+          fi
+
+          # 최종 포트 확인
+          if sudo lsof -i :8000 2>/dev/null; then
+            echo "❌ ERROR: Port 8000 is still in use after all cleanup attempts!"
+            sudo lsof -i :8000
+            exit 1
           else
-            export HOST_PORT=8000
+            echo "✅ Port 8000 is now available"
           fi
           
           # 새 이미지 빌드 및 컨테이너 시작
