@@ -235,6 +235,10 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             'participants'
         )
 
+        # 목록 조회 시 취소/기간만료 건 제외
+        if self.action == 'list':
+            queryset = queryset.exclude(status__in=['cancelled', 'expired'])
+
         type_filter = self.request.query_params.get('type')
         if type_filter:
             queryset = queryset.filter(type=type_filter)
