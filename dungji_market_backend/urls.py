@@ -75,6 +75,7 @@ from api.views_partner import (
 from api.views_partner_bank import (
     register_bank_account, get_bank_account, delete_bank_account, verify_bank_account
 )
+from api.views_naver_test import test_naver_shopping_api
 from api.views_inquiry import InquiryViewSet
 from api.views_notice import NoticeViewSet
 from api.views_popup import PopupViewSet
@@ -308,6 +309,9 @@ urlpatterns = [
 
     # 링크 미리보기 API
     path('api/link-preview/', get_link_preview, name='link_preview'),
+
+    # 네이버 쇼핑 API 테스트
+    path('api/test-naver-shopping/', test_naver_shopping_api, name='test_naver_shopping'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
