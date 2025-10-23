@@ -220,21 +220,9 @@ class SMSService:
             )
             return False, error_msg
 
-        # 90바이트 이하로 최적화 - 바이트 기반 제목 자르기
-        # 기본 텍스트 바이트 계산
-        base_text = "[둥지마켓] 공구마감!\n\n참여자 정보를 확인해주세요\ndungjimarket.com/my"
-        base_bytes = self.calculate_sms_length(base_text)
-        available_bytes = 90 - base_bytes  # 제목에 사용 가능한 바이트
-
-        # 제목을 바이트 기준으로 자르기
-        short_title = title
-        while self.calculate_sms_length(short_title) > available_bytes and len(short_title) > 0:
-            short_title = short_title[:-1]
-
+        # 90바이트 이하로 최적화 - 제목 없이 간단한 멘트
         message = (
-            f"[둥지마켓] 공구마감!\n"
-            f"{short_title}\n"
-            f"참여자 정보를 확인해주세요\n"
+            f"공구가 마감되었습니다! 참여자정보를 확인해주세요^^\n"
             f"dungjimarket.com/my"
         )
 
