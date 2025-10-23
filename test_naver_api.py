@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 # .env 파일 로드
 load_dotenv()
 
-NAVER_CLIENT_ID = os.getenv('NAVER_CLIENT_ID', '94jb615v38')
-NAVER_CLIENT_SECRET = os.getenv('NAVER_CLIENT_SECRET', 'w4d0lOz6oxGwC6xj038t7Lzj5OvPCwUWZSRThvGM')
+NAVER_CLIENT_ID = os.getenv('NAVER_SHOPPING_CLIENT_ID', 'NlUGvThlg3C4nzaKRE8a')
+NAVER_CLIENT_SECRET = os.getenv('NAVER_SHOPPING_CLIENT_SECRET', 'ZYPZHopqG3')
 
 # 네이버 쇼핑 검색 API 테스트
 url = "https://openapi.naver.com/v1/search/shop.json"
