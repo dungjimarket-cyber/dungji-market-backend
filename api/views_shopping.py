@@ -74,15 +74,9 @@ def search_shopping(request):
         display = 10
         start = 1
 
-    # 네이버 API 설정
-    client_id = os.getenv('NAVER_SHOPPING_CLIENT_ID')
-    client_secret = os.getenv('NAVER_SHOPPING_CLIENT_SECRET')
-
-    if not client_id or not client_secret:
-        return Response({
-            'success': False,
-            'error': '네이버 쇼핑 API 설정이 필요합니다.'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    # 네이버 쇼핑 검색 API 인증 정보
+    client_id = 'NlUGvThlg3C4nzaKRE8a'
+    client_secret = 'ZYPZHopqG3'
 
     # 네이버 쇼핑 검색 API 호출
     url = "https://openapi.naver.com/v1/search/shop.json"
