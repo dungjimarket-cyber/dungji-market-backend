@@ -97,18 +97,28 @@ def search_shopping(request):
         if response.status_code == 200:
             data = response.json()
 
-            # HTML 태그 제거 (title에 <b> 태그가 포함될 수 있음)
+            # HTML 태그 제거 및 최저가 3000원 이상만 필터링
             import re
+            filtered_items = []
             for item in data.get('items', []):
+                # HTML 태그 제거
                 if 'title' in item:
                     item['title'] = re.sub(r'<[^>]+>', '', item['title'])
 
+                # 최저가 3000원 이상만 포함
+                try:
+                    lprice = int(item.get('lprice', 0))
+                    if lprice >= 3000:
+                        filtered_items.append(item)
+                except (ValueError, TypeError):
+                    continue
+
             return Response({
                 'success': True,
-                'total': data.get('total', 0),
+                'total': len(filtered_items),
                 'start': data.get('start', 1),
-                'display': data.get('display', 0),
-                'items': data.get('items', [])
+                'display': len(filtered_items),
+                'items': filtered_items
             })
         else:
             return Response({
