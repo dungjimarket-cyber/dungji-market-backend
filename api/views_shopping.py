@@ -113,6 +113,9 @@ def search_shopping(request):
                 except (ValueError, TypeError):
                     continue
 
+            # 필터링 후 가격순으로 정렬 (최저가순)
+            filtered_items.sort(key=lambda x: int(x.get('lprice', 0)))
+
             return Response({
                 'success': True,
                 'total': len(filtered_items),
