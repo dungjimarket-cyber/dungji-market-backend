@@ -19,7 +19,7 @@ class CustomGroupBuy(models.Model):
 
     TYPE_CHOICES = [
         ('online', '온라인'),
-        ('offline', '오프라인'),
+        ('offline', '오프라인매장'),
     ]
 
     STATUS_CHOICES = [
