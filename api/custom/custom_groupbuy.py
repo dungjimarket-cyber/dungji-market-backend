@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q, F
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -19,6 +20,13 @@ from api.services.image_service import ImageService
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class ParticipantPagination(PageNumberPagination):
+    """참여자 목록 페이지네이션 (20명 단위)"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 @api_view(['GET'])
@@ -552,6 +560,23 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             status='confirmed'
         ).select_related('user').order_by('participated_at')
 
+        # 검색 기능 (닉네임 또는 연락처)
+        search_query = request.query_params.get('search', '').strip()
+        if search_query:
+            participants = participants.filter(
+                Q(user__username__icontains=search_query) |
+                Q(user__phone_number__icontains=search_query)
+            )
+
+        # 페이지네이션 적용
+        paginator = ParticipantPagination()
+        page = paginator.paginate_queryset(participants, request)
+
+        if page is not None:
+            serializer = CustomParticipantSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        # 페이지네이션 실패 시 전체 반환 (fallback)
         serializer = CustomParticipantSerializer(participants, many=True)
         return Response(serializer.data)
 
@@ -840,6 +865,13 @@ class CustomParticipantViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_200_OK
             )
 
+        # 참여자 인덱스 계산 (0-based, participated_at 순서)
+        participant_index = CustomParticipant.objects.filter(
+            custom_groupbuy=groupbuy,
+            status='confirmed',
+            participated_at__lt=participant.participated_at
+        ).count()
+
         # 검증만 하고 사용 처리는 하지 않음 (프론트에서 toggle_used API를 별도로 호출)
         return Response({
             'valid': True,
@@ -847,7 +879,9 @@ class CustomParticipantViewSet(viewsets.ReadOnlyModelViewSet):
             'user_name': participant.user.username,
             'participation_code': participant.participation_code,
             'discount_used': participant.discount_used,
-            'discount_used_at': participant.discount_used_at
+            'discount_used_at': participant.discount_used_at,
+            'participant_id': participant.id,
+            'participant_index': participant_index
         })
 
 
