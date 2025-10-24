@@ -11,28 +11,8 @@ from api.models_custom import (
     CustomNoShowReport
 )
 from django.contrib.auth import get_user_model
-import re
 
 User = get_user_model()
-
-
-def extract_url_from_text(text):
-    """텍스트에서 실제 URL만 추출"""
-    if not text:
-        return text
-
-    text = text.strip()
-
-    # URL 패턴 매칭 (http:// 또는 https://로 시작)
-    url_pattern = r'https?://[^\s<>"\'\)]*'
-    match = re.search(url_pattern, text)
-    if match:
-        # URL 끝 문장부호 제거
-        url = match.group(0).rstrip('.,!?;:')
-        return url
-
-    # URL이 없으면 원본 반환
-    return text
 
 
 class CustomGroupBuyImageSerializer(serializers.ModelSerializer):
@@ -255,10 +235,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # update 모드인지 확인 (instance가 있으면 update)
         is_update = self.instance is not None
-
-        # discount_url이 있으면 실제 URL만 추출
-        if 'discount_url' in data and data['discount_url']:
-            data['discount_url'] = extract_url_from_text(data['discount_url'])
 
         # 제목 길이 검증
         title = data.get('title', '')
