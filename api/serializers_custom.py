@@ -293,12 +293,6 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         deal_type = data.get('deal_type', 'participant_based')
 
         if deal_type == 'time_based':
-            # 기간특가 필수 체크
-            if not data.get('discount_url'):
-                raise serializers.ValidationError({
-                    'discount_url': '기간 특가는 할인 링크가 필수입니다.'
-                })
-
             # 상품설명 내 링크 미리보기 생성 (선택적)
             description = data.get('description', '')
             if description:
@@ -326,11 +320,10 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
             # 기간특가용 값 설정
             data['target_participants'] = None  # null 허용으로 변경
             data['online_discount_type'] = None
-            data['pricing_type'] = 'coupon_only'
+            # pricing_type은 프론트엔드에서 보낸 값 유지 (single_product, all_products 등)
             data['allow_partial_sale'] = False  # 기간특가는 부분 판매 불가
 
-            # 기존 검증 모두 스킵
-            return data
+            # 기간특가도 일반 검증 진행 (가격 정보 등)
 
         # products 필드 검증 (단일상품 여러 개)
         pricing_type = data.get('pricing_type', 'single_product')
