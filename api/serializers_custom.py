@@ -404,7 +404,8 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         current_target_participants = data.get('target_participants', self.instance.target_participants if is_update else 0)
 
         # 온라인 공구 검증 (생성 시에만 검증, 수정 시에는 type이 없으므로 스킵)
-        if current_type == 'online' and not is_update:
+        # 기간특가는 할인 제공 방식 선택 불필요
+        if current_type == 'online' and not is_update and deal_type != 'time_based':
             if not data.get('online_discount_type'):
                 raise serializers.ValidationError({
                     'online_discount_type': '온라인 공구는 할인 제공 방식이 필수입니다.'
