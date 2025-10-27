@@ -194,6 +194,11 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 'discount_codes', 'discount_url', 'discount_valid_days',  # 할인 정보 수정 허용
                 'allow_partial_sale'  # 부분 판매 옵션 수정 허용
             ]
+
+            # 기간특가는 등록 기간(expired_at) 수정 허용
+            if instance.deal_type == 'time_based':
+                allowed_fields.append('expired_at')
+
             for field in request.data.keys():
                 if field not in allowed_fields and field not in ['images', 'existing_image_ids', 'new_images']:
                     return Response(
