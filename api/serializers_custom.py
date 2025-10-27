@@ -323,10 +323,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
                 data['description_link_previews'] = previews
 
-            # 더미 값 설정 (DB 제약 조건 회피)
-            data['target_participants'] = 1
+            # 기간특가용 값 설정
+            data['target_participants'] = None  # null 허용으로 변경
             data['online_discount_type'] = None
             data['pricing_type'] = 'coupon_only'
+            data['allow_partial_sale'] = False  # 기간특가는 부분 판매 불가
 
             # 기존 검증 모두 스킵
             return data

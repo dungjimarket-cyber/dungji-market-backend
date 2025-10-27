@@ -121,8 +121,11 @@ class CustomGroupBuy(models.Model):
 
     # 인원 정보
     target_participants = models.PositiveIntegerField(
+        null=True,
+        blank=True,
         validators=[MinValueValidator(2), MaxValueValidator(2000)],
-        verbose_name='목표 인원'
+        verbose_name='목표 인원',
+        help_text='기간특가는 null 가능'
     )
     current_participants = models.PositiveIntegerField(default=0, verbose_name='현재 인원')
 

@@ -191,12 +191,13 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         if instance.current_participants > 0:
             allowed_fields = [
                 'title', 'description', 'usage_guide',
-                'discount_codes', 'discount_url', 'discount_valid_days'  # 할인 정보 수정 허용
+                'discount_codes', 'discount_url', 'discount_valid_days',  # 할인 정보 수정 허용
+                'allow_partial_sale'  # 부분 판매 옵션 수정 허용
             ]
             for field in request.data.keys():
                 if field not in allowed_fields and field not in ['images', 'existing_image_ids', 'new_images']:
                     return Response(
-                        {'error': '참여자가 있는 공구는 제목, 상세설명, 이용안내, 할인 정보만 수정 가능합니다.'},
+                        {'error': '참여자가 있는 공구는 제목, 상세설명, 이용안내, 할인 정보, 부분 판매 옵션만 수정 가능합니다.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
@@ -218,6 +219,13 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': '판매자만 삭제할 수 있습니다.'},
                 status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 완료/취소/만료된 공구는 삭제 불가
+        if instance.status in ['completed', 'cancelled', 'expired']:
+            return Response(
+                {'error': '완료/취소/만료된 공구는 삭제할 수 없습니다.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         # 참여자가 있는 경우 취소 처리
