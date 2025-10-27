@@ -37,6 +37,7 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
     """공구 목록 시리얼라이저"""
 
     type_display = serializers.CharField(source='get_type_display', read_only=True)
+    deal_type_display = serializers.CharField(source='get_deal_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     final_price = serializers.SerializerMethodField()
     is_completed = serializers.BooleanField(read_only=True)
@@ -48,12 +49,14 @@ class CustomGroupBuyListSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomGroupBuy
         fields = [
-            'id', 'title', 'type', 'type_display', 'categories', 'location', 'usage_guide',
+            'id', 'title', 'type', 'type_display', 'deal_type', 'deal_type_display',
+            'categories', 'location', 'usage_guide',
             'pricing_type', 'products', 'product_name', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
             'status', 'status_display', 'expired_at',
             'seller_name', 'seller_type',
             'online_discount_type',  # 할인 제공 방식 추가
+            'discount_url',  # 기간특가 링크
             'primary_image', 'view_count', 'favorite_count', 'is_favorited',
             'created_at'
         ]
@@ -105,6 +108,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
     """공구 상세 시리얼라이저"""
 
     type_display = serializers.CharField(source='get_type_display', read_only=True)
+    deal_type_display = serializers.CharField(source='get_deal_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     online_discount_type_display = serializers.CharField(
         source='get_online_discount_type_display',
@@ -123,6 +127,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
         model = CustomGroupBuy
         fields = [
             'id', 'title', 'description', 'type', 'type_display',
+            'deal_type', 'deal_type_display',
             'categories', 'location', 'location_detail', 'usage_guide',
             'pricing_type', 'products', 'product_name', 'original_price', 'discount_rate', 'final_price',
             'target_participants', 'current_participants', 'is_completed',
@@ -133,6 +138,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             'seller', 'seller_name', 'seller_type', 'is_business_verified',
             'online_discount_type', 'online_discount_type_display',
             'discount_url', 'discount_codes',  # ← 할인 정보 추가
+            'description_link_previews',  # ← 기간특가 설명 내 링크 미리보기
             'phone_number',
             'meta_title', 'meta_image', 'meta_description', 'meta_price',
             'status', 'status_display',
@@ -213,10 +219,11 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
         model = CustomGroupBuy
         fields = [
             'id', 'title', 'description', 'type', 'categories', 'usage_guide',
-            'pricing_type', 'products', 'original_price', 'discount_rate',
+            'deal_type', 'pricing_type', 'products', 'original_price', 'discount_rate',
             'target_participants', 'max_wait_hours', 'expired_at',
             'discount_valid_days', 'allow_partial_sale',
             'online_discount_type', 'discount_url', 'discount_codes',
+            'description_link_previews',
             'location', 'location_detail', 'phone_number',
             'images', 'new_images', 'existing_image_ids'
         ]
@@ -281,6 +288,48 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({
                         'categories': f'유효하지 않은 카테고리입니다: {category}'
                     })
+
+        # 기간특가 분기 처리
+        deal_type = data.get('deal_type', 'participant_based')
+
+        if deal_type == 'time_based':
+            # 기간특가 필수 체크
+            if not data.get('discount_url'):
+                raise serializers.ValidationError({
+                    'discount_url': '기간 특가는 할인 링크가 필수입니다.'
+                })
+
+            # 상품설명 내 링크 미리보기 생성 (선택적)
+            description = data.get('description', '')
+            if description:
+                import re
+                # URL 패턴 찾기
+                url_pattern = r'https?://[^\s<>"\'()]+'
+                urls = re.findall(url_pattern, description)
+
+                # 중복 제거
+                unique_urls = list(dict.fromkeys(urls))
+
+                # 미리보기 생성
+                previews = []
+                from api.services.link_preview_service import LinkPreviewService
+                for url in unique_urls:
+                    try:
+                        metadata = LinkPreviewService.extract_metadata(url)
+                        previews.append(metadata)
+                    except Exception as e:
+                        logger.warning(f"링크 미리보기 생성 실패: {url} - {e}")
+                        continue
+
+                data['description_link_previews'] = previews
+
+            # 더미 값 설정 (DB 제약 조건 회피)
+            data['target_participants'] = 1
+            data['online_discount_type'] = None
+            data['pricing_type'] = 'coupon_only'
+
+            # 기존 검증 모두 스킵
+            return data
 
         # products 필드 검증 (단일상품 여러 개)
         pricing_type = data.get('pricing_type', 'single_product')
@@ -422,6 +471,24 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         logger.info(f"[CustomGroupBuy Create] images count: {len(images_data)}")
 
+        # 기간특가 처리: 메인 링크 미리보기 생성
+        deal_type = validated_data.get('deal_type', 'participant_based')
+        if deal_type == 'time_based':
+            discount_url = validated_data.get('discount_url')
+            if discount_url:
+                try:
+                    from api.services.link_preview_service import LinkPreviewService
+                    metadata = LinkPreviewService.extract_metadata(discount_url)
+
+                    # 메타 필드에 저장
+                    validated_data['meta_title'] = metadata.get('title', '')
+                    validated_data['meta_image'] = metadata.get('image', '')
+                    validated_data['meta_description'] = metadata.get('description', '')
+
+                    logger.info(f"[기간특가] 메인 링크 미리보기 생성 완료: {discount_url}")
+                except Exception as e:
+                    logger.warning(f"[기간특가] 메인 링크 미리보기 생성 실패: {discount_url} - {e}")
+
         # 단일상품일 때 구버전 필드에도 복사 (Admin 가독성)
         pricing_type = validated_data.get('pricing_type', 'single_product')
         products = validated_data.get('products', [])
@@ -462,9 +529,50 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         # 수정 불가능한 필드 제거 (방어적 처리)
         # type, target_participants는 수정 불가능
+        # deal_type도 수정 불가능 (생성 시 결정)
         # 할인 정보(discount_codes, discount_url, discount_valid_days)는 수정 가능
         validated_data.pop('type', None)
         validated_data.pop('target_participants', None)
+        validated_data.pop('deal_type', None)
+
+        # 기간특가 처리: discount_url이 변경된 경우 메인 링크 미리보기 재생성
+        if instance.deal_type == 'time_based':
+            discount_url = validated_data.get('discount_url')
+            # discount_url이 명시적으로 전달되고, 기존 값과 다른 경우
+            if discount_url and discount_url != instance.discount_url:
+                try:
+                    from api.services.link_preview_service import LinkPreviewService
+                    metadata = LinkPreviewService.extract_metadata(discount_url)
+
+                    # 메타 필드 업데이트
+                    validated_data['meta_title'] = metadata.get('title', '')
+                    validated_data['meta_image'] = metadata.get('image', '')
+                    validated_data['meta_description'] = metadata.get('description', '')
+
+                    logger.info(f"[기간특가] 메인 링크 미리보기 재생성 완료: {discount_url}")
+                except Exception as e:
+                    logger.warning(f"[기간특가] 메인 링크 미리보기 재생성 실패: {discount_url} - {e}")
+
+            # 설명이 변경된 경우 링크 미리보기 재생성
+            description = validated_data.get('description')
+            if description and description != instance.description:
+                import re
+                url_pattern = r'https?://[^\s<>"\'()]+'
+                urls = re.findall(url_pattern, description)
+                unique_urls = list(dict.fromkeys(urls))
+
+                previews = []
+                from api.services.link_preview_service import LinkPreviewService
+                for url in unique_urls:
+                    try:
+                        metadata = LinkPreviewService.extract_metadata(url)
+                        previews.append(metadata)
+                    except Exception as e:
+                        logger.warning(f"링크 미리보기 생성 실패: {url} - {e}")
+                        continue
+
+                validated_data['description_link_previews'] = previews
+                logger.info(f"[기간특가] 설명 내 링크 미리보기 재생성 완료: {len(previews)}개")
 
         # 이미지 관련 데이터 추출 (전자제품 방식)
         images_data = validated_data.pop('images', None)  # 기존 방식 호환
@@ -639,6 +747,18 @@ class CustomNoShowReportSerializer(serializers.ModelSerializer):
         custom_groupbuy = data.get('custom_groupbuy')
         reported_user = data.get('reported_user')
         report_type = data.get('report_type')
+
+        # 기간특가는 노쇼 신고 불가
+        if custom_groupbuy.deal_type == 'time_based':
+            raise serializers.ValidationError({
+                'custom_groupbuy': '기간 특가는 노쇼 신고 대상이 아닙니다.'
+            })
+
+        # 쿠폰전용은 노쇼 신고 불가
+        if custom_groupbuy.pricing_type == 'coupon_only':
+            raise serializers.ValidationError({
+                'custom_groupbuy': '쿠폰전용 공구는 노쇼 신고 대상이 아닙니다.'
+            })
 
         # 자기 자신 신고 방지
         if user == reported_user:

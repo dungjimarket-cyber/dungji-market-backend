@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 class CustomGroupBuy(models.Model):
     """커스텀 특가"""
 
+    DEAL_TYPE_CHOICES = [
+        ('participant_based', '인원 모집형'),
+        ('time_based', '기간특가'),
+    ]
+
     TYPE_CHOICES = [
         ('online', '온라인'),
         ('offline', '오프라인매장'),
@@ -60,6 +65,19 @@ class CustomGroupBuy(models.Model):
     # 기본 정보
     title = models.CharField(max_length=50, verbose_name='제목')
     description = models.TextField(verbose_name='설명')
+    description_link_previews = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='설명 내 링크 미리보기',
+        help_text='[{"url": "...", "title": "...", "image": "...", "description": "..."}, ...]'
+    )
+    deal_type = models.CharField(
+        max_length=20,
+        choices=DEAL_TYPE_CHOICES,
+        default='participant_based',
+        verbose_name='특가 유형',
+        help_text='인원 모집형 또는 기간특가'
+    )
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, verbose_name='유형')
     categories = models.JSONField(default=list, verbose_name='카테고리')
     usage_guide = models.TextField(null=True, blank=True, verbose_name='이용안내', help_text='사용기간, 시간 조건 등 이용 안내사항')
@@ -288,6 +306,15 @@ class CustomGroupBuy(models.Model):
 
         logger.info(f"[COMPLETE] 시작 - groupbuy_id:{self.id}, title:{self.title}, status:{self.status}")
 
+        # 기간특가: 간단하게 완료만 처리
+        if self.deal_type == 'time_based':
+            if self.status != 'completed':
+                self.status = 'completed'
+                self.completed_at = timezone.now()
+                self.save()
+                logger.info(f"기간특가 완료: {self.title}")
+            return  # SMS, 알림, 코드 발급 모두 스킵
+
         # 이미 완료된 경우 중복 실행 방지
         if self.status == 'completed':
             logger.warning(f"[COMPLETE] 이미 완료됨 - groupbuy_id:{self.id}")
@@ -368,6 +395,11 @@ class CustomGroupBuy(models.Model):
         from api.utils.notification_helper import send_custom_groupbuy_notification
 
         logger.info(f"[ISSUE] 시작 - groupbuy_id:{self.id}, pricing_type:{self.pricing_type}, type:{self.type}")
+
+        # 기간특가: 발급 자체 없음
+        if self.deal_type == 'time_based':
+            logger.info(f"[ISSUE] 기간특가는 발급 없음 - groupbuy_id:{self.id}")
+            return
 
         participants = self.participants.filter(status='confirmed')
         participant_count = participants.count()
@@ -633,6 +665,16 @@ class CustomGroupBuy(models.Model):
         """기간 만료 체크"""
         from api.utils.notification_helper import send_custom_groupbuy_notification
 
+        # 기간특가: 조용히 만료만 처리
+        if self.deal_type == 'time_based':
+            if self.status == 'recruiting':
+                now = timezone.now()
+                if now >= self.expired_at:
+                    self.status = 'expired'
+                    self.save()
+                    logger.info(f"기간특가 만료: {self.title}")
+            return  # SMS, 알림 모두 스킵
+
         if self.status != 'recruiting':
             return
 
@@ -746,6 +788,14 @@ class CustomGroupBuy(models.Model):
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied('판매자만 공구를 취소할 수 있습니다.')
 
+        # 기간특가: 조용히 취소만 처리
+        if self.deal_type == 'time_based':
+            if self.status != 'cancelled':
+                self.status = 'cancelled'
+                self.save()
+                logger.info(f"기간특가 취소: {self.title}")
+            return  # 참여자 알림 없음
+
         # 이미 취소된 경우 중복 실행 방지
         if self.status == 'cancelled':
             logger.warning(f"공구 이미 취소됨: {self.title}")
@@ -802,6 +852,10 @@ class CustomGroupBuy(models.Model):
         # 권한 체크
         if self.seller != seller_user:
             raise PermissionDenied('판매자만 조기 종료할 수 있습니다.')
+
+        # 기간특가: 조기 종료 불가
+        if self.deal_type == 'time_based':
+            raise ValidationError('기간 특가는 조기 종료할 수 없습니다. 삭제만 가능합니다.')
 
         # 상태 체크
         if self.status != 'recruiting':

@@ -255,6 +255,11 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
+        # deal_type 필터링 (인원 모집형 / 기간 특가형)
+        deal_type = self.request.query_params.get('deal_type')
+        if deal_type:
+            queryset = queryset.filter(deal_type=deal_type)
+
         category = self.request.query_params.get('category')
         if category:
             queryset = queryset.filter(categories__contains=[category])
@@ -636,13 +641,15 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         data = []
 
         try:
-            # 1. 내가 판매자(생성자)인 완료된 공구 (쿠폰전용 제외)
+            # 1. 내가 판매자(생성자)인 완료된 공구 (쿠폰전용, 기간특가 제외)
             seller_groupbuys = CustomGroupBuy.objects.filter(
                 seller=user,
                 status='completed',
                 completed_at__gte=cutoff_date
             ).exclude(
                 pricing_type='coupon_only'  # 쿠폰전용은 노쇼 신고 대상 아님
+            ).exclude(
+                deal_type='time_based'  # 기간특가는 노쇼 신고 대상 아님
             ).prefetch_related('images').order_by('-completed_at')
 
             for groupbuy in seller_groupbuys:
@@ -671,7 +678,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                         logger.error(f"Error processing seller groupbuy {groupbuy.id}: {e}")
                         continue
 
-            # 2. 내가 참여자인 완료된 공구 (판매자가 아닌 것만, 쿠폰전용 제외)
+            # 2. 내가 참여자인 완료된 공구 (판매자가 아닌 것만, 쿠폰전용, 기간특가 제외)
             participants = CustomParticipant.objects.filter(
                 user=user,
                 status='confirmed'
@@ -682,6 +689,8 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 custom_groupbuy__seller=user  # 내가 판매자인 공구는 제외 (중복 방지)
             ).exclude(
                 custom_groupbuy__pricing_type='coupon_only'  # 쿠폰전용은 노쇼 신고 대상 아님
+            ).exclude(
+                custom_groupbuy__deal_type='time_based'  # 기간특가는 노쇼 신고 대상 아님
             ).order_by('-custom_groupbuy__completed_at')
 
             for participant in participants:
