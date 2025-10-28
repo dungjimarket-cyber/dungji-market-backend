@@ -478,7 +478,7 @@ class CustomGroupBuy(models.Model):
             if phone_numbers:
                 try:
                     # 90바이트 메시지 생성
-                    base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/my"
+                    base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/custom-deals/my"
                     base_bytes = sms_service.calculate_sms_length(base_text)
                     available_bytes = 90 - base_bytes
 
@@ -490,7 +490,7 @@ class CustomGroupBuy(models.Model):
                         f"[둥지마켓] 공구마감!\n"
                         f"{short_title}\n"
                         f"할인정보를 확인해주세요\n"
-                        f"dungjimarket.com/my"
+                        f"dungjimarket.com/custom-deals/my"
                     )
 
                     sms_success_count, sms_fail_count = sms_service.send_bulk_sms(phone_numbers, message)
@@ -606,7 +606,7 @@ class CustomGroupBuy(models.Model):
         if phone_numbers:
             try:
                 # 90바이트 메시지 생성
-                base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/my"
+                base_text = "[둥지마켓] 공구마감!\n\n할인정보를 확인해주세요\ndungjimarket.com/custom-deals/my"
                 base_bytes = sms_service.calculate_sms_length(base_text)
                 available_bytes = 90 - base_bytes
 
@@ -618,7 +618,7 @@ class CustomGroupBuy(models.Model):
                     f"[둥지마켓] 공구마감!\n"
                     f"{short_title}\n"
                     f"할인정보를 확인해주세요\n"
-                    f"dungjimarket.com/my"
+                    f"dungjimarket.com/custom-deals/my"
                 )
 
                 sms_success_count, sms_fail_count = sms_service.send_bulk_sms(phone_numbers, message)
