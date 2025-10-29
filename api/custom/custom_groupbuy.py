@@ -51,7 +51,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         return CustomGroupBuyDetailSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'track_click']:
             return [AllowAny()]
         return [IsAuthenticated()]
 
