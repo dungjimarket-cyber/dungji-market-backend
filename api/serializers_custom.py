@@ -142,7 +142,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             'phone_number',
             'meta_title', 'meta_image', 'meta_description', 'meta_price',
             'status', 'status_display',
-            'view_count', 'favorite_count',
+            'view_count', 'favorite_count', 'discount_url_clicks',
             'images', 'is_favorited', 'is_participated',
             'created_at', 'updated_at'
         ]
@@ -150,7 +150,7 @@ class CustomGroupBuyDetailSerializer(serializers.ModelSerializer):
             'id', 'seller', 'current_participants', 'expired_at',
             'completed_at', 'seller_decision_deadline',
             'discount_valid_until', 'status',
-            'view_count', 'favorite_count', 'created_at', 'updated_at'
+            'view_count', 'favorite_count', 'discount_url_clicks', 'created_at', 'updated_at'
         ]
 
     def get_final_price(self, obj):
