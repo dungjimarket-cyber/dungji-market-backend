@@ -563,6 +563,19 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
                 return Response({'favorited': True})
 
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def track_click(self, request, pk=None):
+        """할인링크 클릭수 증가"""
+        groupbuy = self.get_object()
+
+        from django.db import transaction
+
+        with transaction.atomic():
+            groupbuy.discount_url_clicks = F('discount_url_clicks') + 1
+            groupbuy.save(update_fields=['discount_url_clicks'])
+
+        return Response({'success': True})
+
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def participants(self, request, pk=None):
         groupbuy = self.get_object()
