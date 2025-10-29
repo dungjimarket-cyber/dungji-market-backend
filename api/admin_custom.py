@@ -32,14 +32,14 @@ class CustomGroupBuyAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'title', 'type', 'status', 'seller',
         'current_participants', 'target_participants',
-        'final_price', 'created_at'
+        'final_price', 'discount_url_clicks', 'created_at'
     ]
     list_filter = ['type', 'status', 'created_at']
     search_fields = ['title', 'seller__username', 'seller__email']
     readonly_fields = [
         'created_at', 'updated_at', 'completed_at',
         'seller_decision_deadline',
-        'current_participants', 'view_count', 'favorite_count',
+        'current_participants', 'view_count', 'favorite_count', 'discount_url_clicks',
         'final_price', 'is_completed', 'seller_type', 'seller_name', 'is_business_verified'
     ]
 
@@ -74,7 +74,7 @@ class CustomGroupBuyAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('상태 및 통계', {
-            'fields': ('status', 'view_count', 'favorite_count')
+            'fields': ('status', 'view_count', 'favorite_count', 'discount_url_clicks')
         }),
     )
 
@@ -92,6 +92,10 @@ class CustomGroupBuyAdmin(admin.ModelAdmin):
             return f"{min(price):,}원 ~ {max(price):,}원"
         return f"{price:,}원"
     final_price.short_description = '최종 가격'
+
+    def discount_url_clicks(self, obj):
+        return f"{obj.discount_url_clicks:,}회"
+    discount_url_clicks.short_description = '할인링크 클릭수'
 
 
 @admin.register(CustomGroupBuyImage)
