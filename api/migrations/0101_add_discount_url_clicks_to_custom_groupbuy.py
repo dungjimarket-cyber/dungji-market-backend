@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0099_add_deal_type_to_custom_groupbuy'),
+        ('api', '0100_allow_null_target_participants'),
     ]
 
     operations = [
