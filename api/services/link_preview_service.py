@@ -39,8 +39,21 @@ class LinkPreviewService:
                 'Cache-Control': 'max-age=0'
             }
 
+            # 네이버 단축 URL 처리 (naver.me -> place.naver.com PC 버전)
+            final_url = url
+            if 'naver.me' in url or 'm.place.naver.com' in url:
+                # 먼저 리다이렉트를 따라가서 최종 URL 얻기
+                temp_response = requests.head(url, headers=headers, timeout=5, allow_redirects=True)
+                final_url = temp_response.url
+                logger.info(f'네이버 단축 URL 확장: {url} -> {final_url}')
+
+                # 모바일 URL이면 PC 버전으로 변환
+                if 'm.place.naver.com' in final_url:
+                    final_url = final_url.replace('m.place.naver.com', 'pcmap.place.naver.com')
+                    logger.info(f'PC 버전 URL로 변환: {final_url}')
+
             # 타임아웃 10초로 증가 (네이버 스마트스토어는 느림)
-            response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+            response = requests.get(final_url, headers=headers, timeout=10, allow_redirects=True)
             response.raise_for_status()
 
             soup = BeautifulSoup(response.content, 'html.parser')
