@@ -297,7 +297,13 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             else:
                 queryset = queryset.filter(seller_id=seller_id)
 
-        return queryset.order_by('-created_at')
+        # 끌올 기능: last_bumped_at이 있으면 우선, 없으면 created_at 기준
+        from django.db.models import F
+        from django.db.models.functions import Coalesce
+
+        return queryset.order_by(
+            Coalesce('last_bumped_at', 'created_at').desc()
+        )
 
     def list(self, request, *args, **kwargs):
         # 목록 조회 시 만료된 공구들 일괄 체크
