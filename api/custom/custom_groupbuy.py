@@ -260,10 +260,11 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             queryset = queryset.exclude(status='cancelled')
 
-            # 기간특가가 아닌 경우에만 expired 제외 (기간특가는 expired도 표시)
-            deal_type = self.request.query_params.get('deal_type')
-            if deal_type != 'time_based':
-                queryset = queryset.exclude(status='expired')
+            # 일반 공구(participant_based)의 expired만 제외, 기간특가(time_based)는 포함
+            from django.db.models import Q
+            queryset = queryset.exclude(
+                Q(status='expired') & Q(deal_type='participant_based')
+            )
 
         type_filter = self.request.query_params.get('type')
         if type_filter:
