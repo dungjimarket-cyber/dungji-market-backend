@@ -19,7 +19,7 @@ class CustomGroupBuy(models.Model):
 
     DEAL_TYPE_CHOICES = [
         ('participant_based', '인원 모집형'),
-        ('time_based', '기간특가'),
+        ('time_based', '기간행사'),
     ]
 
     TYPE_CHOICES = [
