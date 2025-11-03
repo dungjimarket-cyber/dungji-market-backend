@@ -430,6 +430,7 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
 
         # 오프라인 공구 검증 (생성 시에만 검증, 수정 시에는 type이 없으므로 스킵)
         if current_type == 'offline' and not is_update:
+            # 위치와 연락처는 모든 오프라인 공구에 필수
             if not data.get('location'):
                 raise serializers.ValidationError({
                     'location': '오프라인 공구는 매장 위치가 필수입니다.'
@@ -438,20 +439,23 @@ class CustomGroupBuyCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'phone_number': '오프라인 공구는 연락처가 필수입니다.'
                 })
-            if not data.get('discount_valid_days'):
-                raise serializers.ValidationError({
-                    'discount_valid_days': '오프라인 공구는 할인 유효기간이 필수입니다.'
-                })
 
-            codes = data.get('discount_codes', [])
-            if not codes:
-                raise serializers.ValidationError({
-                    'discount_codes': '오프라인 공구는 할인코드가 필수입니다.'
-                })
-            if len(codes) < current_target_participants:
-                raise serializers.ValidationError({
-                    'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다. (필요: {current_target_participants}, 보유: {len(codes)})'
-                })
+            # 인원 모집 특가(participant_based)일 때만 할인코드와 유효기간 필수
+            if deal_type == 'participant_based':
+                if not data.get('discount_valid_days'):
+                    raise serializers.ValidationError({
+                        'discount_valid_days': '오프라인 공구는 할인 유효기간이 필수입니다.'
+                    })
+
+                codes = data.get('discount_codes', [])
+                if not codes:
+                    raise serializers.ValidationError({
+                        'discount_codes': '오프라인 공구는 할인코드가 필수입니다.'
+                    })
+                if len(codes) < current_target_participants:
+                    raise serializers.ValidationError({
+                        'discount_codes': f'할인코드 개수가 목표 인원보다 적습니다. (필요: {current_target_participants}, 보유: {len(codes)})'
+                    })
 
         return data
 
