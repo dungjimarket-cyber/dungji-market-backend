@@ -97,17 +97,18 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # 활성 공구 개수 체크 (최대 5개까지 등록 가능)
-        active_count = CustomGroupBuy.objects.filter(
-            seller=request.user,
-            status__in=['recruiting', 'pending_seller']
-        ).count()
+        # 활성 공구 개수 체크 (최대 5개까지 등록 가능, seller10 계정 예외)
+        if request.user.username != 'seller10':
+            active_count = CustomGroupBuy.objects.filter(
+                seller=request.user,
+                status__in=['recruiting', 'pending_seller']
+            ).count()
 
-        if active_count >= 5:
-            return Response(
-                {'error': f'최대 5개의 공구까지 동시 진행 가능합니다. (현재 {active_count}개 진행 중)'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            if active_count >= 5:
+                return Response(
+                    {'error': f'최대 5개의 공구까지 동시 진행 가능합니다. (현재 {active_count}개 진행 중)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         try:
             # DRF가 request.data에서 자동으로 파일 처리 (중고거래와 동일)
