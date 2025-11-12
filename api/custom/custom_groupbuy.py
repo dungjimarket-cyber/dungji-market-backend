@@ -506,7 +506,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        groupbuy.complete_groupbuy()
+        groupbuy.finalize_completed_groupbuy()
         serializer = self.get_serializer(groupbuy)
         return Response(serializer.data)
 

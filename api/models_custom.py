@@ -327,22 +327,59 @@ class CustomGroupBuy(models.Model):
         logger.info(f"[COMPLETE] transaction.atomic() 시작 - 상태 변경만")
 
         # 1단계: 트랜잭션 안에서 상태만 변경
+        # pending_seller 상태로 변경 (24시간 판매결정 대기)
         try:
             with transaction.atomic():
-                logger.info(f"[COMPLETE] 상태 변경 시작 - completed")
+                logger.info(f"[COMPLETE] 상태 변경 시작 - pending_seller")
+                self.status = 'pending_seller'
+                self.seller_decision_deadline = timezone.now() + timedelta(hours=24)
+
+                self.save()
+                logger.info(f"[COMPLETE] 상태 저장 완료 - pending_seller (24시간 대기)")
+
+        except Exception as e:
+            logger.error(f"[COMPLETE] 상태 변경 실패 - groupbuy_id:{self.id}, error:{str(e)}", exc_info=True)
+            raise
+
+        # 2단계: 판매자에게 SMS 발송
+        try:
+            from api.utils.sms_service import SMSService
+            sms_service = SMSService()
+
+            if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
+                short_title = self.title[:20] if len(self.title) > 20 else self.title
+                sms_message = f"[둥지마켓] {short_title} 공구가 마감되었습니다. 24시간 내 판매결정을 진행해주세요 ({self.current_participants}명 참여)"
+                sms_service._send_aligo_sms(self.seller.phone_number, sms_message)
+                logger.info(f"[COMPLETE] 판매자 SMS 발송 완료 - {self.seller.username}")
+        except Exception as e:
+            logger.error(f"[COMPLETE] 판매자 SMS 발송 실패 - error:{str(e)}")
+
+        # 3단계: 완료 처리는 confirm_sale() API에서 수동으로 진행
+        # 이 시점에서는 pending_seller로만 변경하고 종료
+        logger.info(f"[COMPLETE] pending_seller 처리 완료 - 판매자 확정 대기")
+
+    def finalize_completed_groupbuy(self):
+        """판매자가 확정한 후 실제 완료 처리 (할인 발급 + 알림)"""
+        from django.db import transaction
+        from api.utils.notification_helper import send_custom_groupbuy_notification
+
+        logger.info(f"[FINALIZE] 시작 - groupbuy_id:{self.id}, title:{self.title}")
+
+        # 1단계: completed 상태로 변경
+        try:
+            with transaction.atomic():
                 self.status = 'completed'
                 self.completed_at = timezone.now()
 
                 # 할인 유효기간 설정
                 if self.discount_valid_days:
                     self.discount_valid_until = timezone.now() + timedelta(days=self.discount_valid_days)
-                    logger.info(f"[COMPLETE] 할인 유효기간 설정 - {self.discount_valid_days}일")
+                    logger.info(f"[FINALIZE] 할인 유효기간 설정 - {self.discount_valid_days}일")
 
                 self.save()
-                logger.info(f"[COMPLETE] 상태 저장 완료 - 트랜잭션 커밋")
-
+                logger.info(f"[FINALIZE] 상태 저장 완료 - completed")
         except Exception as e:
-            logger.error(f"[COMPLETE] 상태 변경 실패 - groupbuy_id:{self.id}, error:{str(e)}", exc_info=True)
+            logger.error(f"[FINALIZE] 상태 변경 실패 - error:{str(e)}", exc_info=True)
             raise
 
         # 2단계: 트랜잭션 밖에서 할인 발급 (SMS 실패해도 상태는 유지)
