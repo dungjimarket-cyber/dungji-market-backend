@@ -257,15 +257,9 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             'participants'
         )
 
-        # 목록 조회 시 취소 건 제외
+        # 목록 조회 시 취소 건만 제외 (마감/완료 건은 프론트에서 필터링)
         if self.action == 'list':
             queryset = queryset.exclude(status='cancelled')
-
-            # 일반 공구(participant_based)의 expired만 제외, 기간특가(time_based)는 포함
-            from django.db.models import Q
-            queryset = queryset.exclude(
-                Q(status='expired') & Q(deal_type='participant_based')
-            )
 
         type_filter = self.request.query_params.get('type')
         if type_filter:
