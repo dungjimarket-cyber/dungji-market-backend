@@ -257,9 +257,17 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
             'participants'
         )
 
-        # 목록 조회 시 취소 건만 제외 (마감/완료 건은 프론트에서 필터링)
+        # 목록 조회 시 필터링
         if self.action == 'list':
+            # 1. 취소건 제외
             queryset = queryset.exclude(status='cancelled')
+
+            # 2. 인원 미달로 인한 기간만료 제외 (participant_based + expired)
+            # 단, time_based의 expired는 정상 마감이므로 포함
+            queryset = queryset.exclude(
+                Q(deal_type='participant_based') &
+                Q(status='expired')
+            )
 
         type_filter = self.request.query_params.get('type')
         if type_filter:
