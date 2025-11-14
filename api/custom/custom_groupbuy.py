@@ -269,8 +269,27 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
                 Q(status='expired')
             )
 
+        # 탭별 필터링 (프론트엔드의 selectedType에 해당)
+        selected_type = self.request.query_params.get('selected_type')
+        if selected_type:
+            if selected_type == 'time_based':
+                # 기간행사 탭
+                queryset = queryset.filter(deal_type='time_based')
+            elif selected_type == 'coupon_only':
+                # 쿠폰/이벤트 탭 (기간행사 제외)
+                queryset = queryset.filter(
+                    pricing_type='coupon_only'
+                ).exclude(deal_type='time_based')
+            elif selected_type in ['online', 'offline']:
+                # 온라인/오프라인 탭 (쿠폰이벤트 중 기간행사 아닌 것 제외)
+                queryset = queryset.filter(type=selected_type).exclude(
+                    Q(pricing_type='coupon_only') & ~Q(deal_type='time_based')
+                )
+            # 'all'이면 필터링 안 함
+
+        # 기존 type 필터 (호환성 유지)
         type_filter = self.request.query_params.get('type')
-        if type_filter:
+        if type_filter and not selected_type:
             queryset = queryset.filter(type=type_filter)
 
         status_filter = self.request.query_params.get('status')
@@ -279,7 +298,7 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         # deal_type 필터링 (인원 모집형 / 기간 특가형)
         deal_type = self.request.query_params.get('deal_type')
-        if deal_type:
+        if deal_type and not selected_type:
             queryset = queryset.filter(deal_type=deal_type)
 
         category = self.request.query_params.get('category')
