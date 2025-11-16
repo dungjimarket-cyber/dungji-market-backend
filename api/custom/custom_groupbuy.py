@@ -404,8 +404,24 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
         if groupbuy.status != 'recruiting':
             logger.info(f"[PARTICIPATE] 잘못된 상태 - status:{groupbuy.status}")
+            # 상태별 명확한 에러 메시지
+            if groupbuy.status == 'completed':
+                error_msg = '이미 마감된 공구입니다.'
+            elif groupbuy.status == 'cancelled':
+                error_msg = '취소된 공구입니다.'
+            elif groupbuy.status == 'expired':
+                error_msg = '기간이 만료된 공구입니다.'
+            elif groupbuy.status == 'pending_seller':
+                error_msg = '판매자 결정 대기 중인 공구입니다.'
+            else:
+                error_msg = '모집 중인 공구만 참여 가능합니다.'
+
             return Response(
-                {'error': '모집 중인 공구만 참여 가능합니다.'},
+                {
+                    'error': error_msg,
+                    'status': groupbuy.status,
+                    'needs_reload': True  # 프론트엔드에서 리로드 필요
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -426,6 +442,35 @@ class CustomGroupBuyViewSet(viewsets.ModelViewSet):
 
                 groupbuy = CustomGroupBuy.objects.select_for_update().get(pk=groupbuy.pk)
                 logger.info(f"[PARTICIPATE] select_for_update 완료 - current:{groupbuy.current_participants}/{groupbuy.target_participants}")
+
+                # 락 획득 후 다시 한 번 상태 체크 (동시 참여로 마감된 경우)
+                if groupbuy.status != 'recruiting':
+                    logger.info(f"[PARTICIPATE] 락 후 상태 변경 감지 - status:{groupbuy.status}")
+                    if groupbuy.status == 'completed':
+                        error_msg = '공구가 마감되었습니다.'
+                    else:
+                        error_msg = '참여할 수 없는 상태입니다.'
+
+                    return Response(
+                        {
+                            'error': error_msg,
+                            'status': groupbuy.status,
+                            'needs_reload': True
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 인원 체크 (동시 참여로 이미 꽉 찬 경우)
+                if groupbuy.current_participants >= groupbuy.target_participants:
+                    logger.info(f"[PARTICIPATE] 락 후 정원 초과 감지 - current:{groupbuy.current_participants}/{groupbuy.target_participants}")
+                    return Response(
+                        {
+                            'error': '공구가 마감되었습니다.',
+                            'status': 'full',
+                            'needs_reload': True
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
                 participant = CustomParticipant.objects.create(
                     custom_groupbuy=groupbuy,
