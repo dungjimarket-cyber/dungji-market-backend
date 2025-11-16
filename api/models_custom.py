@@ -362,6 +362,7 @@ class CustomGroupBuy(models.Model):
         """판매자가 확정한 후 실제 완료 처리 (할인 발급 + 알림)"""
         from django.db import transaction
         from api.utils.notification_helper import send_custom_groupbuy_notification
+        import threading
 
         logger.info(f"[FINALIZE] 시작 - groupbuy_id:{self.id}, title:{self.title}")
 
@@ -391,41 +392,49 @@ class CustomGroupBuy(models.Model):
             logger.error(f"[COMPLETE] 할인 발급 실패 (상태는 completed 유지) - error:{str(e)}", exc_info=True)
             # SMS 실패해도 계속 진행
 
-        # 3단계: Push 알림 발송 (실패해도 무관)
-        try:
-            logger.info(f"[COMPLETE] Push 알림 발송 시작")
-            participants = self.participants.filter(status='confirmed')
-            logger.info(f"[COMPLETE] 참여자 수: {participants.count()}명")
+        # 3단계: Push 알림 발송을 백그라운드 스레드로 실행
+        def send_notifications_async():
+            """Push 알림을 비동기로 발송하는 내부 함수"""
+            try:
+                logger.info(f"[COMPLETE] Push 알림 발송 시작 (백그라운드)")
+                participants = self.participants.filter(status='confirmed')
+                logger.info(f"[COMPLETE] 참여자 수: {participants.count()}명")
 
-            for i, participant in enumerate(participants):
-                try:
-                    send_custom_groupbuy_notification(
-                        user=participant.user,
-                        custom_groupbuy=self,
-                        notification_type='custom_completed',
-                        message=f'"{self.title}" 공구가 마감되었습니다! 할인코드를 확인해주세요.',
-                        push_title='커스텀 공구 마감'
-                    )
-                    logger.info(f"[COMPLETE] Push 알림 {i+1}/{participants.count()} 발송 완료 - user:{participant.user.username}")
-                except Exception as e:
-                    logger.error(f"[COMPLETE] Push 알림 발송 실패 - user:{participant.user.username}, error:{e}")
+                for i, participant in enumerate(participants):
+                    try:
+                        send_custom_groupbuy_notification(
+                            user=participant.user,
+                            custom_groupbuy=self,
+                            notification_type='custom_completed',
+                            message=f'"{self.title}" 공구가 마감되었습니다! 할인코드를 확인해주세요.',
+                            push_title='커스텀 공구 마감'
+                        )
+                        logger.info(f"[COMPLETE] Push 알림 {i+1}/{participants.count()} 발송 완료 - user:{participant.user.username}")
+                    except Exception as e:
+                        logger.error(f"[COMPLETE] Push 알림 발송 실패 - user:{participant.user.username}, error:{e}")
 
-            # 판매자에게도 알림
-            if self.seller:
-                try:
-                    send_custom_groupbuy_notification(
-                        user=self.seller,
-                        custom_groupbuy=self,
-                        notification_type='custom_completed',
-                        message=f'"{self.title}" 공구가 성공적으로 마감되었습니다! (참여자 {self.current_participants}명)',
-                        push_title='커스텀 공구 마감'
-                    )
-                    logger.info(f"[COMPLETE] 판매자 Push 알림 발송 완료 - seller:{self.seller.username}")
-                except Exception as e:
-                    logger.error(f"[COMPLETE] 판매자 Push 알림 발송 실패 - error:{e}")
+                # 판매자에게도 알림
+                if self.seller:
+                    try:
+                        send_custom_groupbuy_notification(
+                            user=self.seller,
+                            custom_groupbuy=self,
+                            notification_type='custom_completed',
+                            message=f'"{self.title}" 공구가 성공적으로 마감되었습니다! (참여자 {self.current_participants}명)',
+                            push_title='커스텀 공구 마감'
+                        )
+                        logger.info(f"[COMPLETE] 판매자 Push 알림 발송 완료 - seller:{self.seller.username}")
+                    except Exception as e:
+                        logger.error(f"[COMPLETE] 판매자 Push 알림 발송 실패 - error:{e}")
 
-        except Exception as e:
-            logger.error(f"[COMPLETE] Push 알림 발송 중 예외 (무시) - error:{str(e)}")
+                logger.info(f"[COMPLETE] 백그라운드 알림 발송 완료 - {self.title}")
+            except Exception as e:
+                logger.error(f"[COMPLETE] Push 알림 발송 중 예외 (백그라운드) - error:{str(e)}")
+
+        # 백그라운드 스레드로 알림 발송 시작
+        notification_thread = threading.Thread(target=send_notifications_async, daemon=True)
+        notification_thread.start()
+        logger.info(f"[COMPLETE] Push 알림 백그라운드 스레드 시작됨")
 
         logger.info(f"[COMPLETE] 완료 - {self.title} ({self.current_participants}명)")
 
