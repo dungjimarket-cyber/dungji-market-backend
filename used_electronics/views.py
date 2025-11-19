@@ -1261,11 +1261,10 @@ class UsedElectronicsViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='my-trading', permission_classes=[IsAuthenticated])
     def my_trading_items(self, request):
-        """판매자/구매자의 거래중 목록 조회"""
-        # 현재 사용자가 구매자이거나 판매자인 accepted 상태 제안들 찾기
-        from django.db.models import Q
+        """구매자의 거래중 목록 조회"""
+        # 현재 사용자가 구매자이고 accepted 상태인 제안들 찾기
         accepted_offers = ElectronicsOffer.objects.filter(
-            Q(buyer=request.user) | Q(electronics__seller=request.user),
+            buyer=request.user,
             status='accepted'
         ).select_related('electronics', 'electronics__seller').prefetch_related('electronics__images')
 
