@@ -202,9 +202,12 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         # GET 요청 시 폼 표시
         from django.template.response import TemplateResponse
 
-        # 지역 목록
-        from .models_region import Region
-        regions = Region.objects.filter(level=2).order_by('name')
+        # 지역 목록 (하드코딩)
+        TARGET_REGIONS = [
+            '강남구', '서초구', '송파구', '강동구', '마포구',
+            '성남시', '수원시', '고양시', '용인시', '화성시'
+        ]
+        regions = [{'name': region} for region in TARGET_REGIONS]
 
         # 카테고리 목록
         categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
