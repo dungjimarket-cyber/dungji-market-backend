@@ -3,10 +3,8 @@
 Google Places API 기반 지역별 업체 정보 제공
 """
 from django.db import models
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from api.models_region import Region
-
-User = get_user_model()
 
 
 class LocalBusinessCategory(models.Model):
@@ -272,7 +270,7 @@ class LocalBusinessView(models.Model):
     )
 
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
