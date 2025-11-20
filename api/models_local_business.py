@@ -106,12 +106,16 @@ class LocalBusiness(models.Model):
     latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
+        null=True,
+        blank=True,
         verbose_name='위도'
     )
 
     longitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,
+        null=True,
+        blank=True,
         verbose_name='경도'
     )
 
