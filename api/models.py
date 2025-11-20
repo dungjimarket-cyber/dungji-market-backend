@@ -18,6 +18,13 @@ from .models_inquiry import Inquiry
 from .models_popup import Popup
 # 닉네임 변경 이력 모델 import
 from .models_nickname import NicknameChangeHistory
+# 지역 업체 정보 모델 import
+from .models_local_business import (
+    LocalBusinessCategory,
+    LocalBusiness,
+    LocalBusinessLink,
+    LocalBusinessView
+)
 
 logger = logging.getLogger(__name__)
 
