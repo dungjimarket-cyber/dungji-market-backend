@@ -130,7 +130,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def init_categories_view(self, request):
-        """카테고리 초기화 실행"""
+        """카테고리 초기화 실행 (GET 요청으로 실행)"""
         try:
             call_command('init_local_business_categories')
             self.message_user(request, "✅ 7개 업종 카테고리가 생성되었습니다!", messages.SUCCESS)
