@@ -129,7 +129,9 @@ class Command(BaseCommand):
                         self.stdout.write(f"    ↻ {business.name} (업데이트)")
 
             except Exception as e:
-                logger.error(f"업체 저장 실패: {place.get('name')} - {str(e)}")
+                error_msg = f"업체 저장 실패: {place.get('name')} - {str(e)}"
+                logger.error(error_msg)
+                self.stdout.write(self.style.ERROR(f"    ❌ {error_msg}"))
                 continue
 
         return count
