@@ -38,6 +38,7 @@ class LocalBusinessListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_icon = serializers.CharField(source='category.icon', read_only=True)
     # region_name은 이제 모델 필드이므로 자동 포함
+    rating = serializers.FloatField(read_only=True)
 
     class Meta:
         model = LocalBusiness
@@ -59,6 +60,7 @@ class LocalBusinessDetailSerializer(serializers.ModelSerializer):
     category = LocalBusinessCategorySerializer(read_only=True)
     # region_name은 이제 모델 필드이므로 자동 포함
     links = LocalBusinessLinkSerializer(many=True, read_only=True)
+    rating = serializers.FloatField(read_only=True)
 
     class Meta:
         model = LocalBusiness
