@@ -14,9 +14,18 @@ from decimal import Decimal
 logger = logging.getLogger(__name__)
 
 # 하드코딩된 지역 리스트 (Region 테이블 불필요)
+# 형식: (저장용 전체명, Google API 검색용 짧은 이름)
 TARGET_REGIONS = [
-    '강남구', '서초구', '송파구', '강동구', '마포구',  # 서울 5개구
-    '성남시', '수원시', '고양시', '용인시', '화성시'   # 수도권 5개시
+    ('서울특별시 강남구', '강남구'),
+    ('서울특별시 서초구', '서초구'),
+    ('서울특별시 송파구', '송파구'),
+    ('서울특별시 강동구', '강동구'),
+    ('서울특별시 마포구', '마포구'),
+    ('경기도 성남시', '성남시'),
+    ('경기도 수원시', '수원시'),
+    ('경기도 고양시', '고양시'),
+    ('경기도 용인시', '용인시'),
+    ('경기도 화성시', '화성시'),
 ]
 
 
@@ -53,9 +62,10 @@ class Command(BaseCommand):
         # 지역 필터링 (하드코딩된 리스트 사용)
         regions = TARGET_REGIONS
         if options['region']:
-            regions = [r for r in TARGET_REGIONS if options['region'] in r]
+            regions = [r for r in TARGET_REGIONS if options['region'] in r[0] or options['region'] in r[1]]
 
-        self.stdout.write(f"🎯 대상 지역: {len(regions)}개 - {', '.join(regions)}")
+        region_display = ', '.join([r[0] for r in regions])
+        self.stdout.write(f"🎯 대상 지역: {len(regions)}개 - {region_display}")
         self.stdout.write(f"🎯 대상 업종: {categories.count()}개")
 
         if categories.count() == 0:
@@ -65,12 +75,12 @@ class Command(BaseCommand):
         limit = options['limit']
 
         total_collected = 0
-        for region_name in regions:
+        for region_full_name, region_short_name in regions:
             for category in categories:
-                self.stdout.write(f"\n📍 {region_name} - {category.name}")
+                self.stdout.write(f"\n📍 {region_full_name} - {category.name}")
 
                 try:
-                    count = self.collect_businesses(region_name, category, limit)
+                    count = self.collect_businesses(region_full_name, region_short_name, category, limit)
                     total_collected += count
                     self.stdout.write(self.style.SUCCESS(f"  ✅ {count}개 수집"))
 
@@ -83,11 +93,11 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"\n=== 완료: 총 {total_collected}개 업체 수집 ==="))
 
-    def collect_businesses(self, region_name, category, limit):
+    def collect_businesses(self, region_full_name, region_short_name, category, limit):
         """특정 지역+업종의 업체 수집"""
-        # Google Places API 호출
+        # Google Places API 호출 (짧은 이름 사용)
         places = self.fetch_google_places(
-            city=region_name,
+            city=region_short_name,
             category=category.name_en,
             place_type=category.google_place_type,
             max_results=limit
@@ -96,7 +106,7 @@ class Command(BaseCommand):
         if not places:
             return 0
 
-        # DB 저장
+        # DB 저장 (전체 이름 사용)
         count = 0
         for rank, place in enumerate(places[:limit], start=1):
             try:
@@ -105,7 +115,7 @@ class Command(BaseCommand):
                         google_place_id=place['placeId'],
                         defaults={
                             'category': category,
-                            'region_name': region_name,
+                            'region_name': region_full_name,
                             'name': place['name'],
                             'address': place['address'],
                             'phone_number': place.get('phoneNumber'),

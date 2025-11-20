@@ -204,8 +204,10 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 
         # 지역 목록 (하드코딩)
         TARGET_REGIONS = [
-            '강남구', '서초구', '송파구', '강동구', '마포구',
-            '성남시', '수원시', '고양시', '용인시', '화성시'
+            '서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구',
+            '서울특별시 강동구', '서울특별시 마포구',
+            '경기도 성남시', '경기도 수원시', '경기도 고양시',
+            '경기도 용인시', '경기도 화성시'
         ]
         regions = [{'name': region} for region in TARGET_REGIONS]
 
