@@ -133,13 +133,13 @@ class LocalBusiness(models.Model):
     )
 
     google_maps_url = models.URLField(
-        max_length=500,
+        max_length=1000,
         blank=True,
         verbose_name='구글 지도 URL'
     )
 
     photo_url = models.URLField(
-        max_length=500,
+        max_length=1000,
         blank=True,
         null=True,
         verbose_name='대표 사진 URL'
