@@ -184,7 +184,17 @@ document.getElementById('collectForm').addEventListener('submit', async function
 });
 
 async function fetchGooglePlaces(city, category, coordinates, maxResults) {
-    const apiKey = '{{ google_api_key }}';
+    const apiKey = '{{ google_api_key|escapejs }}';
+
+    // API 키 디버깅
+    console.log('API Key exists:', !!apiKey);
+    console.log('API Key length:', apiKey.length);
+    console.log('API Key prefix:', apiKey.substring(0, 20));
+
+    if (!apiKey || apiKey === '') {
+        throw new Error('API 키가 설정되지 않았습니다');
+    }
+
     const apiUrl = 'https://places.googleapis.com/v1/places:searchText';
 
     const requestBody = {
