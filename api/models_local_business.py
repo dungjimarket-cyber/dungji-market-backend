@@ -4,7 +4,6 @@ Google Places API 기반 지역별 업체 정보 제공
 """
 from django.db import models
 from django.conf import settings
-from api.models_region import Region
 
 
 class LocalBusinessCategory(models.Model):
@@ -72,11 +71,11 @@ class LocalBusiness(models.Model):
         verbose_name='업종'
     )
 
-    region = models.ForeignKey(
-        Region,
-        on_delete=models.CASCADE,
-        related_name='local_businesses',
-        verbose_name='지역'
+    region_name = models.CharField(
+        max_length=50,
+        verbose_name='지역명',
+        help_text='예: 강남구, 수원시',
+        db_index=True
     )
 
     # 기본 정보
@@ -186,16 +185,16 @@ class LocalBusiness(models.Model):
         db_table = 'local_business'
         verbose_name = '지역 업체'
         verbose_name_plural = '지역 업체'
-        ordering = ['region', 'category', 'rank_in_region']
+        ordering = ['region_name', 'category', 'rank_in_region']
         indexes = [
-            models.Index(fields=['region', 'category', 'rank_in_region']),
+            models.Index(fields=['region_name', 'category', 'rank_in_region']),
             models.Index(fields=['google_place_id']),
             models.Index(fields=['is_new', '-created_at']),
             models.Index(fields=['-popularity_score']),
         ]
 
     def __str__(self):
-        return f"{self.name} ({self.region.name})"
+        return f"{self.name} ({self.region_name})"
 
 
 class LocalBusinessLink(models.Model):

@@ -5,13 +5,19 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.db import transaction
-from api.models import LocalBusinessCategory, LocalBusiness, Region
+from api.models import LocalBusinessCategory, LocalBusiness
 import requests
 import time
 import logging
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+# 하드코딩된 지역 리스트 (Region 테이블 불필요)
+TARGET_REGIONS = [
+    '강남구', '서초구', '송파구', '강동구', '마포구',  # 서울 5개구
+    '성남시', '수원시', '고양시', '용인시', '화성시'   # 수도권 5개시
+]
 
 
 class Command(BaseCommand):
@@ -39,42 +45,32 @@ class Command(BaseCommand):
         """메인 실행 로직"""
         self.stdout.write(self.style.SUCCESS('=== 지역 업체 정보 수집 시작 ==='))
 
-        # 필터링
+        # 카테고리 필터링
         categories = LocalBusinessCategory.objects.filter(is_active=True)
         if options['category']:
             categories = categories.filter(name=options['category'])
 
-        # Region 데이터 확인
-        total_regions = Region.objects.count()
-        self.stdout.write(f"📊 전체 Region 개수: {total_regions}")
-
-        if total_regions == 0:
-            self.stdout.write(self.style.ERROR('❌ Region 테이블이 비어있습니다!'))
-            self.stdout.write('해결 방법: python manage.py loaddata regions.json')
-            return
-
-        # 시/군/구 레벨 찾기 (level=2 또는 level=3일 수 있음)
-        regions = Region.objects.filter(level=2)
-        if regions.count() == 0:
-            # level=2가 없으면 level=3 시도
-            regions = Region.objects.filter(level=3)
-            self.stdout.write(f"⚠️ level=2 없음, level=3 사용: {regions.count()}개")
-
+        # 지역 필터링 (하드코딩된 리스트 사용)
+        regions = TARGET_REGIONS
         if options['region']:
-            regions = regions.filter(name__icontains=options['region'])
+            regions = [r for r in TARGET_REGIONS if options['region'] in r]
 
-        self.stdout.write(f"🎯 대상 지역: {regions.count()}개")
+        self.stdout.write(f"🎯 대상 지역: {len(regions)}개 - {', '.join(regions)}")
         self.stdout.write(f"🎯 대상 업종: {categories.count()}개")
+
+        if categories.count() == 0:
+            self.stdout.write(self.style.ERROR('❌ 활성화된 카테고리가 없습니다!'))
+            return
 
         limit = options['limit']
 
         total_collected = 0
-        for region in regions:
+        for region_name in regions:
             for category in categories:
-                self.stdout.write(f"\n📍 {region.name} - {category.name}")
+                self.stdout.write(f"\n📍 {region_name} - {category.name}")
 
                 try:
-                    count = self.collect_businesses(region, category, limit)
+                    count = self.collect_businesses(region_name, category, limit)
                     total_collected += count
                     self.stdout.write(self.style.SUCCESS(f"  ✅ {count}개 수집"))
 
@@ -87,11 +83,11 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"\n=== 완료: 총 {total_collected}개 업체 수집 ==="))
 
-    def collect_businesses(self, region, category, limit):
+    def collect_businesses(self, region_name, category, limit):
         """특정 지역+업종의 업체 수집"""
         # Google Places API 호출
         places = self.fetch_google_places(
-            city=region.name,
+            city=region_name,
             category=category.name_en,
             place_type=category.google_place_type,
             max_results=limit
@@ -109,7 +105,7 @@ class Command(BaseCommand):
                         google_place_id=place['placeId'],
                         defaults={
                             'category': category,
-                            'region': region,
+                            'region_name': region_name,
                             'name': place['name'],
                             'address': place['address'],
                             'phone_number': place.get('phoneNumber'),
