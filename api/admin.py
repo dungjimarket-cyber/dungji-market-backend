@@ -50,6 +50,12 @@ try:
 except ImportError:
     pass
 
+# 지역 업체 Admin 등록
+try:
+    from . import admin_local_business
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # 설정 확인 로깅

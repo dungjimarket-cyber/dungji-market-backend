@@ -1,0 +1,99 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}지역 업체 정보 수집{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">홈</a>
+    &rsaquo; <a href="{% url 'admin:api_localbusiness_changelist' %}">지역 업체</a>
+    &rsaquo; 데이터 수집
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="margin-bottom: 20px;">🗺️ 지역 업체 정보 수집</h1>
+
+    <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <strong>⚠️ 주의사항</strong>
+        <ul style="margin: 10px 0 0 20px;">
+            <li>Google Places API를 사용하여 데이터를 수집합니다.</li>
+            <li>API 호출마다 비용이 발생할 수 있습니다.</li>
+            <li>이미 수집된 업체는 자동으로 업데이트됩니다.</li>
+            <li>한 지역당 약 1-2초 소요됩니다.</li>
+        </ul>
+    </div>
+
+    <form method="post" style="margin-top: 20px;">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 20px;">
+            <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택 (선택사항)</label>
+            <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- 전체 지역 (서울 + 수도권 5개) --</option>
+                {% for region in regions %}
+                    {% if region.name in '강남구,서초구,송파구,강동구,마포구,성남시,수원시,고양시,용인시,화성시' %}
+                    <option value="{{ region.name }}">{{ region.name }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                비어있으면 서울 5개구 + 수도권 5개시 전체 수집
+            </p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label for="category" style="display: block; margin-bottom: 5px; font-weight: bold;">업종 선택 (선택사항)</label>
+            <select name="category" id="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- 전체 업종 (7개) --</option>
+                {% for cat in categories %}
+                <option value="{{ cat.name }}">{{ cat.icon }} {{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                비어있으면 세무사, 변호사, 법무사, 공인중개사, 인테리어, 휴대폰, 정비소 전체 수집
+            </p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label for="limit" style="display: block; margin-bottom: 5px; font-weight: bold;">지역당 최대 업체 수</label>
+            <input type="number" name="limit" id="limit" value="5" min="1" max="20"
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                각 지역+업종 조합당 수집할 최대 업체 수 (기본: 5개, 최대: 20개)
+            </p>
+        </div>
+
+        <div style="background: #e7f3ff; border: 1px solid #2196F3; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+            <strong>📊 예상 수집량</strong>
+            <ul style="margin: 10px 0 0 20px;">
+                <li><strong>1개 지역 + 전체 업종:</strong> 약 35개 업체 (7개 업종 × 5개)</li>
+                <li><strong>전체 지역 + 1개 업종:</strong> 약 50개 업체 (10개 지역 × 5개)</li>
+                <li><strong>전체 지역 + 전체 업종:</strong> 약 350개 업체 (10개 지역 × 7개 업종 × 5개)</li>
+            </ul>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button type="submit"
+                    style="flex: 1; padding: 12px 24px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                🚀 데이터 수집 시작
+            </button>
+            <a href="{% url 'admin:api_localbusiness_changelist' %}"
+               style="flex: 1; padding: 12px 24px; background: #ddd; color: #333; text-align: center; text-decoration: none; border-radius: 4px; font-size: 16px;">
+                취소
+            </a>
+        </div>
+    </form>
+
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+        <h3 style="margin-bottom: 10px;">💡 사용 팁</h3>
+        <ul style="margin-left: 20px; color: #666;">
+            <li><strong>처음 사용:</strong> "강남구" 1개 지역만 선택해서 테스트해보세요</li>
+            <li><strong>빠른 수집:</strong> 특정 지역 + 특정 업종을 선택하면 빠릅니다</li>
+            <li><strong>전체 수집:</strong> 시간이 오래 걸립니다 (약 5-10분)</li>
+            <li><strong>업데이트:</strong> 같은 설정으로 다시 실행하면 기존 데이터가 업데이트됩니다</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
