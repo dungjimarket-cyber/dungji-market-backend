@@ -4,7 +4,7 @@
 {% block title %}지역 업체 정보 수집 (Google API){% endblock %}
 
 {% block extrahead %}
-<script src="https://maps.googleapis.com/maps/api/js?key={{ google_api_key }}&libraries=places&language=ko"></script>
+<!-- Google Maps API 불필요 - Fetch API로 직접 호출 -->
 {% endblock %}
 
 {% block breadcrumbs %}
@@ -183,26 +183,68 @@ document.getElementById('collectForm').addEventListener('submit', async function
     }
 });
 
-function fetchGooglePlaces(city, category, coordinates, maxResults) {
-    return new Promise((resolve, reject) => {
-        const service = new google.maps.places.PlacesService(document.createElement('div'));
+async function fetchGooglePlaces(city, category, coordinates, maxResults) {
+    const apiKey = '{{ google_api_key }}';
+    const apiUrl = 'https://places.googleapis.com/v1/places:searchText';
 
-        const request = {
-            location: new google.maps.LatLng(coordinates.latitude, coordinates.longitude),
-            radius: 5000,
-            query: `${city} ${category}`,
-            language: 'ko'
-        };
-
-        service.textSearch(request, (results, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK) {
-                const filtered = results.filter(p => (p.rating || 0) >= 4.0).slice(0, maxResults);
-                resolve(filtered);
-            } else {
-                reject(new Error(`Google API 오류: ${status}`));
+    const requestBody = {
+        textQuery: `${city} ${category}`,
+        languageCode: 'ko',
+        locationBias: {
+            circle: {
+                center: {
+                    latitude: coordinates.latitude,
+                    longitude: coordinates.longitude
+                },
+                radius: 5000.0
             }
-        });
+        },
+        minRating: 4.0,
+        maxResultCount: maxResults
+    };
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos'
+    };
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(requestBody)
     });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Google API 오류: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.places || data.places.length === 0) {
+        return [];
+    }
+
+    // 프론트엔드 랭킹 형식으로 변환
+    return data.places.map(place => ({
+        place_id: place.id,
+        name: place.displayName.text,
+        formatted_address: place.formattedAddress,
+        vicinity: place.formattedAddress,
+        formatted_phone_number: place.internationalPhoneNumber,
+        rating: place.rating,
+        user_ratings_total: place.userRatingCount,
+        geometry: {
+            location: {
+                lat: () => place.location.latitude,
+                lng: () => place.location.longitude
+            }
+        },
+        photos: place.photos ? place.photos.map(photo => ({
+            getUrl: (opts) => `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=${opts.maxWidth}&key=${apiKey}`
+        })) : null
+    }));
 }
 
 function calculatePopularityScore(rating, reviewCount) {
