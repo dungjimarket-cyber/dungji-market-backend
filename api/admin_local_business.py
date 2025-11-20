@@ -69,9 +69,9 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         'is_verified',
         'last_synced_at'
     ]
-    list_filter = ['region', 'category', 'is_verified', 'is_new']
-    search_fields = ['name', 'address', 'phone_number']
-    ordering = ['region', 'category', 'rank_in_region']
+    list_filter = ['region_name', 'category', 'is_verified', 'is_new']
+    search_fields = ['name', 'address', 'phone_number', 'region_name']
+    ordering = ['region_name', 'category', 'rank_in_region']
     readonly_fields = [
         'google_place_id',
         'latitude',
@@ -86,7 +86,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('기본 정보', {
-            'fields': ('category', 'region', 'name', 'address', 'phone_number')
+            'fields': ('category', 'region_name', 'name', 'address', 'phone_number')
         }),
         ('평점 및 순위', {
             'fields': ('rating', 'review_count', 'popularity_score', 'rank_in_region')
@@ -118,9 +118,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             return f"{obj.rank_in_region}위"
     rank_badge.short_description = '순위'
 
-    def region_name(self, obj):
-        return obj.region.name
-    region_name.short_description = '지역'
+    # region_name은 이제 모델 필드이므로 메서드 불필요
 
     def category_name(self, obj):
         return f"{obj.category.icon} {obj.category.name}"
@@ -228,7 +226,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
     def collect_region_businesses(self, request, queryset):
         """선택한 지역의 업체 수집"""
         # 선택된 업체들의 지역 추출
-        regions = set(queryset.values_list('region__name', flat=True))
+        regions = set(queryset.values_list('region_name', flat=True))
 
         if not regions:
             self.message_user(request, "지역을 선택해주세요.", messages.WARNING)
