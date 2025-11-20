@@ -140,6 +140,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('collect-businesses/', self.admin_site.admin_view(self.collect_businesses_view), name='collect_local_businesses'),
+            path('collect-v2/', self.admin_site.admin_view(self.collect_v2_view), name='collect_local_businesses_v2'),
         ]
         return custom_urls + urls
 
@@ -284,6 +285,28 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         self.message_user(request, "개별 업체 업데이트 기능은 준비 중입니다.", messages.INFO)
 
     update_selected_businesses.short_description = "🔄 선택한 업체 정보 업데이트"
+
+    def collect_v2_view(self, request):
+        """프론트엔드 방식 데이터 수집 페이지"""
+        from django.template.response import TemplateResponse
+        from django.conf import settings
+
+        # 카테고리 목록
+        categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': '지역 업체 정보 수집 (Google API)',
+            'categories': categories,
+            'google_api_key': settings.GOOGLE_PLACES_API_KEY,
+            'opts': self.model._meta,
+        }
+
+        return TemplateResponse(
+            request,
+            'admin/local_business_collect_v2.html',
+            context
+        )
 
     def changelist_view(self, request, extra_context=None):
         """목록 페이지에 커스텀 버튼 추가"""

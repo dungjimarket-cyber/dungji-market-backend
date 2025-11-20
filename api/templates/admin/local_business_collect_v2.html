@@ -1,0 +1,222 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}지역 업체 정보 수집 (Google API){% endblock %}
+
+{% block extrahead %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_api_key }}&libraries=places&language=ko"></script>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">홈</a>
+    &rsaquo; <a href="{% url 'admin:api_localbusiness_changelist' %}">지역 업체</a>
+    &rsaquo; 데이터 수집 (Google API)
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h1 style="margin-bottom: 20px;">🗺️ 지역 업체 정보 수집 (Google Places API)</h1>
+
+    <div style="background: #e7f3ff; border: 1px solid #2196F3; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <strong>ℹ️ 안내</strong>
+        <ul style="margin: 10px 0 0 20px;">
+            <li>브라우저에서 직접 Google Places API를 호출합니다</li>
+            <li>프론트엔드 환경변수에 설정된 API 키를 사용합니다</li>
+            <li>랭킹 페이지와 동일한 방식입니다</li>
+        </ul>
+    </div>
+
+    <form id="collectForm" style="margin-top: 20px;">
+        <div style="margin-bottom: 20px;">
+            <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택</label>
+            <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
+                <option value="">-- 지역 선택 --</option>
+                <option value="서울특별시 강남구">서울특별시 강남구</option>
+                <option value="서울특별시 서초구">서울특별시 서초구</option>
+                <option value="서울특별시 송파구">서울특별시 송파구</option>
+                <option value="서울특별시 강동구">서울특별시 강동구</option>
+                <option value="서울특별시 마포구">서울특별시 마포구</option>
+                <option value="경기도 성남시">경기도 성남시</option>
+                <option value="경기도 수원시">경기도 수원시</option>
+                <option value="경기도 고양시">경기도 고양시</option>
+                <option value="경기도 용인시">경기도 용인시</option>
+                <option value="경기도 화성시">경기도 화성시</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label for="category" style="display: block; margin-bottom: 5px; font-weight: bold;">업종 선택</label>
+            <select name="category" id="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
+                <option value="">-- 업종 선택 --</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" data-name-en="{{ cat.name_en }}">{{ cat.icon }} {{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label for="limit" style="display: block; margin-bottom: 5px; font-weight: bold;">수집 개수</label>
+            <input type="number" name="limit" id="limit" value="5" min="1" max="20"
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+
+        <button type="submit" id="collectBtn"
+                style="width: 100%; padding: 12px 24px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">
+            🚀 데이터 수집 시작
+        </button>
+    </form>
+
+    <div id="progressContainer" style="display: none; margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+        <h3 style="margin-bottom: 15px;">📊 수집 진행 상황</h3>
+
+        <div style="background: white; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #4CAF50;" id="successCount">0</div>
+                    <div style="color: #666; font-size: 12px;">성공</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #f44336;" id="failCount">0</div>
+                    <div style="color: #666; font-size: 12px;">실패</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #2196F3;" id="totalCount">0</div>
+                    <div style="color: #666; font-size: 12px;">총</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: white; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+            <h4 style="margin-bottom: 10px;">실시간 로그</h4>
+            <div id="logContainer" style="font-family: monospace; font-size: 12px; line-height: 1.6;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const REGION_COORDINATES = {
+    '강남구': {latitude: 37.5172, longitude: 127.0473},
+    '서초구': {latitude: 37.4837, longitude: 127.0324},
+    '송파구': {latitude: 37.5145, longitude: 127.1059},
+    '강동구': {latitude: 37.5301, longitude: 127.1238},
+    '마포구': {latitude: 37.5663, longitude: 126.9019},
+    '성남시': {latitude: 37.4201, longitude: 127.1262},
+    '수원시': {latitude: 37.2636, longitude: 127.0286},
+    '고양시': {latitude: 37.6584, longitude: 126.8320},
+    '용인시': {latitude: 37.2410, longitude: 127.1776},
+    '화성시': {latitude: 37.1990, longitude: 126.8312}
+};
+
+document.getElementById('collectForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const region = document.getElementById('region').value;
+    const categorySelect = document.getElementById('category');
+    const categoryId = categorySelect.value;
+    const categoryNameEn = categorySelect.options[categorySelect.selectedIndex].dataset.nameEn;
+    const limit = parseInt(document.getElementById('limit').value);
+
+    const regionShort = region.split(' ').pop();
+    const coordinates = REGION_COORDINATES[regionShort];
+
+    document.getElementById('progressContainer').style.display = 'block';
+    document.getElementById('collectBtn').disabled = true;
+    document.getElementById('collectBtn').textContent = '⏳ 수집 중...';
+
+    addLog('🔍 Google Places API 호출 중...');
+
+    try {
+        // Google Places API 호출
+        const places = await fetchGooglePlaces(regionShort, categoryNameEn, coordinates, limit);
+
+        addLog(`✅ ${places.length}개 업체 발견`);
+
+        // 백엔드로 저장
+        const businesses = places.map((place, index) => ({
+            google_place_id: place.place_id,
+            category_id: parseInt(categoryId),
+            region_name: region,
+            name: place.name,
+            address: place.formatted_address || place.vicinity,
+            phone_number: place.formatted_phone_number,
+            latitude: place.geometry.location.lat(),
+            longitude: place.geometry.location.lng(),
+            rating: place.rating,
+            review_count: place.user_ratings_total || 0,
+            google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+            photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
+            popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
+            rank_in_region: index + 1,
+            is_new: (place.user_ratings_total || 0) < 10
+        }));
+
+        addLog('💾 백엔드에 저장 중...');
+
+        const response = await fetch('/api/local-businesses/bulk_create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({businesses})
+        });
+
+        const result = await response.json();
+
+        document.getElementById('successCount').textContent = result.created + result.updated;
+        document.getElementById('failCount').textContent = result.errors.length;
+        document.getElementById('totalCount').textContent = result.total;
+
+        addLog(`✅ 완료! 생성: ${result.created}개, 업데이트: ${result.updated}개`);
+
+        if (result.errors.length > 0) {
+            result.errors.forEach(err => addLog(`❌ ${err}`, 'error'));
+        }
+
+    } catch (error) {
+        addLog(`❌ 오류: ${error.message}`, 'error');
+    } finally {
+        document.getElementById('collectBtn').disabled = false;
+        document.getElementById('collectBtn').textContent = '🚀 데이터 수집 시작';
+    }
+});
+
+function fetchGooglePlaces(city, category, coordinates, maxResults) {
+    return new Promise((resolve, reject) => {
+        const service = new google.maps.places.PlacesService(document.createElement('div'));
+
+        const request = {
+            location: new google.maps.LatLng(coordinates.latitude, coordinates.longitude),
+            radius: 5000,
+            query: `${city} ${category}`,
+            language: 'ko'
+        };
+
+        service.textSearch(request, (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                const filtered = results.filter(p => (p.rating || 0) >= 4.0).slice(0, maxResults);
+                resolve(filtered);
+            } else {
+                reject(new Error(`Google API 오류: ${status}`));
+            }
+        });
+    });
+}
+
+function calculatePopularityScore(rating, reviewCount) {
+    const C = 10;
+    const m = 4.0;
+    const adjustedRating = (C * m + reviewCount * rating) / (C + reviewCount);
+    return adjustedRating * Math.log10(reviewCount + 1);
+}
+
+function addLog(message, type = 'info') {
+    const logContainer = document.getElementById('logContainer');
+    const color = type === 'error' ? '#f44336' : type === 'success' ? '#4CAF50' : '#666';
+    logContainer.innerHTML += `<div style="color: ${color};">${message}</div>`;
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+</script>
+{% endblock %}

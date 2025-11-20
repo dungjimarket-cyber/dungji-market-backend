@@ -33,8 +33,8 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
         return self.queryset.order_by('order_index', 'name')
 
 
-class LocalBusinessViewSet(viewsets.ReadOnlyModelViewSet):
-    """지역 업체 ViewSet (읽기 전용)"""
+class LocalBusinessViewSet(viewsets.ModelViewSet):
+    """지역 업체 ViewSet"""
 
     queryset = LocalBusiness.objects.select_related(
         'category'
@@ -154,3 +154,72 @@ class LocalBusinessViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = self.get_serializer(businesses, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """프론트에서 수집한 업체 데이터 일괄 저장"""
+        from django.db import transaction
+        from decimal import Decimal
+        from django.utils import timezone
+
+        businesses_data = request.data.get('businesses', [])
+
+        if not businesses_data:
+            return Response(
+                {'error': 'businesses 배열이 필요합니다'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_count = 0
+        updated_count = 0
+        errors = []
+
+        for business_data in businesses_data:
+            try:
+                with transaction.atomic():
+                    category_id = business_data.get('category_id')
+                    if not category_id:
+                        errors.append(f"{business_data.get('name')}: category_id 필수")
+                        continue
+
+                    category = LocalBusinessCategory.objects.get(id=category_id)
+
+                    business, created = LocalBusiness.objects.update_or_create(
+                        google_place_id=business_data['google_place_id'],
+                        defaults={
+                            'category': category,
+                            'region_name': business_data.get('region_name', ''),
+                            'name': business_data.get('name', ''),
+                            'address': business_data.get('address', ''),
+                            'phone_number': business_data.get('phone_number'),
+                            'latitude': Decimal(str(business_data['latitude'])) if business_data.get('latitude') else None,
+                            'longitude': Decimal(str(business_data['longitude'])) if business_data.get('longitude') else None,
+                            'rating': Decimal(str(business_data['rating'])) if business_data.get('rating') else None,
+                            'review_count': business_data.get('review_count', 0),
+                            'google_maps_url': business_data.get('google_maps_url', ''),
+                            'photo_url': business_data.get('photo_url'),
+                            'popularity_score': business_data.get('popularity_score', 0),
+                            'rank_in_region': business_data.get('rank_in_region', 999),
+                            'is_new': business_data.get('is_new', False),
+                            'last_synced_at': timezone.now(),
+                        }
+                    )
+
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
+
+            except LocalBusinessCategory.DoesNotExist:
+                errors.append(f"{business_data.get('name')}: 카테고리 {category_id} 없음")
+            except Exception as e:
+                errors.append(f"{business_data.get('name')}: {str(e)}")
+
+        return Response({
+            'success': True,
+            'created': created_count,
+            'updated': updated_count,
+            'errors': errors,
+            'total': len(businesses_data)
+        })
+
