@@ -44,9 +44,27 @@ class Command(BaseCommand):
         if options['category']:
             categories = categories.filter(name=options['category'])
 
-        regions = Region.objects.filter(level=2)  # 시/군/구만
+        # Region 데이터 확인
+        total_regions = Region.objects.count()
+        self.stdout.write(f"📊 전체 Region 개수: {total_regions}")
+
+        if total_regions == 0:
+            self.stdout.write(self.style.ERROR('❌ Region 테이블이 비어있습니다!'))
+            self.stdout.write('해결 방법: python manage.py loaddata regions.json')
+            return
+
+        # 시/군/구 레벨 찾기 (level=2 또는 level=3일 수 있음)
+        regions = Region.objects.filter(level=2)
+        if regions.count() == 0:
+            # level=2가 없으면 level=3 시도
+            regions = Region.objects.filter(level=3)
+            self.stdout.write(f"⚠️ level=2 없음, level=3 사용: {regions.count()}개")
+
         if options['region']:
             regions = regions.filter(name__icontains=options['region'])
+
+        self.stdout.write(f"🎯 대상 지역: {regions.count()}개")
+        self.stdout.write(f"🎯 대상 업종: {categories.count()}개")
 
         limit = options['limit']
 
