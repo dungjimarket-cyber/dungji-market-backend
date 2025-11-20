@@ -125,8 +125,19 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('collect-businesses/', self.admin_site.admin_view(self.collect_businesses_view), name='collect_local_businesses'),
+            path('init-categories/', self.admin_site.admin_view(self.init_categories_view), name='init_local_business_categories'),
         ]
         return custom_urls + urls
+
+    def init_categories_view(self, request):
+        """카테고리 초기화 실행"""
+        try:
+            call_command('init_local_business_categories')
+            self.message_user(request, "✅ 7개 업종 카테고리가 생성되었습니다!", messages.SUCCESS)
+        except Exception as e:
+            self.message_user(request, f"❌ 오류 발생: {str(e)}", messages.ERROR)
+
+        return redirect('../')
 
     def collect_businesses_view(self, request):
         """데이터 수집 실행 페이지"""
