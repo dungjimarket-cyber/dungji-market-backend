@@ -294,11 +294,14 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         # 카테고리 목록
         categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
 
+        # API 키 가져오기 (환경변수 우선, 없으면 직접 설정)
+        api_key = settings.GOOGLE_PLACES_API_KEY or 'AIzaSyBm_nr1QJps0tMdLiYAAFEcKD6QOdqt0Tw'
+
         context = {
             **self.admin_site.each_context(request),
             'title': '지역 업체 정보 수집 (Google API)',
             'categories': categories,
-            'google_api_key': settings.GOOGLE_PLACES_API_KEY,
+            'google_api_key': api_key,
             'opts': self.model._meta,
         }
 
