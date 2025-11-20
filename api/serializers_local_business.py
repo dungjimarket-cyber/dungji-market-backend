@@ -39,6 +39,8 @@ class LocalBusinessListSerializer(serializers.ModelSerializer):
     category_icon = serializers.CharField(source='category.icon', read_only=True)
     # region_name은 이제 모델 필드이므로 자동 포함
     rating = serializers.FloatField(read_only=True)
+    # photo_url은 프록시 API 사용을 위해 boolean만 반환
+    has_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = LocalBusiness
@@ -49,9 +51,13 @@ class LocalBusinessListSerializer(serializers.ModelSerializer):
             'rating', 'review_count',
             'popularity_score', 'rank_in_region',
             'is_verified', 'is_new',
-            'photo_url', 'view_count',
+            'has_photo', 'view_count',
             'created_at'
         ]
+
+    def get_has_photo(self, obj):
+        """사진 존재 여부만 반환 (URL은 노출 안 함)"""
+        return bool(obj.photo_url)
 
 
 class LocalBusinessDetailSerializer(serializers.ModelSerializer):

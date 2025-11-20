@@ -8,6 +8,11 @@ from rest_framework.permissions import AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 from django.utils import timezone
+from django.http import HttpResponse
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 from api.models_local_business import (
     LocalBusinessCategory,
@@ -157,10 +162,11 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
-        """프론트에서 수집한 업체 데이터 일괄 저장"""
+        """프론트에서 수집한 업체 데이터 일괄 저장 (30일 캐싱 정책)"""
         from django.db import transaction
         from decimal import Decimal
         from django.utils import timezone
+        from datetime import timedelta
 
         businesses_data = request.data.get('businesses', [])
 
@@ -172,7 +178,11 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
         created_count = 0
         updated_count = 0
+        skipped_count = 0
         errors = []
+
+        # 30일 기준
+        thirty_days_ago = timezone.now() - timedelta(days=30)
 
         for business_data in businesses_data:
             try:
@@ -183,32 +193,58 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         continue
 
                     category = LocalBusinessCategory.objects.get(id=category_id)
+                    google_place_id = business_data['google_place_id']
 
-                    business, created = LocalBusiness.objects.update_or_create(
-                        google_place_id=business_data['google_place_id'],
-                        defaults={
-                            'category': category,
-                            'region_name': business_data.get('region_name', ''),
-                            'name': business_data.get('name', ''),
-                            'address': business_data.get('address', ''),
-                            'phone_number': business_data.get('phone_number'),
-                            'latitude': Decimal(str(business_data['latitude'])) if business_data.get('latitude') else None,
-                            'longitude': Decimal(str(business_data['longitude'])) if business_data.get('longitude') else None,
-                            'rating': Decimal(str(business_data['rating'])) if business_data.get('rating') else None,
-                            'review_count': business_data.get('review_count', 0),
-                            'google_maps_url': business_data.get('google_maps_url', ''),
-                            'photo_url': business_data.get('photo_url'),
-                            'popularity_score': business_data.get('popularity_score', 0),
-                            'rank_in_region': business_data.get('rank_in_region', 999),
-                            'is_new': business_data.get('is_new', False),
-                            'last_synced_at': timezone.now(),
-                        }
-                    )
+                    # 기존 업체 확인
+                    try:
+                        existing = LocalBusiness.objects.get(google_place_id=google_place_id)
 
-                    if created:
-                        created_count += 1
-                    else:
+                        # 30일 이내 업데이트된 업체는 스킵 (photo_url 유지)
+                        if existing.last_synced_at and existing.last_synced_at > thirty_days_ago:
+                            skipped_count += 1
+                            continue
+
+                        # 30일 지났으면 전체 업데이트 (photo_url 포함)
+                        existing.category = category
+                        existing.region_name = business_data.get('region_name', '')
+                        existing.name = business_data.get('name', '')
+                        existing.address = business_data.get('address', '')
+                        existing.phone_number = business_data.get('phone_number')
+                        existing.latitude = Decimal(str(business_data['latitude'])) if business_data.get('latitude') else None
+                        existing.longitude = Decimal(str(business_data['longitude'])) if business_data.get('longitude') else None
+                        existing.rating = Decimal(str(business_data['rating'])) if business_data.get('rating') else None
+                        existing.review_count = business_data.get('review_count', 0)
+                        existing.google_maps_url = business_data.get('google_maps_url', '')
+                        existing.photo_url = business_data.get('photo_url')  # 30일 지났으니 갱신
+                        existing.popularity_score = business_data.get('popularity_score', 0)
+                        existing.rank_in_region = business_data.get('rank_in_region', 999)
+                        existing.is_new = business_data.get('is_new', False)
+                        existing.last_synced_at = timezone.now()
+                        existing.save()
+
                         updated_count += 1
+
+                    except LocalBusiness.DoesNotExist:
+                        # 신규 업체 생성
+                        LocalBusiness.objects.create(
+                            google_place_id=google_place_id,
+                            category=category,
+                            region_name=business_data.get('region_name', ''),
+                            name=business_data.get('name', ''),
+                            address=business_data.get('address', ''),
+                            phone_number=business_data.get('phone_number'),
+                            latitude=Decimal(str(business_data['latitude'])) if business_data.get('latitude') else None,
+                            longitude=Decimal(str(business_data['longitude'])) if business_data.get('longitude') else None,
+                            rating=Decimal(str(business_data['rating'])) if business_data.get('rating') else None,
+                            review_count=business_data.get('review_count', 0),
+                            google_maps_url=business_data.get('google_maps_url', ''),
+                            photo_url=business_data.get('photo_url'),
+                            popularity_score=business_data.get('popularity_score', 0),
+                            rank_in_region=business_data.get('rank_in_region', 999),
+                            is_new=business_data.get('is_new', False),
+                            last_synced_at=timezone.now(),
+                        )
+                        created_count += 1
 
             except LocalBusinessCategory.DoesNotExist:
                 errors.append(f"{business_data.get('name')}: 카테고리 {category_id} 없음")
@@ -219,7 +255,44 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
             'success': True,
             'created': created_count,
             'updated': updated_count,
+            'skipped': skipped_count,
             'errors': errors,
-            'total': len(businesses_data)
+            'total': len(businesses_data),
+            'message': f'30일 이내 업데이트된 {skipped_count}개 업체는 스킵했습니다 (photo_url 유지)'
         })
+
+    @action(detail=True, methods=['get'])
+    def photo(self, request, pk=None):
+        """업체 사진 프록시 (API 키 숨김)
+
+        사용법: /api/local-businesses/{id}/photo/
+        """
+        business = self.get_object()
+
+        if not business.photo_url:
+            return HttpResponse(status=404)
+
+        try:
+            # Google에서 이미지 다운로드 (타임아웃 5초)
+            response = requests.get(business.photo_url, timeout=5)
+
+            if response.status_code == 200:
+                # Content-Type 확인 (기본값: image/jpeg)
+                content_type = response.headers.get('Content-Type', 'image/jpeg')
+
+                # 이미지를 클라이언트에게 전달
+                return HttpResponse(
+                    response.content,
+                    content_type=content_type,
+                    headers={
+                        'Cache-Control': 'public, max-age=86400',  # 1일 캐싱
+                    }
+                )
+            else:
+                logger.error(f'Failed to fetch photo for business {pk}: {response.status_code}')
+                return HttpResponse(status=404)
+
+        except requests.RequestException as e:
+            logger.error(f'Error fetching photo for business {pk}: {str(e)}')
+            return HttpResponse(status=500)
 
