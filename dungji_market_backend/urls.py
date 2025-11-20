@@ -96,6 +96,7 @@ from api.views_mypage import (
 from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
 from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 from api.admin_sms_test import sms_test_view
+from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -121,6 +122,8 @@ router.register(r'popups', PopupViewSet, basename='popup')
 router.register(r'custom-groupbuys', CustomGroupBuyViewSet, basename='custom-groupbuy')
 router.register(r'custom-participants', CustomParticipantViewSet, basename='custom-participant')
 router.register(r'custom-favorites', CustomFavoriteViewSet, basename='custom-favorite')
+router.register(r'local-business-categories', LocalBusinessCategoryViewSet, basename='local-business-category')
+router.register(r'local-businesses', LocalBusinessViewSet, basename='local-business')
 
 urlpatterns = [
     path('admin/sms-test/', sms_test_view, name='admin_sms_test'),
