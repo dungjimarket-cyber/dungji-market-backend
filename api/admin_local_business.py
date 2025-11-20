@@ -135,6 +135,9 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             category = request.POST.get('category', '')
             limit = request.POST.get('limit', '5')
 
+            # AJAX 요청인지 확인
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
             try:
                 # 커맨드 실행
                 out = io.StringIO()
@@ -147,12 +150,39 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                 )
 
                 output = out.getvalue()
-                self.message_user(request, f"데이터 수집 완료!\n{output}", messages.SUCCESS)
+                logs = output.split('\n')
+
+                # 성공/실패 개수 계산
+                success_count = sum(1 for log in logs if '✅' in log)
+                fail_count = sum(1 for log in logs if '❌' in log)
+                total_count = success_count + fail_count
+
+                if is_ajax:
+                    # AJAX 응답: JSON
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        'status': 'completed',
+                        'logs': logs,
+                        'success': success_count,
+                        'fail': fail_count,
+                        'total': total_count,
+                    })
+                else:
+                    # 일반 요청: 리다이렉트
+                    self.message_user(request, f"데이터 수집 완료! 성공: {success_count}개, 실패: {fail_count}개", messages.SUCCESS)
+                    return redirect('..')
 
             except Exception as e:
-                self.message_user(request, f"오류 발생: {str(e)}", messages.ERROR)
-
-            return redirect('..')
+                if is_ajax:
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': str(e),
+                        'logs': [f'❌ 오류 발생: {str(e)}']
+                    }, status=500)
+                else:
+                    self.message_user(request, f"오류 발생: {str(e)}", messages.ERROR)
+                    return redirect('..')
 
         # GET 요청 시 폼 표시
         from django.template.response import TemplateResponse
