@@ -348,6 +348,9 @@ ALIGO_USER_ID = os.getenv('ALIGO_USER_ID', '')
 SMS_SENDER_NUMBER = os.getenv('SMS_SENDER_NUMBER', '010-1234-5678')
 USE_REAL_SMS = os.getenv('USE_REAL_SMS', 'False').lower() == 'true'
 
+# Google Places API (지역 업체 정보 수집용)
+GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
+
 # Logging configuration
 LOGGING = {
     'version': 1,
