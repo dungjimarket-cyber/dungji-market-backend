@@ -181,8 +181,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
                     photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
                     popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
-                    rank_in_region: index + 1,
-                    is_new: (place.user_ratings_total || 0) < 10
+                    rank_in_region: index + 1
                 }));
 
                 addLog('💾 백엔드에 저장 중...');

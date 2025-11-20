@@ -46,7 +46,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
     ).prefetch_related('links')
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'region_name', 'is_verified', 'is_new']
+    filterset_fields = ['category', 'region_name', 'is_verified']
     search_fields = ['name', 'address']
     ordering_fields = ['popularity_score', 'rating', 'review_count', 'rank_in_region', 'created_at']
     ordering = ['rank_in_region']  # 기본 정렬: 순위순
@@ -139,17 +139,21 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def new(self, request):
-        """신규 업체 조회
+        """최근 등록 업체 조회 (30일 이내)
 
         Query Params:
             - category: 카테고리 ID (선택)
             - limit: 조회 개수 (기본: 10)
         """
+        from datetime import timedelta
+
         category_id = request.query_params.get('category')
         limit = int(request.query_params.get('limit', 10))
 
+        # 30일 이내 등록된 업체
+        thirty_days_ago = timezone.now() - timedelta(days=30)
         businesses = self.queryset.filter(
-            is_new=True
+            created_at__gte=thirty_days_ago
         ).order_by('-created_at')
 
         if category_id:
@@ -218,7 +222,6 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         existing.photo_url = business_data.get('photo_url')  # 30일 지났으니 갱신
                         existing.popularity_score = business_data.get('popularity_score', 0)
                         existing.rank_in_region = business_data.get('rank_in_region', 999)
-                        existing.is_new = business_data.get('is_new', False)
                         existing.last_synced_at = timezone.now()
                         existing.save()
 
@@ -241,7 +244,6 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             photo_url=business_data.get('photo_url'),
                             popularity_score=business_data.get('popularity_score', 0),
                             rank_in_region=business_data.get('rank_in_region', 999),
-                            is_new=business_data.get('is_new', False),
                             last_synced_at=timezone.now(),
                         )
                         created_count += 1
