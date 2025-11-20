@@ -64,7 +64,7 @@ class LocalBusinessDetailSerializer(serializers.ModelSerializer):
         model = LocalBusiness
         fields = [
             'id', 'name', 'address', 'phone_number',
-            'category', 'region_name', 'region_full_name',
+            'category', 'region_name',
             'google_place_id', 'latitude', 'longitude',
             'rating', 'review_count',
             'google_maps_url', 'photo_url',
