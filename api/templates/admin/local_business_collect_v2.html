@@ -33,16 +33,21 @@
             <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택</label>
             <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
                 <option value="">-- 지역 선택 --</option>
-                <option value="서울특별시 강남구">서울특별시 강남구</option>
-                <option value="서울특별시 서초구">서울특별시 서초구</option>
-                <option value="서울특별시 송파구">서울특별시 송파구</option>
-                <option value="서울특별시 강동구">서울특별시 강동구</option>
-                <option value="서울특별시 마포구">서울특별시 마포구</option>
-                <option value="경기도 성남시">경기도 성남시</option>
-                <option value="경기도 수원시">경기도 수원시</option>
-                <option value="경기도 고양시">경기도 고양시</option>
-                <option value="경기도 용인시">경기도 용인시</option>
-                <option value="경기도 화성시">경기도 화성시</option>
+                <option value="ALL_METRO" style="font-weight: bold; background: #e3f2fd;">🏙️ 수도권 전체 (서울 5곳 + 경기 5곳)</option>
+                <optgroup label="서울">
+                    <option value="서울특별시 강남구">서울특별시 강남구</option>
+                    <option value="서울특별시 서초구">서울특별시 서초구</option>
+                    <option value="서울특별시 송파구">서울특별시 송파구</option>
+                    <option value="서울특별시 강동구">서울특별시 강동구</option>
+                    <option value="서울특별시 마포구">서울특별시 마포구</option>
+                </optgroup>
+                <optgroup label="경기">
+                    <option value="경기도 성남시">경기도 성남시</option>
+                    <option value="경기도 수원시">경기도 수원시</option>
+                    <option value="경기도 고양시">경기도 고양시</option>
+                    <option value="경기도 용인시">경기도 용인시</option>
+                    <option value="경기도 화성시">경기도 화성시</option>
+                </optgroup>
             </select>
         </div>
 
@@ -50,6 +55,7 @@
             <label for="category" style="display: block; margin-bottom: 5px; font-weight: bold;">업종 선택</label>
             <select name="category" id="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
                 <option value="">-- 업종 선택 --</option>
+                <option value="ALL" data-name-en="ALL" style="font-weight: bold; background: #e3f2fd;">📋 전체 업종 ({{ categories|length }}개)</option>
                 {% for cat in categories %}
                 <option value="{{ cat.id }}" data-name-en="{{ cat.name_en }}">{{ cat.icon }} {{ cat.name }}</option>
                 {% endfor %}
@@ -109,6 +115,14 @@ const REGION_COORDINATES = {
     '화성시': {latitude: 37.1990, longitude: 126.8312}
 };
 
+// 전체 지역 목록
+const ALL_REGIONS = [
+    '서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구',
+    '서울특별시 강동구', '서울특별시 마포구',
+    '경기도 성남시', '경기도 수원시', '경기도 고양시',
+    '경기도 용인시', '경기도 화성시'
+];
+
 document.getElementById('collectForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -118,62 +132,91 @@ document.getElementById('collectForm').addEventListener('submit', async function
     const categoryNameEn = categorySelect.options[categorySelect.selectedIndex].dataset.nameEn;
     const limit = parseInt(document.getElementById('limit').value);
 
-    const regionShort = region.split(' ').pop();
-    const coordinates = REGION_COORDINATES[regionShort];
-
     document.getElementById('progressContainer').style.display = 'block';
     document.getElementById('collectBtn').disabled = true;
     document.getElementById('collectBtn').textContent = '⏳ 수집 중...';
 
-    addLog('🔍 Google Places API 호출 중...');
+    // 지역 목록 결정
+    const regions = region === 'ALL_METRO' ? ALL_REGIONS : [region];
+
+    // 카테고리 목록 결정
+    const categories = categoryId === 'ALL'
+        ? Array.from(document.querySelectorAll('#category option[data-name-en]'))
+            .filter(opt => opt.value !== 'ALL')
+            .map(opt => ({id: opt.value, nameEn: opt.dataset.nameEn}))
+        : [{id: categoryId, nameEn: categoryNameEn}];
+
+    addLog(`📍 지역: ${regions.length}곳, 업종: ${categories.length}개, 지역당 ${limit}개씩 수집`);
 
     try {
-        // Google Places API 호출
-        const places = await fetchGooglePlaces(regionShort, categoryNameEn, coordinates, limit);
+        for (const targetRegion of regions) {
+            for (const cat of categories) {
+                const regionShort = targetRegion.split(' ').pop();
+                const coordinates = REGION_COORDINATES[regionShort];
 
-        addLog(`✅ ${places.length}개 업체 발견`);
+                addLog(`🔍 ${targetRegion} - ${cat.nameEn} 검색 중...`);
 
-        // 백엔드로 저장
-        const businesses = places.map((place, index) => ({
-            google_place_id: place.place_id,
-            category_id: parseInt(categoryId),
-            region_name: region,
-            name: place.name,
-            address: place.formatted_address || place.vicinity,
-            phone_number: place.formatted_phone_number,
-            latitude: place.geometry.location.lat(),
-            longitude: place.geometry.location.lng(),
-            rating: place.rating,
-            review_count: place.user_ratings_total || 0,
-            google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-            photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
-            popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
-            rank_in_region: index + 1,
-            is_new: (place.user_ratings_total || 0) < 10
-        }));
+                // Google Places API 호출
+                const places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit);
 
-        addLog('💾 백엔드에 저장 중...');
+                addLog(`✅ ${places.length}개 업체 발견`);
 
-        const response = await fetch('/api/local-businesses/bulk_create/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({businesses})
-        });
+                if (places.length === 0) {
+                    addLog(`⚠️ 검색 결과 없음`, 'error');
+                    continue;
+                }
 
-        const result = await response.json();
+                // 백엔드로 저장
+                const businesses = places.map((place, index) => ({
+                    google_place_id: place.place_id,
+                    category_id: parseInt(cat.id),
+                    region_name: targetRegion,
+                    name: place.name,
+                    address: place.formatted_address || place.vicinity,
+                    phone_number: place.formatted_phone_number,
+                    latitude: place.geometry.location.lat(),
+                    longitude: place.geometry.location.lng(),
+                    rating: place.rating,
+                    review_count: place.user_ratings_total || 0,
+                    google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+                    photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
+                    popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
+                    rank_in_region: index + 1,
+                    is_new: (place.user_ratings_total || 0) < 10
+                }));
 
-        document.getElementById('successCount').textContent = result.created + result.updated;
-        document.getElementById('failCount').textContent = result.errors.length;
-        document.getElementById('totalCount').textContent = result.total;
+                addLog('💾 백엔드에 저장 중...');
 
-        addLog(`✅ 완료! 생성: ${result.created}개, 업데이트: ${result.updated}개`);
+                const response = await fetch('/api/local-businesses/bulk_create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({businesses})
+                });
 
-        if (result.errors.length > 0) {
-            result.errors.forEach(err => addLog(`❌ ${err}`, 'error'));
+                const result = await response.json();
+
+                document.getElementById('successCount').textContent =
+                    parseInt(document.getElementById('successCount').textContent || 0) + result.created + result.updated;
+                document.getElementById('failCount').textContent =
+                    parseInt(document.getElementById('failCount').textContent || 0) + result.errors.length;
+                document.getElementById('totalCount').textContent =
+                    parseInt(document.getElementById('totalCount').textContent || 0) + result.total;
+
+                addLog(`✅ 저장 완료! 생성: ${result.created}개, 업데이트: ${result.updated}개, 스킵: ${result.skipped}개`);
+
+                if (result.errors.length > 0) {
+                    result.errors.forEach(err => addLog(`❌ ${err}`, 'error'));
+                }
+
+                // API 과부하 방지: 0.5초 대기
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
+
+        addLog(`🎉 전체 수집 완료!`)
 
     } catch (error) {
         addLog(`❌ 오류: ${error.message}`, 'error');
