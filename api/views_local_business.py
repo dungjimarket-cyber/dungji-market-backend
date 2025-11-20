@@ -37,11 +37,11 @@ class LocalBusinessViewSet(viewsets.ReadOnlyModelViewSet):
     """지역 업체 ViewSet (읽기 전용)"""
 
     queryset = LocalBusiness.objects.select_related(
-        'category', 'region'
+        'category'
     ).prefetch_related('links')
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'region', 'is_verified', 'is_new']
+    filterset_fields = ['category', 'region_name', 'is_verified', 'is_new']
     search_fields = ['name', 'address']
     ordering_fields = ['popularity_score', 'rating', 'review_count', 'rank_in_region', 'created_at']
     ordering = ['rank_in_region']  # 기본 정렬: 순위순
@@ -89,22 +89,22 @@ class LocalBusinessViewSet(viewsets.ReadOnlyModelViewSet):
         """지역+업종별 상위 업체 조회
 
         Query Params:
-            - region: 지역 코드 (예: 1111010100)
+            - region: 지역명 (예: 강남구, 수원시)
             - category: 카테고리 ID
             - limit: 조회 개수 (기본: 5)
         """
-        region_code = request.query_params.get('region')
+        region_name = request.query_params.get('region')
         category_id = request.query_params.get('category')
         limit = int(request.query_params.get('limit', 5))
 
-        if not region_code or not category_id:
+        if not region_name or not category_id:
             return Response(
                 {'error': 'region과 category 파라미터가 필요합니다'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         businesses = self.queryset.filter(
-            region__code=region_code,
+            region_name=region_name,
             category_id=category_id
         ).order_by('rank_in_region')[:limit]
 
