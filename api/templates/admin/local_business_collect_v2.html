@@ -181,10 +181,12 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
                 // AI 요약 생성 (배치 처리, 기존 요약 재사용)
                 addLog(`🤖 AI 요약 확인/생성 시작... (${places.length}개 업체)`);
-                const BATCH_SIZE = 3;
+                const BATCH_SIZE = 5; // 5개씩 병렬 처리 (OpenAI Rate Limit 충분)
 
                 for (let i = 0; i < places.length; i += BATCH_SIZE) {
                     const batch = places.slice(i, i + BATCH_SIZE);
+
+                    addLog(`⏳ 배치 ${Math.floor(i/BATCH_SIZE) + 1} 처리 중... (${batch.length}개)`);
 
                     await Promise.all(
                         batch.map(async (place) => {
@@ -195,11 +197,6 @@ document.getElementById('collectForm').addEventListener('submit', async function
                             }
                         })
                     );
-
-                    // Rate limit 방지 (마지막 배치 제외)
-                    if (i + BATCH_SIZE < places.length) {
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
                 }
 
                 // 백엔드로 저장 - 필터링 후 순위를 다시 매김
@@ -423,15 +420,19 @@ async function generateAISummary(place, existingSummary = null) {
             if (data.success && data.summary) {
                 addLog(`✅ ${place.name}: AI 요약 생성 완료`, 'success');
                 return data.summary;
+            } else {
+                addLog(`⚠️ ${place.name}: ${data.error || 'AI 요약 생성 실패'}`, 'error');
+                return null;
             }
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            addLog(`⚠️ ${place.name}: API 오류 (${response.status}) - ${errorData.error || '알 수 없는 오류'}`, 'error');
+            return null;
         }
-
-        addLog(`⚠️ ${place.name}: AI 요약 생성 실패`, 'error');
-        return null;
 
     } catch (error) {
         console.error('AI 요약 생성 오류:', error);
-        addLog(`❌ ${place.name}: AI 요약 생성 오류`, 'error');
+        addLog(`❌ ${place.name}: 네트워크 오류 - ${error.message}`, 'error');
         return null;
     }
 }
