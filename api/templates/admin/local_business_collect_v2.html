@@ -30,25 +30,78 @@
 
     <form id="collectForm" style="margin-top: 20px;">
         <div style="margin-bottom: 20px;">
-            <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택</label>
-            <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
-                <option value="">-- 지역 선택 --</option>
-                <option value="ALL_METRO" style="font-weight: bold; background: #e3f2fd;">🏙️ 수도권 전체 (서울 5곳 + 경기 5곳)</option>
-                <optgroup label="서울">
-                    <option value="서울특별시 강남구">서울특별시 강남구</option>
-                    <option value="서울특별시 서초구">서울특별시 서초구</option>
-                    <option value="서울특별시 송파구">서울특별시 송파구</option>
-                    <option value="서울특별시 강동구">서울특별시 강동구</option>
-                    <option value="서울특별시 마포구">서울특별시 마포구</option>
-                </optgroup>
-                <optgroup label="경기">
-                    <option value="경기도 성남시">경기도 성남시</option>
-                    <option value="경기도 수원시">경기도 수원시</option>
-                    <option value="경기도 고양시">경기도 고양시</option>
-                    <option value="경기도 용인시">경기도 용인시</option>
-                    <option value="경기도 화성시">경기도 화성시</option>
-                </optgroup>
-            </select>
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">지역 선택 (다중 선택 가능)</label>
+
+            <!-- 전체 선택 체크박스 -->
+            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="selectAllRegions" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                    <span style="font-weight: bold;">🏙️ 수도권 전체 선택 (서울 + 경기)</span>
+                </label>
+            </div>
+
+            <!-- 시/도별 그룹 -->
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; max-height: 300px; overflow-y: auto;">
+                <!-- 서울 -->
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: bold; color: #1976d2;">
+                        <input type="checkbox" class="province-select" data-province="서울" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span>서울 전체</span>
+                    </label>
+                    <div style="margin-left: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="서울특별시 강남구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">강남구</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="서울특별시 서초구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">서초구</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="서울특별시 송파구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">송파구</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="서울특별시 강동구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">강동구</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="서울특별시 마포구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">마포구</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 경기 -->
+                <div>
+                    <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: bold; color: #1976d2;">
+                        <input type="checkbox" class="province-select" data-province="경기" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span>경기 전체</span>
+                    </label>
+                    <div style="margin-left: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="경기도 성남시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">성남시</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="경기도 수원시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">수원시</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="경기도 고양시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">고양시</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="경기도 용인시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">용인시</span>
+                        </label>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="경기도 화성시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
+                            <span style="font-size: 14px;">화성시</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div style="margin-bottom: 20px;">
@@ -123,10 +176,33 @@ const ALL_REGIONS = [
     '경기도 용인시', '경기도 화성시'
 ];
 
+// 체크박스 이벤트 처리
+document.getElementById('selectAllRegions').addEventListener('change', function(e) {
+    const checkboxes = document.querySelectorAll('.region-checkbox');
+    checkboxes.forEach(cb => cb.checked = e.target.checked);
+});
+
+// 시/도 전체 선택 체크박스
+document.querySelectorAll('.province-select').forEach(provinceCheckbox => {
+    provinceCheckbox.addEventListener('change', function(e) {
+        const province = e.target.dataset.province;
+        const checkboxes = document.querySelectorAll(`.region-checkbox.${province}`);
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+    });
+});
+
 document.getElementById('collectForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const region = document.getElementById('region').value;
+    // 선택된 지역 수집
+    const selectedRegions = Array.from(document.querySelectorAll('input[name="regions"]:checked'))
+        .map(cb => cb.value);
+
+    if (selectedRegions.length === 0) {
+        alert('최소 1개 이상의 지역을 선택해주세요.');
+        return;
+    }
+
     const categorySelect = document.getElementById('category');
     const categoryId = categorySelect.value;
     const categoryNameEn = categorySelect.options[categorySelect.selectedIndex].dataset.nameEn;
@@ -136,8 +212,8 @@ document.getElementById('collectForm').addEventListener('submit', async function
     document.getElementById('collectBtn').disabled = true;
     document.getElementById('collectBtn').textContent = '⏳ 수집 중...';
 
-    // 지역 목록 결정
-    const regions = region === 'ALL_METRO' ? ALL_REGIONS : [region];
+    // 선택된 지역 사용
+    const regions = selectedRegions;
 
     // 카테고리 목록 결정
     const categories = categoryId === 'ALL'
