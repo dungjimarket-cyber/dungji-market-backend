@@ -165,6 +165,39 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
+    def generate_summary(self, request):
+        """리뷰를 받아서 AI 요약 생성"""
+        from api.utils_ai_summary import generate_business_summary
+
+        business_name = request.data.get('business_name')
+        reviews = request.data.get('reviews', [])
+
+        if not business_name:
+            return Response(
+                {'error': 'business_name이 필요합니다'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not reviews or len(reviews) == 0:
+            return Response(
+                {'summary': None, 'message': '리뷰가 없어 요약을 생성할 수 없습니다'}
+            )
+
+        # AI 요약 생성
+        summary = generate_business_summary(reviews, business_name)
+
+        if summary:
+            return Response({
+                'success': True,
+                'summary': summary
+            })
+        else:
+            return Response(
+                {'success': False, 'error': 'AI 요약 생성 실패', 'summary': None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
     def bulk_create(self, request):
         """프론트에서 수집한 업체 데이터 일괄 저장 (30일 캐싱 정책)"""
         from django.db import transaction

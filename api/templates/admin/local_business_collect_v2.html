@@ -166,6 +166,42 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     continue;
                 }
 
+                // 기존 업체의 요약 정보 가져오기 (30일 캐싱 확인용)
+                const placeIds = places.map(p => p.place_id);
+                const existingBusinesses = await fetch('/api/local-businesses/?' + new URLSearchParams({
+                    google_place_id__in: placeIds.join(',')
+                })).then(r => r.json()).catch(() => ({results: []}));
+
+                const existingSummaryMap = {};
+                if (existingBusinesses.results) {
+                    existingBusinesses.results.forEach(b => {
+                        existingSummaryMap[b.google_place_id] = b.editorial_summary;
+                    });
+                }
+
+                // AI 요약 생성 (배치 처리, 기존 요약 재사용)
+                addLog(`🤖 AI 요약 확인/생성 시작... (${places.length}개 업체)`);
+                const BATCH_SIZE = 3;
+
+                for (let i = 0; i < places.length; i += BATCH_SIZE) {
+                    const batch = places.slice(i, i + BATCH_SIZE);
+
+                    await Promise.all(
+                        batch.map(async (place) => {
+                            const existingSummary = existingSummaryMap[place.place_id];
+                            const aiSummary = await generateAISummary(place, existingSummary);
+                            if (aiSummary) {
+                                place.editorial_summary = aiSummary;
+                            }
+                        })
+                    );
+
+                    // Rate limit 방지 (마지막 배치 제외)
+                    if (i + BATCH_SIZE < places.length) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+
                 // 백엔드로 저장 - 필터링 후 순위를 다시 매김
                 const businesses = places.map((place, index) => ({
                     google_place_id: place.place_id,
@@ -182,7 +218,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
                     website_url: place.website,
                     opening_hours: place.opening_hours,
-                    editorial_summary: place.editorial_summary,
+                    editorial_summary: place.editorial_summary, // AI 생성 또는 Google 요약 또는 기존 요약 재사용
                     business_status: place.business_status,
                     last_review_time: place.last_review_time,
                     popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
@@ -307,7 +343,7 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         return true;
     });
 
-    // 프론트엔드 랭킹 형식으로 변환
+    // 프론트엔드 랭킹 형식으로 변환 (리뷰 데이터 포함)
     return filteredPlaces.map(place => ({
         place_id: place.id,
         name: place.displayName.text,
@@ -329,7 +365,8 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         opening_hours: place.regularOpeningHours?.weekdayDescriptions,
         editorial_summary: place.editorialSummary?.text,
         business_status: place.businessStatus || 'OPERATIONAL',
-        last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null
+        last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null,
+        reviews: place.reviews // 리뷰 데이터 추가 (AI 요약용)
     }));
 }
 
@@ -338,6 +375,80 @@ function calculatePopularityScore(rating, reviewCount) {
     const m = 4.0;
     const adjustedRating = (C * m + reviewCount * rating) / (C + reviewCount);
     return adjustedRating * Math.log10(reviewCount + 1);
+}
+
+async function generateAISummary(place, existingSummary = null) {
+    // Google 요약이 이미 있으면 우선 사용
+    if (place.editorial_summary) {
+        addLog(`💡 ${place.name}: Google 요약 사용`, 'info');
+        return place.editorial_summary;
+    }
+
+    // 기존 AI 요약이 있으면 재사용 (30일 캐싱)
+    if (existingSummary) {
+        addLog(`♻️ ${place.name}: 기존 AI 요약 재사용 (토큰 절약)`, 'info');
+        return existingSummary;
+    }
+
+    // 리뷰가 없으면 null 반환
+    if (!place.reviews || place.reviews.length === 0) {
+        addLog(`⚠️ ${place.name}: 리뷰 없음, 요약 생성 불가`, 'error');
+        return null;
+    }
+
+    try {
+        addLog(`🤖 ${place.name}: AI 요약 생성 중...`, 'info');
+
+        // 리뷰 데이터 포맷팅
+        const reviewsData = place.reviews.map(review => ({
+            text: review.text?.text || '',
+            rating: review.rating || 0
+        }));
+
+        // Django 백엔드 API 호출
+        const response = await fetch('/api/local-businesses/generate_summary/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                business_name: place.name,
+                reviews: reviewsData
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.summary) {
+                addLog(`✅ ${place.name}: AI 요약 생성 완료`, 'success');
+                return data.summary;
+            }
+        }
+
+        addLog(`⚠️ ${place.name}: AI 요약 생성 실패`, 'error');
+        return null;
+
+    } catch (error) {
+        console.error('AI 요약 생성 오류:', error);
+        addLog(`❌ ${place.name}: AI 요약 생성 오류`, 'error');
+        return null;
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 function addLog(message, type = 'info') {
