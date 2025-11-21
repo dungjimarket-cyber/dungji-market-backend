@@ -53,16 +53,17 @@ def generate_business_summary(reviews_data: list, business_name: str) -> tuple:
 이 리뷰들을 바탕으로 업체의 특징과 장점을 요약해주세요.
 
 **요구사항:**
-- 최대 50-60자 이내 (2줄 분량)
-- 핵심 장점 1-2가지만 간결하게
+- 최대 30자 이내 (모바일 2줄 분량)
+- 핵심 장점 1가지만 간결하게
 - 긍정적이고 객관적인 톤
 - 과장 금지
-- 업체명을 주어로 사용하지 말 것 (예: "친절하고 전문적인 서비스 제공")
+- 업체명을 주어로 사용하지 말 것 (예: "친절한 서비스와 합리적 가격")
+- **반드시 자연스럽고 완성된 문장으로 작성** (어색한 표현이나 단어 나열 금지)
 
 리뷰:
 {reviews_text}
 
-요약 (50-60자):"""
+요약 (30자, 자연스러운 문장):"""
 
         # OpenAI API 호출 (GPT-4o-mini: 가장 저렴한 최신 모델)
         response = client.chat.completions.create(
@@ -70,14 +71,14 @@ def generate_business_summary(reviews_data: list, business_name: str) -> tuple:
             messages=[
                 {
                     "role": "system",
-                    "content": "당신은 비즈니스 리뷰를 분석하고 요약하는 전문가입니다. 50-60자 이내로 핵심만 간결하게 요약하며, 업체명을 주어로 사용하지 않습니다."
+                    "content": "당신은 비즈니스 리뷰를 분석하고 요약하는 전문가입니다. 30자 이내로 핵심만 간결하게 요약하며, 업체명을 주어로 사용하지 않습니다. 반드시 자연스럽고 완성된 한국어 문장으로 작성해야 하며, 어색한 표현이나 단어 나열은 절대 금지입니다."
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            max_tokens=80,  # 50-60자면 충분 (한글은 토큰당 1-2자)
+            max_tokens=50,  # 30자면 충분 (한글은 토큰당 1-2자)
             temperature=0.7,  # 적당한 창의성
             timeout=15  # 15초 타임아웃 (대량 처리 시 여유)
         )
