@@ -147,30 +147,34 @@ jobs:
           fi
           echo "✅ Docker Compose file found"
           
-          # 기존 컨테이너 정리 (이름과 ID 둘 다 처리)
-          echo "🧹 Stopping and removing old containers..."
+          # 기존 컨테이너 완전 제거
+          echo "🧹 Completely removing old containers..."
 
-          # 이름으로 정리
-          sudo docker stop dungji-backend-web 2>/dev/null || true
-          sudo docker rm -f dungji-backend-web 2>/dev/null || true
-
-          # 혹시 모를 ID로 남아있는 컨테이너 정리
-          OLD_ID=$(sudo docker ps -aq --filter "name=dungji-backend-web" 2>/dev/null)
-          if [ ! -z "$OLD_ID" ]; then
-            echo "Removing container by ID: $OLD_ID"
-            sudo docker rm -f "$OLD_ID" 2>/dev/null || true
-          fi
+          # 모든 dungji 관련 컨테이너 찾아서 강제 삭제
+          for container_id in $(sudo docker ps -aq --filter "name=dungji"); do
+            if [ ! -z "$container_id" ]; then
+              echo "Force removing container: $container_id"
+              sudo docker rm -f "$container_id" 2>/dev/null || true
+            fi
+          done
 
           # 포트 8000 정리
           echo "🔍 Checking port 8000..."
           sudo fuser -k 8000/tcp 2>/dev/null || true
-          sleep 3
+          sleep 2
 
-          
-          # 새 이미지 빌드 및 컨테이너 시작
-          echo "🏗️  Building and starting containers..."
-          # container_name이 지정되어 있으므로 일관된 이름 사용
-          sudo docker-compose up --build -d --force-recreate --remove-orphans
+          # 남은 컨테이너 확인
+          echo "Remaining containers:"
+          sudo docker ps -a --filter "name=dungji" || echo "No dungji containers"
+
+
+          # 이미지 빌드
+          echo "🏗️  Building new image..."
+          sudo docker-compose build
+
+          # 컨테이너 시작 (up 대신 start 사용)
+          echo "🚀 Starting container..."
+          sudo docker-compose up -d --no-build
 
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
