@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0001_initial'),  # 최신 마이그레이션 번호로 자동 조정됨
+        ('api', '0106_add_business_info_fields'),
     ]
 
     operations = [
