@@ -46,10 +46,21 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
     ).prefetch_related('links')
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'region_name', 'is_verified']
+    filterset_fields = ['category', 'is_verified']
     search_fields = ['name', 'address']
     ordering_fields = ['popularity_score', 'rating', 'review_count', 'rank_in_region', 'created_at']
     ordering = ['rank_in_region']  # 기본 정렬: 순위순
+
+    def get_queryset(self):
+        """커스텀 필터링"""
+        queryset = super().get_queryset()
+
+        # region_name__icontains 파라미터 처리
+        region_filter = self.request.query_params.get('region_name__icontains')
+        if region_filter:
+            queryset = queryset.filter(region_name__icontains=region_filter)
+
+        return queryset
 
     def get_serializer_class(self):
         """액션별 Serializer 선택"""
@@ -243,9 +254,15 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                     try:
                         existing = LocalBusiness.objects.get(google_place_id=google_place_id)
 
-                        # 30일 이내 업데이트된 업체는 스킵 (photo_url 유지)
+                        # 30일 이내 업데이트된 업체는 AI 요약만 업데이트
                         if existing.last_synced_at and existing.last_synced_at > thirty_days_ago:
-                            skipped_count += 1
+                            # AI 요약이 있으면 업데이트
+                            if business_data.get('editorial_summary'):
+                                existing.editorial_summary = business_data.get('editorial_summary')
+                                existing.save(update_fields=['editorial_summary'])
+                                updated_count += 1
+                            else:
+                                skipped_count += 1
                             continue
 
                         # 30일 지났으면 전체 업데이트 (photo_url 포함)
