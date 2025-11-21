@@ -48,13 +48,18 @@ def generate_business_summary(reviews_data: list, business_name: str) -> str:
 
         # 프롬프트 구성
         prompt = f"""다음은 "{business_name}"에 대한 고객 리뷰입니다.
-이 리뷰들을 바탕으로 이 업체의 특징과 장점을 2-3문장으로 요약해주세요.
-긍정적이고 객관적인 톤으로 작성하되, 과장하지 마세요.
+이 리뷰들을 바탕으로 이 업체의 특징과 장점을 요약해주세요.
+
+**요구사항:**
+- 최대 50-60자 이내 (2줄 분량)
+- 핵심 장점 1-2가지만 간결하게
+- 긍정적이고 객관적인 톤
+- 과장 금지
 
 리뷰:
 {reviews_text}
 
-요약 (2-3문장):"""
+요약 (50-60자):"""
 
         # OpenAI API 호출 (GPT-4o-mini: 가장 저렴한 최신 모델)
         response = client.chat.completions.create(
@@ -62,14 +67,14 @@ def generate_business_summary(reviews_data: list, business_name: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "당신은 비즈니스 리뷰를 분석하고 요약하는 전문가입니다. 객관적이고 간결하게 2-3문장으로 핵심을 요약합니다."
+                    "content": "당신은 비즈니스 리뷰를 분석하고 요약하는 전문가입니다. 50-60자 이내로 핵심만 간결하게 요약합니다."
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            max_tokens=150,  # 요약은 짧게
+            max_tokens=80,  # 50-60자면 충분 (한글은 토큰당 1-2자)
             temperature=0.7,  # 적당한 창의성
             timeout=15  # 15초 타임아웃 (대량 처리 시 여유)
         )
