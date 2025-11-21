@@ -201,7 +201,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
         # AI 요약 생성
         try:
-            summary = generate_business_summary(reviews, business_name)
+            summary, error_msg = generate_business_summary(reviews, business_name)
 
             if summary:
                 return Response({
@@ -209,8 +209,9 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                     'summary': summary
                 })
             else:
+                # 구체적인 실패 사유 반환
                 return Response(
-                    {'success': False, 'error': 'AI 요약 생성 실패 (summary is None)', 'summary': None},
+                    {'success': False, 'error': error_msg or 'AI 요약 생성 실패', 'summary': None},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         except Exception as e:

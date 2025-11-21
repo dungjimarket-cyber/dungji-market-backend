@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def generate_business_summary(reviews_data: list, business_name: str) -> str:
+def generate_business_summary(reviews_data: list, business_name: str) -> tuple:
     """
     Google 리뷰를 기반으로 AI 요약 생성
 
@@ -18,15 +18,17 @@ def generate_business_summary(reviews_data: list, business_name: str) -> str:
         business_name: 업체명
 
     Returns:
-        2-3문장의 요약 텍스트 또는 None (실패 시)
+        (summary, error_message) 튜플
+        - success: (summary_text, None)
+        - failure: (None, error_message)
     """
     if not reviews_data or len(reviews_data) == 0:
         logger.info(f"No reviews for {business_name}, skipping AI summary")
-        return None
+        return (None, "리뷰 데이터 없음")
 
     if not settings.OPENAI_API_KEY:
         logger.error("OPENAI_API_KEY not configured")
-        return None
+        return (None, "OpenAI API 키 미설정")
 
     try:
         # OpenAI 클라이언트 초기화
@@ -44,7 +46,7 @@ def generate_business_summary(reviews_data: list, business_name: str) -> str:
 
         if not reviews_text.strip():
             logger.info(f"No text reviews for {business_name}, skipping AI summary")
-            return None
+            return (None, "텍스트 리뷰 없음 (평점만 존재)")
 
         # 프롬프트 구성
         prompt = f"""다음은 "{business_name}"에 대한 고객 리뷰입니다.
@@ -84,14 +86,17 @@ def generate_business_summary(reviews_data: list, business_name: str) -> str:
         # 로그 기록
         logger.info(f"✅ AI summary generated for {business_name}: {summary[:50]}...")
 
-        return summary
+        return (summary, None)
 
     except openai.APIError as e:
-        logger.error(f"OpenAI API error for {business_name}: {str(e)}")
-        return None
+        error_msg = f"OpenAI API 오류: {str(e)}"
+        logger.error(f"{error_msg} for {business_name}")
+        return (None, error_msg)
     except openai.APITimeoutError as e:
-        logger.error(f"OpenAI timeout for {business_name}: {str(e)}")
-        return None
+        error_msg = f"OpenAI 타임아웃 (15초 초과)"
+        logger.error(f"{error_msg} for {business_name}")
+        return (None, error_msg)
     except Exception as e:
-        logger.error(f"Unexpected error generating AI summary for {business_name}: {str(e)}")
-        return None
+        error_msg = f"예상치 못한 오류: {str(e)}"
+        logger.error(f"{error_msg} for {business_name}")
+        return (None, error_msg)
