@@ -147,23 +147,36 @@ jobs:
           fi
           echo "✅ Docker Compose file found"
           
-          # 기존 컨테이너 완전 제거 (강력한 방법)
-          echo "🧹 Killing all dungji containers..."
+          # 기존 컨테이너 완전 제거
+          echo "🧹 Forcefully removing all dungji containers..."
 
-          # 1. 실행 중인 컨테이너 강제 종료
-          sudo docker ps -q --filter "name=dungji" | xargs -r sudo docker kill 2>/dev/null || true
+          # 1. 컨테이너 목록 출력
+          echo "Current containers:"
+          sudo docker ps -a --filter "name=dungji"
 
-          # 2. 모든 컨테이너 강제 삭제
-          sudo docker ps -aq --filter "name=dungji" | xargs -r sudo docker rm -f 2>/dev/null || true
+          # 2. 루프로 하나씩 강제 삭제
+          for container in $(sudo docker ps -aq --filter "name=dungji"); do
+            echo "Killing and removing container: $container"
+            sudo docker kill $container 2>/dev/null || true
+            sudo docker rm -f $container 2>/dev/null || true
+          done
 
           # 3. 포트 8000 정리
           echo "🔍 Checking port 8000..."
           sudo fuser -k 8000/tcp 2>/dev/null || true
-          sleep 2
+          sleep 3
 
           # 4. 최종 확인
-          echo "Remaining containers:"
-          sudo docker ps -a --filter "name=dungji" || echo "✅ No dungji containers"
+          echo "Remaining containers after cleanup:"
+          sudo docker ps -a --filter "name=dungji"
+
+          # 5. 아직 남아있으면 에러
+          if sudo docker ps -a --format '{{.Names}}' | grep -q 'dungji'; then
+            echo "❌ ERROR: Failed to remove old containers!"
+            sudo docker ps -a --filter "name=dungji"
+            exit 1
+          fi
+          echo "✅ All old containers removed"
 
           # 이미지 빌드 (docker 명령어 직접 사용)
           echo "🏗️  Building new image..."
