@@ -260,7 +260,8 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     rating: place.rating,
                     review_count: place.user_ratings_total || 0,
                     google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-                    photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
+                    photo_url: place.photos && place.photos[0] ?
+                        `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=400&key=BACKEND_WILL_HANDLE` : null,
                     website_url: place.website,
                     opening_hours: place.opening_hours,
                     editorial_summary: place.editorial_summary, // AI 생성 또는 Google 요약 또는 기존 요약 재사용
@@ -391,7 +392,9 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
             }
         },
         photos: place.photos ? place.photos.map(photo => ({
-            getUrl: (opts) => `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=${opts.maxWidth}&key=${apiKey}`
+            name: photo.name,
+            // Photo URL은 직접 생성 (API 키 노출 방지를 위해 임시 플레이스홀더 사용)
+            getUrl: (opts) => `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=${opts.maxWidth}&key=BACKEND_WILL_HANDLE`
         })) : null,
         website: place.websiteUri,
         opening_hours: place.regularOpeningHours?.weekdayDescriptions,
