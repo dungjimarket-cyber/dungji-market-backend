@@ -339,6 +339,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         """
         from django.conf import settings
 
+        # Force rebuild trigger
         api_key = settings.GOOGLE_PLACES_API_KEY
         if not api_key:
             return Response(
