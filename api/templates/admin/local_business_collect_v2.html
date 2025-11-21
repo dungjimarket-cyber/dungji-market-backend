@@ -355,28 +355,39 @@ document.getElementById('collectForm').addEventListener('submit', async function
                 }
 
                 // 백엔드로 저장 - 필터링 후 순위를 다시 매김
-                const businesses = places.map((place, index) => ({
-                    google_place_id: place.place_id,
-                    category_id: parseInt(cat.id),
-                    region_name: targetRegion,
-                    name: place.name,
-                    address: place.formatted_address || place.vicinity,
-                    phone_number: place.formatted_phone_number,
-                    latitude: place.geometry.location.lat(),
-                    longitude: place.geometry.location.lng(),
-                    rating: place.rating,
-                    review_count: place.user_ratings_total || 0,
-                    google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-                    photo_url: place.photos && place.photos[0] ?
-                        `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=400&key=BACKEND_WILL_HANDLE` : null,
-                    website_url: place.website,
-                    opening_hours: place.opening_hours,
-                    editorial_summary: place.editorial_summary, // AI 생성 또는 Google 요약 또는 기존 요약 재사용
-                    business_status: place.business_status,
-                    last_review_time: place.last_review_time,
-                    popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
-                    rank_in_region: index + 1  // 필터링 후의 순위
-                }));
+                const businesses = places.map((place, index) => {
+                    const data = {
+                        google_place_id: place.place_id,
+                        category_id: parseInt(cat.id),
+                        region_name: targetRegion,
+                        name: place.name,
+                        address: place.formatted_address || place.vicinity,
+                        phone_number: place.formatted_phone_number,
+                        latitude: place.geometry.location.lat(),
+                        longitude: place.geometry.location.lng(),
+                        rating: place.rating,
+                        review_count: place.user_ratings_total || 0,
+                        google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+                        photo_url: place.photos && place.photos[0] ?
+                            `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=400&key=BACKEND_WILL_HANDLE` : null,
+                        website_url: place.website,
+                        opening_hours: place.opening_hours,
+                        editorial_summary: place.editorial_summary, // AI 생성 또는 Google 요약 또는 기존 요약 재사용
+                        business_status: place.business_status,
+                        last_review_time: place.last_review_time,
+                        popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
+                        rank_in_region: index + 1  // 필터링 후의 순위
+                    };
+
+                    // 요약 저장 로그
+                    if (data.editorial_summary) {
+                        console.log(`[저장 데이터] ${place.name}: editorial_summary="${data.editorial_summary.substring(0, 50)}..."`);
+                    } else {
+                        console.log(`[저장 데이터] ${place.name}: editorial_summary=null`);
+                    }
+
+                    return data;
+                });
 
                 addLog('💾 백엔드에 저장 중...');
 
@@ -501,32 +512,39 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
     });
 
     // 프론트엔드 랭킹 형식으로 변환 (리뷰 데이터 포함)
-    return filteredPlaces.map(place => ({
-        place_id: place.id,
-        name: place.displayName.text,
-        formatted_address: place.formattedAddress,
-        vicinity: place.formattedAddress,
-        formatted_phone_number: place.internationalPhoneNumber,
-        rating: place.rating,
-        user_ratings_total: place.userRatingCount,
-        geometry: {
-            location: {
-                lat: () => place.location.latitude,
-                lng: () => place.location.longitude
-            }
-        },
-        photos: place.photos ? place.photos.map(photo => ({
-            name: photo.name,
-            // Photo URL은 직접 생성 (API 키 노출 방지를 위해 임시 플레이스홀더 사용)
-            getUrl: (opts) => `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=${opts.maxWidth}&key=BACKEND_WILL_HANDLE`
-        })) : null,
-        website: place.websiteUri,
-        opening_hours: place.regularOpeningHours?.weekdayDescriptions,
-        editorial_summary: place.editorialSummary?.text,
-        business_status: place.businessStatus || 'OPERATIONAL',
-        last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null,
-        reviews: place.reviews // 리뷰 데이터 추가 (AI 요약용)
-    }));
+    return filteredPlaces.map(place => {
+        const googleSummary = place.editorialSummary?.text;
+        if (googleSummary) {
+            console.log(`[Google 요약 발견] ${place.displayName.text}: ${googleSummary.substring(0, 50)}...`);
+        }
+
+        return {
+            place_id: place.id,
+            name: place.displayName.text,
+            formatted_address: place.formattedAddress,
+            vicinity: place.formattedAddress,
+            formatted_phone_number: place.internationalPhoneNumber,
+            rating: place.rating,
+            user_ratings_total: place.userRatingCount,
+            geometry: {
+                location: {
+                    lat: () => place.location.latitude,
+                    lng: () => place.location.longitude
+                }
+            },
+            photos: place.photos ? place.photos.map(photo => ({
+                name: photo.name,
+                // Photo URL은 직접 생성 (API 키 노출 방지를 위해 임시 플레이스홀더 사용)
+                getUrl: (opts) => `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=${opts.maxWidth}&key=BACKEND_WILL_HANDLE`
+            })) : null,
+            website: place.websiteUri,
+            opening_hours: place.regularOpeningHours?.weekdayDescriptions,
+            editorial_summary: googleSummary,
+            business_status: place.businessStatus || 'OPERATIONAL',
+            last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null,
+            reviews: place.reviews // 리뷰 데이터 추가 (AI 요약용)
+        };
+    });
 }
 
 function calculatePopularityScore(rating, reviewCount) {
