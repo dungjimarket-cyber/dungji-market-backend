@@ -94,11 +94,15 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         ('AI 요약', {
             'fields': ('editorial_summary',)
         }),
+        ('이미지', {
+            'fields': ('custom_photo', 'photo_url'),
+            'description': 'custom_photo가 있으면 우선 표시, 없으면 Google photo_url 사용'
+        }),
         ('상태', {
             'fields': ('is_verified', 'is_new', 'view_count')
         }),
         ('Google Places 정보', {
-            'fields': ('google_place_id', 'latitude', 'longitude', 'photo_url', 'google_maps_link'),
+            'fields': ('google_place_id', 'latitude', 'longitude', 'google_maps_link'),
             'classes': ('collapse',)
         }),
         ('시스템', {

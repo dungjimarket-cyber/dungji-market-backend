@@ -142,7 +142,15 @@ class LocalBusiness(models.Model):
         max_length=1000,
         blank=True,
         null=True,
-        verbose_name='대표 사진 URL'
+        verbose_name='대표 사진 URL (Google)'
+    )
+
+    custom_photo = models.ImageField(
+        upload_to='local_business_photos/',
+        blank=True,
+        null=True,
+        verbose_name='커스텀 이미지',
+        help_text='Google 이미지가 없을 경우 직접 업로드'
     )
 
     # 추가 정보

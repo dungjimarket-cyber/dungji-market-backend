@@ -209,11 +209,19 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                     'summary': summary
                 })
             else:
-                # 구체적인 실패 사유 반환
-                return Response(
-                    {'success': False, 'error': error_msg or 'AI 요약 생성 실패', 'summary': None},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+                # 리뷰 없음/텍스트 없음은 정상 응답 (200 OK)
+                if error_msg in ["리뷰 데이터 없음", "텍스트 리뷰 없음 (평점만 존재)"]:
+                    return Response({
+                        'success': False,
+                        'summary': None,
+                        'reason': error_msg  # 500 아닌 200으로 반환
+                    })
+                # OpenAI API 오류만 500
+                else:
+                    return Response(
+                        {'success': False, 'error': error_msg or 'AI 요약 생성 실패', 'summary': None},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
         except Exception as e:
             logger.error(f'AI 요약 생성 중 오류: {str(e)}')
             return Response(
@@ -263,8 +271,10 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         # 30일 이내 업데이트된 업체는 AI 요약만 업데이트
                         if existing.last_synced_at and existing.last_synced_at > thirty_days_ago:
                             # AI 요약이 있으면 업데이트
-                            if business_data.get('editorial_summary'):
-                                existing.editorial_summary = business_data.get('editorial_summary')
+                            new_summary = business_data.get('editorial_summary')
+                            if new_summary:
+                                logger.info(f"[UPDATE] {business_data.get('name')}: editorial_summary={new_summary}")
+                                existing.editorial_summary = new_summary
                                 existing.save(update_fields=['editorial_summary'])
                                 updated_count += 1
                             else:
@@ -297,6 +307,9 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
                     except LocalBusiness.DoesNotExist:
                         # 신규 업체 생성
+                        editorial_summary = business_data.get('editorial_summary')
+                        logger.info(f"[SAVE] {business_data.get('name')}: editorial_summary={editorial_summary}")
+
                         LocalBusiness.objects.create(
                             google_place_id=google_place_id,
                             category=category,
@@ -312,7 +325,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             photo_url=business_data.get('photo_url'),
                             website_url=business_data.get('website_url'),
                             opening_hours=business_data.get('opening_hours'),
-                            editorial_summary=business_data.get('editorial_summary'),
+                            editorial_summary=editorial_summary,
                             business_status=business_data.get('business_status', 'OPERATIONAL'),
                             last_review_time=business_data.get('last_review_time'),
                             popularity_score=business_data.get('popularity_score', 0),
