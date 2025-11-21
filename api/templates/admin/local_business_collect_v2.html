@@ -129,6 +129,7 @@
 </div>
 
 <script>
+// 지역별 좌표
 const REGION_COORDINATES = {
     '강남구': {latitude: 37.5172, longitude: 127.0473},
     '서초구': {latitude: 37.4837, longitude: 127.0324},
@@ -142,13 +143,11 @@ const REGION_COORDINATES = {
     '화성시': {latitude: 37.1990, longitude: 126.8312}
 };
 
-// 전체 지역 목록
-const ALL_REGIONS = [
-    '서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구',
-    '서울특별시 강동구', '서울특별시 마포구',
-    '경기도 성남시', '경기도 수원시', '경기도 고양시',
-    '경기도 용인시', '경기도 화성시'
-];
+// 시/도별 하부 지역 매핑
+const PROVINCE_TO_REGIONS = {
+    '서울특별시': ['서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구', '서울특별시 강동구', '서울특별시 마포구'],
+    '경기도': ['경기도 성남시', '경기도 수원시', '경기도 고양시', '경기도 용인시', '경기도 화성시']
+};
 
 document.getElementById('collectForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -171,8 +170,16 @@ document.getElementById('collectForm').addEventListener('submit', async function
     document.getElementById('collectBtn').disabled = true;
     document.getElementById('collectBtn').textContent = '⏳ 수집 중...';
 
-    // 선택된 시/도 사용 (하위 지역 전체 검색)
-    const regions = selectedProvinces;
+    // 선택된 시/도를 하부 지역으로 확장
+    const regions = [];
+    selectedProvinces.forEach(province => {
+        const subRegions = PROVINCE_TO_REGIONS[province];
+        if (subRegions) {
+            regions.push(...subRegions);
+        } else {
+            addLog(`⚠️ ${province}: 하부 지역 정보 없음`, 'error');
+        }
+    });
 
     // 카테고리 목록 결정
     const categories = categoryId === 'ALL'
@@ -186,12 +193,18 @@ document.getElementById('collectForm').addEventListener('submit', async function
     try {
         for (const targetRegion of regions) {
             for (const cat of categories) {
+                // 구/시 추출 (예: "서울특별시 강남구" → "강남구")
                 const regionShort = targetRegion.split(' ').pop();
                 const coordinates = REGION_COORDINATES[regionShort];
 
+                if (!coordinates) {
+                    addLog(`❌ ${targetRegion}: 좌표 정보 없음`, 'error');
+                    continue;
+                }
+
                 addLog(`🔍 ${targetRegion} - ${cat.nameEn} 검색 중...`);
 
-                // Google Places API 호출
+                // Google Places API 호출 (기존 방식 유지)
                 const places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit);
 
                 addLog(`✅ ${places.length}개 업체 발견 (필터링 후)`);
