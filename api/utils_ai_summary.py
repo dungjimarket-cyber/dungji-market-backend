@@ -1,6 +1,6 @@
 """
 AI 기반 리뷰 요약 유틸리티
-OpenAI GPT-3.5-turbo를 사용하여 Google 리뷰를 요약
+OpenAI GPT-4o-mini를 사용하여 Google 리뷰를 요약
 """
 import openai
 from django.conf import settings
