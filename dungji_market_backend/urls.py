@@ -174,6 +174,9 @@ urlpatterns = [
         path('token/verify-role/', verify_token_role, name='verify_token_role'),
     ])),
 
+    # Google Places API 프록시 (router보다 먼저 등록해야 함!)
+    path('api/local-businesses/google-search-proxy/', google_search_proxy_standalone, name='google_search_proxy'),
+
     path('api/', include(router.urls)),
     path('api/categories/<int:category_id>/fields/', get_category_fields, name='category_fields'),
     path('api/groupbuys/<int:groupbuy_id>/bids/', group_buy_bids, name='groupbuy_bids'),
@@ -319,9 +322,6 @@ urlpatterns = [
 
     # 네이버 쇼핑 검색 API
     path('api/shopping/search/', search_shopping, name='shopping_search'),
-
-    # Google Places API 프록시 (독립 함수 버전)
-    path('api/local-businesses/google-search-proxy/', google_search_proxy_standalone, name='google_search_proxy'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
