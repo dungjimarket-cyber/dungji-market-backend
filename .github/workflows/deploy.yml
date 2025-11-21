@@ -164,17 +164,26 @@ jobs:
           # 3. 포트 8000 정리
           echo "🔍 Checking port 8000..."
           sudo fuser -k 8000/tcp 2>/dev/null || true
-          sleep 3
+          sleep 2
 
           # 4. 최종 확인
           echo "Remaining containers after cleanup:"
           sudo docker ps -a --filter "name=dungji"
 
-          # 5. 아직 남아있으면 에러
+          # 5. 아직 남아있으면 Docker 재시작 시도
           if sudo docker ps -a --format '{{.Names}}' | grep -q 'dungji'; then
-            echo "❌ ERROR: Failed to remove old containers!"
+            echo "⚠️  Containers still exist, restarting Docker daemon..."
+            sudo systemctl restart docker
+            sleep 5
+
+            echo "After Docker restart:"
             sudo docker ps -a --filter "name=dungji"
-            exit 1
+
+            # Docker 재시작 후에도 남아있으면 에러
+            if sudo docker ps -a --format '{{.Names}}' | grep -q 'dungji'; then
+              echo "❌ ERROR: Failed to remove old containers even after Docker restart!"
+              exit 1
+            fi
           fi
           echo "✅ All old containers removed"
 
