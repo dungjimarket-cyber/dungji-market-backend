@@ -351,6 +351,9 @@ USE_REAL_SMS = os.getenv('USE_REAL_SMS', 'False').lower() == 'true'
 # Google Places API (지역 업체 정보 수집용)
 GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 
+# OpenAI API Key (AI 리뷰 요약용)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+
 # Logging configuration
 LOGGING = {
     'version': 1,
