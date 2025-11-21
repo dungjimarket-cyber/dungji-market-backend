@@ -91,6 +91,24 @@ jobs:
             echo "✅ Firebase credentials added to .env"
           fi
 
+          # OpenAI API 키를 .env에 추가
+          if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+            # 기존 OPENAI_API_KEY 라인 제거 (있다면)
+            sed -i '/^OPENAI_API_KEY=/d' ~/dungji-market-backend/.env 2>/dev/null || true
+            echo "" >> ~/dungji-market-backend/.env
+            echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> ~/dungji-market-backend/.env
+            echo "✅ OpenAI API key added to .env"
+          fi
+
+          # Google Places API 키를 .env에 추가
+          if [ -n "${{ secrets.GOOGLE_PLACES_API_KEY }}" ]; then
+            # 기존 GOOGLE_PLACES_API_KEY 라인 제거 (있다면)
+            sed -i '/^GOOGLE_PLACES_API_KEY=/d' ~/dungji-market-backend/.env 2>/dev/null || true
+            echo "" >> ~/dungji-market-backend/.env
+            echo "GOOGLE_PLACES_API_KEY=${{ secrets.GOOGLE_PLACES_API_KEY }}" >> ~/dungji-market-backend/.env
+            echo "✅ Google Places API key added to .env"
+          fi
+
     - name: Deploy application
       uses: appleboy/ssh-action@v1.0.3
       with:
