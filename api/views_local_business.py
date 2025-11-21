@@ -51,6 +51,9 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
     ordering_fields = ['popularity_score', 'rating', 'review_count', 'rank_in_region', 'created_at']
     ordering = ['rank_in_region']  # 기본 정렬: 순위순
 
+    # Version marker for deployment verification
+    _deployment_version = "2025-01-23-rebuild"
+
     def get_queryset(self):
         """커스텀 필터링"""
         queryset = super().get_queryset()
@@ -339,7 +342,8 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         """
         from django.conf import settings
 
-        # Force rebuild trigger
+        logger.info(f'[google_search_proxy] Called with version: {self._deployment_version}')
+
         api_key = settings.GOOGLE_PLACES_API_KEY
         if not api_key:
             return Response(
