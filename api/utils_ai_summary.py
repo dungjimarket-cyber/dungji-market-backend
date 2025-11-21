@@ -71,7 +71,7 @@ def generate_business_summary(reviews_data: list, business_name: str) -> str:
             ],
             max_tokens=150,  # 요약은 짧게
             temperature=0.7,  # 적당한 창의성
-            timeout=10  # 10초 타임아웃
+            timeout=15  # 15초 타임아웃 (대량 처리 시 여유)
         )
 
         summary = response.choices[0].message.content.strip()

@@ -352,12 +352,18 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         return [];
     }
 
-    // 필터링: 폐업 업체 및 2년 이상 리뷰 없는 업체 제외
+    // 필터링: 폐업 업체, 연락처 없는 업체, 2년 이상 리뷰 없는 업체 제외
     const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000;
     const filteredPlaces = data.places.filter(place => {
         // 폐업한 곳 제외
         if (place.businessStatus === 'CLOSED_PERMANENTLY') {
             addLog(`⚠️ ${place.displayName.text}: 폐업 (제외)`, 'error');
+            return false;
+        }
+
+        // 연락처 없는 업체 제외
+        if (!place.internationalPhoneNumber) {
+            addLog(`⚠️ ${place.displayName.text}: 연락처 없음 (제외)`, 'error');
             return false;
         }
 
