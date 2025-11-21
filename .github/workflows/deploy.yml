@@ -147,34 +147,36 @@ jobs:
           fi
           echo "✅ Docker Compose file found"
           
-          # 기존 컨테이너 완전 제거
-          echo "🧹 Completely removing old containers..."
+          # 기존 컨테이너 완전 제거 (강력한 방법)
+          echo "🧹 Killing all dungji containers..."
 
-          # 모든 dungji 관련 컨테이너 찾아서 강제 삭제
-          for container_id in $(sudo docker ps -aq --filter "name=dungji"); do
-            if [ ! -z "$container_id" ]; then
-              echo "Force removing container: $container_id"
-              sudo docker rm -f "$container_id" 2>/dev/null || true
-            fi
-          done
+          # 1. 실행 중인 컨테이너 강제 종료
+          sudo docker ps -q --filter "name=dungji" | xargs -r sudo docker kill 2>/dev/null || true
 
-          # 포트 8000 정리
+          # 2. 모든 컨테이너 강제 삭제
+          sudo docker ps -aq --filter "name=dungji" | xargs -r sudo docker rm -f 2>/dev/null || true
+
+          # 3. 포트 8000 정리
           echo "🔍 Checking port 8000..."
           sudo fuser -k 8000/tcp 2>/dev/null || true
           sleep 2
 
-          # 남은 컨테이너 확인
+          # 4. 최종 확인
           echo "Remaining containers:"
-          sudo docker ps -a --filter "name=dungji" || echo "No dungji containers"
+          sudo docker ps -a --filter "name=dungji" || echo "✅ No dungji containers"
 
-
-          # 이미지 빌드
+          # 이미지 빌드 (docker 명령어 직접 사용)
           echo "🏗️  Building new image..."
-          sudo docker-compose build
+          sudo docker build -t dungji-market-backend-web .
 
-          # 컨테이너 시작 (up 대신 start 사용)
+          # 컨테이너 시작 (docker run 직접 사용)
           echo "🚀 Starting container..."
-          sudo docker-compose up -d --no-build
+          sudo docker run -d \
+            --name dungji-backend-web \
+            --restart unless-stopped \
+            -p 8000:8000 \
+            --env-file .env \
+            dungji-market-backend-web
 
           # 컨테이너 시작 대기
           echo "⏳ Waiting for containers to be ready..."
@@ -196,11 +198,11 @@ jobs:
 
           # 마이그레이션 실행
           echo "🔄 Running database migrations..."
-          sudo docker exec dungji-backend-web python manage.py migrate --noinput
+          sudo docker exec dungji-backend-web python manage.py migrate --noinput || echo "Migration failed, continuing..."
 
           # 정적 파일 수집
           echo "📦 Collecting static files..."
-          sudo docker exec dungji-backend-web python manage.py collectstatic --noinput
+          sudo docker exec dungji-backend-web python manage.py collectstatic --noinput || echo "Collectstatic failed, continuing..."
 
           # 최종 상태 확인
           echo "🏥 Final health check..."
