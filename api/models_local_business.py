@@ -145,6 +145,41 @@ class LocalBusiness(models.Model):
         verbose_name='대표 사진 URL'
     )
 
+    # 추가 정보
+    website_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='웹사이트 URL'
+    )
+
+    opening_hours = models.JSONField(
+        blank=True,
+        null=True,
+        verbose_name='영업시간',
+        help_text='요일별 영업시간 JSON'
+    )
+
+    editorial_summary = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Google 요약',
+        help_text='Google이 생성한 장소 요약'
+    )
+
+    business_status = models.CharField(
+        max_length=50,
+        default='OPERATIONAL',
+        verbose_name='영업 상태',
+        help_text='OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY'
+    )
+
+    last_review_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='최근 리뷰 시간'
+    )
+
     # 랭킹 정보
     popularity_score = models.FloatField(
         default=0,

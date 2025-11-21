@@ -220,6 +220,11 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         existing.review_count = business_data.get('review_count', 0)
                         existing.google_maps_url = business_data.get('google_maps_url', '')
                         existing.photo_url = business_data.get('photo_url')  # 30일 지났으니 갱신
+                        existing.website_url = business_data.get('website_url')
+                        existing.opening_hours = business_data.get('opening_hours')
+                        existing.editorial_summary = business_data.get('editorial_summary')
+                        existing.business_status = business_data.get('business_status', 'OPERATIONAL')
+                        existing.last_review_time = business_data.get('last_review_time')
                         existing.popularity_score = business_data.get('popularity_score', 0)
                         existing.rank_in_region = business_data.get('rank_in_region', 999)
                         existing.last_synced_at = timezone.now()
@@ -242,6 +247,11 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             review_count=business_data.get('review_count', 0),
                             google_maps_url=business_data.get('google_maps_url', ''),
                             photo_url=business_data.get('photo_url'),
+                            website_url=business_data.get('website_url'),
+                            opening_hours=business_data.get('opening_hours'),
+                            editorial_summary=business_data.get('editorial_summary'),
+                            business_status=business_data.get('business_status', 'OPERATIONAL'),
+                            last_review_time=business_data.get('last_review_time'),
                             popularity_score=business_data.get('popularity_score', 0),
                             rank_in_region=business_data.get('rank_in_region', 999),
                             last_synced_at=timezone.now(),

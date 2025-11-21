@@ -159,14 +159,14 @@ document.getElementById('collectForm').addEventListener('submit', async function
                 // Google Places API 호출
                 const places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit);
 
-                addLog(`✅ ${places.length}개 업체 발견`);
+                addLog(`✅ ${places.length}개 업체 발견 (필터링 후)`);
 
                 if (places.length === 0) {
                     addLog(`⚠️ 검색 결과 없음`, 'error');
                     continue;
                 }
 
-                // 백엔드로 저장
+                // 백엔드로 저장 - 필터링 후 순위를 다시 매김
                 const businesses = places.map((place, index) => ({
                     google_place_id: place.place_id,
                     category_id: parseInt(cat.id),
@@ -180,8 +180,13 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     review_count: place.user_ratings_total || 0,
                     google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
                     photo_url: place.photos && place.photos[0] ? place.photos[0].getUrl({maxWidth: 400}) : null,
+                    website_url: place.website,
+                    opening_hours: place.opening_hours,
+                    editorial_summary: place.editorial_summary,
+                    business_status: place.business_status,
+                    last_review_time: place.last_review_time,
                     popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
-                    rank_in_region: index + 1
+                    rank_in_region: index + 1  // 필터링 후의 순위
                 }));
 
                 addLog('💾 백엔드에 저장 중...');
@@ -258,7 +263,7 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
     const headers = {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.websiteUri,places.regularOpeningHours,places.editorialSummary,places.businessStatus,places.reviews'
     };
 
     const response = await fetch(apiUrl, {
@@ -278,8 +283,32 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         return [];
     }
 
+    // 필터링: 폐업 업체 및 2년 이상 리뷰 없는 업체 제외
+    const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000;
+    const filteredPlaces = data.places.filter(place => {
+        // 폐업한 곳 제외
+        if (place.businessStatus === 'CLOSED_PERMANENTLY') {
+            addLog(`⚠️ ${place.displayName.text}: 폐업 (제외)`, 'error');
+            return false;
+        }
+
+        // 리뷰가 있고, 최신 리뷰가 2년 이상 지났으면 제외
+        if (place.reviews && place.reviews.length > 0) {
+            const latestReview = place.reviews[0];
+            const reviewDate = new Date(latestReview.publishTime);
+            const daysSinceReview = (Date.now() - reviewDate) / (1000 * 60 * 60 * 24);
+
+            if (daysSinceReview > 730) {
+                addLog(`⚠️ ${place.displayName.text}: 최근 리뷰 ${Math.floor(daysSinceReview)}일 전 (제외)`, 'error');
+                return false;
+            }
+        }
+
+        return true;
+    });
+
     // 프론트엔드 랭킹 형식으로 변환
-    return data.places.map(place => ({
+    return filteredPlaces.map(place => ({
         place_id: place.id,
         name: place.displayName.text,
         formatted_address: place.formattedAddress,
@@ -295,7 +324,12 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         },
         photos: place.photos ? place.photos.map(photo => ({
             getUrl: (opts) => `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=${opts.maxWidth}&key=${apiKey}`
-        })) : null
+        })) : null,
+        website: place.websiteUri,
+        opening_hours: place.regularOpeningHours?.weekdayDescriptions,
+        editorial_summary: place.editorialSummary?.text,
+        business_status: place.businessStatus || 'OPERATIONAL',
+        last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null
     }));
 }
 
