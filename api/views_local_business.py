@@ -45,6 +45,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         'category'
     ).prefetch_related('links')
     permission_classes = [AllowAny]
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']  # 명시적으로 POST 허용
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['category', 'is_verified']
     search_fields = ['name', 'address']
@@ -52,7 +53,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
     ordering = ['rank_in_region']  # 기본 정렬: 순위순
 
     # Version marker for deployment verification
-    _deployment_version = "2025-01-23-rebuild"
+    _deployment_version = "2025-01-23-v2"
 
     def get_queryset(self):
         """커스텀 필터링"""
@@ -342,10 +343,16 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         """
         from django.conf import settings
 
-        logger.info(f'[google_search_proxy] Called with version: {self._deployment_version}')
+        logger.info('=' * 80)
+        logger.info(f'[google_search_proxy] CALLED - Version: {self._deployment_version}')
+        logger.info(f'[google_search_proxy] Request method: {request.method}')
+        logger.info(f'[google_search_proxy] Request data: {request.data}')
+        logger.info(f'[google_search_proxy] User: {request.user}')
+        logger.info('=' * 80)
 
         api_key = settings.GOOGLE_PLACES_API_KEY
         if not api_key:
+            logger.error('[google_search_proxy] API key not configured!')
             return Response(
                 {'error': 'Google Places API key not configured'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -361,13 +368,23 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                 'X-Goog-LanguageCode': 'ko'
             }
 
+            logger.info(f'[google_search_proxy] Calling Google API: {url}')
+            logger.info(f'[google_search_proxy] Request payload size: {len(str(request.data))} bytes')
+
             response = requests.post(url, json=request.data, headers=headers, timeout=10)
+
+            logger.info(f'[google_search_proxy] Google API response status: {response.status_code}')
+            logger.info(f'[google_search_proxy] Returning response to client')
 
             # 응답 그대로 반환
             return Response(response.json(), status=response.status_code)
 
         except requests.RequestException as e:
-            logger.error(f'Google Places API proxy error: {str(e)}')
+            logger.error('=' * 80)
+            logger.error(f'[google_search_proxy] REQUEST EXCEPTION!')
+            logger.error(f'[google_search_proxy] Error type: {type(e).__name__}')
+            logger.error(f'[google_search_proxy] Error message: {str(e)}')
+            logger.error('=' * 80)
             return Response(
                 {'error': f'API request failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
