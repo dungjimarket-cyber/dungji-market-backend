@@ -153,27 +153,35 @@ jobs:
 
           if [ ! -z "$PORT_CONTAINER" ]; then
             echo "Found container using port 8000: $PORT_CONTAINER"
-            echo "Stopping container..."
-            sudo docker stop -t 0 $PORT_CONTAINER 2>/dev/null || true
-            sleep 2
+            echo "Stopping container with SIGKILL..."
+            sudo docker kill $PORT_CONTAINER 2>/dev/null || true
+            sleep 1
             echo "Removing container..."
             sudo docker rm -f $PORT_CONTAINER 2>/dev/null || true
             sleep 2
           else
-            echo "No container using port 8000"
+            echo "No container using port 8000 (via docker)"
           fi
 
-          # 포트 8000 프로세스 강제 종료
+          # 포트 8000 프로세스 강제 종료 (여러 번 시도)
           echo "🧹 Cleaning up port 8000..."
-          sudo fuser -k 8000/tcp 2>/dev/null || true
-          sleep 3
+          for i in {1..3}; do
+            if sudo lsof -i :8000 >/dev/null 2>&1; then
+              echo "Attempt $i: Killing processes on port 8000..."
+              sudo fuser -k -9 8000/tcp 2>/dev/null || true
+              sudo lsof -ti:8000 | xargs -r sudo kill -9 2>/dev/null || true
+              sleep 2
+            else
+              echo "Port 8000 is free"
+              break
+            fi
+          done
 
-          # 포트 확인
+          # 최종 포트 확인
           if sudo lsof -i :8000 >/dev/null 2>&1; then
-            echo "⚠️  Port 8000 still in use, waiting..."
-            sleep 5
-            sudo fuser -k 8000/tcp 2>/dev/null || true
-            sleep 2
+            echo "❌ ERROR: Port 8000 still in use after cleanup!"
+            sudo lsof -i :8000
+            exit 1
           fi
 
           echo "✅ Port 8000 cleanup completed"
