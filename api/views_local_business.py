@@ -328,9 +328,11 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         existing.rank_in_region = business_data.get('rank_in_region', 999)
                         existing.last_synced_at = timezone.now()
 
-                        # Google 이미지 다운로드 및 custom_photo 갱신 (이미지 없을 때만)
+                        # Google 이미지 다운로드 및 custom_photo 갱신 (파일이 없으면 무조건 저장)
                         photo_url = business_data.get('photo_url')
-                        if photo_url and not existing.custom_photo:
+                        # custom_photo 필드가 비어있거나 파일이 실제로 없으면 저장
+                        has_actual_file = existing.custom_photo and existing.custom_photo.name
+                        if photo_url and not has_actual_file:
                             photo_result = self.download_and_save_photo(
                                 photo_url,
                                 business_data.get('name', ''),
@@ -340,8 +342,8 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                                 content_file, filename = photo_result
                                 existing.custom_photo.save(filename, content_file, save=False)
                                 logger.info(f"[S3] {business_data.get('name')}: 이미지 저장 완료")
-                        elif existing.custom_photo:
-                            logger.info(f"[SKIP] {business_data.get('name')}: 이미 이미지 존재")
+                        elif has_actual_file:
+                            logger.info(f"[SKIP] {business_data.get('name')}: 이미 이미지 파일 존재")
 
                         existing.save()
                         updated_count += 1
@@ -468,14 +470,19 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         참고: custom_photo가 우선순위이므로 이 엔드포인트는 거의 사용 안 됨
         사용법: /api/local-businesses/{id}/photo/
         """
+        from django.conf import settings
+
         business = self.get_object()
 
         if not business.photo_url:
             return HttpResponse(status=404)
 
         try:
+            # photo_url에 API 키 추가 (백엔드에서만 처리)
+            photo_url_with_key = f"{business.photo_url}&key={settings.GOOGLE_PLACES_API_KEY}"
+
             # Google에서 이미지 다운로드 (타임아웃 5초)
-            response = requests.get(business.photo_url, timeout=5)
+            response = requests.get(photo_url_with_key, timeout=5)
 
             if response.status_code == 200:
                 # Content-Type 확인 (기본값: image/jpeg)

@@ -30,21 +30,41 @@
 
     <form id="collectForm" style="margin-top: 20px;">
         <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 10px; font-weight: bold;">시/도 선택 (다중 선택 가능)</label>
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">지역 선택 (다중 선택 가능)</label>
 
             <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px;">
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
                     <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
-                        <input type="checkbox" name="provinces" value="서울특별시" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
-                        <span style="font-weight: 500;">서울</span>
+                        <input type="checkbox" name="provinces" value="서울 강남/서초" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울 강남/서초</span>
                     </label>
                     <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
-                        <input type="checkbox" name="provinces" value="경기도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
-                        <span style="font-weight: 500;">경기</span>
+                        <input type="checkbox" name="provinces" value="서울 강서/양천" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울 강서/양천</span>
                     </label>
                     <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
-                        <input type="checkbox" name="provinces" value="강원특별자치도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
-                        <span style="font-weight: 500;">강원</span>
+                        <input type="checkbox" name="provinces" value="서울 강북/노원" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울 강북/노원</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="서울 동부" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울 동부</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="서울 중부/서부" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울 중부/서부</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="서울 관악/동작" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울 관악/동작</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="경기 북부" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">경기 북부</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="경기 남부" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">경기 남부</span>
                     </label>
                     <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
                         <input type="checkbox" name="provinces" value="충청북도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
@@ -193,24 +213,36 @@ const REGION_COORDINATES = {
     '과천시': {latitude: 37.4292, longitude: 126.9879}
 };
 
-// 시/도별 하부 지역 매핑
+// 시/도별 하부 지역 매핑 (세분화)
 const PROVINCE_TO_REGIONS = {
-    '서울특별시': [
-        '서울특별시 강남구', '서울특별시 강동구', '서울특별시 강북구', '서울특별시 강서구',
-        '서울특별시 관악구', '서울특별시 광진구', '서울특별시 구로구', '서울특별시 금천구',
-        '서울특별시 노원구', '서울특별시 도봉구', '서울특별시 동대문구', '서울특별시 동작구',
-        '서울특별시 마포구', '서울특별시 서대문구', '서울특별시 서초구', '서울특별시 성동구',
-        '서울특별시 성북구', '서울특별시 송파구', '서울특별시 양천구', '서울특별시 영등포구',
-        '서울특별시 용산구', '서울특별시 은평구', '서울특별시 종로구', '서울특별시 중구',
-        '서울특별시 중랑구'
+    '서울 강남/서초': [
+        '서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구', '서울특별시 강동구'
     ],
-    '경기도': [
-        '경기도 수원시', '경기도 성남시', '경기도 고양시', '경기도 용인시', '경기도 부천시',
-        '경기도 안산시', '경기도 안양시', '경기도 남양주시', '경기도 화성시', '경기도 평택시',
-        '경기도 의정부시', '경기도 시흥시', '경기도 파주시', '경기도 김포시', '경기도 광명시',
-        '경기도 광주시', '경기도 군포시', '경기도 하남시', '경기도 오산시', '경기도 양주시',
-        '경기도 이천시', '경기도 구리시', '경기도 안성시', '경기도 포천시', '경기도 의왕시',
-        '경기도 여주시', '경기도 동두천시', '경기도 과천시'
+    '서울 강서/양천': [
+        '서울특별시 강서구', '서울특별시 양천구', '서울특별시 구로구', '서울특별시 금천구', '서울특별시 영등포구'
+    ],
+    '서울 강북/노원': [
+        '서울특별시 강북구', '서울특별시 노원구', '서울특별시 도봉구', '서울특별시 성북구', '서울특별시 중랑구'
+    ],
+    '서울 동부': [
+        '서울특별시 광진구', '서울특별시 동대문구', '서울특별시 성동구'
+    ],
+    '서울 중부/서부': [
+        '서울특별시 종로구', '서울특별시 중구', '서울특별시 용산구', '서울특별시 마포구',
+        '서울특별시 서대문구', '서울특별시 은평구'
+    ],
+    '서울 관악/동작': [
+        '서울특별시 관악구', '서울특별시 동작구'
+    ],
+    '경기 북부': [
+        '경기도 의정부시', '경기도 양주시', '경기도 동두천시', '경기도 포천시', '경기도 파주시',
+        '경기도 고양시', '경기도 김포시', '경기도 남양주시', '경기도 구리시', '경기도 가평군', '경기도 연천군'
+    ],
+    '경기 남부': [
+        '경기도 수원시', '경기도 성남시', '경기도 용인시', '경기도 안양시', '경기도 부천시',
+        '경기도 광명시', '경기도 과천시', '경기도 의왕시', '경기도 군포시', '경기도 안산시',
+        '경기도 시흥시', '경기도 광주시', '경기도 하남시', '경기도 이천시', '경기도 여주시',
+        '경기도 화성시', '경기도 평택시', '경기도 안성시', '경기도 오산시'
     ]
 };
 
@@ -355,9 +387,9 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     continue;
                 }
 
-                // 백엔드로 저장 - 필터링 후 순위를 다시 매김
-                const businesses = places.map((place, index) => {
-                    const data = {
+                // 백엔드로 저장 - popularity_score로 정렬 후 순위 할당
+                const businesses = places.map((place) => {
+                    return {
                         google_place_id: place.place_id,
                         category_id: parseInt(cat.id),
                         region_name: targetRegion,
@@ -370,24 +402,27 @@ document.getElementById('collectForm').addEventListener('submit', async function
                         review_count: place.user_ratings_total || 0,
                         google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
                         photo_url: place.photos && place.photos[0] ?
-                            `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=400` : null,
+                            `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=800` : null,
                         website_url: place.website,
                         opening_hours: place.opening_hours,
-                        editorial_summary: place.editorial_summary, // AI 생성 또는 Google 요약 또는 기존 요약 재사용
+                        editorial_summary: place.editorial_summary,
                         business_status: place.business_status,
                         last_review_time: place.last_review_time,
                         popularity_score: calculatePopularityScore(place.rating || 0, place.user_ratings_total || 0),
-                        rank_in_region: index + 1  // 필터링 후의 순위
                     };
+                });
+
+                // popularity_score 기준 내림차순 정렬 후 순위 할당
+                businesses.sort((a, b) => b.popularity_score - a.popularity_score);
+                businesses.forEach((business, index) => {
+                    business.rank_in_region = index + 1;
 
                     // 요약 저장 로그
-                    if (data.editorial_summary) {
-                        console.log(`[저장 데이터] ${place.name}: editorial_summary="${data.editorial_summary.substring(0, 50)}..."`);
+                    if (business.editorial_summary) {
+                        console.log(`[저장 데이터] ${business.name} (순위 ${business.rank_in_region}, 점수 ${business.popularity_score.toFixed(2)}): editorial_summary="${business.editorial_summary.substring(0, 50)}..."`);
                     } else {
-                        console.log(`[저장 데이터] ${place.name}: editorial_summary=null`);
+                        console.log(`[저장 데이터] ${business.name} (순위 ${business.rank_in_region}, 점수 ${business.popularity_score.toFixed(2)}): editorial_summary=null`);
                     }
-
-                    return data;
                 });
 
                 addLog('💾 백엔드에 저장 중...');

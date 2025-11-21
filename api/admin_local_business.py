@@ -81,10 +81,15 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         'last_synced_at',
         'created_at',
         'updated_at',
-        'google_maps_link'
+        'google_maps_link',
+        'refresh_button'
     ]
 
     fieldsets = (
+        ('데이터 갱신', {
+            'fields': ('refresh_button',),
+            'description': '이 업체의 최신 정보를 Google Places API에서 가져옵니다.'
+        }),
         ('기본 정보', {
             'fields': ('category', 'region_name', 'name', 'address', 'phone_number')
         }),
@@ -143,11 +148,24 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         return '-'
     google_maps_link.short_description = 'Google 지도'
 
+    def refresh_button(self, obj):
+        if obj.pk:
+            url = f'/admin/api/localbusiness/{obj.pk}/refresh/'
+            return format_html(
+                '<a class="button" href="{}" style="padding: 10px 15px; background: #417690; color: white; text-decoration: none; border-radius: 4px; display: inline-block;">'
+                '🔄 데이터 갱신하기</a>'
+                '<p style="color: #666; margin-top: 10px; font-size: 12px;">Google Places API에서 최신 정보를 가져와 업데이트합니다.</p>',
+                url
+            )
+        return '-'
+    refresh_button.short_description = '데이터 갱신'
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
             path('collect-businesses/', self.admin_site.admin_view(self.collect_businesses_view), name='collect_local_businesses'),
             path('collect-v2/', self.admin_site.admin_view(self.collect_v2_view), name='collect_local_businesses_v2'),
+            path('<path:object_id>/refresh/', self.admin_site.admin_view(self.refresh_business_view), name='refresh_local_business'),
         ]
         return custom_urls + urls
 
@@ -317,6 +335,131 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             'admin/local_business_collect_v2.html',
             context
         )
+
+    def refresh_business_view(self, request, object_id):
+        """개별 업체 데이터 갱신"""
+        try:
+            # 업체 조회
+            business = LocalBusiness.objects.get(pk=object_id)
+
+            # Google Places API 호출 (views_local_business.py의 로직 재사용)
+            from .views_local_business import LocalBusinessViewSet
+            viewset = LocalBusinessViewSet()
+
+            # Google Places API에서 최신 데이터 가져오기
+            import requests
+            from django.conf import settings
+
+            url = "https://places.googleapis.com/v1/places:searchText"
+            headers = {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": settings.GOOGLE_PLACES_API_KEY,
+                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.googleMapsUri,places.photos,places.editorialSummary,places.reviews"
+            }
+
+            # 검색 쿼리: 업체명 + 주소로 정확도 높이기
+            search_query = f"{business.name} {business.address}"
+
+            body = {
+                "textQuery": search_query,
+                "languageCode": "ko",
+                "maxResultCount": 1
+            }
+
+            response = requests.post(url, json=body, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                self.message_user(request, f"Google API 오류: {response.status_code}", messages.ERROR)
+                return redirect(f'/admin/api/localbusiness/{object_id}/change/')
+
+            data = response.json()
+            places = data.get('places', [])
+
+            if not places:
+                self.message_user(request, "Google Places에서 업체를 찾을 수 없습니다.", messages.WARNING)
+                return redirect(f'/admin/api/localbusiness/{object_id}/change/')
+
+            place = places[0]
+
+            # 기본 정보 업데이트
+            business.name = place.get('displayName', {}).get('text', business.name)
+            business.address = place.get('formattedAddress', business.address)
+            business.phone_number = place.get('nationalPhoneNumber', business.phone_number)
+            business.rating = place.get('rating')
+            business.review_count = place.get('userRatingCount', 0)
+            business.google_maps_url = place.get('googleMapsUri', business.google_maps_url)
+
+            # 위치 정보 업데이트
+            location = place.get('location', {})
+            if location:
+                business.latitude = str(location.get('latitude', business.latitude))
+                business.longitude = str(location.get('longitude', business.longitude))
+
+            # popularity_score 재계산
+            rating = business.rating or 0
+            review_count = business.review_count or 0
+            C = 10
+            m = 4.0
+            import math
+            bayesian_avg = (C * m + review_count * rating) / (C + review_count)
+            log_scale = math.log10(review_count + 1)
+            business.popularity_score = bayesian_avg * log_scale
+
+            # AI 요약 생성 (리뷰가 있는 경우만)
+            reviews = place.get('reviews', [])
+            if reviews:
+                from .utils_ai_summary import generate_business_summary
+
+                reviews_data = [
+                    {
+                        'text': review.get('text', {}).get('text', ''),
+                        'rating': review.get('rating', 0)
+                    }
+                    for review in reviews[:5]
+                ]
+
+                summary, error = generate_business_summary(reviews_data, business.name)
+                if summary:
+                    business.editorial_summary = summary
+
+            # 이미지 업데이트 (이미지가 없는 경우만)
+            if not business.custom_photo:
+                photos = place.get('photos', [])
+                if photos:
+                    photo_name = photos[0].get('name')
+                    if photo_name:
+                        photo_url = f"https://places.googleapis.com/v1/{photo_name}/media?key={settings.GOOGLE_PLACES_API_KEY}&maxHeightPx=800&maxWidthPx=800"
+
+                        # 이미지 다운로드 및 저장
+                        photo_result = viewset.download_and_save_photo(
+                            photo_url,
+                            business.name,
+                            business.google_place_id
+                        )
+
+                        if photo_result:
+                            content_file, filename = photo_result
+                            business.custom_photo.save(filename, content_file, save=False)
+
+            # 마지막 동기화 시간 업데이트
+            from django.utils import timezone
+            business.last_synced_at = timezone.now()
+
+            # 저장
+            business.save()
+
+            self.message_user(
+                request,
+                f"✅ {business.name} 데이터가 갱신되었습니다. (평점: {business.rating}, 리뷰: {business.review_count}개)",
+                messages.SUCCESS
+            )
+
+        except LocalBusiness.DoesNotExist:
+            self.message_user(request, "업체를 찾을 수 없습니다.", messages.ERROR)
+        except Exception as e:
+            self.message_user(request, f"오류 발생: {str(e)}", messages.ERROR)
+
+        return redirect(f'/admin/api/localbusiness/{object_id}/change/')
 
     def changelist_view(self, request, extra_context=None):
         """목록 페이지에 커스텀 버튼 추가"""
