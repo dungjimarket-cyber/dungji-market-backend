@@ -372,7 +372,8 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
     const headers = {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.websiteUri,places.regularOpeningHours,places.editorialSummary,places.businessStatus,places.reviews'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.websiteUri,places.regularOpeningHours,places.editorialSummary,places.businessStatus,places.reviews',
+        'X-Goog-LanguageCode': 'ko'  // 한글 응답 요청
     };
 
     const response = await fetch(apiUrl, {
