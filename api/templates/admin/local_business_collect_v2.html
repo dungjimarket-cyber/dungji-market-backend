@@ -135,22 +135,83 @@
 <script>
 // 지역별 좌표
 const REGION_COORDINATES = {
+    // 서울특별시 25개 구
     '강남구': {latitude: 37.5172, longitude: 127.0473},
-    '서초구': {latitude: 37.4837, longitude: 127.0324},
-    '송파구': {latitude: 37.5145, longitude: 127.1059},
     '강동구': {latitude: 37.5301, longitude: 127.1238},
+    '강북구': {latitude: 37.6398, longitude: 127.0256},
+    '강서구': {latitude: 37.5509, longitude: 126.8495},
+    '관악구': {latitude: 37.4784, longitude: 126.9516},
+    '광진구': {latitude: 37.5384, longitude: 127.0822},
+    '구로구': {latitude: 37.4954, longitude: 126.8874},
+    '금천구': {latitude: 37.4519, longitude: 126.9020},
+    '노원구': {latitude: 37.6542, longitude: 127.0568},
+    '도봉구': {latitude: 37.6688, longitude: 127.0471},
+    '동대문구': {latitude: 37.5744, longitude: 127.0399},
+    '동작구': {latitude: 37.5124, longitude: 126.9393},
     '마포구': {latitude: 37.5663, longitude: 126.9019},
+    '서대문구': {latitude: 37.5791, longitude: 126.9368},
+    '서초구': {latitude: 37.4837, longitude: 127.0324},
+    '성동구': {latitude: 37.5634, longitude: 127.0369},
+    '성북구': {latitude: 37.5894, longitude: 127.0167},
+    '송파구': {latitude: 37.5145, longitude: 127.1059},
+    '양천구': {latitude: 37.5170, longitude: 126.8664},
+    '영등포구': {latitude: 37.5264, longitude: 126.8963},
+    '용산구': {latitude: 37.5326, longitude: 126.9900},
+    '은평구': {latitude: 37.6027, longitude: 126.9291},
+    '종로구': {latitude: 37.5735, longitude: 126.9791},
+    '중구': {latitude: 37.5641, longitude: 126.9979},
+    '중랑구': {latitude: 37.6063, longitude: 127.0929},
+
+    // 경기도 주요 시
     '성남시': {latitude: 37.4201, longitude: 127.1262},
     '수원시': {latitude: 37.2636, longitude: 127.0286},
     '고양시': {latitude: 37.6584, longitude: 126.8320},
     '용인시': {latitude: 37.2410, longitude: 127.1776},
-    '화성시': {latitude: 37.1990, longitude: 126.8312}
+    '부천시': {latitude: 37.5034, longitude: 126.7660},
+    '안산시': {latitude: 37.3219, longitude: 126.8309},
+    '안양시': {latitude: 37.3943, longitude: 126.9568},
+    '남양주시': {latitude: 37.6360, longitude: 127.2166},
+    '화성시': {latitude: 37.1990, longitude: 126.8312},
+    '평택시': {latitude: 36.9922, longitude: 127.1129},
+    '의정부시': {latitude: 37.7382, longitude: 127.0338},
+    '시흥시': {latitude: 37.3800, longitude: 126.8028},
+    '파주시': {latitude: 37.7608, longitude: 126.7800},
+    '김포시': {latitude: 37.6152, longitude: 126.7159},
+    '광명시': {latitude: 37.4786, longitude: 126.8644},
+    '광주시': {latitude: 37.4295, longitude: 127.2551},
+    '군포시': {latitude: 37.3617, longitude: 126.9352},
+    '하남시': {latitude: 37.5400, longitude: 127.2015},
+    '오산시': {latitude: 37.1498, longitude: 127.0773},
+    '양주시': {latitude: 37.7853, longitude: 127.0458},
+    '이천시': {latitude: 37.2720, longitude: 127.4351},
+    '구리시': {latitude: 37.5943, longitude: 127.1296},
+    '안성시': {latitude: 37.0079, longitude: 127.2797},
+    '포천시': {latitude: 37.8950, longitude: 127.2004},
+    '의왕시': {latitude: 37.3449, longitude: 126.9684},
+    '여주시': {latitude: 37.2984, longitude: 127.6377},
+    '동두천시': {latitude: 37.9034, longitude: 127.0606},
+    '과천시': {latitude: 37.4292, longitude: 126.9879}
 };
 
 // 시/도별 하부 지역 매핑
 const PROVINCE_TO_REGIONS = {
-    '서울특별시': ['서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구', '서울특별시 강동구', '서울특별시 마포구'],
-    '경기도': ['경기도 성남시', '경기도 수원시', '경기도 고양시', '경기도 용인시', '경기도 화성시']
+    '서울특별시': [
+        '서울특별시 강남구', '서울특별시 강동구', '서울특별시 강북구', '서울특별시 강서구',
+        '서울특별시 관악구', '서울특별시 광진구', '서울특별시 구로구', '서울특별시 금천구',
+        '서울특별시 노원구', '서울특별시 도봉구', '서울특별시 동대문구', '서울특별시 동작구',
+        '서울특별시 마포구', '서울특별시 서대문구', '서울특별시 서초구', '서울특별시 성동구',
+        '서울특별시 성북구', '서울특별시 송파구', '서울특별시 양천구', '서울특별시 영등포구',
+        '서울특별시 용산구', '서울특별시 은평구', '서울특별시 종로구', '서울특별시 중구',
+        '서울특별시 중랑구'
+    ],
+    '경기도': [
+        '경기도 수원시', '경기도 성남시', '경기도 고양시', '경기도 용인시', '경기도 부천시',
+        '경기도 안산시', '경기도 안양시', '경기도 남양주시', '경기도 화성시', '경기도 평택시',
+        '경기도 의정부시', '경기도 시흥시', '경기도 파주시', '경기도 김포시', '경기도 광명시',
+        '경기도 광주시', '경기도 군포시', '경기도 하남시', '경기도 오산시', '경기도 양주시',
+        '경기도 이천시', '경기도 구리시', '경기도 안성시', '경기도 포천시', '경기도 의왕시',
+        '경기도 여주시', '경기도 동두천시', '경기도 과천시'
+    ]
 };
 
 // 중단 플래그
