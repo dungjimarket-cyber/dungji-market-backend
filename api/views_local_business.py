@@ -2,13 +2,14 @@
 지역 업체 정보 ViewSet
 """
 from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes as perm_decorator
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import F
 from django.utils import timezone
 from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 import requests
 import logging
 
@@ -424,4 +425,58 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
         except requests.RequestException as e:
             logger.error(f'Error fetching photo for business {pk}: {str(e)}')
             return HttpResponse(status=500)
+
+
+# 독립적인 view 함수로 google_search_proxy 구현
+@csrf_exempt
+@api_view(['POST'])
+@perm_decorator([AllowAny])
+def google_search_proxy_standalone(request):
+    """Google Places API 프록시 (CORS 우회) - 독립 함수 버전
+
+    ViewSet의 @action이 작동하지 않아 독립 함수로 구현
+
+    사용법: POST /api/local-businesses/google-search-proxy/
+    Body: { "textQuery": "...", "locationBias": {...}, "maxResultCount": 20 }
+    """
+    from django.conf import settings
+
+    logger.info('=' * 80)
+    logger.info('[google_search_proxy_standalone] CALLED - Standalone version')
+    logger.info(f'[google_search_proxy_standalone] Request method: {request.method}')
+    logger.info(f'[google_search_proxy_standalone] Request data: {request.data}')
+    logger.info('=' * 80)
+
+    api_key = settings.GOOGLE_PLACES_API_KEY
+    if not api_key:
+        logger.error('[google_search_proxy_standalone] API key not configured!')
+        return Response(
+            {'error': 'Google Places API key not configured'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    try:
+        url = 'https://places.googleapis.com/v1/places:searchText'
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': api_key,
+            'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.businessStatus,places.internationalPhoneNumber,places.websiteUri,places.editorialSummary,places.reviews,places.photos,places.regularOpeningHours',
+            'X-Goog-LanguageCode': 'ko'
+        }
+
+        logger.info(f'[google_search_proxy_standalone] Calling Google API: {url}')
+        response = requests.post(url, json=request.data, headers=headers, timeout=10)
+        logger.info(f'[google_search_proxy_standalone] Google API response: {response.status_code}')
+
+        return Response(response.json(), status=response.status_code)
+
+    except requests.RequestException as e:
+        logger.error('=' * 80)
+        logger.error(f'[google_search_proxy_standalone] ERROR: {type(e).__name__}')
+        logger.error(f'[google_search_proxy_standalone] Message: {str(e)}')
+        logger.error('=' * 80)
+        return Response(
+            {'error': f'API request failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 

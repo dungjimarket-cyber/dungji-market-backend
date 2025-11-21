@@ -96,7 +96,7 @@ from api.views_mypage import (
 from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
 from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 from api.admin_sms_test import sms_test_view
-from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet
+from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet, google_search_proxy_standalone
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -319,6 +319,9 @@ urlpatterns = [
 
     # 네이버 쇼핑 검색 API
     path('api/shopping/search/', search_shopping, name='shopping_search'),
+
+    # Google Places API 프록시 (독립 함수 버전)
+    path('api/local-businesses/google-search-proxy/', google_search_proxy_standalone, name='google_search_proxy'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공
