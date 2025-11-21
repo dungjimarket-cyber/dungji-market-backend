@@ -153,6 +153,17 @@ const PROVINCE_TO_REGIONS = {
     '경기도': ['경기도 성남시', '경기도 수원시', '경기도 고양시', '경기도 용인시', '경기도 화성시']
 };
 
+// 중단 플래그
+let isCollectionStopped = false;
+
+// 중단 버튼 이벤트
+document.getElementById('stopBtn').addEventListener('click', function() {
+    isCollectionStopped = true;
+    this.disabled = true;
+    this.textContent = '⏸️ 중단 중...';
+    addLog('🛑 사용자가 수집을 중단했습니다.', 'error');
+});
+
 document.getElementById('collectForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -170,9 +181,15 @@ document.getElementById('collectForm').addEventListener('submit', async function
     const categoryNameEn = categorySelect.options[categorySelect.selectedIndex].dataset.nameEn;
     const limit = parseInt(document.getElementById('limit').value);
 
+    // 중단 플래그 초기화
+    isCollectionStopped = false;
+
     document.getElementById('progressContainer').style.display = 'block';
     document.getElementById('collectBtn').disabled = true;
     document.getElementById('collectBtn').textContent = '⏳ 수집 중...';
+    document.getElementById('stopBtn').style.display = 'block';
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('stopBtn').textContent = '⏹️ 수집 중단';
 
     // 선택된 시/도를 하부 지역으로 확장
     const regions = [];
@@ -196,7 +213,19 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
     try {
         for (const targetRegion of regions) {
+            // 중단 체크
+            if (isCollectionStopped) {
+                addLog('⏹️ 수집이 중단되었습니다.', 'error');
+                break;
+            }
+
             for (const cat of categories) {
+                // 중단 체크
+                if (isCollectionStopped) {
+                    addLog('⏹️ 수집이 중단되었습니다.', 'error');
+                    break;
+                }
+
                 // 구/시 추출 (예: "서울특별시 강남구" → "강남구")
                 const regionShort = targetRegion.split(' ').pop();
                 const coordinates = REGION_COORDINATES[regionShort];
@@ -236,6 +265,12 @@ document.getElementById('collectForm').addEventListener('submit', async function
                 const BATCH_SIZE = 5; // 5개씩 병렬 처리 (OpenAI Rate Limit 충분)
 
                 for (let i = 0; i < places.length; i += BATCH_SIZE) {
+                    // 중단 체크
+                    if (isCollectionStopped) {
+                        addLog('⏹️ AI 요약 생성이 중단되었습니다.', 'error');
+                        break;
+                    }
+
                     const batch = places.slice(i, i + BATCH_SIZE);
 
                     addLog(`⏳ 배치 ${Math.floor(i/BATCH_SIZE) + 1} 처리 중... (${batch.length}개)`);
@@ -249,6 +284,13 @@ document.getElementById('collectForm').addEventListener('submit', async function
                             }
                         })
                     );
+
+                    addLog(`✅ 배치 ${Math.floor(i/BATCH_SIZE) + 1} 완료`);
+                }
+
+                // 중단된 경우 저장 스킵
+                if (isCollectionStopped) {
+                    continue;
                 }
 
                 // 백엔드로 저장 - 필터링 후 순위를 다시 매김
@@ -306,13 +348,18 @@ document.getElementById('collectForm').addEventListener('submit', async function
             }
         }
 
-        addLog(`🎉 전체 수집 완료!`)
+        if (!isCollectionStopped) {
+            addLog(`🎉 전체 수집 완료!`);
+        } else {
+            addLog(`⏹️ 수집이 사용자에 의해 중단되었습니다.`, 'error');
+        }
 
     } catch (error) {
         addLog(`❌ 오류: ${error.message}`, 'error');
     } finally {
         document.getElementById('collectBtn').disabled = false;
         document.getElementById('collectBtn').textContent = '🚀 데이터 수집 시작';
+        document.getElementById('stopBtn').style.display = 'none';
     }
 });
 
