@@ -330,6 +330,44 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
             'message': f'30일 이내 업데이트된 {skipped_count}개 업체는 스킵했습니다 (photo_url 유지)'
         })
 
+    @action(detail=False, methods=['post'])
+    def google_search_proxy(self, request):
+        """Google Places API 프록시 (CORS 우회)
+
+        사용법: POST /api/local-businesses/google-search-proxy/
+        Body: { "textQuery": "...", "locationBias": {...}, "maxResultCount": 20 }
+        """
+        from django.conf import settings
+
+        api_key = settings.GOOGLE_PLACES_API_KEY
+        if not api_key:
+            return Response(
+                {'error': 'Google Places API key not configured'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        try:
+            # Google Places API 호출
+            url = 'https://places.googleapis.com/v1/places:searchText'
+            headers = {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': api_key,
+                'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.businessStatus,places.internationalPhoneNumber,places.websiteUri,places.editorialSummary,places.reviews,places.photos,places.regularOpeningHours',
+                'X-Goog-LanguageCode': 'ko'
+            }
+
+            response = requests.post(url, json=request.data, headers=headers, timeout=10)
+
+            # 응답 그대로 반환
+            return Response(response.json(), status=response.status_code)
+
+        except requests.RequestException as e:
+            logger.error(f'Google Places API proxy error: {str(e)}')
+            return Response(
+                {'error': f'API request failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=True, methods=['get'])
     def photo(self, request, pk=None):
         """업체 사진 프록시 (API 키 숨김)

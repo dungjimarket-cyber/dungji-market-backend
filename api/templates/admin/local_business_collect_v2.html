@@ -30,76 +30,50 @@
 
     <form id="collectForm" style="margin-top: 20px;">
         <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 10px; font-weight: bold;">지역 선택 (다중 선택 가능)</label>
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">시/도 선택 (다중 선택 가능)</label>
 
-            <!-- 전체 선택 체크박스 -->
-            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
-                <label style="display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" id="selectAllRegions" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
-                    <span style="font-weight: bold;">🏙️ 수도권 전체 선택 (서울 + 경기)</span>
-                </label>
-            </div>
-
-            <!-- 시/도별 그룹 -->
-            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; max-height: 300px; overflow-y: auto;">
-                <!-- 서울 -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: bold; color: #1976d2;">
-                        <input type="checkbox" class="province-select" data-province="서울" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
-                        <span>서울 전체</span>
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="서울특별시" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">서울</span>
                     </label>
-                    <div style="margin-left: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="서울특별시 강남구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">강남구</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="서울특별시 서초구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">서초구</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="서울특별시 송파구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">송파구</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="서울특별시 강동구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">강동구</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="서울특별시 마포구" class="region-checkbox seoul" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">마포구</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- 경기 -->
-                <div>
-                    <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; font-weight: bold; color: #1976d2;">
-                        <input type="checkbox" class="province-select" data-province="경기" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
-                        <span>경기 전체</span>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="경기도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">경기</span>
                     </label>
-                    <div style="margin-left: 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="경기도 성남시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">성남시</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="경기도 수원시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">수원시</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="경기도 고양시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">고양시</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="경기도 용인시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">용인시</span>
-                        </label>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" name="regions" value="경기도 화성시" class="region-checkbox 경기" style="margin-right: 6px; cursor: pointer;">
-                            <span style="font-size: 14px;">화성시</span>
-                        </label>
-                    </div>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="강원특별자치도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">강원</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="충청북도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">충북</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="충청남도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">충남</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="전라북도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">전북</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="전라남도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">전남</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="경상북도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">경북</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="경상남도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">경남</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                        <input type="checkbox" name="provinces" value="제주특별자치도" class="province-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                        <span style="font-weight: 500;">제주</span>
+                    </label>
                 </div>
             </div>
         </div>
@@ -176,30 +150,15 @@ const ALL_REGIONS = [
     '경기도 용인시', '경기도 화성시'
 ];
 
-// 체크박스 이벤트 처리
-document.getElementById('selectAllRegions').addEventListener('change', function(e) {
-    const checkboxes = document.querySelectorAll('.region-checkbox');
-    checkboxes.forEach(cb => cb.checked = e.target.checked);
-});
-
-// 시/도 전체 선택 체크박스
-document.querySelectorAll('.province-select').forEach(provinceCheckbox => {
-    provinceCheckbox.addEventListener('change', function(e) {
-        const province = e.target.dataset.province;
-        const checkboxes = document.querySelectorAll(`.region-checkbox.${province}`);
-        checkboxes.forEach(cb => cb.checked = e.target.checked);
-    });
-});
-
 document.getElementById('collectForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    // 선택된 지역 수집
-    const selectedRegions = Array.from(document.querySelectorAll('input[name="regions"]:checked'))
+    // 선택된 시/도 수집
+    const selectedProvinces = Array.from(document.querySelectorAll('input[name="provinces"]:checked'))
         .map(cb => cb.value);
 
-    if (selectedRegions.length === 0) {
-        alert('최소 1개 이상의 지역을 선택해주세요.');
+    if (selectedProvinces.length === 0) {
+        alert('최소 1개 이상의 시/도를 선택해주세요.');
         return;
     }
 
@@ -212,8 +171,8 @@ document.getElementById('collectForm').addEventListener('submit', async function
     document.getElementById('collectBtn').disabled = true;
     document.getElementById('collectBtn').textContent = '⏳ 수집 중...';
 
-    // 선택된 지역 사용
-    const regions = selectedRegions;
+    // 선택된 시/도 사용 (하위 지역 전체 검색)
+    const regions = selectedProvinces;
 
     // 카테고리 목록 결정
     const categories = categoryId === 'ALL'
@@ -340,18 +299,8 @@ document.getElementById('collectForm').addEventListener('submit', async function
 });
 
 async function fetchGooglePlaces(city, category, coordinates, maxResults) {
-    const apiKey = '{{ google_api_key|escapejs }}';
-
-    // API 키 디버깅
-    console.log('API Key exists:', !!apiKey);
-    console.log('API Key length:', apiKey.length);
-    console.log('API Key prefix:', apiKey.substring(0, 20));
-
-    if (!apiKey || apiKey === '') {
-        throw new Error('API 키가 설정되지 않았습니다');
-    }
-
-    const apiUrl = 'https://places.googleapis.com/v1/places:searchText';
+    // 백엔드 프록시를 통해 Google API 호출 (CORS 우회)
+    const proxyUrl = '/api/local-businesses/google-search-proxy/';
 
     const requestBody = {
         textQuery: `${city} ${category}`,
@@ -369,22 +318,18 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         maxResultCount: maxResults
     };
 
-    const headers = {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.websiteUri,places.regularOpeningHours,places.editorialSummary,places.businessStatus,places.reviews',
-        'X-Goog-LanguageCode': 'ko'  // 한글 응답 요청
-    };
-
-    const response = await fetch(apiUrl, {
+    const response = await fetch(proxyUrl, {
         method: 'POST',
-        headers: headers,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+        },
         body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Google API 오류: ${response.status} - ${errorText}`);
+        throw new Error(`Google API 프록시 오류: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
