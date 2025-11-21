@@ -147,15 +147,26 @@ jobs:
           fi
           echo "✅ Docker Compose file found"
           
-          # 기존 컨테이너 정리
-          echo "🧹 Stopping and removing old containers..."
-          sudo docker stop dungji-backend-web 2>/dev/null || true
-          sudo docker rm dungji-backend-web 2>/dev/null || true
+          # 기존 컨테이너 강제 정리
+          echo "🧹 Force removing old containers..."
 
-          # 포트 8000 정리
+          # 1. docker-compose down으로 안전하게 정리 시도
+          sudo docker-compose down 2>/dev/null || true
+
+          # 2. 컨테이너가 남아있다면 강제 삭제
+          if sudo docker ps -a --format '{{.Names}}' | grep -q 'dungji-backend-web'; then
+            echo "Force removing dungji-backend-web..."
+            sudo docker rm -f dungji-backend-web 2>/dev/null || true
+          fi
+
+          # 3. 포트 8000 정리
           echo "🔍 Checking port 8000..."
           sudo fuser -k 8000/tcp 2>/dev/null || true
           sleep 2
+
+          # 4. 최종 확인
+          echo "Container status after cleanup:"
+          sudo docker ps -a | grep dungji || echo "No dungji containers found"
 
           
           # 새 이미지 빌드 및 컨테이너 시작
