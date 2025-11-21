@@ -147,15 +147,24 @@ jobs:
           fi
           echo "✅ Docker Compose file found"
           
-          # 기존 컨테이너 정리
+          # 기존 컨테이너 정리 (이름과 ID 둘 다 처리)
           echo "🧹 Stopping and removing old containers..."
+
+          # 이름으로 정리
           sudo docker stop dungji-backend-web 2>/dev/null || true
-          sudo docker rm dungji-backend-web 2>/dev/null || true
+          sudo docker rm -f dungji-backend-web 2>/dev/null || true
+
+          # 혹시 모를 ID로 남아있는 컨테이너 정리
+          OLD_ID=$(sudo docker ps -aq --filter "name=dungji-backend-web" 2>/dev/null)
+          if [ ! -z "$OLD_ID" ]; then
+            echo "Removing container by ID: $OLD_ID"
+            sudo docker rm -f "$OLD_ID" 2>/dev/null || true
+          fi
 
           # 포트 8000 정리
           echo "🔍 Checking port 8000..."
           sudo fuser -k 8000/tcp 2>/dev/null || true
-          sleep 2
+          sleep 3
 
           
           # 새 이미지 빌드 및 컨테이너 시작
