@@ -296,13 +296,21 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
                         # 30일 이내 업데이트된 업체는 AI 요약만 업데이트
                         if existing.last_synced_at and existing.last_synced_at > thirty_days_ago:
-                            # AI 요약이 있으면 업데이트
                             new_summary = business_data.get('editorial_summary')
-                            if new_summary:
-                                logger.info(f"[UPDATE] {business_data.get('name')}: editorial_summary={new_summary}")
+
+                            # 기존 요약이 없고 새 요약이 있으면 저장
+                            if not existing.editorial_summary and new_summary:
+                                logger.info(f"[UPDATE] {business_data.get('name')}: 새 AI 요약 추가 - {new_summary}")
                                 existing.editorial_summary = new_summary
                                 existing.save(update_fields=['editorial_summary'])
                                 updated_count += 1
+                            # 기존 요약이 있고 새 요약이 있으면 업데이트
+                            elif existing.editorial_summary and new_summary:
+                                logger.info(f"[UPDATE] {business_data.get('name')}: AI 요약 갱신 - {new_summary}")
+                                existing.editorial_summary = new_summary
+                                existing.save(update_fields=['editorial_summary'])
+                                updated_count += 1
+                            # 둘 다 없으면 skip
                             else:
                                 skipped_count += 1
                             continue

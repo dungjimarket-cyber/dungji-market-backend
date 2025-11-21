@@ -375,6 +375,9 @@ document.getElementById('collectForm').addEventListener('submit', async function
                             const aiSummary = await generateAISummary(place, existingSummary);
                             if (aiSummary) {
                                 place.editorial_summary = aiSummary;
+                                console.log(`[AI 요약 저장] ${place.name}: "${aiSummary.substring(0, 30)}..."`);
+                            } else {
+                                console.log(`[AI 요약 실패] ${place.name}: 요약 생성 안 됨 (리뷰: ${place.reviews?.length || 0}개)`);
                             }
                         })
                     );
@@ -593,12 +596,6 @@ function calculatePopularityScore(rating, reviewCount) {
 }
 
 async function generateAISummary(place, existingSummary = null) {
-    // Google 요약이 이미 있으면 우선 사용
-    if (place.editorial_summary) {
-        addLog(`💡 ${place.name}: Google 요약 사용`, 'info');
-        return place.editorial_summary;
-    }
-
     // 기존 AI 요약이 있으면 재사용 (30일 캐싱)
     if (existingSummary) {
         addLog(`♻️ ${place.name}: 기존 AI 요약 재사용 (토큰 절약)`, 'info');
