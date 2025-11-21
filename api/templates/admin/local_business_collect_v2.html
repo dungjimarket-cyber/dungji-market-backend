@@ -369,7 +369,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
                         review_count: place.user_ratings_total || 0,
                         google_maps_url: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
                         photo_url: place.photos && place.photos[0] ?
-                            `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=400&key=BACKEND_WILL_HANDLE` : null,
+                            `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=400` : null,
                         website_url: place.website,
                         opening_hours: place.opening_hours,
                         editorial_summary: place.editorial_summary, // AI 생성 또는 Google 요약 또는 기존 요약 재사용

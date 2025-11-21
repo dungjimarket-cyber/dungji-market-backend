@@ -407,22 +407,44 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def photo(self, request, pk=None):
-        """업체 사진 프록시 (API 키 숨김)
+        """업체 사진 프록시 (API 키 숨김 + 30일 캐싱)
 
         사용법: /api/local-businesses/{id}/photo/
         """
+        from django.core.cache import cache
+
         business = self.get_object()
 
         if not business.photo_url:
             return HttpResponse(status=404)
 
+        # 캐시 키 생성
+        cache_key = f'business_photo_{pk}'
+
+        # 캐시에서 조회
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info(f'[CACHE HIT] Photo for business {pk}')
+            return HttpResponse(
+                cached_data['content'],
+                content_type=cached_data['content_type'],
+                headers={'Cache-Control': 'public, max-age=86400'}
+            )
+
         try:
+            logger.info(f'[CACHE MISS] Fetching photo from Google for business {pk}')
             # Google에서 이미지 다운로드 (타임아웃 5초)
             response = requests.get(business.photo_url, timeout=5)
 
             if response.status_code == 200:
                 # Content-Type 확인 (기본값: image/jpeg)
                 content_type = response.headers.get('Content-Type', 'image/jpeg')
+
+                # 캐시에 30일간 저장
+                cache.set(cache_key, {
+                    'content': response.content,
+                    'content_type': content_type
+                }, timeout=2592000)  # 30일 = 60*60*24*30
 
                 # 이미지를 클라이언트에게 전달
                 return HttpResponse(
