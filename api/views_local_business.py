@@ -229,9 +229,35 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def download_and_save_photo(self, photo_url, business_name, google_place_id):
+        """Google 이미지를 다운로드해서 custom_photo 필드에 저장 (ImageField 사용)"""
+        from django.core.files.base import ContentFile
+        import uuid
+
+        if not photo_url:
+            return None
+
+        try:
+            # Google 이미지 다운로드
+            response = requests.get(photo_url, timeout=10)
+            if response.status_code != 200:
+                logger.error(f'Failed to download photo: {response.status_code}')
+                return None
+
+            # 파일명 생성
+            file_extension = 'jpg'
+            filename = f"{google_place_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
+
+            # ContentFile 객체 생성 (ImageField.save()에 사용)
+            return ContentFile(response.content), filename
+
+        except Exception as e:
+            logger.error(f'Error downloading photo for {business_name}: {str(e)}')
+            return None
+
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
-        """프론트에서 수집한 업체 데이터 일괄 저장 (30일 캐싱 정책)"""
+        """프론트에서 수집한 업체 데이터 일괄 저장 (30일 캐싱 정책 + S3 이미지 저장)"""
         from django.db import transaction
         from decimal import Decimal
         from django.utils import timezone
@@ -281,7 +307,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                                 skipped_count += 1
                             continue
 
-                        # 30일 지났으면 전체 업데이트 (photo_url 포함)
+                        # 30일 지났으면 전체 업데이트 (이미지 포함)
                         existing.category = category
                         existing.region_name = business_data.get('region_name', '')
                         existing.name = business_data.get('name', '')
@@ -292,7 +318,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         existing.rating = Decimal(str(business_data['rating'])) if business_data.get('rating') else None
                         existing.review_count = business_data.get('review_count', 0)
                         existing.google_maps_url = business_data.get('google_maps_url', '')
-                        existing.photo_url = business_data.get('photo_url')  # 30일 지났으니 갱신
+                        existing.photo_url = business_data.get('photo_url')  # 백업용
                         existing.website_url = business_data.get('website_url')
                         existing.opening_hours = business_data.get('opening_hours')
                         existing.editorial_summary = business_data.get('editorial_summary')
@@ -301,8 +327,23 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         existing.popularity_score = business_data.get('popularity_score', 0)
                         existing.rank_in_region = business_data.get('rank_in_region', 999)
                         existing.last_synced_at = timezone.now()
-                        existing.save()
 
+                        # Google 이미지 다운로드 및 custom_photo 갱신 (이미지 없을 때만)
+                        photo_url = business_data.get('photo_url')
+                        if photo_url and not existing.custom_photo:
+                            photo_result = self.download_and_save_photo(
+                                photo_url,
+                                business_data.get('name', ''),
+                                google_place_id
+                            )
+                            if photo_result:
+                                content_file, filename = photo_result
+                                existing.custom_photo.save(filename, content_file, save=False)
+                                logger.info(f"[S3] {business_data.get('name')}: 이미지 저장 완료")
+                        elif existing.custom_photo:
+                            logger.info(f"[SKIP] {business_data.get('name')}: 이미 이미지 존재")
+
+                        existing.save()
                         updated_count += 1
 
                     except LocalBusiness.DoesNotExist:
@@ -310,7 +351,8 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         editorial_summary = business_data.get('editorial_summary')
                         logger.info(f"[SAVE] {business_data.get('name')}: editorial_summary={editorial_summary}")
 
-                        LocalBusiness.objects.create(
+                        # 업체 생성
+                        business = LocalBusiness.objects.create(
                             google_place_id=google_place_id,
                             category=category,
                             region_name=business_data.get('region_name', ''),
@@ -322,7 +364,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             rating=Decimal(str(business_data['rating'])) if business_data.get('rating') else None,
                             review_count=business_data.get('review_count', 0),
                             google_maps_url=business_data.get('google_maps_url', ''),
-                            photo_url=business_data.get('photo_url'),
+                            photo_url=business_data.get('photo_url'),  # 원본 URL은 백업용
                             website_url=business_data.get('website_url'),
                             opening_hours=business_data.get('opening_hours'),
                             editorial_summary=editorial_summary,
@@ -332,6 +374,20 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             rank_in_region=business_data.get('rank_in_region', 999),
                             last_synced_at=timezone.now(),
                         )
+
+                        # Google 이미지 다운로드 및 custom_photo에 저장
+                        photo_url = business_data.get('photo_url')
+                        if photo_url:
+                            photo_result = self.download_and_save_photo(
+                                photo_url,
+                                business_data.get('name', ''),
+                                google_place_id
+                            )
+                            if photo_result:
+                                content_file, filename = photo_result
+                                business.custom_photo.save(filename, content_file, save=True)
+                                logger.info(f"[S3] {business_data.get('name')}: 이미지 저장 완료")
+
                         created_count += 1
 
             except LocalBusinessCategory.DoesNotExist:
@@ -407,32 +463,17 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def photo(self, request, pk=None):
-        """업체 사진 프록시 (API 키 숨김 + 30일 캐싱)
+        """업체 사진 프록시 (photo_url 백업용)
 
+        참고: custom_photo가 우선순위이므로 이 엔드포인트는 거의 사용 안 됨
         사용법: /api/local-businesses/{id}/photo/
         """
-        from django.core.cache import cache
-
         business = self.get_object()
 
         if not business.photo_url:
             return HttpResponse(status=404)
 
-        # 캐시 키 생성
-        cache_key = f'business_photo_{pk}'
-
-        # 캐시에서 조회
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            logger.info(f'[CACHE HIT] Photo for business {pk}')
-            return HttpResponse(
-                cached_data['content'],
-                content_type=cached_data['content_type'],
-                headers={'Cache-Control': 'public, max-age=86400'}
-            )
-
         try:
-            logger.info(f'[CACHE MISS] Fetching photo from Google for business {pk}')
             # Google에서 이미지 다운로드 (타임아웃 5초)
             response = requests.get(business.photo_url, timeout=5)
 
@@ -440,18 +481,12 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                 # Content-Type 확인 (기본값: image/jpeg)
                 content_type = response.headers.get('Content-Type', 'image/jpeg')
 
-                # 캐시에 30일간 저장
-                cache.set(cache_key, {
-                    'content': response.content,
-                    'content_type': content_type
-                }, timeout=2592000)  # 30일 = 60*60*24*30
-
                 # 이미지를 클라이언트에게 전달
                 return HttpResponse(
                     response.content,
                     content_type=content_type,
                     headers={
-                        'Cache-Control': 'public, max-age=86400',  # 1일 캐싱
+                        'Cache-Control': 'public, max-age=86400',  # 1일 브라우저 캐싱
                     }
                 )
             else:

@@ -49,14 +49,15 @@ def generate_business_summary(reviews_data: list, business_name: str) -> tuple:
             return (None, "텍스트 리뷰 없음 (평점만 존재)")
 
         # 프롬프트 구성
-        prompt = f"""다음은 "{business_name}"에 대한 고객 리뷰입니다.
-이 리뷰들을 바탕으로 이 업체의 특징과 장점을 요약해주세요.
+        prompt = f"""다음은 고객 리뷰입니다.
+이 리뷰들을 바탕으로 업체의 특징과 장점을 요약해주세요.
 
 **요구사항:**
 - 최대 50-60자 이내 (2줄 분량)
 - 핵심 장점 1-2가지만 간결하게
 - 긍정적이고 객관적인 톤
 - 과장 금지
+- 업체명을 주어로 사용하지 말 것 (예: "친절하고 전문적인 서비스 제공")
 
 리뷰:
 {reviews_text}
@@ -69,7 +70,7 @@ def generate_business_summary(reviews_data: list, business_name: str) -> tuple:
             messages=[
                 {
                     "role": "system",
-                    "content": "당신은 비즈니스 리뷰를 분석하고 요약하는 전문가입니다. 50-60자 이내로 핵심만 간결하게 요약합니다."
+                    "content": "당신은 비즈니스 리뷰를 분석하고 요약하는 전문가입니다. 50-60자 이내로 핵심만 간결하게 요약하며, 업체명을 주어로 사용하지 않습니다."
                 },
                 {
                     "role": "user",

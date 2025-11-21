@@ -338,6 +338,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
                     await Promise.all(
                         batch.map(async (place) => {
+                            // 기존 AI 요약 재사용 또는 새로 생성
                             const existingSummary = existingSummaryMap[place.place_id];
                             const aiSummary = await generateAISummary(place, existingSummary);
                             if (aiSummary) {
@@ -520,11 +521,6 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
 
     // 프론트엔드 랭킹 형식으로 변환 (리뷰 데이터 포함)
     return filteredPlaces.map(place => {
-        const googleSummary = place.editorialSummary?.text;
-        if (googleSummary) {
-            console.log(`[Google 요약 발견] ${place.displayName.text}: ${googleSummary.substring(0, 50)}...`);
-        }
-
         return {
             place_id: place.id,
             name: place.displayName.text,
@@ -546,7 +542,7 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
             })) : null,
             website: place.websiteUri,
             opening_hours: place.regularOpeningHours?.weekdayDescriptions,
-            editorial_summary: googleSummary,
+            editorial_summary: null,  // AI 요약으로 대체
             business_status: place.businessStatus || 'OPERATIONAL',
             last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null,
             reviews: place.reviews // 리뷰 데이터 추가 (AI 요약용)
