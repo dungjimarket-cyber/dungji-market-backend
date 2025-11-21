@@ -91,6 +91,9 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         ('평점 및 순위', {
             'fields': ('rating', 'review_count', 'popularity_score', 'rank_in_region')
         }),
+        ('AI 요약', {
+            'fields': ('editorial_summary',)
+        }),
         ('상태', {
             'fields': ('is_verified', 'is_new', 'view_count')
         }),
