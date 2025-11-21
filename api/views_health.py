@@ -26,7 +26,8 @@ def health_check(request):
         "status": "healthy" if db_status == "ok" else "unhealthy",
         "timestamp": timezone.now().isoformat(),
         "database": db_status,
-        "version": "1.0.0"
+        "version": "1.0.1",  # Updated to verify deployment
+        "google_search_proxy_available": True  # Indicator that google_search_proxy should be available
     }
     
     # Return 200 if healthy, 503 if unhealthy
