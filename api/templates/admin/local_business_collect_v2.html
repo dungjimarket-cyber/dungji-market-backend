@@ -695,14 +695,14 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             return false;
         }
 
-        // 리뷰가 있고, 최신 리뷰가 3년 이상 지났으면 제외
+        // 리뷰가 있고, 최신 리뷰가 5년 이상 지났으면 제외
         if (place.reviews && place.reviews.length > 0) {
             const latestReview = place.reviews[0];
             const reviewDate = new Date(latestReview.publishTime);
             const daysSinceReview = (Date.now() - reviewDate) / (1000 * 60 * 60 * 24);
 
-            if (daysSinceReview > 1095) {
-                addLog(`⚠️ ${place.displayName.text}: 최근 리뷰 ${Math.floor(daysSinceReview)}일 전 (3년 초과, 제외)`, 'error');
+            if (daysSinceReview > 1825) {
+                addLog(`⚠️ ${place.displayName.text}: 최근 리뷰 ${Math.floor(daysSinceReview)}일 전 (5년 초과, 제외)`, 'error');
                 return false;
             }
         }
