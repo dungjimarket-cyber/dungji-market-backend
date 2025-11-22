@@ -717,66 +717,11 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             }
         }
 
-        // 전역 제외 키워드 (모든 업종에 적용)
-        const globalExcludeKeywords = [
-            '카페', 'cafe', 'coffee',
-            '호텔', 'hotel', 'motel',
-            '군청', '시청', '구청', '면사무소', '주민센터', '행정복지센터',
-            '병원', 'hospital', 'clinic',
-            '약국', 'pharmacy',
-            '편의점', 'convenience',
-            '마트', 'mart',
-            '식당', 'restaurant',
-            '학교', 'school', '대학교', 'university',
-            '은행', 'bank',
-            '우체국', 'post office'
-        ];
-
-        const name = place.displayName.text.toLowerCase();
-        const address = (place.formattedAddress || '').toLowerCase();
-
-        // 전역 제외 키워드 체크
-        if (globalExcludeKeywords.some(keyword => name.includes(keyword))) {
-            addLog(`⚠️ ${place.displayName.text}: 부적합 업종 (${globalExcludeKeywords.find(k => name.includes(k))})`, 'error');
-            return false;
-        }
-
-        // 카테고리별 필수 키워드 검증
-        const categoryRequirements = {
-            'lawyer': {
-                required: ['법률', '법무', '변호사', 'law'],
-                name: '변호사'
-            },
-            'legal': {
-                required: ['법률', '법무', '변호사', 'law'],
-                name: '법무사'
-            },
-            'accounting': {
-                required: ['회계', '세무', '공인회계사', 'accounting', 'cpa'],
-                name: '회계사'
-            },
-            'tax': {
-                required: ['세무', '세무사', 'tax'],
-                name: '세무사'
-            },
-            'real_estate': {
-                required: ['부동산', '공인중개사', 'real estate', 'realty'],
-                name: '부동산'
-            }
-        };
-
-        const categoryKey = category.toLowerCase();
-        if (categoryRequirements[categoryKey]) {
-            const req = categoryRequirements[categoryKey];
-            const hasRequired = req.required.some(keyword =>
-                name.includes(keyword) || address.includes(keyword)
-            );
-
-            if (!hasRequired) {
-                addLog(`⚠️ ${place.displayName.text}: ${req.name} 필수 키워드 없음`, 'error');
-                return false;
-            }
-        }
+        // ✅ 모든 업종 필터 제거
+        // → Google Places API가 이미 검색 쿼리에 맞는 업종만 반환함
+        // → 과도한 사전 필터링으로 유효한 업체 제외 방지
+        //   예: "병원 내 휴대폰수리점", "세무사 시청점" 등이 오작동할 수 있음
+        // → 잘못 수집된 업체는 OpenAI 검증 페이지에서 일괄 삭제 가능
 
         return true;
     });
