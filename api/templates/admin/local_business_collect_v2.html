@@ -689,14 +689,9 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             return false;
         }
 
-        // 리뷰가 1개 미만인 업체 제외 (리뷰 0개만 제외)
-        if (!place.userRatingCount || place.userRatingCount < 1) {
-            addLog(`⚠️ ${place.displayName.text}: 리뷰 없음 (제외)`, 'error');
-            return false;
-        }
-
-        // 리뷰 기간 필터 제거 (전문직은 리뷰가 적음)
-        // 리뷰가 1개 이상만 있으면 OK
+        // 리뷰 필터 완전 제거
+        // 변호사, 세무사, 회계사 등 전문직은 리뷰가 거의 없음
+        // editorialSummary(구글 업체 소개)를 대신 활용
 
         // 주소 검증: 검색한 지역명이 실제 주소에 포함되어 있는지 확인
         if (place.formattedAddress && city) {
@@ -740,7 +735,7 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             })) : null,
             website: place.websiteUri,
             opening_hours: place.regularOpeningHours?.weekdayDescriptions,
-            editorial_summary: null,  // AI 요약으로 대체
+            editorial_summary: place.editorialSummary?.text || null,  // Google 제공 업체 소개
             business_status: place.businessStatus || 'OPERATIONAL',
             last_review_time: place.reviews && place.reviews.length > 0 ? place.reviews[0].publishTime : null,
             reviews: place.reviews // 리뷰 데이터 추가 (AI 요약용)
@@ -762,9 +757,15 @@ async function generateAISummary(place, existingSummary = null) {
         return existingSummary;
     }
 
-    // 리뷰가 없으면 null 반환
+    // Google editorialSummary가 있으면 우선 사용 (리뷰보다 신뢰성 높음)
+    if (place.editorial_summary) {
+        addLog(`📝 ${place.name}: Google 업체 소개 사용`, 'info');
+        return place.editorial_summary;
+    }
+
+    // editorialSummary도 없고 리뷰도 없으면 null 반환
     if (!place.reviews || place.reviews.length === 0) {
-        addLog(`⚠️ ${place.name}: 리뷰 없음, 요약 생성 불가`, 'error');
+        addLog(`⚠️ ${place.name}: 리뷰/업체소개 없음`, 'error');
         return null;
     }
 
