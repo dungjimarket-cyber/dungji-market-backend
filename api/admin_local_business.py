@@ -172,18 +172,25 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 
     def photo_preview(self, obj):
         """사진 미리보기"""
-        if obj.custom_photo:
-            return format_html(
-                '<img src="{}" style="max-width: 300px; max-height: 300px; border-radius: 8px;"><br>'
-                '<small style="color: #666;">S3 파일: {}</small>',
-                obj.custom_photo.url,
-                obj.custom_photo.name
-            )
-        elif obj.photo_url:
+        if obj.custom_photo and obj.custom_photo.name:
+            try:
+                return format_html(
+                    '<img src="{}" style="max-width: 300px; max-height: 300px; border-radius: 8px;"><br>'
+                    '<small style="color: #666;">S3 파일: {}</small>',
+                    obj.custom_photo.url,
+                    obj.custom_photo.name
+                )
+            except:
+                pass
+
+        if obj.photo_url:
+            # photo_url에 API 키 추가
+            from django.conf import settings
+            photo_url_with_key = f"{obj.photo_url}&key={settings.GOOGLE_PLACES_API_KEY}" if '?' in obj.photo_url else obj.photo_url
             return format_html(
                 '<img src="{}" style="max-width: 300px; max-height: 300px; border-radius: 8px;"><br>'
                 '<small style="color: #666;">Google URL (백업용)</small>',
-                obj.photo_url
+                photo_url_with_key
             )
         return format_html('<span style="color: #999;">사진 없음</span>')
     photo_preview.short_description = '사진 미리보기'
@@ -275,7 +282,10 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         from .management.commands.collect_local_businesses import (
             SEOUL_DISTRICTS, GYEONGGI_CITIES, INCHEON_DISTRICTS,
             BUSAN_DISTRICTS, DAEGU_DISTRICTS, DAEJEON_DISTRICTS,
-            GWANGJU_DISTRICTS, ULSAN_DISTRICTS
+            GWANGJU_DISTRICTS, ULSAN_DISTRICTS,
+            GANGWON_CITIES, CHUNGBUK_CITIES, CHUNGNAM_CITIES,
+            JEONBUK_CITIES, JEONNAM_CITIES,
+            GYEONGBUK_CITIES, GYEONGNAM_CITIES, JEJU_CITIES
         )
 
         # 서울 세부 그룹
@@ -309,6 +319,15 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             {'name': '📍 대전광역시', 'regions': [f'대전광역시 {d}' for d in DAEJEON_DISTRICTS]},
             {'name': '📍 광주광역시', 'regions': [f'광주광역시 {d}' for d in GWANGJU_DISTRICTS]},
             {'name': '📍 울산광역시', 'regions': [f'울산광역시 {d}' for d in ULSAN_DISTRICTS]},
+            {'name': '📍 세종특별자치시', 'regions': ['세종특별자치시']},
+            {'name': '📍 강원특별자치도', 'regions': [f'강원특별자치도 {c}' for c in GANGWON_CITIES]},
+            {'name': '📍 충청북도', 'regions': [f'충청북도 {c}' for c in CHUNGBUK_CITIES]},
+            {'name': '📍 충청남도', 'regions': [f'충청남도 {c}' for c in CHUNGNAM_CITIES]},
+            {'name': '📍 전북특별자치도', 'regions': [f'전북특별자치도 {c}' for c in JEONBUK_CITIES]},
+            {'name': '📍 전라남도', 'regions': [f'전라남도 {c}' for c in JEONNAM_CITIES]},
+            {'name': '📍 경상북도', 'regions': [f'경상북도 {c}' for c in GYEONGBUK_CITIES]},
+            {'name': '📍 경상남도', 'regions': [f'경상남도 {c}' for c in GYEONGNAM_CITIES]},
+            {'name': '📍 제주특별자치도', 'regions': [f'제주특별자치도 {c}' for c in JEJU_CITIES]},
         ]
 
         # 카테고리 목록
@@ -563,7 +582,10 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         from .management.commands.collect_local_businesses import (
             SEOUL_DISTRICTS, GYEONGGI_CITIES, INCHEON_DISTRICTS,
             BUSAN_DISTRICTS, DAEGU_DISTRICTS, DAEJEON_DISTRICTS,
-            GWANGJU_DISTRICTS, ULSAN_DISTRICTS
+            GWANGJU_DISTRICTS, ULSAN_DISTRICTS,
+            GANGWON_CITIES, CHUNGBUK_CITIES, CHUNGNAM_CITIES,
+            JEONBUK_CITIES, JEONNAM_CITIES,
+            GYEONGBUK_CITIES, GYEONGNAM_CITIES, JEJU_CITIES
         )
 
         # 서울 세부 그룹
@@ -597,6 +619,15 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             {'name': '📍 대전광역시', 'regions': [f'대전광역시 {d}' for d in DAEJEON_DISTRICTS]},
             {'name': '📍 광주광역시', 'regions': [f'광주광역시 {d}' for d in GWANGJU_DISTRICTS]},
             {'name': '📍 울산광역시', 'regions': [f'울산광역시 {d}' for d in ULSAN_DISTRICTS]},
+            {'name': '📍 세종특별자치시', 'regions': ['세종특별자치시']},
+            {'name': '📍 강원특별자치도', 'regions': [f'강원특별자치도 {c}' for c in GANGWON_CITIES]},
+            {'name': '📍 충청북도', 'regions': [f'충청북도 {c}' for c in CHUNGBUK_CITIES]},
+            {'name': '📍 충청남도', 'regions': [f'충청남도 {c}' for c in CHUNGNAM_CITIES]},
+            {'name': '📍 전북특별자치도', 'regions': [f'전북특별자치도 {c}' for c in JEONBUK_CITIES]},
+            {'name': '📍 전라남도', 'regions': [f'전라남도 {c}' for c in JEONNAM_CITIES]},
+            {'name': '📍 경상북도', 'regions': [f'경상북도 {c}' for c in GYEONGBUK_CITIES]},
+            {'name': '📍 경상남도', 'regions': [f'경상남도 {c}' for c in GYEONGNAM_CITIES]},
+            {'name': '📍 제주특별자치도', 'regions': [f'제주특별자치도 {c}' for c in JEJU_CITIES]},
         ]
 
         categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')

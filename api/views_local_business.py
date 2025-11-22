@@ -425,11 +425,12 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                         existing.rank_in_region = business_data.get('rank_in_region', 999)
                         existing.last_synced_at = timezone.now()
 
-                        # Google 이미지 다운로드 및 custom_photo 갱신 (파일이 없으면 무조건 저장)
+                        # Google 이미지 다운로드 및 custom_photo 저장 (파일 없으면 무조건 저장)
                         photo_url = business_data.get('photo_url')
-                        # custom_photo 필드가 비어있거나 파일이 실제로 없으면 저장
                         has_actual_file = existing.custom_photo and existing.custom_photo.name
+
                         if photo_url and not has_actual_file:
+                            # 파일이 없으면 무조건 다운로드해서 저장
                             photo_result = self.download_and_save_photo(
                                 photo_url,
                                 business_data.get('name', ''),
@@ -438,7 +439,9 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             if photo_result:
                                 content_file, filename = photo_result
                                 existing.custom_photo.save(filename, content_file, save=False)
-                                logger.info(f"[S3] {business_data.get('name')}: 이미지 저장 완료")
+                                logger.info(f"[S3 SAVE] {business_data.get('name')}: 이미지 저장 완료")
+                            else:
+                                logger.warning(f"[S3 FAIL] {business_data.get('name')}: 이미지 다운로드 실패")
                         elif has_actual_file:
                             logger.info(f"[SKIP] {business_data.get('name')}: 이미 이미지 파일 존재")
 
@@ -474,7 +477,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             last_synced_at=timezone.now(),
                         )
 
-                        # Google 이미지 다운로드 및 custom_photo에 저장
+                        # Google 이미지 다운로드 및 custom_photo에 저장 (신규 업체는 무조건 저장)
                         photo_url = business_data.get('photo_url')
                         if photo_url:
                             photo_result = self.download_and_save_photo(
@@ -485,7 +488,9 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
                             if photo_result:
                                 content_file, filename = photo_result
                                 business.custom_photo.save(filename, content_file, save=True)
-                                logger.info(f"[S3] {business_data.get('name')}: 이미지 저장 완료")
+                                logger.info(f"[S3 SAVE] {business_data.get('name')}: 이미지 저장 완료 (신규)")
+                            else:
+                                logger.warning(f"[S3 FAIL] {business_data.get('name')}: 이미지 다운로드 실패 (신규)")
 
                         created_count += 1
 
