@@ -636,9 +636,9 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
     const proxyUrl = '/api/local-businesses/google-search-proxy/';
 
     const requestBody = {
-        textQuery: `${city} ${category}`,
+        includedTypes: placeType ? [placeType] : [], // 업종 필터링
         languageCode: 'ko',
-        locationBias: {
+        locationRestriction: {
             circle: {
                 center: {
                     latitude: coordinates.latitude,
@@ -647,12 +647,10 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
                 radius: 5000.0
             }
         },
-        minRating: 4.0,
         maxResultCount: maxResults
     };
 
-    // Note: includedTypes는 Text Search API에서 지원하지 않음
-    // Text Search는 textQuery 기반으로만 필터링
+    // Nearby Search API 사용 (includedTypes 지원)
 
     const response = await fetch(proxyUrl, {
         method: 'POST',

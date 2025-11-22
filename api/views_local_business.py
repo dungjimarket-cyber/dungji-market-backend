@@ -529,8 +529,8 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            # Google Places API 호출
-            url = 'https://places.googleapis.com/v1/places:searchText'
+            # Google Places API 호출 (Nearby Search)
+            url = 'https://places.googleapis.com/v1/places:searchNearby'
             headers = {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': api_key,
@@ -631,7 +631,7 @@ def google_search_proxy_standalone(request):
         )
 
     try:
-        url = 'https://places.googleapis.com/v1/places:searchText'
+        url = 'https://places.googleapis.com/v1/places:searchNearby'
         headers = {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': api_key,
