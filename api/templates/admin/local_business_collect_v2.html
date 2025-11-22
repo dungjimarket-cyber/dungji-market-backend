@@ -719,6 +719,29 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             }
         }
 
+        // 주소 검증: 검색한 지역명이 실제 주소에 포함되어 있는지 확인
+        if (place.formattedAddress && city) {
+            // "강남구", "노원구" 등에서 "구"를 제거한 순수 지역명 추출
+            const cityName = city.replace(/시$|구$|군$/g, '');
+            if (!place.formattedAddress.includes(cityName)) {
+                addLog(`⚠️ ${place.displayName.text}: 주소 불일치 (${place.formattedAddress.substring(0, 20)}... ≠ ${city})`, 'error');
+                return false;
+            }
+        }
+
+        // 전문직 예외: 관공서(시청, 구청 등) 제외
+        const professionalCategories = ['lawyer', 'legal', 'accounting', 'tax'];
+        if (professionalCategories.some(cat => category.toLowerCase().includes(cat))) {
+            const name = place.displayName.text.toLowerCase();
+            const address = (place.formattedAddress || '').toLowerCase();
+            const governmentKeywords = ['시청', '구청', '시', '구', 'city hall', 'district office'];
+
+            if (governmentKeywords.some(keyword => name.includes(keyword) || address.includes(keyword))) {
+                addLog(`⚠️ ${place.displayName.text}: 관공서 (전문직 제외)`, 'error');
+                return false;
+            }
+        }
+
         return true;
     });
 
