@@ -472,7 +472,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
                 addLog(`🔍 ${targetRegion} - ${cat.nameEn} 검색 중...`);
 
                 // Google Places API 호출 (includedTypes 사용)
-                const places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit, cat.placeType);
+                let places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit, cat.placeType);
 
                 addLog(`✅ ${places.length}개 업체 발견 (필터링 후)`);
 
@@ -538,7 +538,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
                 }
 
                 // 백엔드로 저장 - popularity_score로 정렬 후 순위 할당
-                const businesses = places.map((place) => {
+                let businesses = places.map((place) => {
                     return {
                         google_place_id: place.place_id,
                         category_id: parseInt(cat.id),
