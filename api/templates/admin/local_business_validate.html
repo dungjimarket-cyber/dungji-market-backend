@@ -42,14 +42,18 @@
             <label style="display: block; margin-bottom: 10px; font-weight: bold;">지역 선택 (다중 선택 가능)</label>
             <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; max-height: 400px; overflow-y: auto;">
                 {% for group in region_groups %}
-                <div style="margin-bottom: 15px;">
-                    <div style="font-weight: bold; color: #2196F3; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
-                        {{ group.name }}
+                <div style="margin-bottom: 15px;" data-group-index="{{ forloop.counter0 }}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+                        <span style="font-weight: bold; color: #2196F3;">{{ group.name }}</span>
+                        <button type="button" class="group-select-btn" data-group="{{ forloop.counter0 }}"
+                                style="padding: 4px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                            그룹 전체 선택
+                        </button>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
                         {% for region in group.regions %}
                         <label style="display: flex; align-items: center; cursor: pointer; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa; transition: background 0.2s;">
-                            <input type="checkbox" name="regions" value="{{ region }}" class="region-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                            <input type="checkbox" name="regions" value="{{ region }}" class="region-checkbox group-{{ forloop.parentloop.counter0 }}" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
                             <span style="font-size: 13px;">{{ region }}</span>
                         </label>
                         {% endfor %}
@@ -143,6 +147,21 @@ document.getElementById('selectAllBtn').addEventListener('click', function() {
 
 document.getElementById('deselectAllBtn').addEventListener('click', function() {
     document.querySelectorAll('.region-checkbox').forEach(cb => cb.checked = false);
+});
+
+// 그룹별 전체 선택 버튼
+document.querySelectorAll('.group-select-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const groupIndex = this.dataset.group;
+        const groupCheckboxes = document.querySelectorAll(`.group-${groupIndex}`);
+        const allChecked = Array.from(groupCheckboxes).every(cb => cb.checked);
+
+        // 전체 선택되어 있으면 해제, 아니면 전체 선택
+        groupCheckboxes.forEach(cb => cb.checked = !allChecked);
+
+        // 버튼 텍스트 변경
+        this.textContent = allChecked ? '그룹 전체 선택' : '그룹 전체 해제';
+    });
 });
 
 document.getElementById('validateForm').addEventListener('submit', async function(e) {

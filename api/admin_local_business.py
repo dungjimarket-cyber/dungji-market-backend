@@ -352,6 +352,46 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         from django.template.response import TemplateResponse
         from django.conf import settings
 
+        # collect_local_businesses.py의 TARGET_REGIONS와 동일한 리스트
+        from .management.commands.collect_local_businesses import (
+            SEOUL_DISTRICTS, GYEONGGI_CITIES, INCHEON_DISTRICTS,
+            BUSAN_DISTRICTS, DAEGU_DISTRICTS, DAEJEON_DISTRICTS,
+            GWANGJU_DISTRICTS, ULSAN_DISTRICTS
+        )
+
+        # 서울 세부 그룹
+        seoul_gangbuk = ['강북구', '노원구', '도봉구', '동대문구', '마포구',
+                        '서대문구', '성동구', '성북구', '용산구', '은평구',
+                        '종로구', '중구', '중랑구']
+        seoul_gangnam = ['강남구', '강동구', '강서구', '관악구', '광진구',
+                        '구로구', '금천구', '동작구', '서초구', '송파구',
+                        '양천구', '영등포구']
+
+        # 경기 세부 그룹 (3개로 세분화)
+        gyeonggi_north = ['의정부시', '동두천시', '파주시', '고양시', '양주시',
+                         '포천시', '연천군', '가평군', '남양주시', '구리시']
+        gyeonggi_west = ['김포시', '부천시', '광명시', '시흥시', '안산시',
+                        '안양시', '군포시', '의왕시', '과천시', '성남시']
+        gyeonggi_east_south = ['하남시', '광주시', '여주시', '이천시', '용인시',
+                              '수원시', '화성시', '오산시', '평택시', '안성시', '양평군']
+
+        # 지역 그룹별로 정리
+        region_groups = [
+            {'name': '📍 서울 전체', 'regions': [f'서울특별시 {d}' for d in SEOUL_DISTRICTS]},
+            {'name': '📍 서울 강북', 'regions': [f'서울특별시 {d}' for d in seoul_gangbuk]},
+            {'name': '📍 서울 강남', 'regions': [f'서울특별시 {d}' for d in seoul_gangnam]},
+            {'name': '📍 경기 전체', 'regions': [f'경기도 {c}' for c in GYEONGGI_CITIES]},
+            {'name': '📍 경기 북부', 'regions': [f'경기도 {c}' for c in gyeonggi_north]},
+            {'name': '📍 경기 서부', 'regions': [f'경기도 {c}' for c in gyeonggi_west]},
+            {'name': '📍 경기 동남부', 'regions': [f'경기도 {c}' for c in gyeonggi_east_south]},
+            {'name': '📍 인천광역시', 'regions': [f'인천광역시 {d}' for d in INCHEON_DISTRICTS]},
+            {'name': '📍 부산광역시', 'regions': [f'부산광역시 {d}' for d in BUSAN_DISTRICTS]},
+            {'name': '📍 대구광역시', 'regions': [f'대구광역시 {d}' for d in DAEGU_DISTRICTS]},
+            {'name': '📍 대전광역시', 'regions': [f'대전광역시 {d}' for d in DAEJEON_DISTRICTS]},
+            {'name': '📍 광주광역시', 'regions': [f'광주광역시 {d}' for d in GWANGJU_DISTRICTS]},
+            {'name': '📍 울산광역시', 'regions': [f'울산광역시 {d}' for d in ULSAN_DISTRICTS]},
+        ]
+
         # 카테고리 목록
         categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
 
@@ -361,6 +401,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         context = {
             **self.admin_site.each_context(request),
             'title': '지역 업체 정보 수집 (Google API)',
+            'region_groups': region_groups,
             'categories': categories,
             'google_api_key': api_key,
             'opts': self.model._meta,
