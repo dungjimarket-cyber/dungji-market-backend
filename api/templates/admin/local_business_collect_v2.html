@@ -853,7 +853,9 @@ function addLog(message, type = 'info') {
     logContainer.appendChild(logLine);
 
     // 즉시 스크롤 (로그가 빠르게 추가될 때 따라가기 위함)
-    logContainer.scrollTop = logContainer.scrollHeight;
+    requestAnimationFrame(() => {
+        logContainer.scrollTop = logContainer.scrollHeight;
+    });
 
     // 로그 개수 제한 (메모리 관리)
     if (logContainer.children.length > 500) {
