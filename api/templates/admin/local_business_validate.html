@@ -29,9 +29,9 @@
         {% csrf_token %}
 
         <div style="margin-bottom: 20px;">
-            <label for="category" style="display: block; margin-bottom: 5px; font-weight: bold;">업종 선택 (필수)</label>
-            <select name="category" id="category" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">-- 업종을 선택하세요 --</option>
+            <label for="category" style="display: block; margin-bottom: 10px; font-weight: bold;">업종 선택</label>
+            <select name="category" id="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">-- 전체 업종 --</option>
                 {% for cat in categories %}
                 <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
                 {% endfor %}
@@ -39,17 +39,28 @@
         </div>
 
         <div style="margin-bottom: 20px;">
-            <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택 (선택사항)</label>
-            <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">-- 전체 지역 --</option>
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">지역 선택 (다중 선택 가능)</label>
+            <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; max-height: 400px; overflow-y: auto;">
                 {% for group in region_groups %}
-                    <optgroup label="{{ group.name }}">
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; color: #2196F3; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+                        {{ group.name }}
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
                         {% for region in group.regions %}
-                        <option value="{{ region }}">{{ region }}</option>
+                        <label style="display: flex; align-items: center; cursor: pointer; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa; transition: background 0.2s;">
+                            <input type="checkbox" name="regions" value="{{ region }}" class="region-checkbox" style="margin-right: 8px; width: 16px; height: 16px; cursor: pointer;">
+                            <span style="font-size: 13px;">{{ region }}</span>
+                        </label>
                         {% endfor %}
-                    </optgroup>
+                    </div>
+                </div>
                 {% endfor %}
-            </select>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+                <button type="button" id="selectAllBtn" style="padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 5px;">전체 선택</button>
+                <button type="button" id="deselectAllBtn" style="padding: 6px 12px; background: #9E9E9E; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">전체 해제</button>
+            </div>
         </div>
 
         <button type="submit" id="validateBtn"
@@ -125,16 +136,21 @@
 const csrfToken = '{{ csrf_token }}';
 let invalidBusinesses = [];
 
+// 전체 선택/해제 버튼
+document.getElementById('selectAllBtn').addEventListener('click', function() {
+    document.querySelectorAll('.region-checkbox').forEach(cb => cb.checked = true);
+});
+
+document.getElementById('deselectAllBtn').addEventListener('click', function() {
+    document.querySelectorAll('.region-checkbox').forEach(cb => cb.checked = false);
+});
+
 document.getElementById('validateForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
     const category = document.getElementById('category').value;
-    const region = document.getElementById('region').value;
-
-    if (!category) {
-        alert('업종을 선택해주세요!');
-        return;
-    }
+    const selectedRegions = Array.from(document.querySelectorAll('.region-checkbox:checked'))
+        .map(cb => cb.value);
 
     // UI 초기화
     document.getElementById('progressContainer').style.display = 'block';
@@ -146,7 +162,11 @@ document.getElementById('validateForm').addEventListener('submit', async functio
         formData.append('csrfmiddlewaretoken', csrfToken);
         formData.append('action', 'validate');
         formData.append('category', category);
-        formData.append('region', region);
+
+        // 다중 지역 전송
+        selectedRegions.forEach(region => {
+            formData.append('regions[]', region);
+        });
 
         const response = await fetch('', {
             method: 'POST',

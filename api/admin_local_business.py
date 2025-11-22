@@ -517,15 +517,15 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             # 검증 시작
             if action == 'validate':
                 category_id = request.POST.get('category')
-                region = request.POST.get('region', '')
+                regions = request.POST.getlist('regions[]')
 
                 try:
                     # 필터링
                     businesses = LocalBusiness.objects.all()
                     if category_id:
                         businesses = businesses.filter(category_id=category_id)
-                    if region:
-                        businesses = businesses.filter(region_name__icontains=region)
+                    if regions:
+                        businesses = businesses.filter(region_name__in=regions)
 
                     # OpenAI 검증
                     openai.api_key = settings.OPENAI_API_KEY
