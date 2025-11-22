@@ -496,7 +496,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
                 // AI 요약 생성 (배치 처리, 기존 요약 재사용)
                 addLog(`🤖 AI 요약 확인/생성 시작... (${places.length}개 업체)`);
-                const BATCH_SIZE = 5; // 5개씩 병렬 처리 (OpenAI Rate Limit 충분)
+                const BATCH_SIZE = 10; // 10개씩 병렬 처리 (속도 개선)
 
                 for (let i = 0; i < places.length; i += BATCH_SIZE) {
                     // 중단 체크
@@ -516,14 +516,20 @@ document.getElementById('collectForm').addEventListener('submit', async function
                             const aiSummary = await generateAISummary(place, existingSummary);
                             if (aiSummary) {
                                 place.editorial_summary = aiSummary;
-                                console.log(`[AI 요약 저장] ${place.name}: "${aiSummary.substring(0, 30)}..."`);
-                            } else {
-                                console.log(`[AI 요약 실패] ${place.name}: 요약 생성 안 됨 (리뷰: ${place.reviews?.length || 0}개)`);
                             }
+
+                            // 메모리 최적화: 처리 완료된 리뷰 데이터 즉시 삭제
+                            delete place.reviews;
                         })
                     );
 
                     addLog(`✅ 배치 ${Math.floor(i/BATCH_SIZE) + 1} 완료`);
+
+                    // 배치마다 가비지 컬렉션 힌트 (브라우저가 메모리 정리하도록)
+                    if ((i + BATCH_SIZE) % 30 === 0) {
+                        addLog(`🧹 메모리 정리 중... (${i + BATCH_SIZE}개 처리 완료)`);
+                        await new Promise(resolve => setTimeout(resolve, 100)); // 100ms 휴식
+                    }
                 }
 
                 // 중단된 경우 저장 스킵
@@ -560,14 +566,11 @@ document.getElementById('collectForm').addEventListener('submit', async function
                 businesses.sort((a, b) => b.popularity_score - a.popularity_score);
                 businesses.forEach((business, index) => {
                     business.rank_in_region = index + 1;
-
-                    // 요약 저장 로그
-                    if (business.editorial_summary) {
-                        console.log(`[저장 데이터] ${business.name} (순위 ${business.rank_in_region}, 점수 ${business.popularity_score.toFixed(2)}): editorial_summary="${business.editorial_summary.substring(0, 50)}..."`);
-                    } else {
-                        console.log(`[저장 데이터] ${business.name} (순위 ${business.rank_in_region}, 점수 ${business.popularity_score.toFixed(2)}): editorial_summary=null`);
-                    }
                 });
+
+                // 저장 데이터 요약 로그
+                const withSummary = businesses.filter(b => b.editorial_summary).length;
+                addLog(`📊 저장 준비: 총 ${businesses.length}개 (AI 요약: ${withSummary}개)`);
 
                 addLog('💾 백엔드에 저장 중...');
 
@@ -602,11 +605,17 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     result.errors.forEach(err => addLog(`❌ ${err}`, 'error'));
                 }
 
-                // API 과부하 방지: 0.5초 대기
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // 저장 완료 후 메모리 정리
+                businesses = null;
+                places = null;
+
+                // API 과부하 방지: 0.3초 대기 (0.5초에서 단축)
+                await new Promise(resolve => setTimeout(resolve, 300));
             }
         }
 
+        // 최종 메모리 정리
+        addLog(`🧹 최종 메모리 정리 중...`);
         if (!isCollectionStopped) {
             addLog(`🎉 전체 수집 완료!`);
         } else {
@@ -885,8 +894,26 @@ function getCookie(name) {
 function addLog(message, type = 'info') {
     const logContainer = document.getElementById('logContainer');
     const color = type === 'error' ? '#f44336' : type === 'success' ? '#4CAF50' : '#666';
-    logContainer.innerHTML += `<div style="color: ${color};">${message}</div>`;
-    logContainer.scrollTop = logContainer.scrollHeight;
+
+    // DOM 요소 생성 (innerHTML보다 성능 좋음)
+    const logLine = document.createElement('div');
+    logLine.style.color = color;
+    logLine.textContent = message;
+    logContainer.appendChild(logLine);
+
+    // 부드러운 스크롤
+    logContainer.scrollTo({
+        top: logContainer.scrollHeight,
+        behavior: 'smooth'
+    });
+
+    // 로그 개수 제한 (메모리 관리)
+    if (logContainer.children.length > 500) {
+        // 오래된 로그 100개 제거
+        for (let i = 0; i < 100; i++) {
+            logContainer.removeChild(logContainer.firstChild);
+        }
+    }
 }
 </script>
 {% endblock %}
