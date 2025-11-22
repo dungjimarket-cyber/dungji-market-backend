@@ -38,6 +38,76 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
         """활성화된 카테고리만 정렬순으로"""
         return self.queryset.order_by('order_index', 'name')
 
+    def list(self, request, *args, **kwargs):
+        """카테고리 목록 조회 - 세무사+회계사, 법무사+변호사 통합"""
+        from django.db.models import Q
+
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        # 통합할 카테고리 처리
+        categories = []
+        tax_accounting_added = False
+        legal_service_added = False
+        skip_categories = []
+
+        for cat_data in serializer.data:
+            category_name = cat_data['name']
+
+            # 세무사+회계사 통합
+            if category_name in ['세무사', '회계사']:
+                skip_categories.append(category_name)
+                if not tax_accounting_added:
+                    # 세무·회계 통합 카테고리 생성
+                    tax_accounting_count = LocalBusiness.objects.filter(
+                        Q(category__name='세무사') | Q(category__name='회계사')
+                    ).count()
+
+                    categories.append({
+                        'id': 'tax_accounting',
+                        'name': '세무·회계',
+                        'name_en': 'tax & accounting',
+                        'icon': '💼',
+                        'google_place_type': 'accounting',
+                        'description': '세무사, 회계사 등 세무·회계 전문 서비스',
+                        'order_index': 1,
+                        'is_active': True,
+                        'business_count': tax_accounting_count,
+                        'merged_categories': ['세무사', '회계사']
+                    })
+                    tax_accounting_added = True
+
+            # 법무사+변호사 통합
+            elif category_name in ['법무사', '변호사']:
+                skip_categories.append(category_name)
+                if not legal_service_added:
+                    # 법률서비스 통합 카테고리 생성
+                    legal_service_count = LocalBusiness.objects.filter(
+                        Q(category__name='법무사') | Q(category__name='변호사')
+                    ).count()
+
+                    categories.append({
+                        'id': 'legal_service',
+                        'name': '법률 서비스',
+                        'name_en': 'legal service',
+                        'icon': '⚖️',
+                        'google_place_type': 'legal',
+                        'description': '변호사, 법무사 등 법률 전문 서비스',
+                        'order_index': 2,
+                        'is_active': True,
+                        'business_count': legal_service_count,
+                        'merged_categories': ['변호사', '법무사']
+                    })
+                    legal_service_added = True
+
+            # 나머지 카테고리는 그대로 추가
+            else:
+                business_count = LocalBusiness.objects.filter(category_id=cat_data['id']).count()
+                cat_data['business_count'] = business_count
+                categories.append(cat_data)
+
+        return Response(categories)
+
 
 class LocalBusinessViewSet(viewsets.ModelViewSet):
     """지역 업체 ViewSet"""
@@ -58,12 +128,31 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """커스텀 필터링"""
+        from django.db.models import Q
+
         queryset = super().get_queryset()
 
         # region_name__icontains 파라미터 처리
         region_filter = self.request.query_params.get('region_name__icontains')
         if region_filter:
             queryset = queryset.filter(region_name__icontains=region_filter)
+
+        # 통합 카테고리 필터링 처리
+        category_filter = self.request.query_params.get('category')
+        if category_filter:
+            if category_filter == 'tax_accounting':
+                # 세무·회계: 세무사 + 회계사
+                queryset = queryset.filter(
+                    Q(category__name='세무사') | Q(category__name='회계사')
+                )
+            elif category_filter == 'legal_service':
+                # 법률 서비스: 변호사 + 법무사
+                queryset = queryset.filter(
+                    Q(category__name='변호사') | Q(category__name='법무사')
+                )
+            else:
+                # 일반 카테고리 ID 필터링
+                queryset = queryset.filter(category_id=category_filter)
 
         return queryset
 

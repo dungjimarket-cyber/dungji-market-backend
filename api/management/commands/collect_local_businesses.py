@@ -128,10 +128,10 @@ class Command(BaseCommand):
 
     def collect_businesses(self, region_full_name, region_short_name, category, limit):
         """특정 지역+업종의 업체 수집"""
-        # Google Places API 호출 (짧은 이름 사용)
+        # Google Places API 호출 (한글 카테고리명 사용)
         places = self.fetch_google_places(
             city=region_short_name,
-            category=category.name_en,
+            category=category.name,  # name_en 대신 한글 name 사용
             place_type=category.google_place_type,
             max_results=limit
         )
@@ -144,35 +144,58 @@ class Command(BaseCommand):
         for rank, place in enumerate(places[:limit], start=1):
             try:
                 with transaction.atomic():
-                    business, created = LocalBusiness.objects.update_or_create(
-                        google_place_id=place['placeId'],
-                        defaults={
-                            'category': category,
-                            'region_name': region_full_name,
-                            'name': place['name'],
-                            'address': place['address'],
-                            'phone_number': place.get('phoneNumber'),
-                            'latitude': Decimal(str(place['latitude'])),
-                            'longitude': Decimal(str(place['longitude'])),
-                            'rating': Decimal(str(place['rating'])) if place.get('rating') else None,
-                            'review_count': place.get('userRatingCount', 0),
-                            'google_maps_url': place['googleMapsUrl'],
-                            'photo_url': place.get('photoUrl'),
-                            'popularity_score': place.get('popularityScore', 0),
-                            'rank_in_region': rank,
-                            'is_new': place.get('userRatingCount', 0) < 10,
-                            'editorial_summary': place.get('editorialSummary'),
-                            'website_url': place.get('websiteUri'),
-                            'business_status': place.get('businessStatus', 'OPERATIONAL'),
-                            'last_synced_at': timezone.now(),
-                        }
-                    )
+                    # 기존 업체 확인
+                    existing_business = LocalBusiness.objects.filter(
+                        google_place_id=place['placeId']
+                    ).first()
 
-                    if created:
-                        count += 1
-                        self.stdout.write(f"    + {business.name}")
+                    if existing_business:
+                        # 기존 업체는 카테고리 제외하고 업데이트
+                        existing_business.region_name = region_full_name
+                        existing_business.name = place['name']
+                        existing_business.address = place['address']
+                        existing_business.phone_number = place.get('phoneNumber')
+                        existing_business.latitude = Decimal(str(place['latitude']))
+                        existing_business.longitude = Decimal(str(place['longitude']))
+                        existing_business.rating = Decimal(str(place['rating'])) if place.get('rating') else None
+                        existing_business.review_count = place.get('userRatingCount', 0)
+                        existing_business.google_maps_url = place['googleMapsUrl']
+                        existing_business.photo_url = place.get('photoUrl')
+                        existing_business.popularity_score = place.get('popularityScore', 0)
+                        existing_business.rank_in_region = rank
+                        existing_business.is_new = place.get('userRatingCount', 0) < 10
+                        existing_business.editorial_summary = place.get('editorialSummary')
+                        existing_business.website_url = place.get('websiteUri')
+                        existing_business.business_status = place.get('businessStatus', 'OPERATIONAL')
+                        existing_business.last_synced_at = timezone.now()
+                        existing_business.save()
+
+                        self.stdout.write(f"    ↻ {existing_business.name} (업데이트, 카테고리 유지: {existing_business.category.name})")
                     else:
-                        self.stdout.write(f"    ↻ {business.name} (업데이트)")
+                        # 신규 업체는 모든 정보 포함하여 생성
+                        business = LocalBusiness.objects.create(
+                            google_place_id=place['placeId'],
+                            category=category,
+                            region_name=region_full_name,
+                            name=place['name'],
+                            address=place['address'],
+                            phone_number=place.get('phoneNumber'),
+                            latitude=Decimal(str(place['latitude'])),
+                            longitude=Decimal(str(place['longitude'])),
+                            rating=Decimal(str(place['rating'])) if place.get('rating') else None,
+                            review_count=place.get('userRatingCount', 0),
+                            google_maps_url=place['googleMapsUrl'],
+                            photo_url=place.get('photoUrl'),
+                            popularity_score=place.get('popularityScore', 0),
+                            rank_in_region=rank,
+                            is_new=place.get('userRatingCount', 0) < 10,
+                            editorial_summary=place.get('editorialSummary'),
+                            website_url=place.get('websiteUri'),
+                            business_status=place.get('businessStatus', 'OPERATIONAL'),
+                            last_synced_at=timezone.now(),
+                        )
+                        count += 1
+                        self.stdout.write(f"    + {business.name} (신규)")
 
             except Exception as e:
                 error_msg = f"업체 저장 실패: {place.get('name')} - {str(e)}"

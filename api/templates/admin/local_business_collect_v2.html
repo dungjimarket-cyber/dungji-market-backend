@@ -846,11 +846,8 @@ function addLog(message, type = 'info') {
     logLine.textContent = message;
     logContainer.appendChild(logLine);
 
-    // 부드러운 스크롤
-    logContainer.scrollTo({
-        top: logContainer.scrollHeight,
-        behavior: 'smooth'
-    });
+    // 즉시 스크롤 (로그가 빠르게 추가될 때 따라가기 위함)
+    logContainer.scrollTop = logContainer.scrollHeight;
 
     // 로그 개수 제한 (메모리 관리)
     if (logContainer.children.length > 500) {
