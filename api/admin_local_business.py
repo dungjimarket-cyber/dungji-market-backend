@@ -174,7 +174,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         if request.method == 'POST':
             region = request.POST.get('region', '')
             category = request.POST.get('category', '')
-            limit = request.POST.get('limit', '5')
+            limit = request.POST.get('limit', '20')
 
             # AJAX 요청인지 확인
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -228,14 +228,24 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         # GET 요청 시 폼 표시
         from django.template.response import TemplateResponse
 
-        # 지역 목록 (하드코딩)
-        TARGET_REGIONS = [
-            '서울특별시 강남구', '서울특별시 서초구', '서울특별시 송파구',
-            '서울특별시 강동구', '서울특별시 마포구',
-            '경기도 성남시', '경기도 수원시', '경기도 고양시',
-            '경기도 용인시', '경기도 화성시'
-        ]
-        regions = [{'name': region} for region in TARGET_REGIONS]
+        # collect_local_businesses.py의 TARGET_REGIONS와 동일한 리스트
+        from .management.commands.collect_local_businesses import (
+            SEOUL_DISTRICTS, GYEONGGI_CITIES, INCHEON_DISTRICTS,
+            BUSAN_DISTRICTS, DAEGU_DISTRICTS, DAEJEON_DISTRICTS,
+            GWANGJU_DISTRICTS, ULSAN_DISTRICTS
+        )
+
+        regions_list = []
+        regions_list.extend([f'서울특별시 {d}' for d in SEOUL_DISTRICTS])
+        regions_list.extend([f'경기도 {c}' for c in GYEONGGI_CITIES])
+        regions_list.extend([f'인천광역시 {d}' for d in INCHEON_DISTRICTS])
+        regions_list.extend([f'부산광역시 {d}' for d in BUSAN_DISTRICTS])
+        regions_list.extend([f'대구광역시 {d}' for d in DAEGU_DISTRICTS])
+        regions_list.extend([f'대전광역시 {d}' for d in DAEJEON_DISTRICTS])
+        regions_list.extend([f'광주광역시 {d}' for d in GWANGJU_DISTRICTS])
+        regions_list.extend([f'울산광역시 {d}' for d in ULSAN_DISTRICTS])
+
+        regions = [{'name': region} for region in regions_list]
 
         # 카테고리 목록
         categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')

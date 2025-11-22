@@ -31,13 +31,13 @@
         <div style="margin-bottom: 20px;">
             <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택 (선택사항)</label>
             <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <option value="">-- 전체 지역 (서울 5구 + 수도권 5시) --</option>
+                <option value="">-- 전체 지역 (서울 전체 + 경기 전체 + 광역시) --</option>
                 {% for region in regions %}
                 <option value="{{ region.name }}">{{ region.name }}</option>
                 {% endfor %}
             </select>
             <p style="color: #666; font-size: 12px; margin-top: 5px;">
-                비어있으면 서울 5개구 + 수도권 5개시 전체 수집
+                비어있으면 서울 25개구 + 경기 28개시 + 광역시 전체 수집 (120개 이상)
             </p>
         </div>
 
@@ -56,19 +56,20 @@
 
         <div style="margin-bottom: 20px;">
             <label for="limit" style="display: block; margin-bottom: 5px; font-weight: bold;">지역당 최대 업체 수</label>
-            <input type="number" name="limit" id="limit" value="5" min="1" max="20"
+            <input type="number" name="limit" id="limit" value="20" min="1" max="30"
                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             <p style="color: #666; font-size: 12px; margin-top: 5px;">
-                각 지역+업종 조합당 수집할 최대 업체 수 (기본: 5개, 최대: 20개)
+                각 지역+업종 조합당 수집할 최대 업체 수 (기본: 20개, 최대: 30개)
             </p>
         </div>
 
         <div style="background: #e7f3ff; border: 1px solid #2196F3; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
             <strong>📊 예상 수집량</strong>
             <ul style="margin: 10px 0 0 20px;">
-                <li><strong>1개 지역 + 전체 업종:</strong> 약 35개 업체 (7개 업종 × 5개)</li>
-                <li><strong>전체 지역 + 1개 업종:</strong> 약 50개 업체 (10개 지역 × 5개)</li>
-                <li><strong>전체 지역 + 전체 업종:</strong> 약 350개 업체 (10개 지역 × 7개 업종 × 5개)</li>
+                <li><strong>1개 지역 + 전체 업종:</strong> 약 140개 업체 (7개 업종 × 20개)</li>
+                <li><strong>전체 지역 + 1개 업종:</strong> 약 2,400개 업체 (120개 지역 × 20개)</li>
+                <li><strong>전체 지역 + 전체 업종:</strong> 약 16,800개 업체 (120개 지역 × 7개 업종 × 20개)</li>
+                <li><strong style="color: #f44336;">⚠️ 전체 수집 시 API 비용 주의!</strong></li>
             </ul>
         </div>
 
