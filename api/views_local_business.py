@@ -529,8 +529,23 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            # Google Places API 호출 (Nearby Search)
-            url = 'https://places.googleapis.com/v1/places:searchNearby'
+            # textQuery 또는 includedTypes로 API 선택
+            has_text_query = 'textQuery' in request.data
+            has_included_types = 'includedTypes' in request.data and request.data['includedTypes']
+
+            if has_text_query:
+                # Text Search API
+                url = 'https://places.googleapis.com/v1/places:searchText'
+                logger.info('[google_search_proxy] Using Text Search API')
+            elif has_included_types:
+                # Nearby Search API
+                url = 'https://places.googleapis.com/v1/places:searchNearby'
+                logger.info('[google_search_proxy] Using Nearby Search API')
+            else:
+                # 기본값: Nearby Search
+                url = 'https://places.googleapis.com/v1/places:searchNearby'
+                logger.info('[google_search_proxy] Using Nearby Search API (default)')
+
             headers = {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': api_key,
@@ -631,7 +646,20 @@ def google_search_proxy_standalone(request):
         )
 
     try:
-        url = 'https://places.googleapis.com/v1/places:searchNearby'
+        # textQuery 또는 includedTypes로 API 선택
+        has_text_query = 'textQuery' in request.data
+        has_included_types = 'includedTypes' in request.data and request.data['includedTypes']
+
+        if has_text_query:
+            url = 'https://places.googleapis.com/v1/places:searchText'
+            logger.info('[google_search_proxy_standalone] Using Text Search API')
+        elif has_included_types:
+            url = 'https://places.googleapis.com/v1/places:searchNearby'
+            logger.info('[google_search_proxy_standalone] Using Nearby Search API')
+        else:
+            url = 'https://places.googleapis.com/v1/places:searchNearby'
+            logger.info('[google_search_proxy_standalone] Using Nearby Search API (default)')
+
         headers = {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': api_key,

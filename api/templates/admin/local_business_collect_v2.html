@@ -638,22 +638,12 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
     // 지역명 간소화: "경기도 하남시" → "하남시", "서울특별시 강남구" → "강남구"
     const shortCityName = city.split(' ').pop();
 
-    const requestBody = placeType ? {
-        // Nearby Search API (업종 타입 있음)
-        includedTypes: [placeType],
-        languageCode: 'ko',
-        locationRestriction: {
-            circle: {
-                center: {
-                    latitude: coordinates.latitude,
-                    longitude: coordinates.longitude
-                },
-                radius: 5000.0
-            }
-        },
-        maxResultCount: maxResults
-    } : {
-        // Text Search API (업종 타입 없음 - 인테리어 등)
+    // Google에서 지원하지 않는 타입 목록 (Text Search로 fallback)
+    const unsupportedTypes = ['interior_designer'];
+    const useTextSearch = !placeType || unsupportedTypes.includes(placeType);
+
+    const requestBody = useTextSearch ? {
+        // Text Search API (업종 타입 없음 또는 미지원 타입)
         textQuery: `${shortCityName} ${category}`,
         languageCode: 'ko',
         locationBias: {
@@ -666,9 +656,23 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             }
         },
         maxResultCount: maxResults
+    } : {
+        // Nearby Search API (업종 타입 지원됨)
+        includedTypes: [placeType],
+        languageCode: 'ko',
+        locationRestriction: {
+            circle: {
+                center: {
+                    latitude: coordinates.latitude,
+                    longitude: coordinates.longitude
+                },
+                radius: 5000.0
+            }
+        },
+        maxResultCount: maxResults
     };
 
-    // placeType 있으면 Nearby Search, 없으면 Text Search
+    // useTextSearch가 true면 Text Search, false면 Nearby Search
 
     const response = await fetch(proxyUrl, {
         method: 'POST',
