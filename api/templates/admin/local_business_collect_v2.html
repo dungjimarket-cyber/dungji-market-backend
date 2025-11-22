@@ -102,9 +102,9 @@
             <label for="category" style="display: block; margin-bottom: 5px; font-weight: bold;">업종 선택</label>
             <select name="category" id="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
                 <option value="">-- 업종 선택 --</option>
-                <option value="ALL" data-name-en="ALL" style="font-weight: bold; background: #e3f2fd;">📋 전체 업종 ({{ categories|length }}개)</option>
+                <option value="ALL" data-name-en="ALL" data-place-type="ALL" style="font-weight: bold; background: #e3f2fd;">📋 전체 업종 ({{ categories|length }}개)</option>
                 {% for cat in categories %}
-                <option value="{{ cat.id }}" data-name-en="{{ cat.name_en }}">{{ cat.icon }} {{ cat.name }}</option>
+                <option value="{{ cat.id }}" data-name-en="{{ cat.name_en }}" data-place-type="{{ cat.google_place_type }}">{{ cat.icon }} {{ cat.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -299,8 +299,8 @@ document.getElementById('collectForm').addEventListener('submit', async function
     const categories = categoryId === 'ALL'
         ? Array.from(document.querySelectorAll('#category option[data-name-en]'))
             .filter(opt => opt.value !== 'ALL')
-            .map(opt => ({id: opt.value, nameEn: opt.dataset.nameEn}))
-        : [{id: categoryId, nameEn: categoryNameEn}];
+            .map(opt => ({id: opt.value, nameEn: opt.dataset.nameEn, placeType: opt.dataset.placeType}))
+        : [{id: categoryId, nameEn: categoryNameEn, placeType: document.querySelector(`#category option[value="${categoryId}"]`)?.dataset.placeType}];
 
     addLog(`📍 지역: ${regions.length}곳, 업종: ${categories.length}개, 지역당 ${limit}개씩 수집`);
 
@@ -330,8 +330,8 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
                 addLog(`🔍 ${targetRegion} - ${cat.nameEn} 검색 중...`);
 
-                // Google Places API 호출 (기존 방식 유지)
-                const places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit);
+                // Google Places API 호출 (includedTypes 사용)
+                const places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit, cat.placeType);
 
                 addLog(`✅ ${places.length}개 업체 발견 (필터링 후)`);
 
@@ -481,7 +481,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
     }
 });
 
-async function fetchGooglePlaces(city, category, coordinates, maxResults) {
+async function fetchGooglePlaces(city, category, coordinates, maxResults, placeType = null) {
     // 백엔드 프록시를 통해 Google API 호출 (CORS 우회)
     const proxyUrl = '/api/local-businesses/google-search-proxy/';
 
@@ -500,6 +500,11 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
         minRating: 4.0,
         maxResultCount: maxResults
     };
+
+    // includedTypes 파라미터 추가 (정확한 업종 필터링)
+    if (placeType && placeType !== 'ALL') {
+        requestBody.includedTypes = [placeType];
+    }
 
     const response = await fetch(proxyUrl, {
         method: 'POST',
@@ -536,9 +541,9 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults) {
             return false;
         }
 
-        // 리뷰가 없는 업체 제외
-        if (!place.userRatingCount || place.userRatingCount === 0) {
-            addLog(`⚠️ ${place.displayName.text}: 리뷰 없음 (제외)`, 'error');
+        // 리뷰가 2개 미만인 업체 제외
+        if (!place.userRatingCount || place.userRatingCount < 2) {
+            addLog(`⚠️ ${place.displayName.text}: 리뷰 ${place.userRatingCount || 0}개 (2개 미만 제외)`, 'error');
             return false;
         }
 
