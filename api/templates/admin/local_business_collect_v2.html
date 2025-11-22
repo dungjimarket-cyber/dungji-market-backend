@@ -695,17 +695,8 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             return false;
         }
 
-        // 리뷰가 있고, 최신 리뷰가 5년 이상 지났으면 제외
-        if (place.reviews && place.reviews.length > 0) {
-            const latestReview = place.reviews[0];
-            const reviewDate = new Date(latestReview.publishTime);
-            const daysSinceReview = (Date.now() - reviewDate) / (1000 * 60 * 60 * 24);
-
-            if (daysSinceReview > 1825) {
-                addLog(`⚠️ ${place.displayName.text}: 최근 리뷰 ${Math.floor(daysSinceReview)}일 전 (5년 초과, 제외)`, 'error');
-                return false;
-            }
-        }
+        // 리뷰 기간 필터 제거 (전문직은 리뷰가 적음)
+        // 리뷰가 1개 이상만 있으면 OK
 
         // 주소 검증: 검색한 지역명이 실제 주소에 포함되어 있는지 확인
         if (place.formattedAddress && city) {
