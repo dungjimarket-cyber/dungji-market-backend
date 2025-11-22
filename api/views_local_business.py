@@ -118,7 +118,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']  # 명시적으로 POST 허용
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'is_verified']
+    filterset_fields = ['is_verified']  # category는 get_queryset에서 커스텀 처리
     search_fields = ['name', 'address']
     ordering_fields = ['popularity_score', 'rating', 'review_count', 'rank_in_region', 'created_at']
     ordering = ['rank_in_region']  # 기본 정렬: 순위순
