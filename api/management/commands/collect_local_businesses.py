@@ -13,20 +13,53 @@ from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
-# 하드코딩된 지역 리스트 (Region 테이블 불필요)
-# 형식: (저장용 전체명, Google API 검색용 짧은 이름)
-TARGET_REGIONS = [
-    ('서울특별시 강남구', '강남구'),
-    ('서울특별시 서초구', '서초구'),
-    ('서울특별시 송파구', '송파구'),
-    ('서울특별시 강동구', '강동구'),
-    ('서울특별시 마포구', '마포구'),
-    ('경기도 성남시', '성남시'),
-    ('경기도 수원시', '수원시'),
-    ('경기도 고양시', '고양시'),
-    ('경기도 용인시', '용인시'),
-    ('경기도 화성시', '화성시'),
+# 전체 지역 리스트 (형식: (저장용 전체명, Google API 검색용 짧은 이름))
+TARGET_REGIONS = []
+
+# 서울특별시
+SEOUL_DISTRICTS = [
+    '강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구',
+    '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구',
+    '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구',
+    '종로구', '중구', '중랑구'
 ]
+TARGET_REGIONS.extend([(f'서울특별시 {d}', d) for d in SEOUL_DISTRICTS])
+
+# 경기도 주요 도시
+GYEONGGI_CITIES = [
+    '고양시', '과천시', '광명시', '광주시', '구리시', '군포시', '김포시',
+    '남양주시', '동두천시', '부천시', '성남시', '수원시', '시흥시', '안산시',
+    '안성시', '안양시', '양주시', '여주시', '오산시', '용인시', '의왕시',
+    '의정부시', '이천시', '파주시', '평택시', '포천시', '하남시', '화성시'
+]
+TARGET_REGIONS.extend([(f'경기도 {c}', c) for c in GYEONGGI_CITIES])
+
+# 인천광역시
+INCHEON_DISTRICTS = ['계양구', '남동구', '동구', '부평구', '서구', '연수구', '중구']
+TARGET_REGIONS.extend([(f'인천광역시 {d}', d) for d in INCHEON_DISTRICTS])
+
+# 부산광역시
+BUSAN_DISTRICTS = [
+    '강서구', '금정구', '남구', '동구', '동래구', '부산진구', '북구',
+    '사상구', '사하구', '서구', '수영구', '연제구', '영도구', '중구', '해운대구'
+]
+TARGET_REGIONS.extend([(f'부산광역시 {d}', d) for d in BUSAN_DISTRICTS])
+
+# 대구광역시
+DAEGU_DISTRICTS = ['남구', '달서구', '동구', '북구', '서구', '수성구', '중구']
+TARGET_REGIONS.extend([(f'대구광역시 {d}', d) for d in DAEGU_DISTRICTS])
+
+# 대전광역시
+DAEJEON_DISTRICTS = ['대덕구', '동구', '서구', '유성구', '중구']
+TARGET_REGIONS.extend([(f'대전광역시 {d}', d) for d in DAEJEON_DISTRICTS])
+
+# 광주광역시
+GWANGJU_DISTRICTS = ['광산구', '남구', '동구', '북구', '서구']
+TARGET_REGIONS.extend([(f'광주광역시 {d}', d) for d in GWANGJU_DISTRICTS])
+
+# 울산광역시
+ULSAN_DISTRICTS = ['남구', '동구', '북구', '중구']
+TARGET_REGIONS.extend([(f'울산광역시 {d}', d) for d in ULSAN_DISTRICTS])
 
 
 class Command(BaseCommand):
@@ -46,8 +79,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--limit',
             type=int,
-            default=5,
-            help='지역당 최대 업체 수 (기본: 5개)'
+            default=20,
+            help='지역당 최대 업체 수 (기본: 20개)'
         )
 
     def handle(self, *args, **options):
@@ -128,6 +161,9 @@ class Command(BaseCommand):
                             'popularity_score': place.get('popularityScore', 0),
                             'rank_in_region': rank,
                             'is_new': place.get('userRatingCount', 0) < 10,
+                            'editorial_summary': place.get('editorialSummary'),
+                            'website_url': place.get('websiteUri'),
+                            'business_status': place.get('businessStatus', 'OPERATIONAL'),
                             'last_synced_at': timezone.now(),
                         }
                     )
@@ -165,7 +201,7 @@ class Command(BaseCommand):
         headers = {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': api_key,
-            'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos'
+            'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.editorialSummary,places.websiteUri,places.businessStatus'
         }
 
         body = {
@@ -180,7 +216,7 @@ class Command(BaseCommand):
                     'radius': 5000.0
                 }
             },
-            'minRating': 4.0,
+            'minRating': 3.5,
             'maxResultCount': max_results
         }
 
@@ -222,6 +258,9 @@ class Command(BaseCommand):
                 'googleMapsUrl': google_maps_url,
                 'photoUrl': photo_url,
                 'popularityScore': popularity_score,
+                'editorialSummary': place.get('editorialSummary', {}).get('text'),
+                'websiteUri': place.get('websiteUri'),
+                'businessStatus': place.get('businessStatus', 'OPERATIONAL'),
             })
 
         return results
@@ -240,19 +279,81 @@ class Command(BaseCommand):
         return adjusted_rating * math.log10(user_rating_count + 1)
 
     def get_region_coordinates(self, city):
-        """지역 좌표 반환 (rankings의 REGION_COORDINATES)"""
-        # 주요 지역 좌표 (확장 가능)
+        """지역 좌표 반환"""
+        # 전체 지역 좌표
         REGION_COORDINATES = {
+            # 서울특별시
             '강남구': {'latitude': 37.5172, 'longitude': 127.0473},
-            '서초구': {'latitude': 37.4837, 'longitude': 127.0324},
-            '송파구': {'latitude': 37.5145, 'longitude': 127.1059},
             '강동구': {'latitude': 37.5301, 'longitude': 127.1238},
+            '강북구': {'latitude': 37.6396, 'longitude': 127.0257},
+            '강서구': {'latitude': 37.5509, 'longitude': 126.8495},
+            '관악구': {'latitude': 37.4784, 'longitude': 126.9516},
+            '광진구': {'latitude': 37.5384, 'longitude': 127.0822},
+            '구로구': {'latitude': 37.4954, 'longitude': 126.8874},
+            '금천구': {'latitude': 37.4519, 'longitude': 126.8955},
+            '노원구': {'latitude': 37.6542, 'longitude': 127.0568},
+            '도봉구': {'latitude': 37.6688, 'longitude': 127.0471},
+            '동대문구': {'latitude': 37.5744, 'longitude': 127.0396},
+            '동작구': {'latitude': 37.5124, 'longitude': 126.9393},
             '마포구': {'latitude': 37.5663, 'longitude': 126.9019},
+            '서대문구': {'latitude': 37.5791, 'longitude': 126.9368},
+            '서초구': {'latitude': 37.4837, 'longitude': 127.0324},
+            '성동구': {'latitude': 37.5635, 'longitude': 127.0369},
+            '성북구': {'latitude': 37.5894, 'longitude': 127.0167},
+            '송파구': {'latitude': 37.5145, 'longitude': 127.1059},
+            '양천구': {'latitude': 37.5170, 'longitude': 126.8664},
+            '영등포구': {'latitude': 37.5264, 'longitude': 126.8962},
+            '용산구': {'latitude': 37.5326, 'longitude': 126.9900},
+            '은평구': {'latitude': 37.6027, 'longitude': 126.9291},
+            '종로구': {'latitude': 37.5735, 'longitude': 126.9788},
+            '중구': {'latitude': 37.5641, 'longitude': 126.9979},
+            '중랑구': {'latitude': 37.6063, 'longitude': 127.0925},
+
+            # 경기도
+            '고양시': {'latitude': 37.6584, 'longitude': 126.8320},
+            '과천시': {'latitude': 37.4292, 'longitude': 126.9877},
+            '광명시': {'latitude': 37.4785, 'longitude': 126.8644},
+            '광주시': {'latitude': 37.4292, 'longitude': 127.2550},
+            '구리시': {'latitude': 37.5943, 'longitude': 127.1296},
+            '군포시': {'latitude': 37.3617, 'longitude': 126.9352},
+            '김포시': {'latitude': 37.6152, 'longitude': 126.7158},
+            '남양주시': {'latitude': 37.6360, 'longitude': 127.2165},
+            '동두천시': {'latitude': 37.9034, 'longitude': 127.0606},
+            '부천시': {'latitude': 37.5035, 'longitude': 126.7660},
             '성남시': {'latitude': 37.4201, 'longitude': 127.1262},
             '수원시': {'latitude': 37.2636, 'longitude': 127.0286},
-            '고양시': {'latitude': 37.6584, 'longitude': 126.8320},
+            '시흥시': {'latitude': 37.3800, 'longitude': 126.8028},
+            '안산시': {'latitude': 37.3219, 'longitude': 126.8309},
+            '안성시': {'latitude': 37.0079, 'longitude': 127.2797},
+            '안양시': {'latitude': 37.3943, 'longitude': 126.9568},
+            '양주시': {'latitude': 37.7852, 'longitude': 127.0458},
+            '여주시': {'latitude': 37.2982, 'longitude': 127.6377},
+            '오산시': {'latitude': 37.1498, 'longitude': 127.0773},
             '용인시': {'latitude': 37.2410, 'longitude': 127.1776},
+            '의왕시': {'latitude': 37.3449, 'longitude': 126.9684},
+            '의정부시': {'latitude': 37.7381, 'longitude': 127.0338},
+            '이천시': {'latitude': 37.2720, 'longitude': 127.4351},
+            '파주시': {'latitude': 37.7599, 'longitude': 126.7800},
+            '평택시': {'latitude': 36.9921, 'longitude': 127.1127},
+            '포천시': {'latitude': 37.8948, 'longitude': 127.2006},
+            '하남시': {'latitude': 37.5393, 'longitude': 127.2148},
             '화성시': {'latitude': 37.1990, 'longitude': 126.8312},
+
+            # 인천광역시
+            '계양구': {'latitude': 37.5377, 'longitude': 126.7377},
+            '남동구': {'latitude': 37.4474, 'longitude': 126.7313},
+            '부평구': {'latitude': 37.5070, 'longitude': 126.7219},
+            '연수구': {'latitude': 37.4106, 'longitude': 126.6784},
+
+            # 부산/대구/대전/광주/울산 주요 구
+            '해운대구': {'latitude': 35.1631, 'longitude': 129.1635},
+            '부산진구': {'latitude': 35.1628, 'longitude': 129.0531},
+            '동래구': {'latitude': 35.2048, 'longitude': 129.0784},
+            '수성구': {'latitude': 35.8581, 'longitude': 128.6311},
+            '달서구': {'latitude': 35.8298, 'longitude': 128.5326},
+            '유성구': {'latitude': 36.3621, 'longitude': 127.3567},
+            '서구': {'latitude': 35.1520, 'longitude': 126.8895},  # 광주
         }
 
+        # 좌표가 없는 경우 강남구 기본값 사용
         return REGION_COORDINATES.get(city, REGION_COORDINATES['강남구'])

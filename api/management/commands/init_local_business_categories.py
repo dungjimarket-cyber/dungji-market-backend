@@ -15,7 +15,7 @@ class Command(BaseCommand):
         categories = [
             {
                 'name': '세무사',
-                'name_en': 'tax accountant',
+                'name_en': 'tax accountant office',
                 'icon': '💼',
                 'google_place_type': 'accounting',
                 'description': '세무 신고, 세무 상담, 세무 조정 등 세무 관련 전문 서비스',
@@ -23,7 +23,7 @@ class Command(BaseCommand):
             },
             {
                 'name': '변호사',
-                'name_en': 'lawyer',
+                'name_en': 'law firm',
                 'icon': '⚖️',
                 'google_place_type': 'lawyer',
                 'description': '법률 상담, 소송 대리, 계약서 작성 등 법률 전문 서비스',
@@ -31,7 +31,7 @@ class Command(BaseCommand):
             },
             {
                 'name': '법무사',
-                'name_en': 'legal service',
+                'name_en': 'judicial scrivener office',
                 'icon': '📋',
                 'google_place_type': 'legal',
                 'description': '등기, 인허가, 법률 문서 작성 등 법무 전문 서비스',
@@ -39,7 +39,7 @@ class Command(BaseCommand):
             },
             {
                 'name': '공인중개사',
-                'name_en': 'real estate',
+                'name_en': 'real estate agency',
                 'icon': '🏠',
                 'google_place_type': 'real_estate_agency',
                 'description': '부동산 매매, 임대차, 중개 등 부동산 거래 전문 서비스',
@@ -47,15 +47,15 @@ class Command(BaseCommand):
             },
             {
                 'name': '인테리어',
-                'name_en': 'interior',
+                'name_en': 'interior design',
                 'icon': '🛠️',
-                'google_place_type': 'home_improvement_store',
+                'google_place_type': 'interior_designer',
                 'description': '주거 및 상업 공간 인테리어 설계 및 시공',
                 'order_index': 5
             },
             {
                 'name': '휴대폰 대리점',
-                'name_en': 'phone store',
+                'name_en': 'mobile phone store',
                 'icon': '📱',
                 'google_place_type': 'cell_phone_store',
                 'description': '휴대폰 개통, 요금제 상담, 단말기 판매',
@@ -63,7 +63,7 @@ class Command(BaseCommand):
             },
             {
                 'name': '정비소',
-                'name_en': 'car repair',
+                'name_en': 'auto repair shop',
                 'icon': '🔧',
                 'google_place_type': 'car_repair',
                 'description': '자동차 정비, 수리, 점검 등 차량 관리 서비스',
