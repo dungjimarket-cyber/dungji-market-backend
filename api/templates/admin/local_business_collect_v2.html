@@ -729,15 +729,63 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             }
         }
 
-        // 전문직 예외: 관공서(시청, 구청 등) 제외
-        const professionalCategories = ['lawyer', 'legal', 'accounting', 'tax'];
-        if (professionalCategories.some(cat => category.toLowerCase().includes(cat))) {
-            const name = place.displayName.text.toLowerCase();
-            const address = (place.formattedAddress || '').toLowerCase();
-            const governmentKeywords = ['시청', '구청', '시', '구', 'city hall', 'district office'];
+        // 전역 제외 키워드 (모든 업종에 적용)
+        const globalExcludeKeywords = [
+            '카페', 'cafe', 'coffee',
+            '호텔', 'hotel', 'motel',
+            '군청', '시청', '구청', '면사무소', '주민센터', '행정복지센터',
+            '병원', 'hospital', 'clinic',
+            '약국', 'pharmacy',
+            '편의점', 'convenience',
+            '마트', 'mart',
+            '식당', 'restaurant',
+            '학교', 'school', '대학교', 'university',
+            '은행', 'bank',
+            '우체국', 'post office'
+        ];
 
-            if (governmentKeywords.some(keyword => name.includes(keyword) || address.includes(keyword))) {
-                addLog(`⚠️ ${place.displayName.text}: 관공서 (전문직 제외)`, 'error');
+        const name = place.displayName.text.toLowerCase();
+        const address = (place.formattedAddress || '').toLowerCase();
+
+        // 전역 제외 키워드 체크
+        if (globalExcludeKeywords.some(keyword => name.includes(keyword))) {
+            addLog(`⚠️ ${place.displayName.text}: 부적합 업종 (${globalExcludeKeywords.find(k => name.includes(k))})`, 'error');
+            return false;
+        }
+
+        // 카테고리별 필수 키워드 검증
+        const categoryRequirements = {
+            'lawyer': {
+                required: ['법률', '법무', '변호사', 'law'],
+                name: '변호사'
+            },
+            'legal': {
+                required: ['법률', '법무', '변호사', 'law'],
+                name: '법무사'
+            },
+            'accounting': {
+                required: ['회계', '세무', '공인회계사', 'accounting', 'cpa'],
+                name: '회계사'
+            },
+            'tax': {
+                required: ['세무', '세무사', 'tax'],
+                name: '세무사'
+            },
+            'real_estate': {
+                required: ['부동산', '공인중개사', 'real estate', 'realty'],
+                name: '부동산'
+            }
+        };
+
+        const categoryKey = category.toLowerCase();
+        if (categoryRequirements[categoryKey]) {
+            const req = categoryRequirements[categoryKey];
+            const hasRequired = req.required.some(keyword =>
+                name.includes(keyword) || address.includes(keyword)
+            );
+
+            if (!hasRequired) {
+                addLog(`⚠️ ${place.displayName.text}: ${req.name} 필수 키워드 없음`, 'error');
                 return false;
             }
         }
