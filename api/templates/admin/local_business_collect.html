@@ -32,8 +32,12 @@
             <label for="region" style="display: block; margin-bottom: 5px; font-weight: bold;">지역 선택 (선택사항)</label>
             <select name="region" id="region" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 <option value="">-- 전체 지역 (서울 전체 + 경기 전체 + 광역시) --</option>
-                {% for region in regions %}
-                <option value="{{ region.name }}">{{ region.name }}</option>
+                {% for group in region_groups %}
+                    <optgroup label="{{ group.name }}">
+                        {% for region in group.regions %}
+                        <option value="{{ region }}">{{ region }}</option>
+                        {% endfor %}
+                    </optgroup>
                 {% endfor %}
             </select>
             <p style="color: #666; font-size: 12px; margin-top: 5px;">

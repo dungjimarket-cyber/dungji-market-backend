@@ -165,6 +165,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         custom_urls = [
             path('collect-businesses/', self.admin_site.admin_view(self.collect_businesses_view), name='collect_local_businesses'),
             path('collect-v2/', self.admin_site.admin_view(self.collect_v2_view), name='collect_local_businesses_v2'),
+            path('validate-businesses/', self.admin_site.admin_view(self.validate_businesses_view), name='validate_local_businesses'),
             path('<path:object_id>/refresh/', self.admin_site.admin_view(self.refresh_business_view), name='refresh_local_business'),
         ]
         return custom_urls + urls
@@ -235,17 +236,42 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             GWANGJU_DISTRICTS, ULSAN_DISTRICTS
         )
 
-        regions_list = []
-        regions_list.extend([f'서울특별시 {d}' for d in SEOUL_DISTRICTS])
-        regions_list.extend([f'경기도 {c}' for c in GYEONGGI_CITIES])
-        regions_list.extend([f'인천광역시 {d}' for d in INCHEON_DISTRICTS])
-        regions_list.extend([f'부산광역시 {d}' for d in BUSAN_DISTRICTS])
-        regions_list.extend([f'대구광역시 {d}' for d in DAEGU_DISTRICTS])
-        regions_list.extend([f'대전광역시 {d}' for d in DAEJEON_DISTRICTS])
-        regions_list.extend([f'광주광역시 {d}' for d in GWANGJU_DISTRICTS])
-        regions_list.extend([f'울산광역시 {d}' for d in ULSAN_DISTRICTS])
+        # 서울 세부 그룹
+        seoul_gangbuk = ['강북구', '노원구', '도봉구', '동대문구', '마포구',
+                        '서대문구', '성동구', '성북구', '용산구', '은평구',
+                        '종로구', '중구', '중랑구']
+        seoul_gangnam = ['강남구', '강동구', '강서구', '관악구', '광진구',
+                        '구로구', '금천구', '동작구', '서초구', '송파구',
+                        '양천구', '영등포구']
 
-        regions = [{'name': region} for region in regions_list]
+        # 경기 세부 그룹
+        gyeonggi_north = ['가평군', '고양시', '구리시', '김포시', '남양주시',
+                         '동두천시', '양주시', '양평군', '연천군', '의정부시',
+                         '파주시', '포천시']
+        gyeonggi_south = ['과천시', '광명시', '광주시', '군포시', '부천시',
+                         '성남시', '수원시', '시흥시', '안산시', '안성시',
+                         '안양시', '여주시', '오산시', '용인시', '의왕시',
+                         '이천시', '평택시', '하남시', '화성시']
+
+        # 지역 그룹별로 정리
+        region_groups = [
+            {'name': '📍 서울 전체', 'regions': [f'서울특별시 {d}' for d in SEOUL_DISTRICTS]},
+            {'name': '📍 서울 강북', 'regions': [f'서울특별시 {d}' for d in seoul_gangbuk]},
+            {'name': '📍 서울 강남', 'regions': [f'서울특별시 {d}' for d in seoul_gangnam]},
+            {'name': '📍 경기 전체', 'regions': [f'경기도 {c}' for c in GYEONGGI_CITIES]},
+            {'name': '📍 경기 북부', 'regions': [f'경기도 {c}' for c in gyeonggi_north]},
+            {'name': '📍 경기 남부', 'regions': [f'경기도 {c}' for c in gyeonggi_south]},
+            {'name': '📍 인천광역시', 'regions': [f'인천광역시 {d}' for d in INCHEON_DISTRICTS]},
+            {'name': '📍 부산광역시', 'regions': [f'부산광역시 {d}' for d in BUSAN_DISTRICTS]},
+            {'name': '📍 대구광역시', 'regions': [f'대구광역시 {d}' for d in DAEGU_DISTRICTS]},
+            {'name': '📍 대전광역시', 'regions': [f'대전광역시 {d}' for d in DAEJEON_DISTRICTS]},
+            {'name': '📍 광주광역시', 'regions': [f'광주광역시 {d}' for d in GWANGJU_DISTRICTS]},
+            {'name': '📍 울산광역시', 'regions': [f'울산광역시 {d}' for d in ULSAN_DISTRICTS]},
+        ]
+
+        regions_list = []
+        for group in region_groups:
+            regions_list.extend(group['regions'])
 
         # 카테고리 목록
         categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
@@ -253,7 +279,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         context = {
             **self.admin_site.each_context(request),
             'title': '지역 업체 정보 수집',
-            'regions': regions,
+            'region_groups': region_groups,  # 그룹별 지역
             'categories': categories,
             'opts': self.model._meta,
         }
@@ -471,10 +497,169 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 
         return redirect(f'/admin/api/localbusiness/{object_id}/change/')
 
+    def validate_businesses_view(self, request):
+        """OpenAI로 잘못 분류된 업체 검증 및 삭제"""
+        from django.template.response import TemplateResponse
+        from django.http import JsonResponse
+        from django.conf import settings
+        import openai
+
+        if request.method == 'POST':
+            # AJAX 요청 처리
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+            if not is_ajax:
+                self.message_user(request, "잘못된 요청입니다.", messages.ERROR)
+                return redirect('..')
+
+            action = request.POST.get('action')
+
+            # 검증 시작
+            if action == 'validate':
+                category_id = request.POST.get('category')
+                region = request.POST.get('region', '')
+
+                try:
+                    # 필터링
+                    businesses = LocalBusiness.objects.all()
+                    if category_id:
+                        businesses = businesses.filter(category_id=category_id)
+                    if region:
+                        businesses = businesses.filter(region_name__icontains=region)
+
+                    # OpenAI 검증
+                    openai.api_key = settings.OPENAI_API_KEY
+                    invalid_businesses = []
+
+                    for business in businesses[:50]:  # 한 번에 최대 50개
+                        category_name = business.category.name
+                        business_name = business.name
+
+                        # OpenAI에 검증 요청
+                        prompt = f"""
+다음 업체가 "{category_name}" 업종에 맞는지 판단해주세요.
+
+업체명: {business_name}
+업종: {category_name}
+
+이 업체가 해당 업종이 맞으면 "YES", 아니면 "NO"로만 답변하세요.
+예: 업체명이 "스타벅스"이고 업종이 "변호사"면 → NO
+예: 업체명이 "김앤장 법률사무소"이고 업종이 "변호사"면 → YES
+"""
+
+                        response = openai.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": "당신은 업체 분류 검증 전문가입니다. YES 또는 NO로만 답변하세요."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0,
+                            max_tokens=10
+                        )
+
+                        answer = response.choices[0].message.content.strip().upper()
+
+                        if 'NO' in answer:
+                            invalid_businesses.append({
+                                'id': business.id,
+                                'name': business.name,
+                                'category': category_name,
+                                'region': business.region_name,
+                                'address': business.address,
+                            })
+
+                    return JsonResponse({
+                        'status': 'success',
+                        'invalid_count': len(invalid_businesses),
+                        'invalid_businesses': invalid_businesses,
+                        'total_checked': businesses.count()
+                    })
+
+                except Exception as e:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': str(e)
+                    }, status=500)
+
+            # 삭제 실행
+            elif action == 'delete':
+                business_ids = request.POST.getlist('business_ids[]')
+
+                try:
+                    deleted_count = LocalBusiness.objects.filter(id__in=business_ids).delete()[0]
+
+                    return JsonResponse({
+                        'status': 'success',
+                        'deleted_count': deleted_count
+                    })
+
+                except Exception as e:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': str(e)
+                    }, status=500)
+
+        # GET 요청: 검증 페이지 표시 (데이터 수집 페이지와 동일한 로직)
+        from .management.commands.collect_local_businesses import (
+            SEOUL_DISTRICTS, GYEONGGI_CITIES, INCHEON_DISTRICTS,
+            BUSAN_DISTRICTS, DAEGU_DISTRICTS, DAEJEON_DISTRICTS,
+            GWANGJU_DISTRICTS, ULSAN_DISTRICTS
+        )
+
+        # 서울 세부 그룹
+        seoul_gangbuk = ['강북구', '노원구', '도봉구', '동대문구', '마포구',
+                        '서대문구', '성동구', '성북구', '용산구', '은평구',
+                        '종로구', '중구', '중랑구']
+        seoul_gangnam = ['강남구', '강동구', '강서구', '관악구', '광진구',
+                        '구로구', '금천구', '동작구', '서초구', '송파구',
+                        '양천구', '영등포구']
+
+        # 경기 세부 그룹
+        gyeonggi_north = ['가평군', '고양시', '구리시', '김포시', '남양주시',
+                         '동두천시', '양주시', '양평군', '연천군', '의정부시',
+                         '파주시', '포천시']
+        gyeonggi_south = ['과천시', '광명시', '광주시', '군포시', '부천시',
+                         '성남시', '수원시', '시흥시', '안산시', '안성시',
+                         '안양시', '여주시', '오산시', '용인시', '의왕시',
+                         '이천시', '평택시', '하남시', '화성시']
+
+        # 지역 그룹별로 정리
+        region_groups = [
+            {'name': '📍 서울 전체', 'regions': [f'서울특별시 {d}' for d in SEOUL_DISTRICTS]},
+            {'name': '📍 서울 강북', 'regions': [f'서울특별시 {d}' for d in seoul_gangbuk]},
+            {'name': '📍 서울 강남', 'regions': [f'서울특별시 {d}' for d in seoul_gangnam]},
+            {'name': '📍 경기 전체', 'regions': [f'경기도 {c}' for c in GYEONGGI_CITIES]},
+            {'name': '📍 경기 북부', 'regions': [f'경기도 {c}' for c in gyeonggi_north]},
+            {'name': '📍 경기 남부', 'regions': [f'경기도 {c}' for c in gyeonggi_south]},
+            {'name': '📍 인천광역시', 'regions': [f'인천광역시 {d}' for d in INCHEON_DISTRICTS]},
+            {'name': '📍 부산광역시', 'regions': [f'부산광역시 {d}' for d in BUSAN_DISTRICTS]},
+            {'name': '📍 대구광역시', 'regions': [f'대구광역시 {d}' for d in DAEGU_DISTRICTS]},
+            {'name': '📍 대전광역시', 'regions': [f'대전광역시 {d}' for d in DAEJEON_DISTRICTS]},
+            {'name': '📍 광주광역시', 'regions': [f'광주광역시 {d}' for d in GWANGJU_DISTRICTS]},
+            {'name': '📍 울산광역시', 'regions': [f'울산광역시 {d}' for d in ULSAN_DISTRICTS]},
+        ]
+
+        categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': '업체 데이터 검증 (OpenAI)',
+            'region_groups': region_groups,
+            'categories': categories,
+            'opts': self.model._meta,
+        }
+
+        return TemplateResponse(
+            request,
+            'admin/local_business_validate.html',
+            context
+        )
+
     def changelist_view(self, request, extra_context=None):
         """목록 페이지에 커스텀 버튼 추가"""
         extra_context = extra_context or {}
         extra_context['show_collect_button'] = True
+        extra_context['show_validate_button'] = True
         return super().changelist_view(request, extra_context=extra_context)
 
 
