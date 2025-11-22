@@ -63,9 +63,9 @@
             <label for="category" style="display: block; margin-bottom: 5px; font-weight: bold;">업종 선택</label>
             <select name="category" id="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" required>
                 <option value="">-- 업종 선택 --</option>
-                <option value="ALL" data-name-en="ALL" data-place-type="ALL" style="font-weight: bold; background: #e3f2fd;">📋 전체 업종 ({{ categories|length }}개)</option>
+                <option value="ALL" data-name-ko="ALL" data-place-type="ALL" style="font-weight: bold; background: #e3f2fd;">📋 전체 업종 ({{ categories|length }}개)</option>
                 {% for cat in categories %}
-                <option value="{{ cat.id }}" data-name-en="{{ cat.name_en }}" data-place-type="{{ cat.google_place_type }}">{{ cat.icon }} {{ cat.name }}</option>
+                <option value="{{ cat.id }}" data-name-ko="{{ cat.name }}" data-place-type="{{ cat.google_place_type }}">{{ cat.icon }} {{ cat.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -420,7 +420,7 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
     const categorySelect = document.getElementById('category');
     const categoryId = categorySelect.value;
-    const categoryNameEn = categorySelect.options[categorySelect.selectedIndex].dataset.nameEn;
+    const categoryNameKo = categorySelect.options[categorySelect.selectedIndex].dataset.nameKo;
     const limit = parseInt(document.getElementById('limit').value);
 
     // 중단 플래그 초기화
@@ -438,10 +438,10 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
     // 카테고리 목록 결정
     const categories = categoryId === 'ALL'
-        ? Array.from(document.querySelectorAll('#category option[data-name-en]'))
+        ? Array.from(document.querySelectorAll('#category option[data-name-ko]'))
             .filter(opt => opt.value !== 'ALL')
-            .map(opt => ({id: opt.value, nameEn: opt.dataset.nameEn, placeType: opt.dataset.placeType}))
-        : [{id: categoryId, nameEn: categoryNameEn, placeType: document.querySelector(`#category option[value="${categoryId}"]`)?.dataset.placeType}];
+            .map(opt => ({id: opt.value, nameKo: opt.dataset.nameKo, placeType: opt.dataset.placeType}))
+        : [{id: categoryId, nameKo: categoryNameKo, placeType: document.querySelector(`#category option[value="${categoryId}"]`)?.dataset.placeType}];
 
     addLog(`📍 지역: ${regions.length}곳, 업종: ${categories.length}개, 지역당 ${limit}개씩 수집`);
 
@@ -469,10 +469,10 @@ document.getElementById('collectForm').addEventListener('submit', async function
                     continue;
                 }
 
-                addLog(`🔍 ${targetRegion} - ${cat.nameEn} 검색 중...`);
+                addLog(`🔍 ${targetRegion} - ${cat.nameKo} 검색 중...`);
 
-                // Google Places API 호출 (includedTypes 사용)
-                let places = await fetchGooglePlaces(regionShort, cat.nameEn, coordinates, limit, cat.placeType);
+                // Google Places API 호출 (한글 카테고리명 사용)
+                let places = await fetchGooglePlaces(regionShort, cat.nameKo, coordinates, limit, cat.placeType);
 
                 addLog(`✅ ${places.length}개 업체 발견 (필터링 후)`);
 
