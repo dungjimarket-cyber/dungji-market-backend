@@ -14,28 +14,20 @@ class Command(BaseCommand):
 
         categories = [
             {
-                'name': '세무사',
-                'name_en': 'tax accountant office',
-                'icon': '💼',
-                'google_place_type': 'accounting',
-                'description': '세무 신고, 세무 상담, 세무 조정 등 세무 관련 전문 서비스',
-                'order_index': 1
-            },
-            {
                 'name': '회계사',
                 'name_en': 'accountant',
                 'icon': '💼',
                 'google_place_type': 'accounting',
                 'description': '회계 감사, 재무 상담, 회계 처리 등 회계 전문 서비스',
-                'order_index': 2
+                'order_index': 1
             },
             {
-                'name': '변호사',
-                'name_en': 'law firm',
-                'icon': '⚖️',
-                'google_place_type': 'lawyer',
-                'description': '법률 상담, 소송 대리, 계약서 작성 등 법률 전문 서비스',
-                'order_index': 3
+                'name': '세무사',
+                'name_en': 'tax accountant office',
+                'icon': '💼',
+                'google_place_type': 'accounting',
+                'description': '세무 신고, 세무 상담, 세무 조정 등 세무 관련 전문 서비스',
+                'order_index': 2
             },
             {
                 'name': '법무사',
@@ -43,6 +35,14 @@ class Command(BaseCommand):
                 'icon': '📋',
                 'google_place_type': 'legal',
                 'description': '등기, 인허가, 법률 문서 작성 등 법무 전문 서비스',
+                'order_index': 3
+            },
+            {
+                'name': '변호사',
+                'name_en': 'law firm',
+                'icon': '⚖️',
+                'google_place_type': 'lawyer',
+                'description': '법률 상담, 소송 대리, 계약서 작성 등 법률 전문 서비스',
                 'order_index': 4
             },
             {

@@ -703,12 +703,6 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
             }
         }
 
-        // ✅ 모든 업종 필터 제거
-        // → Google Places API가 이미 검색 쿼리에 맞는 업종만 반환함
-        // → 과도한 사전 필터링으로 유효한 업체 제외 방지
-        //   예: "병원 내 휴대폰수리점", "세무사 시청점" 등이 오작동할 수 있음
-        // → 잘못 수집된 업체는 OpenAI 검증 페이지에서 일괄 삭제 가능
-
         return true;
     });
 
