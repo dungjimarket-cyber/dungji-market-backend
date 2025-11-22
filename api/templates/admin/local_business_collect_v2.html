@@ -663,10 +663,8 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
         maxResultCount: maxResults
     };
 
-    // includedTypes 파라미터 추가 (정확한 업종 필터링)
-    if (placeType && placeType !== 'ALL') {
-        requestBody.includedTypes = [placeType];
-    }
+    // Note: includedTypes는 Text Search API에서 지원하지 않음
+    // Text Search는 textQuery 기반으로만 필터링 가능
 
     const response = await fetch(proxyUrl, {
         method: 'POST',
