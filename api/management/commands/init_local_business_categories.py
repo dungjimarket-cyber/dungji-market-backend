@@ -33,7 +33,7 @@ class Command(BaseCommand):
                 'name': '법무사',
                 'name_en': 'judicial scrivener office',
                 'icon': '📋',
-                'google_place_type': 'legal',
+                'google_place_type': 'lawyer',
                 'description': '등기, 인허가, 법률 문서 작성 등 법무 전문 서비스',
                 'order_index': 3
             },
