@@ -244,14 +244,13 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                         '구로구', '금천구', '동작구', '서초구', '송파구',
                         '양천구', '영등포구']
 
-        # 경기 세부 그룹
-        gyeonggi_north = ['가평군', '고양시', '구리시', '김포시', '남양주시',
-                         '동두천시', '양주시', '양평군', '연천군', '의정부시',
-                         '파주시', '포천시']
-        gyeonggi_south = ['과천시', '광명시', '광주시', '군포시', '부천시',
-                         '성남시', '수원시', '시흥시', '안산시', '안성시',
-                         '안양시', '여주시', '오산시', '용인시', '의왕시',
-                         '이천시', '평택시', '하남시', '화성시']
+        # 경기 세부 그룹 (3개로 세분화)
+        gyeonggi_north = ['의정부시', '동두천시', '파주시', '고양시', '양주시',
+                         '포천시', '연천군', '가평군', '남양주시', '구리시']
+        gyeonggi_west = ['김포시', '부천시', '광명시', '시흥시', '안산시',
+                        '안양시', '군포시', '의왕시', '과천시', '성남시']
+        gyeonggi_east_south = ['하남시', '광주시', '여주시', '이천시', '용인시',
+                              '수원시', '화성시', '오산시', '평택시', '안성시', '양평군']
 
         # 지역 그룹별로 정리
         region_groups = [
@@ -260,7 +259,8 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             {'name': '📍 서울 강남', 'regions': [f'서울특별시 {d}' for d in seoul_gangnam]},
             {'name': '📍 경기 전체', 'regions': [f'경기도 {c}' for c in GYEONGGI_CITIES]},
             {'name': '📍 경기 북부', 'regions': [f'경기도 {c}' for c in gyeonggi_north]},
-            {'name': '📍 경기 남부', 'regions': [f'경기도 {c}' for c in gyeonggi_south]},
+            {'name': '📍 경기 서부', 'regions': [f'경기도 {c}' for c in gyeonggi_west]},
+            {'name': '📍 경기 동남부', 'regions': [f'경기도 {c}' for c in gyeonggi_east_south]},
             {'name': '📍 인천광역시', 'regions': [f'인천광역시 {d}' for d in INCHEON_DISTRICTS]},
             {'name': '📍 부산광역시', 'regions': [f'부산광역시 {d}' for d in BUSAN_DISTRICTS]},
             {'name': '📍 대구광역시', 'regions': [f'대구광역시 {d}' for d in DAEGU_DISTRICTS]},
@@ -614,14 +614,13 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                         '구로구', '금천구', '동작구', '서초구', '송파구',
                         '양천구', '영등포구']
 
-        # 경기 세부 그룹
-        gyeonggi_north = ['가평군', '고양시', '구리시', '김포시', '남양주시',
-                         '동두천시', '양주시', '양평군', '연천군', '의정부시',
-                         '파주시', '포천시']
-        gyeonggi_south = ['과천시', '광명시', '광주시', '군포시', '부천시',
-                         '성남시', '수원시', '시흥시', '안산시', '안성시',
-                         '안양시', '여주시', '오산시', '용인시', '의왕시',
-                         '이천시', '평택시', '하남시', '화성시']
+        # 경기 세부 그룹 (3개로 세분화)
+        gyeonggi_north = ['의정부시', '동두천시', '파주시', '고양시', '양주시',
+                         '포천시', '연천군', '가평군', '남양주시', '구리시']
+        gyeonggi_west = ['김포시', '부천시', '광명시', '시흥시', '안산시',
+                        '안양시', '군포시', '의왕시', '과천시', '성남시']
+        gyeonggi_east_south = ['하남시', '광주시', '여주시', '이천시', '용인시',
+                              '수원시', '화성시', '오산시', '평택시', '안성시', '양평군']
 
         # 지역 그룹별로 정리
         region_groups = [
@@ -630,7 +629,8 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             {'name': '📍 서울 강남', 'regions': [f'서울특별시 {d}' for d in seoul_gangnam]},
             {'name': '📍 경기 전체', 'regions': [f'경기도 {c}' for c in GYEONGGI_CITIES]},
             {'name': '📍 경기 북부', 'regions': [f'경기도 {c}' for c in gyeonggi_north]},
-            {'name': '📍 경기 남부', 'regions': [f'경기도 {c}' for c in gyeonggi_south]},
+            {'name': '📍 경기 서부', 'regions': [f'경기도 {c}' for c in gyeonggi_west]},
+            {'name': '📍 경기 동남부', 'regions': [f'경기도 {c}' for c in gyeonggi_east_south]},
             {'name': '📍 인천광역시', 'regions': [f'인천광역시 {d}' for d in INCHEON_DISTRICTS]},
             {'name': '📍 부산광역시', 'regions': [f'부산광역시 {d}' for d in BUSAN_DISTRICTS]},
             {'name': '📍 대구광역시', 'regions': [f'대구광역시 {d}' for d in DAEGU_DISTRICTS]},

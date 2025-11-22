@@ -2,6 +2,11 @@
 
 {% block object-tools-items %}
     <li>
+        <a href="{% url 'admin:validate_local_businesses' %}" class="addlink" style="background-color: #FF9800; padding: 10px 15px;">
+            ✅ 업체 검증/삭제 (OpenAI)
+        </a>
+    </li>
+    <li>
         <a href="{% url 'admin:collect_local_businesses_v2' %}" class="addlink" style="background-color: #2196F3; padding: 10px 15px;">
             🚀 데이터 수집 (Google API)
         </a>
