@@ -64,6 +64,8 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         'category_name',
         'rating_display',
         'review_count',
+        'website_display',
+        'opening_hours_display',
         'view_count',
         'is_new',
         'is_verified',
@@ -82,7 +84,8 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
         'google_maps_link',
-        'refresh_button'
+        'refresh_button',
+        'photo_preview'
     ]
 
     fieldsets = (
@@ -100,7 +103,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             'fields': ('editorial_summary',)
         }),
         ('이미지', {
-            'fields': ('custom_photo', 'photo_url'),
+            'fields': ('photo_preview', 'custom_photo', 'photo_url'),
             'description': 'custom_photo가 있으면 우선 표시, 없으면 Google photo_url 사용'
         }),
         ('상태', {
@@ -142,11 +145,48 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         return '-'
     rating_display.short_description = '평점'
 
+    def website_display(self, obj):
+        if obj.website_url:
+            return format_html('<a href="{}" target="_blank">🌐</a>', obj.website_url)
+        return '-'
+    website_display.short_description = '웹사이트'
+
+    def opening_hours_display(self, obj):
+        if obj.opening_hours:
+            # JSON 배열 형태로 저장된 영업시간을 파싱
+            import json
+            try:
+                hours = json.loads(obj.opening_hours) if isinstance(obj.opening_hours, str) else obj.opening_hours
+                if hours and len(hours) > 0:
+                    return format_html('<span title="{}">{}</span>', '\n'.join(hours), hours[0][:20] + '...' if len(hours[0]) > 20 else hours[0])
+            except:
+                pass
+        return '-'
+    opening_hours_display.short_description = '영업시간'
+
     def google_maps_link(self, obj):
         if obj.google_maps_url:
             return format_html('<a href="{}" target="_blank">Google 지도에서 보기</a>', obj.google_maps_url)
         return '-'
     google_maps_link.short_description = 'Google 지도'
+
+    def photo_preview(self, obj):
+        """사진 미리보기"""
+        if obj.custom_photo:
+            return format_html(
+                '<img src="{}" style="max-width: 300px; max-height: 300px; border-radius: 8px;"><br>'
+                '<small style="color: #666;">S3 파일: {}</small>',
+                obj.custom_photo.url,
+                obj.custom_photo.name
+            )
+        elif obj.photo_url:
+            return format_html(
+                '<img src="{}" style="max-width: 300px; max-height: 300px; border-radius: 8px;"><br>'
+                '<small style="color: #666;">Google URL (백업용)</small>',
+                obj.photo_url
+            )
+        return format_html('<span style="color: #999;">사진 없음</span>')
+    photo_preview.short_description = '사진 미리보기'
 
     def refresh_button(self, obj):
         if obj.pk:
