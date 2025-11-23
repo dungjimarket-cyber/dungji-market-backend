@@ -121,7 +121,7 @@ class LocalBusinessViewSet(viewsets.ModelViewSet):
     filterset_fields = ['is_verified']  # category는 get_queryset에서 커스텀 처리
     search_fields = ['name', 'address']
     ordering_fields = ['popularity_score', 'rating', 'review_count', 'rank_in_region', 'created_at']
-    ordering = ['rank_in_region']  # 기본 정렬: 순위순
+    ordering = ['-popularity_score']  # 기본 정렬: 인기도순 (높은순)
 
     # Version marker for deployment verification
     _deployment_version = "2025-01-23-v2"
