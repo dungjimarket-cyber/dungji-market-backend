@@ -36,6 +36,11 @@
                     <strong>🏢 업종 검증</strong>
                     <div style="font-size: 12px; color: #666; margin-top: 5px;">업체명과 업종이 일치하는지 검증</div>
                 </label>
+                <label id="duplicateModeLabel" style="flex: 1; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s;">
+                    <input type="radio" name="validation_mode" value="duplicate" style="margin-right: 8px;">
+                    <strong>🔄 중복 검증</strong>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">중복된 업체명 검증</div>
+                </label>
                 <label id="websiteModeLabel" style="flex: 1; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s;">
                     <input type="radio" name="validation_mode" value="website" style="margin-right: 8px;">
                     <strong>🌐 웹사이트 검증</strong>
@@ -161,22 +166,33 @@ document.querySelectorAll('input[name="validation_mode"]').forEach(radio => {
     radio.addEventListener('change', function() {
         const mode = this.value;
         const categoryLabel = document.getElementById('categoryModeLabel');
+        const duplicateLabel = document.getElementById('duplicateModeLabel');
         const websiteLabel = document.getElementById('websiteModeLabel');
         const validateBtnText = document.getElementById('validateBtnText');
         const validationInfo = document.getElementById('validationInfo');
         const deleteBtnText = document.getElementById('deleteBtnText');
 
+        // 모든 라벨 초기화
+        categoryLabel.style.border = '2px solid #ddd';
+        categoryLabel.style.background = 'white';
+        duplicateLabel.style.border = '2px solid #ddd';
+        duplicateLabel.style.background = 'white';
+        websiteLabel.style.border = '2px solid #ddd';
+        websiteLabel.style.background = 'white';
+
         if (mode === 'category') {
             categoryLabel.style.border = '2px solid #2196F3';
             categoryLabel.style.background = '#e3f2fd';
-            websiteLabel.style.border = '2px solid #ddd';
-            websiteLabel.style.background = 'white';
             validateBtnText.textContent = '🔍 업종 검증 시작';
             validationInfo.textContent = '업종이 맞지 않거나 공공기관으로 판단된 업체가 표시됩니다.';
             if (deleteBtnText) deleteBtnText.textContent = '🗑️ 선택한 업체 삭제';
+        } else if (mode === 'duplicate') {
+            duplicateLabel.style.border = '2px solid #2196F3';
+            duplicateLabel.style.background = '#e3f2fd';
+            validateBtnText.textContent = '🔄 중복 검증 시작';
+            validationInfo.textContent = '중복된 업체명을 가진 업체가 표시됩니다.';
+            if (deleteBtnText) deleteBtnText.textContent = '🗑️ 선택한 업체 삭제';
         } else {
-            categoryLabel.style.border = '2px solid #ddd';
-            categoryLabel.style.background = 'white';
             websiteLabel.style.border = '2px solid #2196F3';
             websiteLabel.style.background = '#e3f2fd';
             validateBtnText.textContent = '🌐 웹사이트 검증 시작';

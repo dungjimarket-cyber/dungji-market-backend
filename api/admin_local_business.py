@@ -511,12 +511,82 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                     if validation_mode == 'website':
                         businesses = businesses.exclude(website_url__isnull=True).exclude(website_url='')
 
+                    # 중복 검증 모드인 경우 중복 이름이 있는 업체만
+                    elif validation_mode == 'duplicate':
+                        from django.db.models import Count
+                        # 중복된 이름 찾기
+                        duplicate_names = LocalBusiness.objects.values('name').annotate(
+                            count=Count('id')
+                        ).filter(count__gt=1).values_list('name', flat=True)
+
+                        businesses = businesses.filter(name__in=duplicate_names).order_by('name')
+
                     # OpenAI 검증
                     openai.api_key = settings.OPENAI_API_KEY
                     invalid_businesses = []
 
                     for business in businesses[:50]:  # 한 번에 최대 50개
-                        if validation_mode == 'website':
+                        if validation_mode == 'duplicate':
+                            # 중복 업체명 검증 모드
+                            business_name = business.name
+                            business_address = business.address
+                            category_name = business.category.name
+
+                            # 같은 이름의 다른 업체들 찾기
+                            duplicates = LocalBusiness.objects.filter(name=business_name).exclude(id=business.id)
+                            duplicate_info = "\n".join([
+                                f"- {dup.name} ({dup.category.name}) - {dup.address}"
+                                for dup in duplicates[:5]
+                            ])
+
+                            # OpenAI에 중복 검증 요청
+                            prompt = f"""
+다음 업체가 실제로 존재하는 업체인지, 아니면 중복 등록인지 판단해주세요.
+
+현재 업체:
+- 이름: {business_name}
+- 업종: {category_name}
+- 주소: {business_address}
+
+같은 이름의 다른 업체들:
+{duplicate_info}
+
+다음 경우 "DUPLICATE"로 답변하세요:
+1. 주소가 거의 동일한데 중복 등록된 경우
+2. 프랜차이즈가 아닌데 같은 이름이 여러 지역에 있는 경우 (의심스러운 경우)
+3. 명백히 잘못 등록된 경우
+
+다음 경우 "VALID"로 답변하세요:
+1. 프랜차이즈 업체인 경우 (스타벅스, 맥도날드 등)
+2. 같은 이름이지만 주소가 명확히 다른 별개의 업체인 경우
+3. 판단이 애매한 경우
+
+"VALID" 또는 "DUPLICATE"로만 답변하세요.
+"""
+
+                            response = openai.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[
+                                    {"role": "system", "content": "당신은 중복 업체 검증 전문가입니다. VALID 또는 DUPLICATE로만 답변하세요."},
+                                    {"role": "user", "content": prompt}
+                                ],
+                                temperature=0,
+                                max_tokens=10
+                            )
+
+                            answer = response.choices[0].message.content.strip().upper()
+
+                            if 'DUPLICATE' in answer:
+                                invalid_businesses.append({
+                                    'id': business.id,
+                                    'name': business.name,
+                                    'category': business.category.name,
+                                    'region': business.region_name,
+                                    'address': business.address,
+                                    'issue': '중복 의심'
+                                })
+
+                        elif validation_mode == 'website':
                             # 웹사이트 검증 모드
                             business_name = business.name
                             website_url = business.website_url
@@ -646,13 +716,13 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                             'mode': 'website'
                         })
                     else:
-                        # 업종 검증 모드: 업체 자체를 삭제
+                        # 업종/중복 검증 모드: 업체 자체를 삭제
                         deleted_count = LocalBusiness.objects.filter(id__in=business_ids).delete()[0]
 
                         return JsonResponse({
                             'status': 'success',
                             'deleted_count': deleted_count,
-                            'mode': 'category'
+                            'mode': validation_mode
                         })
 
                 except Exception as e:
