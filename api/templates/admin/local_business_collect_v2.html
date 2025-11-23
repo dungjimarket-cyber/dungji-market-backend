@@ -638,13 +638,21 @@ async function fetchGooglePlaces(city, category, coordinates, maxResults, placeT
     // 지역명 간소화: "경기도 하남시" → "하남시", "서울특별시 강남구" → "강남구"
     const shortCityName = city.split(' ').pop();
 
-    // Google에서 지원하지 않는 타입 목록 (Text Search로 fallback)
-    const unsupportedTypes = ['interior_designer'];
-    const useTextSearch = !placeType || unsupportedTypes.includes(placeType);
+    // Text Search로 검색할 타입 목록 (cleaning_service, moving_company는 타입 미지원 또는 부정확)
+    const textSearchTypes = ['interior_designer', 'cleaning_service', 'moving_company'];
+    const useTextSearch = !placeType || textSearchTypes.includes(placeType);
+
+    // 업종별 검색어 설정
+    let searchQuery = `${shortCityName} ${category}`;
+    if (placeType === 'cleaning_service') {
+        searchQuery = `${shortCityName} 청소 업체`;
+    } else if (placeType === 'moving_company') {
+        searchQuery = `${shortCityName} 이사 업체`;
+    }
 
     const requestBody = useTextSearch ? {
-        // Text Search API (업종 타입 없음 또는 미지원 타입)
-        textQuery: `${shortCityName} ${category}`,
+        // Text Search API (청소, 이사, 인테리어 등)
+        textQuery: searchQuery,
         languageCode: 'ko',
         locationBias: {
             circle: {
