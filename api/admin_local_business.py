@@ -495,6 +495,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 
             # 검증 시작
             if action == 'validate':
+                validation_mode = request.POST.get('validation_mode', 'category')
                 category_id = request.POST.get('category')
                 regions = request.POST.getlist('regions[]')
 
@@ -506,16 +507,71 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                     if regions:
                         businesses = businesses.filter(region_name__in=regions)
 
+                    # 웹사이트 검증 모드인 경우 website_url이 있는 업체만
+                    if validation_mode == 'website':
+                        businesses = businesses.exclude(website_url__isnull=True).exclude(website_url='')
+
                     # OpenAI 검증
                     openai.api_key = settings.OPENAI_API_KEY
                     invalid_businesses = []
 
                     for business in businesses[:50]:  # 한 번에 최대 50개
-                        category_name = business.category.name
-                        business_name = business.name
+                        if validation_mode == 'website':
+                            # 웹사이트 검증 모드
+                            business_name = business.name
+                            website_url = business.website_url
 
-                        # OpenAI에 검증 요청
-                        prompt = f"""
+                            # OpenAI에 웹사이트 유효성 검증 요청
+                            prompt = f"""
+다음 업체의 웹사이트가 유효한지 판단해주세요.
+
+업체명: {business_name}
+웹사이트: {website_url}
+
+다음 중 하나라도 해당되면 "INVALID"로 답변하세요:
+1. URL이 명백히 잘못되었거나 형식이 이상한 경우
+2. URL이 업체와 전혀 관련 없어 보이는 경우
+3. URL이 만료되었을 가능성이 높은 경우 (예: 오래된 블로그, 개인 페이지 등)
+4. URL이 공공기관, 포털사이트, 검색엔진 등인 경우
+
+웹사이트가 정상적이고 업체와 관련이 있어 보이면 "VALID", 아니면 "INVALID"로만 답변하세요.
+판단이 애매하면 "VALID"로 답변하세요.
+
+예시:
+- "김앤장 법률사무소" + "https://www.kimchang.com" → VALID
+- "세무법인 나무" + "https://blog.naver.com/user123" → INVALID (개인 블로그)
+- "건축사사무소" + "https://www.google.com" → INVALID (관련 없음)
+"""
+
+                            response = openai.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[
+                                    {"role": "system", "content": "당신은 웹사이트 유효성 검증 전문가입니다. VALID 또는 INVALID로만 답변하세요."},
+                                    {"role": "user", "content": prompt}
+                                ],
+                                temperature=0,
+                                max_tokens=10
+                            )
+
+                            answer = response.choices[0].message.content.strip().upper()
+
+                            if 'INVALID' in answer:
+                                invalid_businesses.append({
+                                    'id': business.id,
+                                    'name': business.name,
+                                    'category': business.category.name,
+                                    'region': business.region_name,
+                                    'address': business.address,
+                                    'website_url': website_url,
+                                    'issue': '유효하지 않은 웹사이트'
+                                })
+                        else:
+                            # 업종 검증 모드 (기존 로직)
+                            category_name = business.category.name
+                            business_name = business.name
+
+                            # OpenAI에 검증 요청
+                            prompt = f"""
 다음 업체가 "{category_name}" 업종에 맞는지 판단해주세요.
 
 업체명: {business_name}
@@ -534,26 +590,26 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 - "강남세무서" + 업종 "세무사" → NO (공공기관)
 """
 
-                        response = openai.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=[
-                                {"role": "system", "content": "당신은 업체 분류 검증 전문가입니다. YES 또는 NO로만 답변하세요."},
-                                {"role": "user", "content": prompt}
-                            ],
-                            temperature=0,
-                            max_tokens=10
-                        )
+                            response = openai.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[
+                                    {"role": "system", "content": "당신은 업체 분류 검증 전문가입니다. YES 또는 NO로만 답변하세요."},
+                                    {"role": "user", "content": prompt}
+                                ],
+                                temperature=0,
+                                max_tokens=10
+                            )
 
-                        answer = response.choices[0].message.content.strip().upper()
+                            answer = response.choices[0].message.content.strip().upper()
 
-                        if 'NO' in answer:
-                            invalid_businesses.append({
-                                'id': business.id,
-                                'name': business.name,
-                                'category': category_name,
-                                'region': business.region_name,
-                                'address': business.address,
-                            })
+                            if 'NO' in answer:
+                                invalid_businesses.append({
+                                    'id': business.id,
+                                    'name': business.name,
+                                    'category': category_name,
+                                    'region': business.region_name,
+                                    'address': business.address,
+                                })
 
                     return JsonResponse({
                         'status': 'success',

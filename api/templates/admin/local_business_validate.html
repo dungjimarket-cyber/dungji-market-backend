@@ -18,15 +18,31 @@
     <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
         <strong>⚠️ 주의사항</strong>
         <ul style="margin: 10px 0 0 20px;">
-            <li>OpenAI API를 사용하여 업체명과 업종이 일치하는지 검증합니다.</li>
+            <li>OpenAI API를 사용하여 업체 데이터를 검증합니다.</li>
             <li>한 번에 최대 50개 업체를 검증합니다.</li>
             <li>검증 시간: 약 1~2분 (업체 수에 따라 다름)</li>
-            <li>잘못 분류된 것으로 판단된 업체는 목록에 표시됩니다.</li>
+            <li id="validationInfo">문제가 있는 업체는 목록에 표시됩니다.</li>
         </ul>
     </div>
 
     <form id="validateForm" style="margin-top: 20px;">
         {% csrf_token %}
+
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">검증 모드 선택</label>
+            <div style="display: flex; gap: 10px;">
+                <label id="categoryModeLabel" style="flex: 1; padding: 15px; border: 2px solid #2196F3; border-radius: 8px; cursor: pointer; background: #e3f2fd; transition: all 0.2s;">
+                    <input type="radio" name="validation_mode" value="category" checked style="margin-right: 8px;">
+                    <strong>🏢 업종 검증</strong>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">업체명과 업종이 일치하는지 검증</div>
+                </label>
+                <label id="websiteModeLabel" style="flex: 1; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; background: white; transition: all 0.2s;">
+                    <input type="radio" name="validation_mode" value="website" style="margin-right: 8px;">
+                    <strong>🌐 웹사이트 검증</strong>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">웹사이트 상태 및 유효성 검증</div>
+                </label>
+            </div>
+        </div>
 
         <div style="margin-bottom: 20px;">
             <label for="category" style="display: block; margin-bottom: 10px; font-weight: bold;">업종 선택</label>
@@ -69,7 +85,7 @@
 
         <button type="submit" id="validateBtn"
                 style="width: 100%; padding: 12px 24px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">
-            🔍 검증 시작
+            <span id="validateBtnText">🔍 업종 검증 시작</span>
         </button>
     </form>
 
@@ -140,6 +156,33 @@
 const csrfToken = '{{ csrf_token }}';
 let invalidBusinesses = [];
 
+// 검증 모드 선택 시 UI 업데이트
+document.querySelectorAll('input[name="validation_mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const mode = this.value;
+        const categoryLabel = document.getElementById('categoryModeLabel');
+        const websiteLabel = document.getElementById('websiteModeLabel');
+        const validateBtnText = document.getElementById('validateBtnText');
+        const validationInfo = document.getElementById('validationInfo');
+
+        if (mode === 'category') {
+            categoryLabel.style.border = '2px solid #2196F3';
+            categoryLabel.style.background = '#e3f2fd';
+            websiteLabel.style.border = '2px solid #ddd';
+            websiteLabel.style.background = 'white';
+            validateBtnText.textContent = '🔍 업종 검증 시작';
+            validationInfo.textContent = '업종이 맞지 않거나 공공기관으로 판단된 업체가 표시됩니다.';
+        } else {
+            categoryLabel.style.border = '2px solid #ddd';
+            categoryLabel.style.background = 'white';
+            websiteLabel.style.border = '2px solid #2196F3';
+            websiteLabel.style.background = '#e3f2fd';
+            validateBtnText.textContent = '🌐 웹사이트 검증 시작';
+            validationInfo.textContent = '유효하지 않거나 만료된 웹사이트를 가진 업체가 표시됩니다.';
+        }
+    });
+});
+
 // 전체 선택/해제 버튼
 document.getElementById('selectAllBtn').addEventListener('click', function() {
     document.querySelectorAll('.region-checkbox').forEach(cb => cb.checked = true);
@@ -167,6 +210,7 @@ document.querySelectorAll('.group-select-btn').forEach(btn => {
 document.getElementById('validateForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
+    const mode = document.querySelector('input[name="validation_mode"]:checked').value;
     const category = document.getElementById('category').value;
     const selectedRegions = Array.from(document.querySelectorAll('.region-checkbox:checked'))
         .map(cb => cb.value);
@@ -180,6 +224,7 @@ document.getElementById('validateForm').addEventListener('submit', async functio
         const formData = new FormData();
         formData.append('csrfmiddlewaretoken', csrfToken);
         formData.append('action', 'validate');
+        formData.append('validation_mode', mode);
         formData.append('category', category);
 
         // 다중 지역 전송
@@ -223,24 +268,55 @@ function displayResults(data) {
         invalidList.innerHTML = '<div style="padding: 20px; text-align: center; color: #4CAF50;">✅ 모든 업체가 올바르게 분류되어 있습니다!</div>';
         document.getElementById('deleteSection').style.display = 'none';
     } else {
+        const mode = document.querySelector('input[name="validation_mode"]:checked').value;
+
         data.invalid_businesses.forEach(business => {
             const item = document.createElement('div');
             item.className = 'business-item';
+
+            let detailHtml = '';
+            if (mode === 'website') {
+                // 웹사이트 검증 모드: URL 클릭 가능하게 표시
+                detailHtml = `
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                        ${business.region} | ${business.address}
+                    </div>
+                    <div style="font-size: 12px;">
+                        <span style="color: #f44336;">❌ 문제: ${business.issue || '유효하지 않은 웹사이트'}</span>
+                    </div>
+                    ${business.website_url ? `
+                        <div style="margin-top: 5px;">
+                            <a href="${business.website_url}" target="_blank" rel="noopener noreferrer"
+                               style="color: #2196F3; text-decoration: none; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;"
+                               onclick="event.stopPropagation();">
+                                🌐 ${business.website_url}
+                                <span style="font-size: 10px;">↗</span>
+                            </a>
+                        </div>
+                    ` : ''}
+                `;
+            } else {
+                // 업종 검증 모드: 기존 방식
+                detailHtml = `
+                    <div style="font-size: 12px; color: #666;">
+                        <span style="color: #f44336;">❌ 업종: ${business.category}</span> |
+                        ${business.region} |
+                        ${business.address}
+                    </div>
+                `;
+            }
+
             item.innerHTML = `
                 <label style="display: flex; align-items: start; cursor: pointer;">
                     <input type="checkbox" class="business-checkbox" data-id="${business.id}">
                     <div style="flex: 1;">
                         <div style="font-weight: bold; margin-bottom: 5px;">${business.name}</div>
-                        <div style="font-size: 12px; color: #666;">
-                            <span style="color: #f44336;">❌ 업종: ${business.category}</span> |
-                            ${business.region} |
-                            ${business.address}
-                        </div>
+                        ${detailHtml}
                     </div>
                 </label>
             `;
             item.addEventListener('click', function(e) {
-                if (e.target.tagName !== 'INPUT') {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'A') {
                     const checkbox = item.querySelector('input[type="checkbox"]');
                     checkbox.checked = !checkbox.checked;
                     updateSelectedCount();
