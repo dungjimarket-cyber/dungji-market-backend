@@ -281,15 +281,15 @@ class Command(BaseCommand):
             'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.editorialSummary,places.websiteUri,places.businessStatus'
         }
 
-        # 인테리어, 이사는 Text Search 사용 (텍스트 쿼리)
-        # 나머지는 Nearby Search 사용 (includedTypes)
-        if place_type in ['interior_designer', 'moving_company']:
+        # cleaning_service (타입 미지원), interior_designer는 Text Search 사용
+        # 나머지(moving_company 포함)는 Nearby Search 사용 (includedTypes)
+        if place_type in ['interior_designer', 'cleaning_service']:
             # Text Search API
             url = 'https://places.googleapis.com/v1/places:searchText'
 
-            # 이사는 "이사 업체"로 검색
-            if place_type == 'moving_company':
-                search_query = f"{city} 이사 업체"
+            # 청소는 "청소 업체"로 검색
+            if place_type == 'cleaning_service':
+                search_query = f"{city} 청소 업체"
             else:
                 search_query = f"{city} {category}"
 
@@ -309,7 +309,7 @@ class Command(BaseCommand):
                 'maxResultCount': max_results
             }
         else:
-            # Nearby Search API (includedTypes 사용)
+            # Nearby Search API (moving_company 포함, includedTypes 사용)
             url = 'https://places.googleapis.com/v1/places:searchNearby'
             body = {
                 'includedTypes': [place_type],
