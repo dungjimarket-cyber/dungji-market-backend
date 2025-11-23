@@ -202,6 +202,12 @@ class Command(BaseCommand):
         count = 0
         for rank, place in enumerate(places[:limit], start=1):
             try:
+                # 주소 검증: 검색한 지역명이 주소에 포함되어 있는지 확인
+                address = place.get('address', '')
+                if region_short_name not in address:
+                    self.stdout.write(self.style.WARNING(f"    ⚠️  {place['name']} - 주소 불일치 (검색: {region_short_name}, 실제: {address[:30]}...) 스킵"))
+                    continue
+
                 with transaction.atomic():
                     # 기존 업체 확인
                     existing_business = LocalBusiness.objects.filter(
