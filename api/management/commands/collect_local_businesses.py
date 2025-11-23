@@ -265,42 +265,66 @@ class Command(BaseCommand):
         return count
 
     def fetch_google_places(self, city, category, place_type, max_results=5):
-        """Google Places API 호출 (rankings 로직 재사용)"""
+        """Google Places API 호출 (Nearby Search 또는 Text Search)"""
         from django.conf import settings
 
         api_key = settings.GOOGLE_PLACES_API_KEY
         if not api_key:
             raise ValueError("GOOGLE_PLACES_API_KEY not configured")
 
-        # 지역 좌표 (rankings의 REGION_COORDINATES 사용)
+        # 지역 좌표
         coordinates = self.get_region_coordinates(city)
 
-        # 검색 쿼리
-        search_query = f"{city} {category}"
-
-        # API 요청
-        url = 'https://places.googleapis.com/v1/places:searchText'
         headers = {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': api_key,
             'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.editorialSummary,places.websiteUri,places.businessStatus'
         }
 
-        body = {
-            'textQuery': search_query,
-            'languageCode': 'ko',
-            'locationBias': {
-                'circle': {
-                    'center': {
-                        'latitude': coordinates['latitude'],
-                        'longitude': coordinates['longitude']
-                    },
-                    'radius': 5000.0
-                }
-            },
-            'minRating': 3.5,
-            'maxResultCount': max_results
-        }
+        # 인테리어, 이사는 Text Search 사용 (텍스트 쿼리)
+        # 나머지는 Nearby Search 사용 (includedTypes)
+        if place_type in ['interior_designer', 'moving_company']:
+            # Text Search API
+            url = 'https://places.googleapis.com/v1/places:searchText'
+
+            # 이사는 "이사 업체"로 검색
+            if place_type == 'moving_company':
+                search_query = f"{city} 이사 업체"
+            else:
+                search_query = f"{city} {category}"
+
+            body = {
+                'textQuery': search_query,
+                'languageCode': 'ko',
+                'locationBias': {
+                    'circle': {
+                        'center': {
+                            'latitude': coordinates['latitude'],
+                            'longitude': coordinates['longitude']
+                        },
+                        'radius': 5000.0
+                    }
+                },
+                'minRating': 3.5,
+                'maxResultCount': max_results
+            }
+        else:
+            # Nearby Search API (includedTypes 사용)
+            url = 'https://places.googleapis.com/v1/places:searchNearby'
+            body = {
+                'includedTypes': [place_type],
+                'languageCode': 'ko',
+                'locationRestriction': {
+                    'circle': {
+                        'center': {
+                            'latitude': coordinates['latitude'],
+                            'longitude': coordinates['longitude']
+                        },
+                        'radius': 5000.0
+                    }
+                },
+                'maxResultCount': max_results
+            }
 
         response = requests.post(url, json=body, headers=headers)
 
