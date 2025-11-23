@@ -94,7 +94,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             'description': '이 업체의 최신 정보를 Google Places API에서 가져옵니다.'
         }),
         ('기본 정보', {
-            'fields': ('category', 'region_name', 'name', 'address', 'phone_number')
+            'fields': ('category', 'region_name', 'name', 'address', 'phone_number', 'website_url')
         }),
         ('평점 및 순위', {
             'fields': ('rating', 'review_count', 'popularity_score', 'rank_in_region')

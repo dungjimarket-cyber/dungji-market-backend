@@ -55,6 +55,7 @@ class LocalBusinessListSerializer(serializers.ModelSerializer):
             'is_verified', 'is_new',
             'has_photo', 'photo_url', 'custom_photo_url',
             'editorial_summary',
+            'website_url',
             'view_count',
             'created_at'
         ]
