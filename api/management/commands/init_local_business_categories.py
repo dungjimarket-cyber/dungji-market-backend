@@ -77,6 +77,22 @@ class Command(BaseCommand):
                 'description': '자동차 정비, 수리, 점검 등 차량 관리 서비스',
                 'order_index': 8
             },
+            {
+                'name': '청소 전문',
+                'name_en': 'cleaning service',
+                'icon': '🧹',
+                'google_place_type': 'cleaning_service',
+                'description': '가정 및 사무실 청소, 입주 청소, 정리 정돈 등 청소 전문 서비스',
+                'order_index': 9
+            },
+            {
+                'name': '이사 전문',
+                'name_en': 'moving company',
+                'icon': '🚚',
+                'google_place_type': 'moving_company',
+                'description': '가정 이사, 사무실 이전, 포장 이사 등 이사 전문 서비스',
+                'order_index': 10
+            },
         ]
 
         created_count = 0
