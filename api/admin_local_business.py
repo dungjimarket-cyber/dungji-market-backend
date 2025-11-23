@@ -627,14 +627,29 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             # 삭제 실행
             elif action == 'delete':
                 business_ids = request.POST.getlist('business_ids[]')
+                validation_mode = request.POST.get('validation_mode', 'category')
 
                 try:
-                    deleted_count = LocalBusiness.objects.filter(id__in=business_ids).delete()[0]
+                    if validation_mode == 'website':
+                        # 웹사이트 검증 모드: website_url 필드만 비우기
+                        updated_count = LocalBusiness.objects.filter(
+                            id__in=business_ids
+                        ).update(website_url=None)
 
-                    return JsonResponse({
-                        'status': 'success',
-                        'deleted_count': deleted_count
-                    })
+                        return JsonResponse({
+                            'status': 'success',
+                            'deleted_count': updated_count,
+                            'mode': 'website'
+                        })
+                    else:
+                        # 업종 검증 모드: 업체 자체를 삭제
+                        deleted_count = LocalBusiness.objects.filter(id__in=business_ids).delete()[0]
+
+                        return JsonResponse({
+                            'status': 'success',
+                            'deleted_count': deleted_count,
+                            'mode': 'category'
+                        })
 
                 except Exception as e:
                     return JsonResponse({

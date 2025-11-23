@@ -123,7 +123,7 @@
         <div id="deleteSection" style="display: none; margin-top: 20px;">
             <button id="deleteBtn"
                     style="width: 100%; padding: 12px 24px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;">
-                🗑️ 선택한 업체 삭제 (<span id="selectedCount">0</span>개)
+                <span id="deleteBtnText">🗑️ 선택한 업체 삭제</span> (<span id="selectedCount">0</span>개)
             </button>
         </div>
     </div>
@@ -164,6 +164,7 @@ document.querySelectorAll('input[name="validation_mode"]').forEach(radio => {
         const websiteLabel = document.getElementById('websiteModeLabel');
         const validateBtnText = document.getElementById('validateBtnText');
         const validationInfo = document.getElementById('validationInfo');
+        const deleteBtnText = document.getElementById('deleteBtnText');
 
         if (mode === 'category') {
             categoryLabel.style.border = '2px solid #2196F3';
@@ -172,6 +173,7 @@ document.querySelectorAll('input[name="validation_mode"]').forEach(radio => {
             websiteLabel.style.background = 'white';
             validateBtnText.textContent = '🔍 업종 검증 시작';
             validationInfo.textContent = '업종이 맞지 않거나 공공기관으로 판단된 업체가 표시됩니다.';
+            if (deleteBtnText) deleteBtnText.textContent = '🗑️ 선택한 업체 삭제';
         } else {
             categoryLabel.style.border = '2px solid #ddd';
             categoryLabel.style.background = 'white';
@@ -179,6 +181,7 @@ document.querySelectorAll('input[name="validation_mode"]').forEach(radio => {
             websiteLabel.style.background = '#e3f2fd';
             validateBtnText.textContent = '🌐 웹사이트 검증 시작';
             validationInfo.textContent = '유효하지 않거나 만료된 웹사이트를 가진 업체가 표시됩니다.';
+            if (deleteBtnText) deleteBtnText.textContent = '🔗 선택한 웹사이트 링크 삭제';
         }
     });
 });
@@ -342,13 +345,18 @@ function updateSelectedCount() {
 
 document.getElementById('deleteBtn').addEventListener('click', async function() {
     const selected = document.querySelectorAll('.business-checkbox:checked');
+    const mode = document.querySelector('input[name="validation_mode"]:checked').value;
 
     if (selected.length === 0) {
-        alert('삭제할 업체를 선택해주세요!');
+        alert(mode === 'website' ? '삭제할 웹사이트를 선택해주세요!' : '삭제할 업체를 선택해주세요!');
         return;
     }
 
-    if (!confirm(`정말 ${selected.length}개 업체를 삭제하시겠습니까?`)) {
+    const confirmMsg = mode === 'website'
+        ? `정말 ${selected.length}개 업체의 웹사이트 링크를 삭제하시겠습니까?\n(업체는 유지되고 웹사이트 URL만 비워집니다)`
+        : `정말 ${selected.length}개 업체를 삭제하시겠습니까?`;
+
+    if (!confirm(confirmMsg)) {
         return;
     }
 
@@ -358,6 +366,7 @@ document.getElementById('deleteBtn').addEventListener('click', async function() 
         const formData = new FormData();
         formData.append('csrfmiddlewaretoken', csrfToken);
         formData.append('action', 'delete');
+        formData.append('validation_mode', mode);
         businessIds.forEach(id => formData.append('business_ids[]', id));
 
         const response = await fetch('', {
@@ -371,7 +380,11 @@ document.getElementById('deleteBtn').addEventListener('click', async function() 
         const data = await response.json();
 
         if (data.status === 'success') {
-            alert(`${data.deleted_count}개 업체가 삭제되었습니다!`);
+            const successMsg = mode === 'website'
+                ? `${data.deleted_count}개 업체의 웹사이트 링크가 삭제되었습니다!`
+                : `${data.deleted_count}개 업체가 삭제되었습니다!`;
+            alert(successMsg);
+
             // 삭제된 항목 제거
             selected.forEach(cb => {
                 cb.closest('.business-item').remove();
@@ -380,7 +393,10 @@ document.getElementById('deleteBtn').addEventListener('click', async function() 
             const remaining = document.querySelectorAll('.business-item').length;
             document.getElementById('invalidCount').textContent = remaining;
             if (remaining === 0) {
-                document.getElementById('invalidList').innerHTML = '<div style="padding: 20px; text-align: center; color: #4CAF50;">✅ 모든 잘못 분류된 업체가 삭제되었습니다!</div>';
+                const completeMsg = mode === 'website'
+                    ? '✅ 모든 유효하지 않은 웹사이트 링크가 삭제되었습니다!'
+                    : '✅ 모든 잘못 분류된 업체가 삭제되었습니다!';
+                document.getElementById('invalidList').innerHTML = `<div style="padding: 20px; text-align: center; color: #4CAF50;">${completeMsg}</div>`;
                 document.getElementById('deleteSection').style.display = 'none';
             }
         } else {
