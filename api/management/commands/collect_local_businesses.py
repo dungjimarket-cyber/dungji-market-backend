@@ -208,6 +208,22 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.WARNING(f"    ⚠️  {place['name']} - 주소 불일치 (검색: {region_short_name}, 실제: {address[:30]}...) 스킵"))
                     continue
 
+                # 키워드 필터링: 카테고리별 제외 키워드 체크
+                business_name = place.get('name', '')
+                category_name = category.name
+
+                # 청소 전문: 세탁소, 빨래방 제외
+                if category_name == '청소 전문':
+                    if any(keyword in business_name for keyword in ['세탁', '빨래방', '드라이클리닝', '코인워시']):
+                        self.stdout.write(self.style.WARNING(f"    ⚠️  {business_name} - 세탁소 관련 (청소 아님) 스킵"))
+                        continue
+
+                # 이사 전문: 창고, 보관 업체 제외
+                elif category_name == '이사 전문':
+                    if any(keyword in business_name for keyword in ['창고', '보관', '스토리지', '물류센터', '컨테이너']):
+                        self.stdout.write(self.style.WARNING(f"    ⚠️  {business_name} - 창고/보관 업체 (이사 아님) 스킵"))
+                        continue
+
                 with transaction.atomic():
                     # 기존 업체 확인
                     existing_business = LocalBusiness.objects.filter(
