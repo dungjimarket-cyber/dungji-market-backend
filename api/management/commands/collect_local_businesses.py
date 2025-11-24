@@ -472,17 +472,199 @@ class Command(BaseCommand):
             # 인천광역시
             '계양구': {'latitude': 37.5377, 'longitude': 126.7377},
             '남동구': {'latitude': 37.4474, 'longitude': 126.7313},
+            '동구': {'latitude': 37.4738, 'longitude': 126.6433},  # 인천
             '부평구': {'latitude': 37.5070, 'longitude': 126.7219},
+            '서구': {'latitude': 37.5454, 'longitude': 126.6759},  # 인천
             '연수구': {'latitude': 37.4106, 'longitude': 126.6784},
+            '중구': {'latitude': 37.4738, 'longitude': 126.6216},  # 인천
 
-            # 부산/대구/대전/광주/울산 주요 구
-            '해운대구': {'latitude': 35.1631, 'longitude': 129.1635},
-            '부산진구': {'latitude': 35.1628, 'longitude': 129.0531},
+            # 부산광역시
+            '강서구': {'latitude': 35.2121, 'longitude': 128.9806},  # 부산
+            '금정구': {'latitude': 35.2428, 'longitude': 129.0927},
+            '남구': {'latitude': 35.1365, 'longitude': 129.0846},  # 부산
+            '동구': {'latitude': 35.1295, 'longitude': 129.0454},  # 부산
             '동래구': {'latitude': 35.2048, 'longitude': 129.0784},
-            '수성구': {'latitude': 35.8581, 'longitude': 128.6311},
+            '부산진구': {'latitude': 35.1628, 'longitude': 129.0531},
+            '북구': {'latitude': 35.1975, 'longitude': 128.9897},  # 부산
+            '사상구': {'latitude': 35.1528, 'longitude': 128.9910},
+            '사하구': {'latitude': 35.1042, 'longitude': 128.9743},
+            '서구': {'latitude': 35.0979, 'longitude': 129.0246},  # 부산
+            '수영구': {'latitude': 35.1454, 'longitude': 129.1134},
+            '연제구': {'latitude': 35.1761, 'longitude': 129.0798},
+            '영도구': {'latitude': 35.0913, 'longitude': 129.0679},
+            '중구': {'latitude': 35.1063, 'longitude': 129.0326},  # 부산
+            '해운대구': {'latitude': 35.1631, 'longitude': 129.1635},
+
+            # 대구광역시
+            '남구': {'latitude': 35.8463, 'longitude': 128.5977},  # 대구
             '달서구': {'latitude': 35.8298, 'longitude': 128.5326},
+            '동구': {'latitude': 35.8868, 'longitude': 128.6354},  # 대구
+            '북구': {'latitude': 35.8858, 'longitude': 128.5829},  # 대구
+            '서구': {'latitude': 35.8718, 'longitude': 128.5592},  # 대구
+            '수성구': {'latitude': 35.8581, 'longitude': 128.6311},
+            '중구': {'latitude': 35.8694, 'longitude': 128.6061},  # 대구
+
+            # 대전광역시
+            '대덕구': {'latitude': 36.3464, 'longitude': 127.4147},
+            '동구': {'latitude': 36.3504, 'longitude': 127.4545},  # 대전
+            '서구': {'latitude': 36.3553, 'longitude': 127.3838},  # 대전
             '유성구': {'latitude': 36.3621, 'longitude': 127.3567},
+            '중구': {'latitude': 36.3255, 'longitude': 127.4211},  # 대전
+
+            # 광주광역시
+            '광산구': {'latitude': 35.1397, 'longitude': 126.7934},
+            '남구': {'latitude': 35.1327, 'longitude': 126.9026},  # 광주
+            '동구': {'latitude': 35.1460, 'longitude': 126.9230},  # 광주
+            '북구': {'latitude': 35.1740, 'longitude': 126.9117},  # 광주
             '서구': {'latitude': 35.1520, 'longitude': 126.8895},  # 광주
+
+            # 울산광역시
+            '남구': {'latitude': 35.5446, 'longitude': 129.3300},  # 울산
+            '동구': {'latitude': 35.5049, 'longitude': 129.4163},  # 울산
+            '북구': {'latitude': 35.5826, 'longitude': 129.3614},  # 울산
+            '중구': {'latitude': 35.5689, 'longitude': 129.3325},  # 울산
+
+            # 세종특별자치시
+            '세종시': {'latitude': 36.4800, 'longitude': 127.2890},
+
+            # 강원특별자치도
+            '춘천시': {'latitude': 37.8813, 'longitude': 127.7300},
+            '원주시': {'latitude': 37.3422, 'longitude': 127.9202},
+            '강릉시': {'latitude': 37.7519, 'longitude': 128.8761},
+            '동해시': {'latitude': 37.5247, 'longitude': 129.1144},
+            '태백시': {'latitude': 37.1640, 'longitude': 128.9856},
+            '속초시': {'latitude': 38.2070, 'longitude': 128.5918},
+            '삼척시': {'latitude': 37.4500, 'longitude': 129.1656},
+            '홍천군': {'latitude': 37.6974, 'longitude': 127.8888},
+            '횡성군': {'latitude': 37.4919, 'longitude': 127.9848},
+            '영월군': {'latitude': 37.1836, 'longitude': 128.4614},
+            '평창군': {'latitude': 37.3708, 'longitude': 128.3903},
+            '정선군': {'latitude': 37.3807, 'longitude': 128.6608},
+            '철원군': {'latitude': 38.1467, 'longitude': 127.3136},
+            '화천군': {'latitude': 38.1063, 'longitude': 127.7083},
+            '양구군': {'latitude': 38.1098, 'longitude': 127.9896},
+            '인제군': {'latitude': 38.0695, 'longitude': 128.1707},
+            '고성군': {'latitude': 38.3807, 'longitude': 128.4677},  # 강원
+            '양양군': {'latitude': 38.0754, 'longitude': 128.6190},
+
+            # 충청북도
+            '청주시': {'latitude': 36.6424, 'longitude': 127.4890},
+            '충주시': {'latitude': 36.9910, 'longitude': 127.9259},
+            '제천시': {'latitude': 37.1326, 'longitude': 128.1911},
+            '보은군': {'latitude': 36.4894, 'longitude': 127.7294},
+            '옥천군': {'latitude': 36.3014, 'longitude': 127.5721},
+            '영동군': {'latitude': 36.1750, 'longitude': 127.7834},
+            '증평군': {'latitude': 36.7848, 'longitude': 127.5814},
+            '진천군': {'latitude': 36.8551, 'longitude': 127.4329},
+            '괴산군': {'latitude': 36.8155, 'longitude': 127.7866},
+            '음성군': {'latitude': 36.9941, 'longitude': 127.6926},
+            '단양군': {'latitude': 36.9845, 'longitude': 128.3659},
+
+            # 충청남도
+            '천안시': {'latitude': 36.8151, 'longitude': 127.1139},
+            '공주시': {'latitude': 36.4465, 'longitude': 127.1248},
+            '보령시': {'latitude': 36.3330, 'longitude': 126.6129},
+            '아산시': {'latitude': 36.7898, 'longitude': 127.0016},
+            '서산시': {'latitude': 36.7847, 'longitude': 126.4503},
+            '논산시': {'latitude': 36.1870, 'longitude': 127.0986},
+            '계룡시': {'latitude': 36.2744, 'longitude': 127.2487},
+            '당진시': {'latitude': 36.8930, 'longitude': 126.6472},
+            '금산군': {'latitude': 36.1089, 'longitude': 127.4879},
+            '부여군': {'latitude': 36.2756, 'longitude': 126.9100},
+            '서천군': {'latitude': 36.0806, 'longitude': 126.6919},
+            '청양군': {'latitude': 36.4592, 'longitude': 126.8025},
+            '홍성군': {'latitude': 36.6012, 'longitude': 126.6650},
+            '예산군': {'latitude': 36.6826, 'longitude': 126.8508},
+            '태안군': {'latitude': 36.7456, 'longitude': 126.2979},
+
+            # 전북특별자치도
+            '전주시': {'latitude': 35.8242, 'longitude': 127.1480},
+            '군산시': {'latitude': 35.9678, 'longitude': 126.7368},
+            '익산시': {'latitude': 35.9483, 'longitude': 126.9575},
+            '정읍시': {'latitude': 35.5697, 'longitude': 126.8560},
+            '남원시': {'latitude': 35.4163, 'longitude': 127.3903},
+            '김제시': {'latitude': 35.8031, 'longitude': 126.8809},
+            '완주군': {'latitude': 35.9053, 'longitude': 127.1650},
+            '진안군': {'latitude': 35.7917, 'longitude': 127.4244},
+            '무주군': {'latitude': 36.0066, 'longitude': 127.6605},
+            '장수군': {'latitude': 35.6477, 'longitude': 127.5211},
+            '임실군': {'latitude': 35.6177, 'longitude': 127.2861},
+            '순창군': {'latitude': 35.3746, 'longitude': 127.1376},
+            '고창군': {'latitude': 35.4354, 'longitude': 126.7019},
+            '부안군': {'latitude': 35.7318, 'longitude': 126.7330},
+
+            # 전라남도
+            '목포시': {'latitude': 34.8118, 'longitude': 126.3922},
+            '여수시': {'latitude': 34.7604, 'longitude': 127.6622},
+            '순천시': {'latitude': 34.9507, 'longitude': 127.4872},
+            '나주시': {'latitude': 35.0160, 'longitude': 126.7107},
+            '광양시': {'latitude': 34.9406, 'longitude': 127.6956},
+            '담양군': {'latitude': 35.3208, 'longitude': 126.9883},
+            '곡성군': {'latitude': 35.2818, 'longitude': 127.2917},
+            '구례군': {'latitude': 35.2024, 'longitude': 127.4632},
+            '고흥군': {'latitude': 34.6114, 'longitude': 127.2754},
+            '보성군': {'latitude': 34.7713, 'longitude': 127.0800},
+            '화순군': {'latitude': 35.0641, 'longitude': 126.9866},
+            '장흥군': {'latitude': 34.6814, 'longitude': 126.9072},
+            '강진군': {'latitude': 34.6420, 'longitude': 126.7672},
+            '해남군': {'latitude': 34.5733, 'longitude': 126.5989},
+            '영암군': {'latitude': 34.8003, 'longitude': 126.6967},
+            '무안군': {'latitude': 34.9906, 'longitude': 126.4816},
+            '함평군': {'latitude': 35.0663, 'longitude': 126.5158},
+            '영광군': {'latitude': 35.2772, 'longitude': 126.5119},
+            '장성군': {'latitude': 35.3018, 'longitude': 126.7846},
+            '완도군': {'latitude': 34.3114, 'longitude': 126.7552},
+            '진도군': {'latitude': 34.4868, 'longitude': 126.2633},
+            '신안군': {'latitude': 34.8276, 'longitude': 126.1076},
+
+            # 경상북도
+            '포항시': {'latitude': 36.0190, 'longitude': 129.3435},
+            '경주시': {'latitude': 35.8562, 'longitude': 129.2247},
+            '김천시': {'latitude': 36.1399, 'longitude': 128.1137},
+            '안동시': {'latitude': 36.5684, 'longitude': 128.7294},
+            '구미시': {'latitude': 36.1195, 'longitude': 128.3445},
+            '영주시': {'latitude': 36.8057, 'longitude': 128.6240},
+            '영천시': {'latitude': 35.9733, 'longitude': 128.9386},
+            '상주시': {'latitude': 36.4109, 'longitude': 128.1590},
+            '문경시': {'latitude': 36.5867, 'longitude': 128.1867},
+            '경산시': {'latitude': 35.8250, 'longitude': 128.7414},
+            '군위군': {'latitude': 36.2427, 'longitude': 128.5730},
+            '의성군': {'latitude': 36.3526, 'longitude': 128.6970},
+            '청송군': {'latitude': 36.4364, 'longitude': 129.0571},
+            '영양군': {'latitude': 36.6666, 'longitude': 129.1123},
+            '영덕군': {'latitude': 36.4150, 'longitude': 129.3657},
+            '청도군': {'latitude': 35.6475, 'longitude': 128.7362},
+            '고령군': {'latitude': 35.7273, 'longitude': 128.2628},
+            '성주군': {'latitude': 35.9193, 'longitude': 128.2828},
+            '칠곡군': {'latitude': 35.9953, 'longitude': 128.4019},
+            '예천군': {'latitude': 36.6572, 'longitude': 128.4524},
+            '봉화군': {'latitude': 36.8930, 'longitude': 128.7323},
+            '울진군': {'latitude': 36.9930, 'longitude': 129.4006},
+            '울릉군': {'latitude': 37.4845, 'longitude': 130.9058},
+
+            # 경상남도
+            '창원시': {'latitude': 35.2280, 'longitude': 128.6811},
+            '진주시': {'latitude': 35.1800, 'longitude': 128.1076},
+            '통영시': {'latitude': 34.8544, 'longitude': 128.4332},
+            '사천시': {'latitude': 35.0036, 'longitude': 128.0642},
+            '김해시': {'latitude': 35.2285, 'longitude': 128.8894},
+            '밀양시': {'latitude': 35.5038, 'longitude': 128.7462},
+            '거제시': {'latitude': 34.8806, 'longitude': 128.6217},
+            '양산시': {'latitude': 35.3350, 'longitude': 129.0374},
+            '의령군': {'latitude': 35.3222, 'longitude': 128.2618},
+            '함안군': {'latitude': 35.2723, 'longitude': 128.4061},
+            '창녕군': {'latitude': 35.5446, 'longitude': 128.4925},
+            '고성군': {'latitude': 34.9732, 'longitude': 128.3230},  # 경남
+            '남해군': {'latitude': 34.8375, 'longitude': 127.8924},
+            '하동군': {'latitude': 35.0674, 'longitude': 127.7514},
+            '산청군': {'latitude': 35.4152, 'longitude': 127.8735},
+            '함양군': {'latitude': 35.5204, 'longitude': 127.7252},
+            '거창군': {'latitude': 35.6869, 'longitude': 127.9094},
+            '합천군': {'latitude': 35.5664, 'longitude': 128.1656},
+
+            # 제주특별자치도
+            '제주시': {'latitude': 33.4996, 'longitude': 126.5312},
+            '서귀포시': {'latitude': 33.2541, 'longitude': 126.5600},
         }
 
         # 좌표가 없는 경우 강남구 기본값 사용

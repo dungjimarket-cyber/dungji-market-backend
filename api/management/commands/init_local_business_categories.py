@@ -70,7 +70,7 @@ class Command(BaseCommand):
                 'order_index': 7
             },
             {
-                'name': '정비소',
+                'name': '자동차 정비',
                 'name_en': 'auto repair shop',
                 'icon': '🔧',
                 'google_place_type': 'car_repair',
