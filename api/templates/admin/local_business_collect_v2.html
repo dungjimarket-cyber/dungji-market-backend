@@ -550,7 +550,9 @@ document.getElementById('collectForm').addEventListener('submit', async function
 
                 // 좌표 키 결정 (중복 지역명 처리)
                 let coordinateKey = regionShort;
-                if (targetRegion.includes('인천광역시') && !['강화군', '옹진군'].includes(regionShort)) {
+                if (targetRegion.includes('세종특별자치시')) {
+                    coordinateKey = '세종시';
+                } else if (targetRegion.includes('인천광역시') && !['강화군', '옹진군'].includes(regionShort)) {
                     coordinateKey = '인천' + regionShort;
                 } else if (targetRegion.includes('부산광역시') && regionShort !== '기장군') {
                     coordinateKey = '부산' + regionShort;
