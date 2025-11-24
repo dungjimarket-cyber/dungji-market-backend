@@ -27,26 +27,26 @@ TARGET_REGIONS.extend([(f'서울특별시 {d}', d) for d in SEOUL_DISTRICTS])
 
 # 경기도 주요 도시
 GYEONGGI_CITIES = [
-    '고양시', '과천시', '광명시', '광주시', '구리시', '군포시', '김포시',
+    '가평군', '고양시', '과천시', '광명시', '광주시', '구리시', '군포시', '김포시',
     '남양주시', '동두천시', '부천시', '성남시', '수원시', '시흥시', '안산시',
-    '안성시', '안양시', '양주시', '여주시', '오산시', '용인시', '의왕시',
+    '안성시', '안양시', '양주시', '양평군', '여주시', '연천군', '오산시', '용인시', '의왕시',
     '의정부시', '이천시', '파주시', '평택시', '포천시', '하남시', '화성시'
 ]
 TARGET_REGIONS.extend([(f'경기도 {c}', c) for c in GYEONGGI_CITIES])
 
 # 인천광역시
-INCHEON_DISTRICTS = ['계양구', '남동구', '동구', '부평구', '서구', '연수구', '중구']
+INCHEON_DISTRICTS = ['강화군', '계양구', '남동구', '동구', '부평구', '서구', '연수구', '옹진군', '중구']
 TARGET_REGIONS.extend([(f'인천광역시 {d}', d) for d in INCHEON_DISTRICTS])
 
 # 부산광역시
 BUSAN_DISTRICTS = [
-    '강서구', '금정구', '남구', '동구', '동래구', '부산진구', '북구',
+    '강서구', '금정구', '기장군', '남구', '동구', '동래구', '부산진구', '북구',
     '사상구', '사하구', '서구', '수영구', '연제구', '영도구', '중구', '해운대구'
 ]
 TARGET_REGIONS.extend([(f'부산광역시 {d}', d) for d in BUSAN_DISTRICTS])
 
 # 대구광역시
-DAEGU_DISTRICTS = ['남구', '달서구', '동구', '북구', '서구', '수성구', '중구']
+DAEGU_DISTRICTS = ['남구', '달서구', '달성군', '동구', '북구', '서구', '수성구', '중구', '군위군']
 TARGET_REGIONS.extend([(f'대구광역시 {d}', d) for d in DAEGU_DISTRICTS])
 
 # 대전광역시
@@ -58,7 +58,7 @@ GWANGJU_DISTRICTS = ['광산구', '남구', '동구', '북구', '서구']
 TARGET_REGIONS.extend([(f'광주광역시 {d}', d) for d in GWANGJU_DISTRICTS])
 
 # 울산광역시
-ULSAN_DISTRICTS = ['남구', '동구', '북구', '중구']
+ULSAN_DISTRICTS = ['남구', '동구', '북구', '울주군', '중구']
 TARGET_REGIONS.extend([(f'울산광역시 {d}', d) for d in ULSAN_DISTRICTS])
 
 # 세종특별자치시
@@ -189,7 +189,8 @@ class Command(BaseCommand):
         """특정 지역+업종의 업체 수집"""
         # Google Places API 호출 (한글 카테고리명 사용)
         places = self.fetch_google_places(
-            city=region_short_name,
+            region_full_name=region_full_name,
+            region_short_name=region_short_name,
             category=category.name,  # name_en 대신 한글 name 사용
             place_type=category.google_place_type,
             max_results=limit
@@ -286,7 +287,7 @@ class Command(BaseCommand):
 
         return count
 
-    def fetch_google_places(self, city, category, place_type, max_results=5):
+    def fetch_google_places(self, region_full_name, region_short_name, category, place_type, max_results=5):
         """Google Places API 호출 (Nearby Search 또는 Text Search)"""
         from django.conf import settings
 
@@ -295,7 +296,7 @@ class Command(BaseCommand):
             raise ValueError("GOOGLE_PLACES_API_KEY not configured")
 
         # 지역 좌표
-        coordinates = self.get_region_coordinates(city)
+        coordinates = self.get_region_coordinates(region_full_name, region_short_name)
 
         headers = {
             'Content-Type': 'application/json',
@@ -303,24 +304,29 @@ class Command(BaseCommand):
             'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.internationalPhoneNumber,places.photos,places.editorialSummary,places.websiteUri,places.businessStatus'
         }
 
-        # cleaning_service, moving_company, interior_designer는 Text Search 사용
-        # 나머지는 Nearby Search 사용 (includedTypes)
-        if place_type in ['interior_designer', 'cleaning_service', 'moving_company']:
+        # 좌표가 없거나 특정 타입은 Text Search 사용
+        if coordinates is None or place_type in ['interior_designer', 'cleaning_service', 'moving_company']:
             # Text Search API
             url = 'https://places.googleapis.com/v1/places:searchText'
 
             # 업종별 검색어 설정
             if place_type == 'cleaning_service':
-                search_query = f"{city} 청소 업체"
+                search_query = f"{region_short_name} 청소 업체"
             elif place_type == 'moving_company':
-                search_query = f"{city} 이사 업체"
+                search_query = f"{region_short_name} 이사 업체"
             else:
-                search_query = f"{city} {category}"
+                search_query = f"{region_short_name} {category}"
 
             body = {
                 'textQuery': search_query,
                 'languageCode': 'ko',
-                'locationBias': {
+                'minRating': 3.5,
+                'maxResultCount': max_results
+            }
+
+            # 좌표가 있으면 locationBias 추가
+            if coordinates:
+                body['locationBias'] = {
                     'circle': {
                         'center': {
                             'latitude': coordinates['latitude'],
@@ -328,12 +334,9 @@ class Command(BaseCommand):
                         },
                         'radius': 5000.0
                     }
-                },
-                'minRating': 3.5,
-                'maxResultCount': max_results
-            }
+                }
         else:
-            # Nearby Search API (moving_company 포함, includedTypes 사용)
+            # Nearby Search API (includedTypes 사용)
             url = 'https://places.googleapis.com/v1/places:searchNearby'
             body = {
                 'includedTypes': [place_type],
@@ -408,8 +411,58 @@ class Command(BaseCommand):
         # 최종 점수
         return adjusted_rating * math.log10(user_rating_count + 1)
 
-    def get_region_coordinates(self, city):
-        """지역 좌표 반환"""
+    def get_region_coordinates(self, region_full_name, region_short_name):
+        """지역 좌표 반환 - full_name을 기반으로 적절한 키 선택"""
+        # region_full_name 예: "서울특별시 강남구", "부산광역시 해운대구", "경기도 수원시"
+        # region_short_name 예: "강남구", "해운대구", "수원시"
+
+        # 좌표 키 결정 로직
+        if '서울특별시' in region_full_name or '경기도' in region_full_name:
+            # 서울, 경기는 짧은 이름 그대로 사용
+            coordinate_key = region_short_name
+        elif '인천광역시' in region_full_name:
+            # 인천: 강화군, 옹진군만 그대로, 나머지는 '인천' 접두사
+            if region_short_name in ['강화군', '옹진군']:
+                coordinate_key = region_short_name
+            else:
+                coordinate_key = f'인천{region_short_name}'
+        elif '부산광역시' in region_full_name:
+            # 부산: 기장군만 그대로, 나머지는 '부산' 접두사
+            if region_short_name == '기장군':
+                coordinate_key = region_short_name
+            else:
+                coordinate_key = f'부산{region_short_name}'
+        elif '대구광역시' in region_full_name:
+            # 대구: 달성군, 군위군만 그대로, 나머지는 '대구' 접두사
+            if region_short_name in ['달성군', '군위군']:
+                coordinate_key = region_short_name
+            else:
+                coordinate_key = f'대구{region_short_name}'
+        elif '대전광역시' in region_full_name:
+            # 대전: '대전' 접두사
+            coordinate_key = f'대전{region_short_name}'
+        elif '광주광역시' in region_full_name:
+            # 광주: '광주' 접두사
+            coordinate_key = f'광주{region_short_name}'
+        elif '울산광역시' in region_full_name:
+            # 울산: 울주군만 그대로, 나머지는 '울산' 접두사
+            if region_short_name == '울주군':
+                coordinate_key = region_short_name
+            else:
+                coordinate_key = f'울산{region_short_name}'
+        elif '세종특별자치시' in region_full_name:
+            # 세종
+            coordinate_key = region_short_name
+        elif '강원특별자치도' in region_full_name and region_short_name == '고성군':
+            # 강원 고성군 (경남 고성군과 구분)
+            coordinate_key = '강원고성군'
+        elif '경상남도' in region_full_name and region_short_name == '고성군':
+            # 경남 고성군 (강원 고성군과 구분)
+            coordinate_key = '경남고성군'
+        else:
+            # 나머지 도 지역들은 모두 짧은 이름 그대로 사용
+            coordinate_key = region_short_name
+
         # 전체 지역 좌표
         REGION_COORDINATES = {
             # 서울특별시
@@ -440,6 +493,7 @@ class Command(BaseCommand):
             '중랑구': {'latitude': 37.6063, 'longitude': 127.0925},
 
             # 경기도
+            '가평군': {'latitude': 37.8314, 'longitude': 127.5095},
             '고양시': {'latitude': 37.6584, 'longitude': 126.8320},
             '과천시': {'latitude': 37.4292, 'longitude': 126.9877},
             '광명시': {'latitude': 37.4785, 'longitude': 126.8644},
@@ -457,7 +511,9 @@ class Command(BaseCommand):
             '안성시': {'latitude': 37.0079, 'longitude': 127.2797},
             '안양시': {'latitude': 37.3943, 'longitude': 126.9568},
             '양주시': {'latitude': 37.7852, 'longitude': 127.0458},
+            '양평군': {'latitude': 37.4883, 'longitude': 127.4906},
             '여주시': {'latitude': 37.2982, 'longitude': 127.6377},
+            '연천군': {'latitude': 38.0969, 'longitude': 127.0753},
             '오산시': {'latitude': 37.1498, 'longitude': 127.0773},
             '용인시': {'latitude': 37.2410, 'longitude': 127.1776},
             '의왕시': {'latitude': 37.3449, 'longitude': 126.9684},
@@ -470,59 +526,65 @@ class Command(BaseCommand):
             '화성시': {'latitude': 37.1990, 'longitude': 126.8312},
 
             # 인천광역시
-            '계양구': {'latitude': 37.5377, 'longitude': 126.7377},
-            '남동구': {'latitude': 37.4474, 'longitude': 126.7313},
-            '동구': {'latitude': 37.4738, 'longitude': 126.6433},  # 인천
-            '부평구': {'latitude': 37.5070, 'longitude': 126.7219},
-            '서구': {'latitude': 37.5454, 'longitude': 126.6759},  # 인천
-            '연수구': {'latitude': 37.4106, 'longitude': 126.6784},
-            '중구': {'latitude': 37.4738, 'longitude': 126.6216},  # 인천
+            '강화군': {'latitude': 37.7473, 'longitude': 126.4877},
+            '인천계양구': {'latitude': 37.5377, 'longitude': 126.7377},
+            '인천남동구': {'latitude': 37.4474, 'longitude': 126.7313},
+            '인천동구': {'latitude': 37.4738, 'longitude': 126.6433},
+            '인천부평구': {'latitude': 37.5070, 'longitude': 126.7219},
+            '인천서구': {'latitude': 37.5454, 'longitude': 126.6759},
+            '인천연수구': {'latitude': 37.4106, 'longitude': 126.6784},
+            '옹진군': {'latitude': 37.4451, 'longitude': 126.6372},
+            '인천중구': {'latitude': 37.4738, 'longitude': 126.6216},
 
             # 부산광역시
-            '강서구': {'latitude': 35.2121, 'longitude': 128.9806},  # 부산
-            '금정구': {'latitude': 35.2428, 'longitude': 129.0927},
-            '남구': {'latitude': 35.1365, 'longitude': 129.0846},  # 부산
-            '동구': {'latitude': 35.1295, 'longitude': 129.0454},  # 부산
-            '동래구': {'latitude': 35.2048, 'longitude': 129.0784},
+            '부산강서구': {'latitude': 35.2121, 'longitude': 128.9806},
+            '부산금정구': {'latitude': 35.2428, 'longitude': 129.0927},
+            '기장군': {'latitude': 35.2446, 'longitude': 129.2224},
+            '부산남구': {'latitude': 35.1365, 'longitude': 129.0846},
+            '부산동구': {'latitude': 35.1295, 'longitude': 129.0454},
+            '부산동래구': {'latitude': 35.2048, 'longitude': 129.0784},
             '부산진구': {'latitude': 35.1628, 'longitude': 129.0531},
-            '북구': {'latitude': 35.1975, 'longitude': 128.9897},  # 부산
-            '사상구': {'latitude': 35.1528, 'longitude': 128.9910},
-            '사하구': {'latitude': 35.1042, 'longitude': 128.9743},
-            '서구': {'latitude': 35.0979, 'longitude': 129.0246},  # 부산
-            '수영구': {'latitude': 35.1454, 'longitude': 129.1134},
-            '연제구': {'latitude': 35.1761, 'longitude': 129.0798},
-            '영도구': {'latitude': 35.0913, 'longitude': 129.0679},
-            '중구': {'latitude': 35.1063, 'longitude': 129.0326},  # 부산
-            '해운대구': {'latitude': 35.1631, 'longitude': 129.1635},
+            '부산북구': {'latitude': 35.1975, 'longitude': 128.9897},
+            '부산사상구': {'latitude': 35.1528, 'longitude': 128.9910},
+            '부산사하구': {'latitude': 35.1042, 'longitude': 128.9743},
+            '부산서구': {'latitude': 35.0979, 'longitude': 129.0246},
+            '부산수영구': {'latitude': 35.1454, 'longitude': 129.1134},
+            '부산연제구': {'latitude': 35.1761, 'longitude': 129.0798},
+            '부산영도구': {'latitude': 35.0913, 'longitude': 129.0679},
+            '부산중구': {'latitude': 35.1063, 'longitude': 129.0326},
+            '부산해운대구': {'latitude': 35.1631, 'longitude': 129.1635},
 
             # 대구광역시
-            '남구': {'latitude': 35.8463, 'longitude': 128.5977},  # 대구
-            '달서구': {'latitude': 35.8298, 'longitude': 128.5326},
-            '동구': {'latitude': 35.8868, 'longitude': 128.6354},  # 대구
-            '북구': {'latitude': 35.8858, 'longitude': 128.5829},  # 대구
-            '서구': {'latitude': 35.8718, 'longitude': 128.5592},  # 대구
-            '수성구': {'latitude': 35.8581, 'longitude': 128.6311},
-            '중구': {'latitude': 35.8694, 'longitude': 128.6061},  # 대구
+            '대구남구': {'latitude': 35.8463, 'longitude': 128.5977},
+            '대구달서구': {'latitude': 35.8298, 'longitude': 128.5326},
+            '달성군': {'latitude': 35.7742, 'longitude': 128.4311},
+            '대구동구': {'latitude': 35.8868, 'longitude': 128.6354},
+            '대구북구': {'latitude': 35.8858, 'longitude': 128.5829},
+            '대구서구': {'latitude': 35.8718, 'longitude': 128.5592},
+            '대구수성구': {'latitude': 35.8581, 'longitude': 128.6311},
+            '대구중구': {'latitude': 35.8694, 'longitude': 128.6061},
+            '군위군': {'latitude': 36.2427, 'longitude': 128.5730},
 
             # 대전광역시
-            '대덕구': {'latitude': 36.3464, 'longitude': 127.4147},
-            '동구': {'latitude': 36.3504, 'longitude': 127.4545},  # 대전
-            '서구': {'latitude': 36.3553, 'longitude': 127.3838},  # 대전
-            '유성구': {'latitude': 36.3621, 'longitude': 127.3567},
-            '중구': {'latitude': 36.3255, 'longitude': 127.4211},  # 대전
+            '대전대덕구': {'latitude': 36.3464, 'longitude': 127.4147},
+            '대전동구': {'latitude': 36.3504, 'longitude': 127.4545},
+            '대전서구': {'latitude': 36.3553, 'longitude': 127.3838},
+            '대전유성구': {'latitude': 36.3621, 'longitude': 127.3567},
+            '대전중구': {'latitude': 36.3255, 'longitude': 127.4211},
 
             # 광주광역시
-            '광산구': {'latitude': 35.1397, 'longitude': 126.7934},
-            '남구': {'latitude': 35.1327, 'longitude': 126.9026},  # 광주
-            '동구': {'latitude': 35.1460, 'longitude': 126.9230},  # 광주
-            '북구': {'latitude': 35.1740, 'longitude': 126.9117},  # 광주
-            '서구': {'latitude': 35.1520, 'longitude': 126.8895},  # 광주
+            '광주광산구': {'latitude': 35.1397, 'longitude': 126.7934},
+            '광주남구': {'latitude': 35.1327, 'longitude': 126.9026},
+            '광주동구': {'latitude': 35.1460, 'longitude': 126.9230},
+            '광주북구': {'latitude': 35.1740, 'longitude': 126.9117},
+            '광주서구': {'latitude': 35.1520, 'longitude': 126.8895},
 
             # 울산광역시
-            '남구': {'latitude': 35.5446, 'longitude': 129.3300},  # 울산
-            '동구': {'latitude': 35.5049, 'longitude': 129.4163},  # 울산
-            '북구': {'latitude': 35.5826, 'longitude': 129.3614},  # 울산
-            '중구': {'latitude': 35.5689, 'longitude': 129.3325},  # 울산
+            '울산남구': {'latitude': 35.5446, 'longitude': 129.3300},
+            '울산동구': {'latitude': 35.5049, 'longitude': 129.4163},
+            '울산북구': {'latitude': 35.5826, 'longitude': 129.3614},
+            '울주군': {'latitude': 35.5227, 'longitude': 129.1543},
+            '울산중구': {'latitude': 35.5689, 'longitude': 129.3325},
 
             # 세종특별자치시
             '세종시': {'latitude': 36.4800, 'longitude': 127.2890},
@@ -544,7 +606,7 @@ class Command(BaseCommand):
             '화천군': {'latitude': 38.1063, 'longitude': 127.7083},
             '양구군': {'latitude': 38.1098, 'longitude': 127.9896},
             '인제군': {'latitude': 38.0695, 'longitude': 128.1707},
-            '고성군': {'latitude': 38.3807, 'longitude': 128.4677},  # 강원
+            '강원고성군': {'latitude': 38.3807, 'longitude': 128.4677},
             '양양군': {'latitude': 38.0754, 'longitude': 128.6190},
 
             # 충청북도
@@ -654,7 +716,7 @@ class Command(BaseCommand):
             '의령군': {'latitude': 35.3222, 'longitude': 128.2618},
             '함안군': {'latitude': 35.2723, 'longitude': 128.4061},
             '창녕군': {'latitude': 35.5446, 'longitude': 128.4925},
-            '고성군': {'latitude': 34.9732, 'longitude': 128.3230},  # 경남
+            '경남고성군': {'latitude': 34.9732, 'longitude': 128.3230},
             '남해군': {'latitude': 34.8375, 'longitude': 127.8924},
             '하동군': {'latitude': 35.0674, 'longitude': 127.7514},
             '산청군': {'latitude': 35.4152, 'longitude': 127.8735},
@@ -667,5 +729,5 @@ class Command(BaseCommand):
             '서귀포시': {'latitude': 33.2541, 'longitude': 126.5600},
         }
 
-        # 좌표가 없는 경우 강남구 기본값 사용
-        return REGION_COORDINATES.get(city, REGION_COORDINATES['강남구'])
+        # 좌표 반환 (없으면 None)
+        return REGION_COORDINATES.get(coordinate_key)
