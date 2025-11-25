@@ -79,8 +79,8 @@ class ConsultationRequestViewSet(viewsets.ModelViewSet):
         return ConsultationRequestDetailSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'ai_assist']:
-            # 상담 신청 및 AI 정리는 누구나 가능
+        if self.action in ['create', 'ai_assist', 'ai_polish']:
+            # 상담 신청 및 AI 정리/다듬기는 누구나 가능
             return [permissions.AllowAny()]
         # 나머지는 관리자만
         return [permissions.IsAdminUser()]
