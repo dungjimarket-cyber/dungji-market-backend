@@ -21,6 +21,7 @@ class ConsultationTypeSerializer(serializers.ModelSerializer):
 
 class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
     """상담 신청 생성용 시리얼라이저 (비회원도 사용 가능)"""
+    category = serializers.CharField()  # ID 또는 이름 허용
 
     class Meta:
         model = ConsultationRequest
@@ -29,6 +30,29 @@ class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
             'category', 'consultation_type', 'region',
             'content', 'ai_summary', 'ai_recommended_types'
         ]
+
+    def validate_category(self, value):
+        """카테고리 검증 - ID 또는 이름/google_place_type 지원"""
+        from django.db.models import Q
+
+        # 숫자면 ID로 검색
+        if str(value).isdigit():
+            try:
+                return LocalBusinessCategory.objects.get(id=int(value))
+            except LocalBusinessCategory.DoesNotExist:
+                raise serializers.ValidationError('존재하지 않는 카테고리입니다.')
+
+        # 문자열이면 이름/google_place_type으로 검색
+        category = LocalBusinessCategory.objects.filter(
+            Q(google_place_type__iexact=value) |
+            Q(name__iexact=value) |
+            Q(name_en__iexact=value)
+        ).first()
+
+        if not category:
+            raise serializers.ValidationError(f'카테고리를 찾을 수 없습니다: {value}')
+
+        return category
 
     def validate_phone(self, value):
         """전화번호 형식 검증"""
@@ -104,8 +128,31 @@ class ConsultationRequestDetailSerializer(serializers.ModelSerializer):
 
 class AIAssistRequestSerializer(serializers.Serializer):
     """AI 내용 정리 요청용 시리얼라이저"""
-    category = serializers.PrimaryKeyRelatedField(queryset=LocalBusinessCategory.objects.all())
+    category = serializers.CharField()  # ID 또는 이름 허용
     content = serializers.CharField(min_length=10)
+
+    def validate_category(self, value):
+        """카테고리 검증 - ID 또는 이름/google_place_type 지원"""
+        from django.db.models import Q
+
+        # 숫자면 ID로 검색
+        if str(value).isdigit():
+            try:
+                return LocalBusinessCategory.objects.get(id=int(value))
+            except LocalBusinessCategory.DoesNotExist:
+                raise serializers.ValidationError('존재하지 않는 카테고리입니다.')
+
+        # 문자열이면 이름/google_place_type으로 검색
+        category = LocalBusinessCategory.objects.filter(
+            Q(google_place_type__iexact=value) |
+            Q(name__iexact=value) |
+            Q(name_en__iexact=value)
+        ).first()
+
+        if not category:
+            raise serializers.ValidationError(f'카테고리를 찾을 수 없습니다: {value}')
+
+        return category
 
 
 class AIAssistResponseSerializer(serializers.Serializer):

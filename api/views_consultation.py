@@ -2,6 +2,7 @@
 상담 신청 관련 API ViewSet
 """
 import logging
+from django.db import models
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -33,10 +34,28 @@ class ConsultationTypeViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # 카테고리 필터
-        category_id = self.request.query_params.get('category')
-        if category_id:
-            queryset = queryset.filter(category_id=category_id)
+        # 카테고리 필터 (ID 또는 이름 지원)
+        category_param = self.request.query_params.get('category')
+        if category_param:
+            # 숫자면 ID로, 아니면 이름으로 검색
+            if category_param.isdigit():
+                queryset = queryset.filter(category_id=int(category_param))
+            else:
+                # google_place_type 또는 name으로 검색
+                from .models_local_business import LocalBusinessCategory
+                try:
+                    category = LocalBusinessCategory.objects.filter(
+                        models.Q(google_place_type__iexact=category_param) |
+                        models.Q(name__iexact=category_param) |
+                        models.Q(name_en__iexact=category_param)
+                    ).first()
+                    if category:
+                        queryset = queryset.filter(category=category)
+                    else:
+                        # 카테고리를 찾지 못하면 빈 결과
+                        queryset = queryset.none()
+                except Exception:
+                    queryset = queryset.none()
 
         return queryset.select_related('category')
 
