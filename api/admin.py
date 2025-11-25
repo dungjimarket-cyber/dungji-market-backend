@@ -56,6 +56,12 @@ try:
 except ImportError:
     pass
 
+# 상담 Admin 등록
+try:
+    from . import admin_consultation
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # 설정 확인 로깅
