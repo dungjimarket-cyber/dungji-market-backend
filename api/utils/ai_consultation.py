@@ -251,3 +251,181 @@ def polish_consultation_content(category_name: str, selections: list, additional
             "polished_content": raw_summary,
             "raw_summary": raw_summary
         }
+
+
+def generate_consultation_flow(category_name: str, keywords: str = "", reference_text: str = "") -> dict:
+    """
+    AI로 상담 질문 플로우 생성
+
+    Args:
+        category_name: 업종명 (예: "세무사", "변호사")
+        keywords: 참고할 키워드 (예: "종소세, 법인세, 부가세")
+        reference_text: 참고할 기존 플로우나 텍스트
+
+    Returns:
+        {
+            "success": True/False,
+            "flows": [
+                {
+                    "step_number": 1,
+                    "question": "질문 텍스트",
+                    "is_required": True,
+                    "depends_on_step": null,
+                    "depends_on_options": [],
+                    "options": [
+                        {"key": "option_key", "label": "표시 텍스트", "icon": "🔹", "description": "설명"}
+                    ]
+                }
+            ],
+            "error": "에러 메시지" (실패 시)
+        }
+    """
+    if not settings.OPENAI_API_KEY:
+        logger.error("OPENAI_API_KEY not configured")
+        return {
+            "success": False,
+            "error": "API 키가 설정되지 않았습니다."
+        }
+
+    try:
+        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+
+        prompt = f"""당신은 상담 접수 시스템 설계 전문가입니다.
+
+**업종**: {category_name}
+
+**참고 키워드** (있는 경우):
+{keywords if keywords else "(없음)"}
+
+**참고 텍스트** (있는 경우):
+{reference_text if reference_text else "(없음)"}
+
+**작업**:
+"{category_name}" 업종의 무료 상담 신청을 위한 질문 플로우를 설계해주세요.
+
+**요구사항**:
+1. 3~5개의 질문 단계로 구성
+2. 첫 번째 질문은 "어떤 도움이 필요하세요?" 형태의 핵심 니즈 파악
+3. 각 질문에는 3~6개의 선택지 제공
+4. 마지막 선택지는 "직접 입력" 옵션 (is_custom_input: true)
+5. 필요한 경우 조건부 질문 설정 (이전 답변에 따라 표시)
+
+**응답 형식 (JSON)**:
+{{
+    "flows": [
+        {{
+            "step_number": 1,
+            "question": "어떤 도움이 필요하세요?",
+            "is_required": true,
+            "depends_on_step": null,
+            "depends_on_options": [],
+            "options": [
+                {{"key": "option_1", "label": "옵션1", "icon": "📋", "description": "설명"}},
+                {{"key": "custom", "label": "직접 입력", "icon": "✏️", "description": "", "is_custom_input": true}}
+            ]
+        }},
+        {{
+            "step_number": 2,
+            "question": "후속 질문",
+            "is_required": true,
+            "depends_on_step": 1,
+            "depends_on_options": ["option_1"],
+            "options": [...]
+        }}
+    ]
+}}
+
+**규칙**:
+- key는 영문 소문자와 언더스코어만 사용 (예: tax_return, legal_advice)
+- icon은 관련 이모지 하나 사용
+- 각 질문의 선택지는 상호 배타적이어야 함
+- JSON 형식으로만 응답하세요"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 상담 접수 시스템 설계 전문가입니다. 항상 유효한 JSON 형식으로만 응답합니다."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.4,
+            max_tokens=2000,
+            timeout=30
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # JSON 파싱
+        try:
+            # 코드 블록 제거
+            if result_text.startswith('```'):
+                result_text = result_text.split('```')[1]
+                if result_text.startswith('json'):
+                    result_text = result_text[4:]
+            result_text = result_text.strip()
+
+            result = json.loads(result_text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"AI 응답 JSON 파싱 실패: {e}, 원본: {result_text[:500]}")
+            return {
+                "success": False,
+                "error": "AI 응답을 파싱할 수 없습니다."
+            }
+
+        flows = result.get('flows', [])
+
+        # 플로우 검증 및 정리
+        validated_flows = []
+        for idx, flow in enumerate(flows):
+            validated_flow = {
+                "step_number": flow.get('step_number', idx + 1),
+                "question": flow.get('question', ''),
+                "is_required": flow.get('is_required', True),
+                "depends_on_step": flow.get('depends_on_step'),
+                "depends_on_options": flow.get('depends_on_options', []),
+                "options": []
+            }
+
+            for opt_idx, opt in enumerate(flow.get('options', [])):
+                validated_flow["options"].append({
+                    "key": opt.get('key', f'option_{opt_idx}'),
+                    "label": opt.get('label', ''),
+                    "icon": opt.get('icon', ''),
+                    "logo": opt.get('logo', ''),
+                    "description": opt.get('description', ''),
+                    "is_custom_input": opt.get('is_custom_input', False),
+                    "order_index": opt_idx
+                })
+
+            validated_flows.append(validated_flow)
+
+        logger.info(f"AI 플로우 생성 완료: {category_name} - {len(validated_flows)}개")
+
+        return {
+            "success": True,
+            "flows": validated_flows
+        }
+
+    except openai.APIError as e:
+        logger.error(f"OpenAI API 오류: {e}")
+        return {
+            "success": False,
+            "error": f"API 오류: {str(e)}"
+        }
+    except openai.APITimeoutError:
+        logger.error("OpenAI API 타임아웃")
+        return {
+            "success": False,
+            "error": "API 응답 시간 초과"
+        }
+    except Exception as e:
+        logger.error(f"AI 플로우 생성 오류: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }

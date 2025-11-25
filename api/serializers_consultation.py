@@ -256,3 +256,86 @@ class AIPolishRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(f'카테고리를 찾을 수 없습니다: {value}')
 
         return category
+
+
+# ========== 관리자용 시리얼라이저 ==========
+
+class ConsultationFlowOptionAdminSerializer(serializers.ModelSerializer):
+    """상담 선택지 관리자용 시리얼라이저 (CRUD)"""
+
+    class Meta:
+        model = ConsultationFlowOption
+        fields = [
+            'id', 'flow', 'key', 'label', 'icon', 'logo', 'description',
+            'is_custom_input', 'order_index', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ConsultationFlowAdminSerializer(serializers.ModelSerializer):
+    """상담 질문 플로우 관리자용 시리얼라이저 (CRUD)"""
+    options = ConsultationFlowOptionAdminSerializer(many=True, read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_icon = serializers.CharField(source='category.icon', read_only=True)
+
+    class Meta:
+        model = ConsultationFlow
+        fields = [
+            'id', 'category', 'category_name', 'category_icon',
+            'step_number', 'question', 'is_required',
+            'depends_on_step', 'depends_on_options',
+            'order_index', 'is_active', 'options',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        """플로우 생성 시 옵션도 함께 생성"""
+        options_data = self.context.get('request').data.get('options', [])
+        flow = ConsultationFlow.objects.create(**validated_data)
+
+        for idx, opt_data in enumerate(options_data):
+            ConsultationFlowOption.objects.create(
+                flow=flow,
+                key=opt_data.get('key', f'option_{idx}'),
+                label=opt_data.get('label', ''),
+                icon=opt_data.get('icon', ''),
+                logo=opt_data.get('logo', ''),
+                description=opt_data.get('description', ''),
+                is_custom_input=opt_data.get('is_custom_input', False),
+                order_index=opt_data.get('order_index', idx),
+                is_active=opt_data.get('is_active', True),
+            )
+
+        return flow
+
+    def update(self, instance, validated_data):
+        """플로우 수정 시 옵션도 함께 수정"""
+        options_data = self.context.get('request').data.get('options')
+
+        # 기본 필드 업데이트
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # 옵션 데이터가 있으면 옵션도 업데이트
+        if options_data is not None:
+            # 기존 옵션 삭제
+            instance.options.all().delete()
+
+            # 새 옵션 생성
+            for idx, opt_data in enumerate(options_data):
+                ConsultationFlowOption.objects.create(
+                    flow=instance,
+                    key=opt_data.get('key', f'option_{idx}'),
+                    label=opt_data.get('label', ''),
+                    icon=opt_data.get('icon', ''),
+                    logo=opt_data.get('logo', ''),
+                    description=opt_data.get('description', ''),
+                    is_custom_input=opt_data.get('is_custom_input', False),
+                    order_index=opt_data.get('order_index', idx),
+                    is_active=opt_data.get('is_active', True),
+                )
+
+        return instance

@@ -2,7 +2,7 @@
 상담 신청 관련 API ViewSet
 """
 import logging
-from django.db import models
+from django.db import models, transaction
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,8 +19,10 @@ from .serializers_consultation import (
     AIAssistRequestSerializer,
     ConsultationFlowListSerializer,
     AIPolishRequestSerializer,
+    ConsultationFlowAdminSerializer,
+    ConsultationFlowOptionAdminSerializer,
 )
-from .utils.ai_consultation import get_consultation_assist, polish_consultation_content
+from .utils.ai_consultation import get_consultation_assist, polish_consultation_content, generate_consultation_flow
 
 logger = logging.getLogger(__name__)
 
@@ -357,3 +359,231 @@ class ConsultationFlowViewSet(viewsets.ReadOnlyModelViewSet):
             ]
 
         return Response(data)
+
+
+class ConsultationFlowAdminViewSet(viewsets.ModelViewSet):
+    """
+    상담 질문 플로우 관리자용 ViewSet (CRUD)
+    - 관리자만 접근 가능
+    - 플로우 생성, 수정, 삭제
+    - AI 플로우 추천
+    """
+    queryset = ConsultationFlow.objects.all()
+    serializer_class = ConsultationFlowAdminSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # 카테고리 필터
+        category_param = self.request.query_params.get('category')
+        if category_param:
+            if category_param.isdigit():
+                queryset = queryset.filter(category_id=int(category_param))
+            else:
+                queryset = queryset.filter(
+                    models.Q(category__name__iexact=category_param) |
+                    models.Q(category__google_place_type__iexact=category_param)
+                )
+
+        # 활성 상태 필터
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+
+        return queryset.select_related('category').prefetch_related('options').order_by('category', 'step_number', 'order_index')
+
+    def list(self, request, *args, **kwargs):
+        """카테고리별 플로우 목록 (관리자용)"""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        """새 플로우 생성"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+
+        logger.info(f"플로우 생성: {instance.category.name} - Step {instance.step_number}")
+
+        return Response(
+            self.get_serializer(instance).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    def update(self, request, *args, **kwargs):
+        """플로우 수정"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        logger.info(f"플로우 수정: {instance.category.name} - Step {instance.step_number}")
+
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        """플로우 삭제"""
+        instance = self.get_object()
+        category_name = instance.category.name
+        step_number = instance.step_number
+
+        # 연관된 옵션들도 함께 삭제 (CASCADE)
+        instance.delete()
+
+        logger.info(f"플로우 삭제: {category_name} - Step {step_number}")
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'], url_path='bulk-save')
+    def bulk_save(self, request):
+        """
+        카테고리의 전체 플로우 일괄 저장
+        - 기존 플로우 삭제 후 새로 생성
+        """
+        category_id = request.data.get('category_id')
+        flows_data = request.data.get('flows', [])
+
+        if not category_id:
+            return Response(
+                {'error': '카테고리 ID가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            category = LocalBusinessCategory.objects.get(id=category_id)
+        except LocalBusinessCategory.DoesNotExist:
+            return Response(
+                {'error': '존재하지 않는 카테고리입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            with transaction.atomic():
+                # 기존 플로우 삭제
+                ConsultationFlow.objects.filter(category=category).delete()
+
+                # 새 플로우 생성
+                created_flows = []
+                for idx, flow_data in enumerate(flows_data):
+                    options_data = flow_data.pop('options', [])
+
+                    flow = ConsultationFlow.objects.create(
+                        category=category,
+                        step_number=flow_data.get('step_number', idx + 1),
+                        question=flow_data.get('question', ''),
+                        is_required=flow_data.get('is_required', True),
+                        depends_on_step=flow_data.get('depends_on_step'),
+                        depends_on_options=flow_data.get('depends_on_options', []),
+                        order_index=flow_data.get('order_index', idx),
+                        is_active=flow_data.get('is_active', True),
+                    )
+
+                    # 옵션 생성
+                    for opt_idx, opt_data in enumerate(options_data):
+                        ConsultationFlowOption.objects.create(
+                            flow=flow,
+                            key=opt_data.get('key', f'option_{opt_idx}'),
+                            label=opt_data.get('label', ''),
+                            icon=opt_data.get('icon', ''),
+                            logo=opt_data.get('logo', ''),
+                            description=opt_data.get('description', ''),
+                            is_custom_input=opt_data.get('is_custom_input', False),
+                            order_index=opt_data.get('order_index', opt_idx),
+                            is_active=opt_data.get('is_active', True),
+                        )
+
+                    created_flows.append(flow)
+
+                logger.info(f"플로우 일괄 저장: {category.name} - {len(created_flows)}개")
+
+                return Response({
+                    'success': True,
+                    'message': f'{len(created_flows)}개의 플로우가 저장되었습니다.',
+                    'flows': ConsultationFlowAdminSerializer(created_flows, many=True).data
+                })
+
+        except Exception as e:
+            logger.error(f"플로우 일괄 저장 오류: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], url_path='ai-generate')
+    def ai_generate(self, request):
+        """
+        AI로 플로우 추천받기
+        - 카테고리와 키워드를 기반으로 질문 플로우 생성
+        """
+        category_id = request.data.get('category_id')
+        keywords = request.data.get('keywords', '')
+        reference_text = request.data.get('reference_text', '')
+
+        if not category_id:
+            return Response(
+                {'error': '카테고리 ID가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            category = LocalBusinessCategory.objects.get(id=category_id)
+        except LocalBusinessCategory.DoesNotExist:
+            return Response(
+                {'error': '존재하지 않는 카테고리입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # AI 플로우 생성
+        result = generate_consultation_flow(
+            category_name=category.name,
+            keywords=keywords,
+            reference_text=reference_text
+        )
+
+        if not result.get('success'):
+            return Response(
+                {'error': result.get('error', 'AI 생성에 실패했습니다.')},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        logger.info(f"AI 플로우 생성: {category.name} - {len(result.get('flows', []))}개")
+
+        return Response(result)
+
+    @action(detail=False, methods=['get'], url_path='categories')
+    def get_categories(self, request):
+        """플로우가 있는 카테고리 목록"""
+        categories_with_flows = LocalBusinessCategory.objects.filter(
+            consultation_flows__isnull=False
+        ).distinct().values('id', 'name', 'icon')
+
+        all_categories = LocalBusinessCategory.objects.filter(
+            is_active=True
+        ).values('id', 'name', 'icon')
+
+        return Response({
+            'all': list(all_categories),
+            'with_flows': list(categories_with_flows)
+        })
+
+
+class ConsultationFlowOptionAdminViewSet(viewsets.ModelViewSet):
+    """
+    상담 선택지 관리자용 ViewSet
+    """
+    queryset = ConsultationFlowOption.objects.all()
+    serializer_class = ConsultationFlowOptionAdminSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # 플로우 필터
+        flow_id = self.request.query_params.get('flow')
+        if flow_id:
+            queryset = queryset.filter(flow_id=flow_id)
+
+        return queryset.select_related('flow').order_by('flow', 'order_index')

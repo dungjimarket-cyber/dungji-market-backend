@@ -97,7 +97,7 @@ from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantV
 from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 from api.admin_sms_test import sms_test_view
 from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet, google_search_proxy_standalone
-from api.views_consultation import ConsultationTypeViewSet, ConsultationRequestViewSet, ConsultationFlowViewSet
+from api.views_consultation import ConsultationTypeViewSet, ConsultationRequestViewSet, ConsultationFlowViewSet, ConsultationFlowAdminViewSet, ConsultationFlowOptionAdminViewSet
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -128,6 +128,8 @@ router.register(r'local-businesses', LocalBusinessViewSet, basename='local-busin
 router.register(r'consultation-types', ConsultationTypeViewSet, basename='consultation-type')
 router.register(r'consultation-requests', ConsultationRequestViewSet, basename='consultation-request')
 router.register(r'consultation-flows', ConsultationFlowViewSet, basename='consultation-flow')
+router.register(r'admin/consultation-flows', ConsultationFlowAdminViewSet, basename='admin-consultation-flow')
+router.register(r'admin/consultation-flow-options', ConsultationFlowOptionAdminViewSet, basename='admin-consultation-flow-option')
 
 urlpatterns = [
     path('admin/sms-test/', sms_test_view, name='admin_sms_test'),
