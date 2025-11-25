@@ -79,7 +79,7 @@ def generate_consultation_flow(category_name: str, additional_prompt: str = '') 
 JSON 형식으로만 응답해주세요."""
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -155,7 +155,7 @@ def improve_consultation_flow(category_name: str, current_flows: list, improveme
 개선된 플로우를 JSON 형식으로 응답해주세요."""
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
