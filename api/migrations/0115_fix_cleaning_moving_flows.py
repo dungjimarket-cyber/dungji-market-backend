@@ -101,20 +101,20 @@ CLEANING_MOVING_FLOWS = [
 
 
 def populate_cleaning_moving_flows(apps, schema_editor):
-    """청소업체 카테고리에 청소·이사 플로우 데이터 생성"""
+    """청소 전문 카테고리에 청소·이사 플로우 데이터 생성"""
     LocalBusinessCategory = apps.get_model('api', 'LocalBusinessCategory')
     ConsultationFlow = apps.get_model('api', 'ConsultationFlow')
     ConsultationFlowOption = apps.get_model('api', 'ConsultationFlowOption')
 
-    # 청소업체 카테고리 찾기
+    # 청소 전문 카테고리 찾기
     try:
-        category = LocalBusinessCategory.objects.get(name='청소업체')
+        category = LocalBusinessCategory.objects.get(name='청소 전문')
     except LocalBusinessCategory.DoesNotExist:
-        # 청소업체가 없으면 이사업체 시도
+        # 청소 전문이 없으면 이사 전문 시도
         try:
-            category = LocalBusinessCategory.objects.get(name='이사업체')
+            category = LocalBusinessCategory.objects.get(name='이사 전문')
         except LocalBusinessCategory.DoesNotExist:
-            print('청소업체/이사업체 카테고리 없음 - 건너뜀')
+            print('청소 전문/이사 전문 카테고리 없음 - 건너뜀')
             return
 
     # 해당 카테고리의 기존 플로우 삭제
@@ -155,7 +155,7 @@ def reverse_populate(apps, schema_editor):
     ConsultationFlow = apps.get_model('api', 'ConsultationFlow')
 
     try:
-        category = LocalBusinessCategory.objects.get(name='청소업체')
+        category = LocalBusinessCategory.objects.get(name='청소 전문')
         ConsultationFlow.objects.filter(category=category).delete()
     except LocalBusinessCategory.DoesNotExist:
         pass

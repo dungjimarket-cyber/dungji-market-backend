@@ -207,10 +207,10 @@ class ConsultationFlowListSerializer(serializers.ModelSerializer):
 MERGED_CATEGORY_TO_REAL = {
     'tax_accounting': '세무사',  # 세무·회계 → 세무사 (대표)
     'legal_service': '변호사',   # 법률 서비스 → 변호사 (대표)
-    'cleaning_moving': '청소업체',  # 청소·이사 → 청소업체 (대표)
+    'cleaning_moving': '청소 전문',  # 청소·이사 → 청소 전문 (대표)
     '세무·회계': '세무사',
     '법률 서비스': '변호사',
-    '청소·이사': '청소업체',
+    '청소·이사': '청소 전문',
 }
 
 
