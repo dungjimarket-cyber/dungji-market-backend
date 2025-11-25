@@ -276,10 +276,16 @@ class ConsultationRequestViewSet(viewsets.ModelViewSet):
 
 
 # 통합 카테고리 → 실제 DB 카테고리 매핑
+# 키: 프론트에서 전달되는 값 (카테고리명 또는 문자열 ID)
 MERGED_CATEGORY_MAPPING = {
+    # 카테고리명으로 조회 시
     '세무·회계': ['세무사', '회계사'],
     '법률 서비스': ['변호사', '법무사'],
     '청소·이사': ['청소업체', '이사업체'],
+    # 문자열 ID로 조회 시 (프론트에서 category.id 전달)
+    'tax_accounting': ['세무사', '회계사'],
+    'legal_service': ['변호사', '법무사'],
+    'cleaning_moving': ['청소업체', '이사업체'],
 }
 
 
