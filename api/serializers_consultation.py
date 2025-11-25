@@ -3,6 +3,7 @@
 """
 from rest_framework import serializers
 from .models_consultation import ConsultationType, ConsultationRequest
+from .models_consultation_flow import ConsultationFlow, ConsultationFlowOption
 from .models_local_business import LocalBusinessCategory
 
 
@@ -161,3 +162,77 @@ class AIAssistResponseSerializer(serializers.Serializer):
     recommended_types = serializers.ListField(
         child=serializers.DictField()
     )
+
+
+# ========== 상담 질문 플로우 시리얼라이저 ==========
+
+class ConsultationFlowOptionSerializer(serializers.ModelSerializer):
+    """상담 선택지 시리얼라이저"""
+
+    class Meta:
+        model = ConsultationFlowOption
+        fields = [
+            'id', 'key', 'label', 'icon', 'description',
+            'is_custom_input', 'order_index'
+        ]
+
+
+class ConsultationFlowSerializer(serializers.ModelSerializer):
+    """상담 질문 플로우 시리얼라이저"""
+    options = ConsultationFlowOptionSerializer(many=True, read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+
+    class Meta:
+        model = ConsultationFlow
+        fields = [
+            'id', 'category', 'category_name', 'step_number', 'question',
+            'is_required', 'depends_on_step', 'depends_on_options',
+            'options'
+        ]
+
+
+class ConsultationFlowListSerializer(serializers.ModelSerializer):
+    """상담 질문 플로우 목록용 시리얼라이저 (옵션 포함)"""
+    options = ConsultationFlowOptionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ConsultationFlow
+        fields = [
+            'id', 'step_number', 'question', 'is_required',
+            'depends_on_step', 'depends_on_options', 'options'
+        ]
+
+
+class AIPolishRequestSerializer(serializers.Serializer):
+    """AI 문장 다듬기 요청용 시리얼라이저"""
+    category = serializers.CharField()
+    selections = serializers.ListField(
+        child=serializers.DictField(),
+        help_text='선택된 내용 목록 [{step: 1, question: "...", answer: "..."}]'
+    )
+    additional_content = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text='추가 입력 내용'
+    )
+
+    def validate_category(self, value):
+        """카테고리 검증"""
+        from django.db.models import Q
+
+        if str(value).isdigit():
+            try:
+                return LocalBusinessCategory.objects.get(id=int(value))
+            except LocalBusinessCategory.DoesNotExist:
+                raise serializers.ValidationError('존재하지 않는 카테고리입니다.')
+
+        category = LocalBusinessCategory.objects.filter(
+            Q(google_place_type__iexact=value) |
+            Q(name__iexact=value) |
+            Q(name_en__iexact=value)
+        ).first()
+
+        if not category:
+            raise serializers.ValidationError(f'카테고리를 찾을 수 없습니다: {value}')
+
+        return category

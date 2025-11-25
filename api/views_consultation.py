@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 
 from .models_consultation import ConsultationType, ConsultationRequest
+from .models_consultation_flow import ConsultationFlow, ConsultationFlowOption
 from .models_local_business import LocalBusinessCategory
 from .serializers_consultation import (
     ConsultationTypeSerializer,
@@ -16,8 +17,10 @@ from .serializers_consultation import (
     ConsultationRequestListSerializer,
     ConsultationRequestDetailSerializer,
     AIAssistRequestSerializer,
+    ConsultationFlowListSerializer,
+    AIPolishRequestSerializer,
 )
-from .utils.ai_consultation import get_consultation_assist
+from .utils.ai_consultation import get_consultation_assist, polish_consultation_content
 
 logger = logging.getLogger(__name__)
 
@@ -245,3 +248,82 @@ class ConsultationRequestViewSet(viewsets.ModelViewSet):
             'by_category': by_category,
             'daily': daily
         })
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def ai_polish(self, request):
+        """
+        AI 문장 다듬기
+        - 탭 선택 결과를 자연스러운 문장으로 변환
+        - 비회원도 사용 가능
+        """
+        serializer = AIPolishRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        category = serializer.validated_data['category']
+        selections = serializer.validated_data['selections']
+        additional_content = serializer.validated_data.get('additional_content', '')
+
+        # AI 다듬기 실행
+        result = polish_consultation_content(
+            category_name=category.name,
+            selections=selections,
+            additional_content=additional_content
+        )
+
+        logger.info(f"AI 문장 다듬기 요청: {category.name}")
+
+        return Response(result)
+
+
+class ConsultationFlowViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    상담 질문 플로우 ViewSet (읽기 전용)
+    - 비회원도 조회 가능
+    - 업종별 질문 플로우와 선택지 제공
+    """
+    queryset = ConsultationFlow.objects.filter(is_active=True)
+    serializer_class = ConsultationFlowListSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # 카테고리 필터 (필수)
+        category_param = self.request.query_params.get('category')
+        if category_param:
+            if category_param.isdigit():
+                queryset = queryset.filter(category_id=int(category_param))
+            else:
+                # google_place_type 또는 name으로 검색
+                try:
+                    category = LocalBusinessCategory.objects.filter(
+                        models.Q(google_place_type__iexact=category_param) |
+                        models.Q(name__iexact=category_param) |
+                        models.Q(name_en__iexact=category_param)
+                    ).first()
+                    if category:
+                        queryset = queryset.filter(category=category)
+                    else:
+                        queryset = queryset.none()
+                except Exception:
+                    queryset = queryset.none()
+        else:
+            # 카테고리 필터 없으면 빈 결과
+            queryset = queryset.none()
+
+        return queryset.prefetch_related('options').order_by('step_number')
+
+    def list(self, request, *args, **kwargs):
+        """업종별 질문 플로우 목록"""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        # 활성 옵션만 필터링
+        data = serializer.data
+        for flow in data:
+            flow['options'] = [
+                opt for opt in flow['options']
+                if opt.get('is_active', True) is not False
+            ]
+
+        return Response(data)
