@@ -203,6 +203,17 @@ class ConsultationFlowListSerializer(serializers.ModelSerializer):
         ]
 
 
+# 통합 카테고리 매핑 (프론트엔드에서 가상으로 생성된 카테고리 → 실제 DB 카테고리)
+MERGED_CATEGORY_TO_REAL = {
+    'tax_accounting': '세무사',  # 세무·회계 → 세무사 (대표)
+    'legal_service': '변호사',   # 법률 서비스 → 변호사 (대표)
+    'cleaning_moving': '청소업체',  # 청소·이사 → 청소업체 (대표)
+    '세무·회계': '세무사',
+    '법률 서비스': '변호사',
+    '청소·이사': '청소업체',
+}
+
+
 class AIPolishRequestSerializer(serializers.Serializer):
     """AI 문장 다듬기 요청용 시리얼라이저"""
     category = serializers.CharField()
@@ -217,7 +228,7 @@ class AIPolishRequestSerializer(serializers.Serializer):
     )
 
     def validate_category(self, value):
-        """카테고리 검증 - 숫자 ID, 문자열 ID, 이름 모두 지원"""
+        """카테고리 검증 - 숫자 ID, 문자열 ID, 통합 카테고리 모두 지원"""
         from django.db.models import Q
 
         # 숫자면 ID로 검색
@@ -227,9 +238,15 @@ class AIPolishRequestSerializer(serializers.Serializer):
             except LocalBusinessCategory.DoesNotExist:
                 raise serializers.ValidationError('존재하지 않는 카테고리입니다.')
 
-        # 문자열 ID (tax_accounting 등) 또는 이름으로 검색
+        # 통합 카테고리 매핑 확인 (tax_accounting → 세무사 등)
+        if value in MERGED_CATEGORY_TO_REAL:
+            real_category_name = MERGED_CATEGORY_TO_REAL[value]
+            category = LocalBusinessCategory.objects.filter(name=real_category_name).first()
+            if category:
+                return category
+
+        # 문자열 ID 또는 이름으로 검색
         category = LocalBusinessCategory.objects.filter(
-            Q(id__iexact=value) |  # 문자열 ID
             Q(google_place_type__iexact=value) |
             Q(name__iexact=value) |
             Q(name_en__iexact=value)

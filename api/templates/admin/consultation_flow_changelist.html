@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block object-tools-items %}
+{{ block.super }}
+<li>
+    <a href="{% url 'admin:consultation_flow_ai_generate' %}" class="addlink" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white;">
+        🤖 AI 플로우 생성
+    </a>
+</li>
+{% endblock %}

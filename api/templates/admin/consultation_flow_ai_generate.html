@@ -1,0 +1,543 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}AI 상담 플로우 생성{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">홈</a>
+    &rsaquo; <a href="{% url 'admin:api_consultationflow_changelist' %}">상담 질문 플로우</a>
+    &rsaquo; AI 플로우 생성
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .ai-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .ai-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+    .ai-header h1 {
+        margin: 0;
+        font-size: 24px;
+    }
+    .ai-badge {
+        background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .ai-grid {
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 30px;
+    }
+    @media (max-width: 1024px) {
+        .ai-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .ai-form-section {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+    }
+    .ai-form-section h2 {
+        margin: 0 0 20px 0;
+        font-size: 18px;
+        color: #374151;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #374151;
+    }
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+    .form-group textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    .checkbox-group label {
+        margin: 0;
+        cursor: pointer;
+    }
+    .btn-generate {
+        width: 100%;
+        padding: 14px 24px;
+        background: linear-gradient(135deg, #8b5cf6, #6366f1);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    .btn-generate:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    .btn-generate:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    .preview-section {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+    }
+    .preview-section h2 {
+        margin: 0 0 20px 0;
+        font-size: 18px;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .preview-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 10px;
+    }
+    .preview-tab {
+        padding: 8px 16px;
+        background: #f3f4f6;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    .preview-tab.active {
+        background: #8b5cf6;
+        color: white;
+    }
+    .preview-content {
+        min-height: 400px;
+    }
+    .preview-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 400px;
+        color: #9ca3af;
+    }
+    .preview-empty svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+    .flow-preview {
+        display: none;
+    }
+    .flow-preview.active {
+        display: block;
+    }
+    .flow-step {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+    .flow-step-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .flow-step-number {
+        width: 28px;
+        height: 28px;
+        background: #8b5cf6;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+    }
+    .flow-step-question {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+    }
+    .flow-step-meta {
+        font-size: 12px;
+        color: #6b7280;
+        margin-left: auto;
+    }
+    .flow-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 10px;
+    }
+    .flow-option {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .flow-option-icon {
+        font-size: 20px;
+    }
+    .flow-option-label {
+        font-size: 14px;
+        color: #374151;
+    }
+    .flow-option.custom {
+        border-style: dashed;
+        color: #6b7280;
+    }
+    .json-preview {
+        display: none;
+        background: #1e1e1e;
+        border-radius: 8px;
+        padding: 16px;
+        overflow-x: auto;
+    }
+    .json-preview.active {
+        display: block;
+    }
+    .json-preview pre {
+        margin: 0;
+        color: #d4d4d4;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .message {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .message.success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #6ee7b7;
+    }
+    .message.error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+    }
+    .hint {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        font-size: 13px;
+        color: #1e40af;
+    }
+    .hint strong {
+        display: block;
+        margin-bottom: 6px;
+    }
+</style>
+
+<div class="ai-container">
+    <div class="ai-header">
+        <h1>AI 상담 플로우 생성</h1>
+        <span class="ai-badge">GPT-4o</span>
+    </div>
+
+    <div id="message-container"></div>
+
+    <div class="ai-grid">
+        <div class="ai-form-section">
+            <h2>생성 설정</h2>
+
+            <div class="hint">
+                <strong>사용 방법</strong>
+                1. 카테고리를 선택하세요<br>
+                2. 추가 지시사항을 입력하세요 (선택)<br>
+                3. '플로우 생성' 버튼을 클릭하세요
+            </div>
+
+            <form id="generateForm">
+                <div class="form-group">
+                    <label for="category">카테고리 선택 *</label>
+                    <select id="category" name="category" required>
+                        <option value="">-- 카테고리 선택 --</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" data-name="{{ cat.name }}">{{ cat.icon }} {{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="prompt">추가 지시사항</label>
+                    <textarea id="prompt" name="prompt"
+                        placeholder="예: 기업 고객 대상 질문도 포함해주세요, 세금 관련 질문을 더 상세하게 해주세요"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="replace_existing" name="replace_existing">
+                        <label for="replace_existing">기존 플로우 삭제 후 새로 생성</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-generate" id="generateBtn">
+                    <span>AI로 플로우 생성</span>
+                </button>
+            </form>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">기존 플로우 미리보기</h3>
+                <select id="previewCategory" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    <option value="">-- 카테고리 선택 --</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" id="previewBtn" style="margin-top: 10px; width: 100%; padding: 10px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;">
+                    기존 플로우 불러오기
+                </button>
+            </div>
+        </div>
+
+        <div class="preview-section">
+            <h2>
+                <span>미리보기</span>
+                <span id="preview-category-name" style="font-weight: normal; color: #8b5cf6;"></span>
+            </h2>
+
+            <div class="preview-tabs">
+                <button type="button" class="preview-tab active" data-tab="visual">시각적 미리보기</button>
+                <button type="button" class="preview-tab" data-tab="json">JSON 데이터</button>
+            </div>
+
+            <div class="preview-content">
+                <div id="visual-preview" class="flow-preview active">
+                    <div class="preview-empty" id="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <p>AI가 생성한 플로우가 여기에 표시됩니다</p>
+                    </div>
+                    <div id="flows-container"></div>
+                </div>
+                <div id="json-preview" class="json-preview">
+                    <pre id="json-content"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('generateForm');
+    const generateBtn = document.getElementById('generateBtn');
+    const previewTabs = document.querySelectorAll('.preview-tab');
+    const messageContainer = document.getElementById('message-container');
+
+    // 탭 전환
+    previewTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            previewTabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+
+            const tabName = this.dataset.tab;
+            document.getElementById('visual-preview').classList.toggle('active', tabName === 'visual');
+            document.getElementById('json-preview').classList.toggle('active', tabName === 'json');
+        });
+    });
+
+    // 메시지 표시
+    function showMessage(text, type) {
+        messageContainer.innerHTML = `
+            <div class="message ${type}">
+                ${type === 'success' ? '✅' : '❌'} ${text}
+            </div>
+        `;
+        setTimeout(() => {
+            messageContainer.innerHTML = '';
+        }, 5000);
+    }
+
+    // 플로우 렌더링
+    function renderFlows(flows, categoryName) {
+        const container = document.getElementById('flows-container');
+        const emptyState = document.getElementById('empty-state');
+        const categoryNameEl = document.getElementById('preview-category-name');
+
+        if (!flows || flows.length === 0) {
+            emptyState.style.display = 'flex';
+            container.innerHTML = '';
+            categoryNameEl.textContent = '';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+        categoryNameEl.textContent = `- ${categoryName}`;
+
+        container.innerHTML = flows.map(flow => `
+            <div class="flow-step">
+                <div class="flow-step-header">
+                    <span class="flow-step-number">${flow.step_number}</span>
+                    <span class="flow-step-question">${flow.question}</span>
+                    <span class="flow-step-meta">
+                        ${flow.is_required ? '필수' : '선택'}
+                        ${flow.depends_on_step ? ` | Step ${flow.depends_on_step} 의존` : ''}
+                    </span>
+                </div>
+                <div class="flow-options">
+                    ${flow.options.map(opt => `
+                        <div class="flow-option ${opt.is_custom_input ? 'custom' : ''}">
+                            ${opt.logo ?
+                                `<img src="${opt.logo}" alt="${opt.label}" style="height: 20px; width: auto;">` :
+                                `<span class="flow-option-icon">${opt.icon || '📋'}</span>`
+                            }
+                            <span class="flow-option-label">${opt.label}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+
+        // JSON 미리보기 업데이트
+        document.getElementById('json-content').textContent = JSON.stringify(flows, null, 2);
+    }
+
+    // 폼 제출
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const categoryId = document.getElementById('category').value;
+        const categoryName = document.getElementById('category').selectedOptions[0]?.dataset.name || '';
+        const prompt = document.getElementById('prompt').value;
+        const replaceExisting = document.getElementById('replace_existing').checked;
+
+        if (!categoryId) {
+            showMessage('카테고리를 선택해주세요.', 'error');
+            return;
+        }
+
+        // 버튼 로딩 상태
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<div class="spinner"></div><span>생성 중...</span>';
+
+        try {
+            const response = await fetch('{% url "admin:consultation_flow_ai_generate_run" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    category_id: categoryId,
+                    prompt: prompt,
+                    replace_existing: replaceExisting
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                showMessage(data.message, 'success');
+                renderFlows(data.flows, categoryName);
+            } else {
+                showMessage(data.error || '생성에 실패했습니다.', 'error');
+            }
+        } catch (error) {
+            showMessage('네트워크 오류가 발생했습니다: ' + error.message, 'error');
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<span>AI로 플로우 생성</span>';
+        }
+    });
+
+    // 기존 플로우 미리보기
+    document.getElementById('previewBtn').addEventListener('click', async function() {
+        const categoryId = document.getElementById('previewCategory').value;
+        if (!categoryId) {
+            showMessage('카테고리를 선택해주세요.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin/api/consultationflow/preview/${categoryId}/`);
+            const data = await response.json();
+
+            if (response.ok) {
+                renderFlows(data.flows, data.category);
+            } else {
+                showMessage(data.error || '플로우를 불러오지 못했습니다.', 'error');
+            }
+        } catch (error) {
+            showMessage('네트워크 오류가 발생했습니다.', 'error');
+        }
+    });
+});
+</script>
+{% endblock %}

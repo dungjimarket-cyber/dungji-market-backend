@@ -1,12 +1,23 @@
 """
 상담 관련 어드민 설정
 """
+import json
+import logging
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils import timezone
+from django.urls import path
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.admin.views.decorators import staff_member_required
 
 from .models_consultation import ConsultationType, ConsultationRequest
 from .models_consultation_flow import ConsultationFlow, ConsultationFlowOption
+from .models_local_business import LocalBusinessCategory
+
+logger = logging.getLogger(__name__)
 
 
 class ConsultationFlowOptionInline(admin.TabularInline):
@@ -198,6 +209,7 @@ class ConsultationFlowAdmin(admin.ModelAdmin):
     list_editable = ['step_number', 'is_required']
     ordering = ['category', 'step_number', 'order_index']
     inlines = [ConsultationFlowOptionInline]
+    change_list_template = 'admin/consultation_flow_changelist.html'
 
     fieldsets = (
         ('기본 정보', {
@@ -211,6 +223,139 @@ class ConsultationFlowAdmin(admin.ModelAdmin):
             'fields': ('is_required', 'order_index', 'is_active')
         }),
     )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('ai-generate/', self.admin_site.admin_view(self.ai_generate_view), name='consultation_flow_ai_generate'),
+            path('ai-generate/run/', self.admin_site.admin_view(self.ai_generate_run), name='consultation_flow_ai_generate_run'),
+            path('preview/<int:category_id>/', self.admin_site.admin_view(self.preview_flow), name='consultation_flow_preview'),
+        ]
+        return custom_urls + urls
+
+    def ai_generate_view(self, request):
+        """AI 플로우 생성 페이지"""
+        categories = LocalBusinessCategory.objects.filter(is_active=True).order_by('order_index')
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'AI 상담 플로우 생성',
+            'categories': categories,
+        }
+        return render(request, 'admin/consultation_flow_ai_generate.html', context)
+
+    def ai_generate_run(self, request):
+        """AI로 플로우 생성 실행"""
+        if request.method != 'POST':
+            return JsonResponse({'error': 'POST만 허용'}, status=405)
+
+        try:
+            data = json.loads(request.body)
+            category_id = data.get('category_id')
+            prompt = data.get('prompt', '')
+            replace_existing = data.get('replace_existing', False)
+
+            if not category_id:
+                return JsonResponse({'error': '카테고리를 선택해주세요.'}, status=400)
+
+            # 카테고리 조회
+            try:
+                category = LocalBusinessCategory.objects.get(id=category_id)
+            except LocalBusinessCategory.DoesNotExist:
+                return JsonResponse({'error': '카테고리를 찾을 수 없습니다.'}, status=404)
+
+            # OpenAI API 호출
+            from .utils.ai_consultation_flow import generate_consultation_flow
+            result = generate_consultation_flow(category.name, prompt)
+
+            if not result.get('success'):
+                return JsonResponse({'error': result.get('error', 'AI 생성 실패')}, status=500)
+
+            flows_data = result.get('flows', [])
+
+            # 기존 데이터 삭제 (옵션 선택 시)
+            if replace_existing:
+                ConsultationFlow.objects.filter(category=category).delete()
+
+            # 플로우 생성
+            created_count = 0
+            for idx, flow_data in enumerate(flows_data):
+                flow = ConsultationFlow.objects.create(
+                    category=category,
+                    step_number=flow_data.get('step_number', idx + 1),
+                    question=flow_data.get('question', ''),
+                    is_required=flow_data.get('is_required', True),
+                    depends_on_step=flow_data.get('depends_on_step'),
+                    depends_on_options=flow_data.get('depends_on_options', []),
+                    order_index=idx,
+                    is_active=True,
+                )
+
+                # 옵션 생성
+                for opt_idx, opt_data in enumerate(flow_data.get('options', [])):
+                    ConsultationFlowOption.objects.create(
+                        flow=flow,
+                        key=opt_data.get('key', f'opt_{opt_idx}'),
+                        label=opt_data.get('label', ''),
+                        icon=opt_data.get('icon', ''),
+                        logo=opt_data.get('logo', ''),
+                        description=opt_data.get('description', ''),
+                        is_custom_input=opt_data.get('is_custom_input', False),
+                        order_index=opt_idx,
+                        is_active=True,
+                    )
+
+                created_count += 1
+
+            return JsonResponse({
+                'success': True,
+                'message': f'{category.name} 카테고리에 {created_count}개의 질문 플로우가 생성되었습니다.',
+                'flows': flows_data,
+            })
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': '잘못된 요청 형식'}, status=400)
+        except Exception as e:
+            logger.exception("AI 플로우 생성 오류")
+            return JsonResponse({'error': str(e)}, status=500)
+
+    def preview_flow(self, request, category_id):
+        """카테고리별 플로우 미리보기"""
+        try:
+            category = LocalBusinessCategory.objects.get(id=category_id)
+            flows = ConsultationFlow.objects.filter(
+                category=category,
+                is_active=True
+            ).prefetch_related('options').order_by('step_number', 'order_index')
+
+            flows_data = []
+            for flow in flows:
+                flow_dict = {
+                    'id': flow.id,
+                    'step_number': flow.step_number,
+                    'question': flow.question,
+                    'is_required': flow.is_required,
+                    'depends_on_step': flow.depends_on_step,
+                    'depends_on_options': flow.depends_on_options,
+                    'options': [
+                        {
+                            'key': opt.key,
+                            'label': opt.label,
+                            'icon': opt.icon,
+                            'logo': opt.logo,
+                            'description': opt.description,
+                            'is_custom_input': opt.is_custom_input,
+                        }
+                        for opt in flow.options.filter(is_active=True).order_by('order_index')
+                    ]
+                }
+                flows_data.append(flow_dict)
+
+            return JsonResponse({
+                'category': category.name,
+                'flows': flows_data,
+            })
+        except LocalBusinessCategory.DoesNotExist:
+            return JsonResponse({'error': '카테고리를 찾을 수 없습니다.'}, status=404)
 
     def depends_info(self, obj):
         """조건부 표시 정보"""
