@@ -522,7 +522,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
                         businesses = businesses.filter(name__in=duplicate_names).order_by('name')
 
                     # OpenAI 검증
-                    openai.api_key = settings.OPENAI_API_KEY
+                    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
                     invalid_businesses = []
 
                     for business in businesses[:50]:  # 한 번에 최대 50개
@@ -564,7 +564,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 "VALID" 또는 "DUPLICATE"로만 답변하세요.
 """
 
-                            response = openai.chat.completions.create(
+                            response = client.chat.completions.create(
                                 model="gpt-4o-mini",
                                 messages=[
                                     {"role": "system", "content": "당신은 중복 업체 검증 전문가입니다. VALID 또는 DUPLICATE로만 답변하세요."},
@@ -613,7 +613,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 - "건축사사무소" + "https://www.google.com" → INVALID (관련 없음)
 """
 
-                            response = openai.chat.completions.create(
+                            response = client.chat.completions.create(
                                 model="gpt-4o-mini",
                                 messages=[
                                     {"role": "system", "content": "당신은 웹사이트 유효성 검증 전문가입니다. VALID 또는 INVALID로만 답변하세요."},
@@ -746,7 +746,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
 **중요: 조금이라도 의심되거나, 업체명만으로 해당 업종인지 100% 확신할 수 없거나, 주소와 지역이 일치하지 않으면 무조건 "NO"로 답변하세요.**
 """
 
-                            response = openai.chat.completions.create(
+                            response = client.chat.completions.create(
                                 model="gpt-4o-mini",
                                 messages=[
                                     {"role": "system", "content": "당신은 업체 분류 검증 전문가입니다. YES 또는 NO로만 답변하세요."},
