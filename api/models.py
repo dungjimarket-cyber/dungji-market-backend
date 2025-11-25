@@ -25,6 +25,8 @@ from .models_local_business import (
     LocalBusinessLink,
     LocalBusinessView
 )
+# 상담 신청 모델 import
+from .models_consultation import ConsultationType, ConsultationRequest
 
 logger = logging.getLogger(__name__)
 
