@@ -218,6 +218,10 @@ jobs:
           echo "🔄 Running database migrations..."
           sudo docker exec dungji-backend-web python manage.py migrate --noinput
 
+          # 상담 플로우 데이터 초기화
+          echo "💬 Initializing consultation flows..."
+          sudo docker exec dungji-backend-web python manage.py init_consultation_flows
+
           # 정적 파일 수집
           echo "📦 Collecting static files..."
           sudo docker exec dungji-backend-web python manage.py collectstatic --noinput
