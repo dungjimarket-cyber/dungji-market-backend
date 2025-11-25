@@ -217,16 +217,19 @@ class AIPolishRequestSerializer(serializers.Serializer):
     )
 
     def validate_category(self, value):
-        """카테고리 검증"""
+        """카테고리 검증 - 숫자 ID, 문자열 ID, 이름 모두 지원"""
         from django.db.models import Q
 
+        # 숫자면 ID로 검색
         if str(value).isdigit():
             try:
                 return LocalBusinessCategory.objects.get(id=int(value))
             except LocalBusinessCategory.DoesNotExist:
                 raise serializers.ValidationError('존재하지 않는 카테고리입니다.')
 
+        # 문자열 ID (tax_accounting 등) 또는 이름으로 검색
         category = LocalBusinessCategory.objects.filter(
+            Q(id__iexact=value) |  # 문자열 ID
             Q(google_place_type__iexact=value) |
             Q(name__iexact=value) |
             Q(name_en__iexact=value)
