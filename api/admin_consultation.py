@@ -191,7 +191,7 @@ class ConsultationFlowAdmin(admin.ModelAdmin):
 
     list_display = [
         'id', 'category', 'step_number', 'question', 'depends_info',
-        'options_count', 'is_required_display', 'is_active_display'
+        'options_count', 'is_required', 'is_active_display'
     ]
     list_filter = ['category', 'step_number', 'is_required', 'is_active']
     search_fields = ['question', 'category__name']
