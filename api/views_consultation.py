@@ -275,6 +275,14 @@ class ConsultationRequestViewSet(viewsets.ModelViewSet):
         return Response(result)
 
 
+# 통합 카테고리 → 실제 DB 카테고리 매핑
+MERGED_CATEGORY_MAPPING = {
+    '세무·회계': ['세무사', '회계사'],
+    '법률 서비스': ['변호사', '법무사'],
+    '청소·이사': ['청소업체', '이사업체'],
+}
+
+
 class ConsultationFlowViewSet(viewsets.ReadOnlyModelViewSet):
     """
     상담 질문 플로우 ViewSet (읽기 전용)
@@ -294,24 +302,40 @@ class ConsultationFlowViewSet(viewsets.ReadOnlyModelViewSet):
             if category_param.isdigit():
                 queryset = queryset.filter(category_id=int(category_param))
             else:
-                # google_place_type 또는 name으로 검색
-                try:
-                    category = LocalBusinessCategory.objects.filter(
-                        models.Q(google_place_type__iexact=category_param) |
-                        models.Q(name__iexact=category_param) |
-                        models.Q(name_en__iexact=category_param)
-                    ).first()
-                    if category:
-                        queryset = queryset.filter(category=category)
-                    else:
+                # 통합 카테고리인지 확인
+                if category_param in MERGED_CATEGORY_MAPPING:
+                    # 통합 카테고리면 실제 DB 카테고리 중 첫 번째 것의 플로우 반환
+                    # (같은 플로우가 양쪽에 있으므로 하나만 반환)
+                    actual_category_names = MERGED_CATEGORY_MAPPING[category_param]
+                    try:
+                        category = LocalBusinessCategory.objects.filter(
+                            name__in=actual_category_names
+                        ).first()
+                        if category:
+                            queryset = queryset.filter(category=category)
+                        else:
+                            queryset = queryset.none()
+                    except Exception:
                         queryset = queryset.none()
-                except Exception:
-                    queryset = queryset.none()
+                else:
+                    # google_place_type 또는 name으로 검색
+                    try:
+                        category = LocalBusinessCategory.objects.filter(
+                            models.Q(google_place_type__iexact=category_param) |
+                            models.Q(name__iexact=category_param) |
+                            models.Q(name_en__iexact=category_param)
+                        ).first()
+                        if category:
+                            queryset = queryset.filter(category=category)
+                        else:
+                            queryset = queryset.none()
+                    except Exception:
+                        queryset = queryset.none()
         else:
             # 카테고리 필터 없으면 빈 결과
             queryset = queryset.none()
 
-        return queryset.prefetch_related('options').order_by('step_number')
+        return queryset.prefetch_related('options').order_by('step_number', 'order_index')
 
     def list(self, request, *args, **kwargs):
         """업종별 질문 플로우 목록"""

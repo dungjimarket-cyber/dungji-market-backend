@@ -499,6 +499,15 @@ CONSULTATION_FLOWS_DATA = {
 }
 
 
+# 통합 카테고리 → 실제 DB 카테고리 매핑
+# 프론트엔드에서는 통합 카테고리로 보여주지만, DB에는 개별 카테고리로 저장
+CATEGORY_MAPPING = {
+    '세무·회계': ['세무사', '회계사'],
+    '법률 서비스': ['변호사', '법무사'],
+    '청소·이사': ['청소업체', '이사업체'],
+}
+
+
 class Command(BaseCommand):
     help = '상담 질문 플로우 데이터 초기화'
 
@@ -519,56 +528,60 @@ class Command(BaseCommand):
         skipped_count = 0
 
         for category_name, flows in CONSULTATION_FLOWS_DATA.items():
-            try:
-                category = LocalBusinessCategory.objects.get(name=category_name)
-            except LocalBusinessCategory.DoesNotExist:
-                self.stdout.write(
-                    self.style.WARNING(f'카테고리 "{category_name}" 없음 - 건너뜀')
-                )
-                skipped_count += 1
-                continue
+            # 통합 카테고리인 경우 실제 DB 카테고리들에 각각 생성
+            actual_categories = CATEGORY_MAPPING.get(category_name, [category_name])
 
-            # 해당 카테고리의 기존 플로우 확인
-            existing_count = ConsultationFlow.objects.filter(category=category).count()
-            if existing_count > 0 and not options['clear']:
-                self.stdout.write(
-                    f'카테고리 "{category_name}"에 이미 {existing_count}개 플로우 있음 - 건너뜀'
-                )
-                continue
+            for actual_category_name in actual_categories:
+                try:
+                    category = LocalBusinessCategory.objects.get(name=actual_category_name)
+                except LocalBusinessCategory.DoesNotExist:
+                    self.stdout.write(
+                        self.style.WARNING(f'카테고리 "{actual_category_name}" 없음 - 건너뜀')
+                    )
+                    skipped_count += 1
+                    continue
 
-            # 기존 데이터 삭제 (clear 옵션 없어도 해당 카테고리는 삭제)
-            ConsultationFlow.objects.filter(category=category).delete()
+                # 해당 카테고리의 기존 플로우 확인
+                existing_count = ConsultationFlow.objects.filter(category=category).count()
+                if existing_count > 0 and not options['clear']:
+                    self.stdout.write(
+                        f'카테고리 "{actual_category_name}"에 이미 {existing_count}개 플로우 있음 - 건너뜀'
+                    )
+                    continue
 
-            # 플로우 생성
-            for idx, flow_data in enumerate(flows):
-                flow = ConsultationFlow.objects.create(
-                    category=category,
-                    step_number=flow_data['step_number'],
-                    question=flow_data['question'],
-                    is_required=flow_data.get('is_required', True),
-                    depends_on_step=flow_data.get('depends_on_step'),
-                    depends_on_options=flow_data.get('depends_on_options', []),
-                    order_index=idx,
-                    is_active=True,
-                )
+                # 기존 데이터 삭제 (clear 옵션 없어도 해당 카테고리는 삭제)
+                ConsultationFlow.objects.filter(category=category).delete()
 
-                # 옵션 생성
-                for opt_idx, option_data in enumerate(flow_data.get('options', [])):
-                    ConsultationFlowOption.objects.create(
-                        flow=flow,
-                        key=option_data['key'],
-                        label=option_data['label'],
-                        icon=option_data.get('icon', ''),
-                        description=option_data.get('description', ''),
-                        is_custom_input=option_data.get('is_custom_input', False),
-                        order_index=opt_idx,
+                # 플로우 생성
+                for idx, flow_data in enumerate(flows):
+                    flow = ConsultationFlow.objects.create(
+                        category=category,
+                        step_number=flow_data['step_number'],
+                        question=flow_data['question'],
+                        is_required=flow_data.get('is_required', True),
+                        depends_on_step=flow_data.get('depends_on_step'),
+                        depends_on_options=flow_data.get('depends_on_options', []),
+                        order_index=idx,
                         is_active=True,
                     )
 
-            created_count += 1
-            self.stdout.write(
-                self.style.SUCCESS(f'카테고리 "{category_name}" 플로우 생성 완료 ({len(flows)}개 질문)')
-            )
+                    # 옵션 생성
+                    for opt_idx, option_data in enumerate(flow_data.get('options', [])):
+                        ConsultationFlowOption.objects.create(
+                            flow=flow,
+                            key=option_data['key'],
+                            label=option_data['label'],
+                            icon=option_data.get('icon', ''),
+                            description=option_data.get('description', ''),
+                            is_custom_input=option_data.get('is_custom_input', False),
+                            order_index=opt_idx,
+                            is_active=True,
+                        )
+
+                created_count += 1
+                self.stdout.write(
+                    self.style.SUCCESS(f'카테고리 "{actual_category_name}" 플로우 생성 완료 ({len(flows)}개 질문)')
+                )
 
         self.stdout.write('')
         self.stdout.write(self.style.SUCCESS(f'완료: {created_count}개 카테고리 생성, {skipped_count}개 건너뜀'))
