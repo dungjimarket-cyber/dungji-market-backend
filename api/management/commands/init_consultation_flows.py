@@ -558,80 +558,181 @@ CONSULTATION_FLOWS_DATA = {
     ],
 
     # ===== 휴대폰 대리점 =====
+    # 참고: SKT, KT, LG U+ 공식몰, 모요, 뽐뿌 등
     '휴대폰 대리점': [
         {
             'step_number': 1,
             'question': '어떤 상담이 필요하세요?',
             'options': [
-                {'key': 'new_phone', 'label': '새 폰 구매/개통', 'icon': '📱'},
-                {'key': 'plan_change', 'label': '요금제 상담', 'icon': '💳'},
-                {'key': 'family', 'label': '가족결합/인터넷', 'icon': '👨‍👩‍👧'},
-                {'key': 'repair', 'label': '수리/AS', 'icon': '🔧'},
+                {'key': 'phone', 'label': '휴대폰', 'icon': '📱', 'description': '개통, 기기변경, 요금제'},
+                {'key': 'internet', 'label': '인터넷', 'icon': '🌐', 'description': '신규, 변경, 이전설치'},
+                {'key': 'tv', 'label': 'TV', 'icon': '📺', 'description': 'IPTV 가입/변경'},
+                {'key': 'bundle', 'label': '결합상품', 'icon': '🏠', 'description': '휴대폰+인터넷+TV 결합'},
                 {'key': 'other', 'label': '기타 문의', 'icon': '💬'},
+            ]
+        },
+        # ===== 휴대폰 선택 시 =====
+        {
+            'step_number': 2,
+            'question': '어떤 휴대폰 상담인가요?',
+            'depends_on_step': 1,
+            'depends_on_options': ['phone'],
+            'options': [
+                {'key': 'new_device', 'label': '새 폰 구매', 'icon': '📱', 'description': '신규/번호이동/기기변경'},
+                {'key': 'plan_only', 'label': '요금제만 변경', 'icon': '💳'},
+                {'key': 'mvno', 'label': '알뜰폰 상담', 'icon': '💰', 'description': '저렴한 요금제'},
+                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
             ]
         },
         # 새 폰 구매 선택 시
         {
-            'step_number': 2,
-            'question': '어떤 가입 유형인가요?',
-            'depends_on_step': 1,
-            'depends_on_options': ['new_phone'],
-            'options': [
-                {'key': 'new', 'label': '신규 가입', 'icon': '✨'},
-                {'key': 'mnp', 'label': '번호이동', 'icon': '🔄'},
-                {'key': 'upgrade', 'label': '기기변경', 'icon': '📱'},
-            ]
-        },
-        # 요금제 상담 선택 시
-        {
-            'step_number': 2,
-            'question': '어떤 요금제 상담인가요?',
-            'depends_on_step': 1,
-            'depends_on_options': ['plan_change'],
-            'options': [
-                {'key': 'cheaper', 'label': '더 저렴한 요금제', 'icon': '💰'},
-                {'key': 'more_data', 'label': '데이터 더 많이', 'icon': '📶'},
-                {'key': 'compare', 'label': '통신사 비교', 'icon': '⚖️'},
-                {'key': 'budget', 'label': '알뜰폰 상담', 'icon': '💵'},
-                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
-            ]
-        },
-        # 가족결합 선택 시
-        {
-            'step_number': 2,
-            'question': '어떤 결합 상담인가요?',
-            'depends_on_step': 1,
-            'depends_on_options': ['family'],
-            'options': [
-                {'key': 'family_plan', 'label': '가족 요금제 결합', 'icon': '👨‍👩‍👧'},
-                {'key': 'internet', 'label': '인터넷+TV 결합', 'icon': '📺'},
-                {'key': 'all', 'label': '통합 결합 상담', 'icon': '🏠'},
-                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
-            ]
-        },
-        {
             'step_number': 3,
+            'question': '가입 유형은?',
+            'depends_on_step': 2,
+            'depends_on_options': ['new_device'],
+            'options': [
+                {'key': 'new', 'label': '신규 가입', 'icon': '✨', 'description': '새 번호 개통'},
+                {'key': 'mnp', 'label': '번호이동', 'icon': '🔄', 'description': '타사에서 이동'},
+                {'key': 'upgrade', 'label': '기기변경', 'icon': '📱', 'description': '같은 통신사 유지'},
+            ]
+        },
+        # 새 폰 - 기기 선택
+        {
+            'step_number': 4,
             'question': '관심 있는 기기는?',
-            'depends_on_step': 1,
-            'depends_on_options': ['new_phone'],
+            'depends_on_step': 2,
+            'depends_on_options': ['new_device'],
             'options': [
                 {'key': 'iphone', 'label': '아이폰', 'icon': '🍎'},
                 {'key': 'galaxy_s', 'label': '갤럭시 S시리즈', 'icon': '📱'},
                 {'key': 'galaxy_fold', 'label': '폴드/플립', 'icon': '📲'},
-                {'key': 'budget', 'label': '가성비 폰', 'icon': '💵'},
-                {'key': 'recommend', 'label': '추천 원함', 'icon': '🤔'},
+                {'key': 'budget', 'label': '가성비폰', 'icon': '💵'},
+                {'key': 'recommend', 'label': '추천 원해요', 'icon': '🤔'},
             ]
         },
+        # 요금제 변경 시
         {
             'step_number': 3,
-            'question': '현재 사용 중인 통신사는?',
-            'depends_on_step': 1,
-            'depends_on_options': ['plan_change', 'family'],
+            'question': '어떤 요금제를 원하세요?',
+            'depends_on_step': 2,
+            'depends_on_options': ['plan_only'],
             'options': [
-                {'key': 'skt', 'label': 'SKT', 'icon': '🔴'},
-                {'key': 'kt', 'label': 'KT', 'icon': '🟠'},
-                {'key': 'lgu', 'label': 'LG U+', 'icon': '🟣'},
-                {'key': 'mvno', 'label': '알뜰폰', 'icon': '💰'},
+                {'key': 'cheaper', 'label': '더 저렴하게', 'icon': '💰'},
+                {'key': 'more_data', 'label': '데이터 더 많이', 'icon': '📶'},
+                {'key': 'unlimited', 'label': '데이터 무제한', 'icon': '♾️'},
+                {'key': 'compare', 'label': '통신사 비교', 'icon': '⚖️'},
+                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+            ]
+        },
+        # ===== 인터넷 선택 시 =====
+        {
+            'step_number': 2,
+            'question': '어떤 인터넷 상담인가요?',
+            'depends_on_step': 1,
+            'depends_on_options': ['internet'],
+            'options': [
+                {'key': 'new_install', 'label': '신규 가입', 'icon': '✨', 'description': '새로 설치'},
+                {'key': 'change', 'label': '타사 변경', 'icon': '🔄', 'description': '다른 통신사로'},
+                {'key': 'move', 'label': '이전 설치', 'icon': '🏠', 'description': '이사할 때'},
+                {'key': 'speed_up', 'label': '속도 업그레이드', 'icon': '⚡'},
+                {'key': 'cancel', 'label': '해지 문의', 'icon': '❌'},
+                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+            ]
+        },
+        # 인터넷 - 속도 선택
+        {
+            'step_number': 3,
+            'question': '원하는 인터넷 속도는?',
+            'depends_on_step': 1,
+            'depends_on_options': ['internet'],
+            'options': [
+                {'key': '100m', 'label': '100Mbps', 'icon': '🐢', 'description': '기본 (1~2인)'},
+                {'key': '500m', 'label': '500Mbps', 'icon': '🚗', 'description': '일반 (3~4인)'},
+                {'key': '1g', 'label': '1Gbps (기가)', 'icon': '🚀', 'description': '고속 (게임/영상)'},
+                {'key': '10g', 'label': '10Gbps', 'icon': '⚡', 'description': '초고속'},
+                {'key': 'recommend', 'label': '추천 원해요', 'icon': '🤔'},
+            ]
+        },
+        # ===== TV 선택 시 =====
+        {
+            'step_number': 2,
+            'question': '어떤 TV 상담인가요?',
+            'depends_on_step': 1,
+            'depends_on_options': ['tv'],
+            'options': [
+                {'key': 'new_tv', 'label': '신규 가입', 'icon': '✨'},
+                {'key': 'change_tv', 'label': '타사 변경', 'icon': '🔄'},
+                {'key': 'add_box', 'label': '셋톱박스 추가', 'icon': '📦'},
+                {'key': 'channel', 'label': '채널 변경', 'icon': '📺'},
+                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+            ]
+        },
+        # TV - 채널 선택
+        {
+            'step_number': 3,
+            'question': '원하는 채널 구성은?',
+            'depends_on_step': 1,
+            'depends_on_options': ['tv'],
+            'options': [
+                {'key': 'basic', 'label': '기본 채널', 'icon': '📺', 'description': '지상파+기본'},
+                {'key': 'popular', 'label': '인기 채널', 'icon': '⭐', 'description': '+영화/스포츠'},
+                {'key': 'premium', 'label': '프리미엄', 'icon': '👑', 'description': '전체 채널'},
+                {'key': 'recommend', 'label': '추천 원해요', 'icon': '🤔'},
+            ]
+        },
+        # ===== 결합상품 선택 시 =====
+        {
+            'step_number': 2,
+            'question': '어떤 결합을 원하세요?',
+            'depends_on_step': 1,
+            'depends_on_options': ['bundle'],
+            'options': [
+                {'key': 'phone_internet', 'label': '휴대폰 + 인터넷', 'icon': '📱🌐'},
+                {'key': 'phone_tv', 'label': '휴대폰 + TV', 'icon': '📱📺'},
+                {'key': 'internet_tv', 'label': '인터넷 + TV', 'icon': '🌐📺'},
+                {'key': 'all_bundle', 'label': '휴대폰+인터넷+TV', 'icon': '🏠', 'description': '트리플 결합'},
+                {'key': 'family', 'label': '가족결합', 'icon': '👨‍👩‍👧', 'description': '가족 요금 할인'},
+                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+            ]
+        },
+        # 결합 - 현재 이용 현황
+        {
+            'step_number': 3,
+            'question': '현재 이용 중인 서비스는?',
+            'depends_on_step': 1,
+            'depends_on_options': ['bundle'],
+            'options': [
+                {'key': 'phone_only', 'label': '휴대폰만', 'icon': '📱'},
+                {'key': 'internet_only', 'label': '인터넷만', 'icon': '🌐'},
+                {'key': 'phone_internet', 'label': '휴대폰+인터넷', 'icon': '📱🌐'},
+                {'key': 'all', 'label': '휴대폰+인터넷+TV', 'icon': '🏠'},
+                {'key': 'none', 'label': '없음 (신규)', 'icon': '✨'},
+            ]
+        },
+        # ===== 공통: 통신사 선택 =====
+        {
+            'step_number': 4,
+            'question': '선호하는 통신사가 있나요?',
+            'depends_on_step': 1,
+            'depends_on_options': ['internet', 'tv', 'bundle'],
+            'options': [
+                {'key': 'skt', 'label': 'SK브로드밴드', 'logo': '/logos/sk-broadband.png'},
+                {'key': 'kt', 'label': 'KT', 'logo': '/logos/kt.png'},
+                {'key': 'lgu', 'label': 'LG U+', 'logo': '/logos/lgu.png'},
+                {'key': 'compare', 'label': '비교 후 결정', 'icon': '⚖️'},
+            ]
+        },
+        # 휴대폰 통신사 선택
+        {
+            'step_number': 5,
+            'question': '원하는 통신사는?',
+            'depends_on_step': 2,
+            'depends_on_options': ['new_device', 'plan_only'],
+            'options': [
+                {'key': 'skt', 'label': 'SKT', 'logo': '/logos/skt.png'},
+                {'key': 'kt', 'label': 'KT', 'logo': '/logos/kt.png'},
+                {'key': 'lgu', 'label': 'LG U+', 'logo': '/logos/lgu.png'},
+                {'key': 'compare', 'label': '비교 후 결정', 'icon': '⚖️'},
             ]
         },
     ],
@@ -791,6 +892,7 @@ class Command(BaseCommand):
                             key=option_data['key'],
                             label=option_data['label'],
                             icon=option_data.get('icon', ''),
+                            logo=option_data.get('logo', ''),
                             description=option_data.get('description', ''),
                             is_custom_input=option_data.get('is_custom_input', False),
                             order_index=opt_idx,

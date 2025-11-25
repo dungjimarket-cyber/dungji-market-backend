@@ -99,6 +99,14 @@ class ConsultationFlowOption(models.Model):
         verbose_name='아이콘'
     )
 
+    logo = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name='로고 이미지 경로',
+        help_text='예: /logos/skt.png'
+    )
+
     description = models.CharField(
         max_length=100,
         blank=True,

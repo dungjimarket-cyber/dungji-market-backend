@@ -172,7 +172,7 @@ class ConsultationFlowOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConsultationFlowOption
         fields = [
-            'id', 'key', 'label', 'icon', 'description',
+            'id', 'key', 'label', 'icon', 'logo', 'description',
             'is_custom_input', 'order_index'
         ]
 
