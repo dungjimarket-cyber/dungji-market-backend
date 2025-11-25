@@ -230,6 +230,7 @@ class ConsultationFlowAdmin(admin.ModelAdmin):
             path('ai-generate/', self.admin_site.admin_view(self.ai_generate_view), name='consultation_flow_ai_generate'),
             path('ai-generate/run/', self.admin_site.admin_view(self.ai_generate_run), name='consultation_flow_ai_generate_run'),
             path('preview/<int:category_id>/', self.admin_site.admin_view(self.preview_flow), name='consultation_flow_preview'),
+            path('bulk-save/', self.admin_site.admin_view(self.bulk_save), name='consultation_flow_bulk_save'),
         ]
         return custom_urls + urls
 
@@ -356,6 +357,70 @@ class ConsultationFlowAdmin(admin.ModelAdmin):
             })
         except LocalBusinessCategory.DoesNotExist:
             return JsonResponse({'error': '카테고리를 찾을 수 없습니다.'}, status=404)
+
+    def bulk_save(self, request):
+        """플로우 일괄 저장 (수정 기능)"""
+        if request.method != 'POST':
+            return JsonResponse({'error': 'POST만 허용'}, status=405)
+
+        try:
+            data = json.loads(request.body)
+            category_id = data.get('category_id')
+            flows_data = data.get('flows', [])
+
+            if not category_id:
+                return JsonResponse({'error': '카테고리를 선택해주세요.'}, status=400)
+
+            try:
+                category = LocalBusinessCategory.objects.get(id=category_id)
+            except LocalBusinessCategory.DoesNotExist:
+                return JsonResponse({'error': '카테고리를 찾을 수 없습니다.'}, status=404)
+
+            # 기존 플로우 삭제
+            ConsultationFlow.objects.filter(category=category).delete()
+
+            # 새 플로우 생성
+            created_count = 0
+            for idx, flow_data in enumerate(flows_data):
+                flow = ConsultationFlow.objects.create(
+                    category=category,
+                    step_number=flow_data.get('step_number', idx + 1),
+                    question=flow_data.get('question', ''),
+                    is_required=flow_data.get('is_required', True),
+                    depends_on_step=flow_data.get('depends_on_step'),
+                    depends_on_options=flow_data.get('depends_on_options', []),
+                    order_index=idx,
+                    is_active=True,
+                )
+
+                # 옵션 생성
+                for opt_idx, opt_data in enumerate(flow_data.get('options', [])):
+                    ConsultationFlowOption.objects.create(
+                        flow=flow,
+                        key=opt_data.get('key', f'opt_{opt_idx}'),
+                        label=opt_data.get('label', ''),
+                        icon=opt_data.get('icon', ''),
+                        logo=opt_data.get('logo', ''),
+                        description=opt_data.get('description', ''),
+                        is_custom_input=opt_data.get('is_custom_input', False),
+                        order_index=opt_idx,
+                        is_active=True,
+                    )
+
+                created_count += 1
+
+            logger.info(f"플로우 일괄 저장: {category.name} - {created_count}개")
+
+            return JsonResponse({
+                'success': True,
+                'message': f'{category.name} 카테고리에 {created_count}개의 질문 플로우가 저장되었습니다.',
+            })
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': '잘못된 요청 형식'}, status=400)
+        except Exception as e:
+            logger.exception("플로우 일괄 저장 오류")
+            return JsonResponse({'error': str(e)}, status=500)
 
     def depends_info(self, obj):
         """조건부 표시 정보"""
