@@ -64,7 +64,7 @@ class ConsultationFlow(models.Model):
         verbose_name = '상담 질문 플로우'
         verbose_name_plural = '상담 질문 플로우'
         ordering = ['category', 'step_number', 'order_index']
-        unique_together = ['category', 'step_number']
+        # unique_together 제거: 같은 step_number에 조건부 질문 여러 개 허용
 
     def __str__(self):
         return f"{self.category.name} - Step {self.step_number}: {self.question}"
