@@ -33,6 +33,10 @@ echo "================================================"
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
 
+# 상담 플로우 데이터 초기화 (없으면 생성)
+echo "Initializing consultation flows..."
+python manage.py init_consultation_flows
+
 # 환경 정보 로그
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Environment: DEBUG=$DEBUG, USE_S3=$USE_S3" >> /app/logs/cron.log
 
