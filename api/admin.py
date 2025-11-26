@@ -255,6 +255,21 @@ class PenaltyAdmin(admin.ModelAdmin):
         js = ('admin/js/penalty_admin.js',)
 
 
+# 전문가 프로필 인라인 Admin
+class ExpertProfileInline(admin.StackedInline):
+    from .models_expert import ExpertProfile
+    model = ExpertProfile
+    extra = 0
+    can_delete = False
+    verbose_name = '전문가 프로필'
+    verbose_name_plural = '전문가 프로필'
+    fields = ['category', 'representative_name', 'status', 'is_receiving_requests', 'contact_phone', 'contact_email', 'tagline']
+    readonly_fields = []
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('category')
+
+
 # BidToken 관련 인라인 Admin
 class BidTokenInline(admin.TabularInline):
     model = BidToken
@@ -263,7 +278,7 @@ class BidTokenInline(admin.TabularInline):
     readonly_fields = ['created_at']
     can_delete = False
     max_num = 10  # 최대 10개만 표시
-    
+
     def get_queryset(self, request):
         # 최근 생성된 것부터 정렬 (슬라이싱 제거로 Django admin 오류 방지)
         qs = super().get_queryset(request)
@@ -646,7 +661,7 @@ class UserAdmin(admin.ModelAdmin):
         }),
     )
     filter_horizontal = ('groups', 'user_permissions')
-    inlines = [BidTokenInline, BidTokenAdjustmentLogInline]
+    inlines = [ExpertProfileInline, BidTokenInline, BidTokenAdjustmentLogInline]
     actions = ['add_5_bid_tokens', 'add_10_bid_tokens', 'grant_7day_subscription', 'grant_30day_subscription', 'approve_business_verification', 'custom_adjust_bid_tokens', 'remove_bid_tokens', 'reset_bid_tokens']
 
     # 한글화
