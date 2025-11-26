@@ -82,10 +82,10 @@ class ConsultationRequestAdmin(admin.ModelAdmin):
 
     list_display = [
         'id', 'status_badge', 'name', 'phone_display', 'category',
-        'consultation_type', 'region', 'created_at', 'contacted_at_display'
+        'consultation_type_text', 'region', 'created_at', 'contacted_at_display'
     ]
-    list_filter = ['status', 'category', 'created_at', 'contacted_at', 'completed_at']
-    search_fields = ['name', 'phone', 'email', 'content', 'region']
+    list_filter = ['status', 'category', 'consultation_type_text', 'created_at', 'contacted_at', 'completed_at']
+    search_fields = ['name', 'phone', 'email', 'content', 'region', 'consultation_type_text']
     readonly_fields = [
         'user', 'created_at', 'updated_at', 'contacted_at', 'completed_at',
         'ai_summary', 'ai_recommended_types', 'content_preview'
@@ -98,7 +98,7 @@ class ConsultationRequestAdmin(admin.ModelAdmin):
             'fields': ('user', 'name', 'phone', 'email')
         }),
         ('상담 정보', {
-            'fields': ('category', 'consultation_type', 'region')
+            'fields': ('category', 'consultation_type_text', 'region')
         }),
         ('상담 내용', {
             'fields': ('content', 'content_preview')
