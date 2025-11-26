@@ -36,6 +36,7 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('buyer', '구매자'),
         ('seller', '판매자'),
+        ('expert', '전문가'),
         ('admin', '관리자'),
     )
     
@@ -1559,3 +1560,5 @@ from .models_banner import Banner, Event
 from .models_partner import Partner, ReferralRecord, PartnerSettlement, PartnerLink, PartnerNotification
 # Import Unified models for favorites and reviews
 from .models_unified_simple import UnifiedFavorite, UnifiedReview
+# Import Expert models
+from .models_expert import ExpertProfile, ConsultationMatch

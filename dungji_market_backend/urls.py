@@ -98,6 +98,7 @@ from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 from api.admin_sms_test import sms_test_view
 from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet, google_search_proxy_standalone
 from api.views_consultation import ConsultationTypeViewSet, ConsultationRequestViewSet, ConsultationFlowViewSet, ConsultationFlowAdminViewSet, ConsultationFlowOptionAdminViewSet
+from api.views_expert import ExpertProfileViewSet, ExpertRequestsViewSet, CustomerConsultationsViewSet, ExpertRegisterView, ExpertProfileImageUploadView
 
 router = DefaultRouter()
 router.register('categories', CategoryViewSet)
@@ -328,6 +329,48 @@ urlpatterns = [
 
     # 네이버 쇼핑 검색 API
     path('api/shopping/search/', search_shopping, name='shopping_search'),
+
+    # 전문가 API
+    path('api/auth/register-expert/', ExpertRegisterView.as_view(), name='register_expert'),
+    path('api/expert/profile/', ExpertProfileViewSet.as_view({
+        'get': 'list',
+        'post': 'create',
+        'put': 'update',
+        'patch': 'partial_update'
+    }), name='expert_profile'),
+    path('api/expert/profile/receiving/', ExpertProfileViewSet.as_view({
+        'patch': 'toggle_receiving'
+    }), name='expert_toggle_receiving'),
+    path('api/expert/profile/image/', ExpertProfileImageUploadView.as_view(), name='expert_profile_image'),
+    path('api/expert/requests/', ExpertRequestsViewSet.as_view({
+        'get': 'list'
+    }), name='expert_requests'),
+    path('api/expert/requests/<int:pk>/', ExpertRequestsViewSet.as_view({
+        'get': 'retrieve'
+    }), name='expert_request_detail'),
+    path('api/expert/requests/<int:pk>/reply/', ExpertRequestsViewSet.as_view({
+        'post': 'reply'
+    }), name='expert_reply'),
+    path('api/expert/requests/<int:pk>/complete/', ExpertRequestsViewSet.as_view({
+        'post': 'complete'
+    }), name='expert_complete'),
+
+    # 고객용 상담 내역 API
+    path('api/my/consultations/', CustomerConsultationsViewSet.as_view({
+        'get': 'list'
+    }), name='my_consultations'),
+    path('api/my/consultations/<int:pk>/', CustomerConsultationsViewSet.as_view({
+        'get': 'retrieve'
+    }), name='my_consultation_detail'),
+    path('api/my/consultations/<int:pk>/experts/', CustomerConsultationsViewSet.as_view({
+        'get': 'experts'
+    }), name='my_consultation_experts'),
+    path('api/my/consultations/<int:pk>/experts/<int:expert_id>/connect/', CustomerConsultationsViewSet.as_view({
+        'post': 'connect'
+    }), name='my_consultation_connect'),
+    path('api/my/consultations/<int:pk>/complete/', CustomerConsultationsViewSet.as_view({
+        'post': 'complete'
+    }), name='my_consultation_complete'),
 ]
 
 # 개발 환경에서는 Django가 정적 파일 제공

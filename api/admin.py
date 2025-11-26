@@ -2349,3 +2349,6 @@ class NotificationSettingAdmin(admin.ModelAdmin):
     list_filter = ['trade_notifications', 'marketing_notifications']
     search_fields = ['user__username', 'user__nickname']
 
+
+# 전문가 프로필 및 상담 매칭 Admin 등록
+from .admin_expert import ExpertProfileAdmin, ConsultationMatchAdmin

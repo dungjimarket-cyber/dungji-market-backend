@@ -23,6 +23,7 @@ from .serializers_consultation import (
     ConsultationFlowOptionAdminSerializer,
 )
 from .utils.ai_consultation import get_consultation_assist, polish_consultation_content, generate_consultation_flow
+from .utils.expert_matching import create_expert_matches
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,14 @@ class ConsultationRequestViewSet(viewsets.ModelViewSet):
         logger.info(
             f"상담 신청 생성: {instance.name} - {instance.category.name} - {instance.region}"
         )
+
+        # 전문가 자동 매칭 (백그라운드에서 처리)
+        try:
+            matched_count = create_expert_matches(instance)
+            logger.info(f"상담 {instance.id}: {matched_count}명의 전문가와 매칭됨")
+        except Exception as e:
+            logger.error(f"상담 {instance.id} 전문가 매칭 오류: {e}")
+            # 매칭 실패해도 상담 신청은 성공으로 처리
 
         return Response({
             'success': True,

@@ -354,6 +354,11 @@ GOOGLE_PLACES_API_KEY = os.getenv('GOOGLE_PLACES_API_KEY', '')
 # OpenAI API Key (AI 리뷰 요약용)
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
+# 전문가 매칭 설정
+# 지역 매칭 활성화 여부 (True: 지역 필터링 적용, False: 카테고리만 매칭)
+# 비즈니스 활성화 후 True로 변경
+ENABLE_REGION_MATCHING = os.getenv('ENABLE_REGION_MATCHING', 'False').lower() == 'true'
+
 # Logging configuration
 LOGGING = {
     'version': 1,

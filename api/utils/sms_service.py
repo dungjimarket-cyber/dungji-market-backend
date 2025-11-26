@@ -512,3 +512,34 @@ class SMSService:
             return f"{phone[:3]}-{phone[3:6]}-{phone[6:]}"
         else:
             return phone
+
+    def send_consultation_new_expert(self, phone_number: str, category_name: str) -> Tuple[bool, Optional[str]]:
+        """새 상담 문의 등록 알림 SMS (전문가에게)"""
+        if not self.is_valid_phone_number(phone_number):
+            return False, "유효하지 않은 전화번호"
+
+        message = f"[둥지마켓] {category_name} 문의가 등록되었습니다. 상담내역을 확인해주세요"
+
+        try:
+            if self.provider == 'aligo':
+                return self._send_aligo_sms(phone_number, message)
+            return self._send_mock_sms(phone_number, message)
+        except Exception as e:
+            logger.error(f"상담 알림 SMS 발송 실패: {e}")
+            return False, str(e)
+
+    def send_consultation_replied_customer(self, phone_number: str, expert_name: str) -> Tuple[bool, Optional[str]]:
+        """전문가 답변 등록 알림 SMS (고객에게)"""
+        if not self.is_valid_phone_number(phone_number):
+            return False, "유효하지 않은 전화번호"
+
+        short_name = expert_name[:8] if len(expert_name) > 8 else expert_name
+        message = f"[둥지마켓] {short_name} 전문가 답변이 등록되었습니다. 상담내역을 확인해주세요"
+
+        try:
+            if self.provider == 'aligo':
+                return self._send_aligo_sms(phone_number, message)
+            return self._send_mock_sms(phone_number, message)
+        except Exception as e:
+            logger.error(f"답변 알림 SMS 발송 실패: {e}")
+            return False, str(e)
