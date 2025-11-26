@@ -46,11 +46,11 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
 
         # 통합할 카테고리 처리
-        # 세무사+회계사 → 세무·회계, 법무사+변호사 → 법률 서비스
-        # 청소 전문, 이사 전문은 각각 분리 유지
+        # 세무사+회계사 → 세무·회계, 법무사+변호사 → 법률 서비스, 청소+이사 → 청소·이사
         categories = []
         tax_accounting_added = False
         legal_service_added = False
+        cleaning_moving_added = False
         skip_categories = []
 
         for cat_data in serializer.data:
@@ -60,11 +60,9 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
             if category_name in ['세무사', '회계사']:
                 skip_categories.append(category_name)
                 if not tax_accounting_added:
-                    # 세무·회계 통합 카테고리 생성
                     tax_accounting_count = LocalBusiness.objects.filter(
                         Q(category__name='세무사') | Q(category__name='회계사')
                     ).count()
-
                     categories.append({
                         'id': 'tax_accounting',
                         'name': '세무·회계',
@@ -83,11 +81,9 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
             elif category_name in ['법무사', '변호사']:
                 skip_categories.append(category_name)
                 if not legal_service_added:
-                    # 법률서비스 통합 카테고리 생성
                     legal_service_count = LocalBusiness.objects.filter(
                         Q(category__name='법무사') | Q(category__name='변호사')
                     ).count()
-
                     categories.append({
                         'id': 'legal_service',
                         'name': '법률 서비스',
@@ -102,8 +98,28 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
                     })
                     legal_service_added = True
 
-            # 청소 전문, 이사 전문은 각각 분리 유지 (통합하지 않음)
-            # 나머지 카테고리도 그대로 추가
+            # 청소+이사 통합
+            elif category_name in ['청소 전문', '이사 전문']:
+                skip_categories.append(category_name)
+                if not cleaning_moving_added:
+                    cleaning_moving_count = LocalBusiness.objects.filter(
+                        Q(category__name='청소 전문') | Q(category__name='이사 전문')
+                    ).count()
+                    categories.append({
+                        'id': 'cleaning_moving',
+                        'name': '청소·이사',
+                        'name_en': 'cleaning & moving',
+                        'icon': '🧹',
+                        'google_place_type': 'service',
+                        'description': '청소, 이사 전문 서비스',
+                        'order_index': 9,
+                        'is_active': True,
+                        'business_count': cleaning_moving_count,
+                        'merged_categories': ['청소 전문', '이사 전문']
+                    })
+                    cleaning_moving_added = True
+
+            # 나머지 카테고리는 그대로 추가
             else:
                 business_count = LocalBusiness.objects.filter(category_id=cat_data['id']).count()
                 cat_data['business_count'] = business_count
