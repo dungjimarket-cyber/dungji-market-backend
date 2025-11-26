@@ -211,17 +211,28 @@ class ConsultationRequestForCustomerSerializer(serializers.ModelSerializer):
     replied_experts_count = serializers.SerializerMethodField()
     connected_expert = serializers.SerializerMethodField()
     matches = serializers.SerializerMethodField()
+    answers = serializers.SerializerMethodField()
 
     class Meta:
         model = ConsultationRequest
         fields = [
             'id', 'category_name',
             'region', 'answers',
-            'customer_name', 'customer_phone',
+            'name', 'phone',
             'replied_experts_count', 'connected_expert',
             'matches',
             'created_at'
         ]
+
+    def get_answers(self, obj):
+        """상담 내용을 answers 형식으로 변환"""
+        # content 필드를 질문-답변 형식으로 변환
+        answers = {}
+        if obj.content:
+            answers['상담 내용'] = obj.content
+        if obj.consultation_type_text:
+            answers['상담 유형'] = obj.consultation_type_text
+        return answers
 
     def get_replied_experts_count(self, obj):
         """답변한 전문가 수"""
