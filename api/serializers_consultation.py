@@ -23,12 +23,13 @@ class ConsultationTypeSerializer(serializers.ModelSerializer):
 class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
     """상담 신청 생성용 시리얼라이저 (비회원도 사용 가능)"""
     category = serializers.CharField()  # ID 또는 이름 허용
+    consultation_type_name = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
         model = ConsultationRequest
         fields = [
             'name', 'phone', 'email',
-            'category', 'consultation_type', 'region',
+            'category', 'consultation_type', 'consultation_type_name', 'region',
             'content', 'ai_summary', 'ai_recommended_types'
         ]
 
@@ -87,6 +88,20 @@ class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        # consultation_type_name으로 ConsultationType 찾기
+        consultation_type_name = validated_data.pop('consultation_type_name', None)
+        if consultation_type_name and not validated_data.get('consultation_type'):
+            category = validated_data.get('category')
+            if category:
+                # 해당 카테고리에서 이름이 일치하는 상담 유형 찾기
+                consultation_type = ConsultationType.objects.filter(
+                    category=category,
+                    name__iexact=consultation_type_name,
+                    is_active=True
+                ).first()
+                if consultation_type:
+                    validated_data['consultation_type'] = consultation_type
+
         # 로그인한 사용자가 있으면 연결
         request = self.context.get('request')
         if request and request.user.is_authenticated:
