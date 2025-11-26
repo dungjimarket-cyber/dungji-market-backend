@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.models import Q
 from django.conf import settings
 
 from .models import User
@@ -264,14 +265,17 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """내 상담 요청 목록"""
-        # 휴대폰 번호로 조회
-        phone = request.user.phone_number
-        if not phone:
-            return Response({'results': []})
+        user = request.user
+        phone = user.phone_number
+
+        # user ID 또는 phone 둘 중 하나로 조회
+        q_filter = Q(user=user)
+        if phone:
+            q_filter |= Q(phone=phone)
 
         consultations = ConsultationRequest.objects.filter(
-            customer_phone=phone
-        ).select_related('category').prefetch_related('matches__expert')
+            q_filter
+        ).select_related('category').prefetch_related('matches__expert').distinct()
 
         serializer = ConsultationRequestForCustomerSerializer(
             consultations, many=True, context={'request': request}
@@ -281,11 +285,17 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         """상담 요청 상세"""
-        phone = request.user.phone_number
+        user = request.user
+        phone = user.phone_number
+
+        # user ID 또는 phone 둘 중 하나로 조회
+        q_filter = Q(user=user)
+        if phone:
+            q_filter |= Q(phone=phone)
+
         consultation = get_object_or_404(
-            ConsultationRequest,
-            id=pk,
-            customer_phone=phone
+            ConsultationRequest.objects.filter(q_filter),
+            id=pk
         )
 
         serializer = ConsultationRequestForCustomerSerializer(
@@ -297,11 +307,17 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['get'], url_path='experts')
     def experts(self, request, pk=None):
         """답변한 전문가 목록"""
-        phone = request.user.phone_number
+        user = request.user
+        phone = user.phone_number
+
+        # user ID 또는 phone 둘 중 하나로 조회
+        q_filter = Q(user=user)
+        if phone:
+            q_filter |= Q(phone=phone)
+
         consultation = get_object_or_404(
-            ConsultationRequest,
-            id=pk,
-            customer_phone=phone
+            ConsultationRequest.objects.filter(q_filter),
+            id=pk
         )
 
         matches = consultation.matches.filter(
@@ -315,11 +331,17 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'], url_path=r'experts/(?P<expert_id>\d+)/connect')
     def connect(self, request, pk=None, expert_id=None):
         """전문가와 연결하기"""
-        phone = request.user.phone_number
+        user = request.user
+        phone = user.phone_number
+
+        # user ID 또는 phone 둘 중 하나로 조회
+        q_filter = Q(user=user)
+        if phone:
+            q_filter |= Q(phone=phone)
+
         consultation = get_object_or_404(
-            ConsultationRequest,
-            id=pk,
-            customer_phone=phone
+            ConsultationRequest.objects.filter(q_filter),
+            id=pk
         )
 
         match = get_object_or_404(
@@ -357,11 +379,17 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'], url_path='complete')
     def complete(self, request, pk=None):
         """상담 완료"""
-        phone = request.user.phone_number
+        user = request.user
+        phone = user.phone_number
+
+        # user ID 또는 phone 둘 중 하나로 조회
+        q_filter = Q(user=user)
+        if phone:
+            q_filter |= Q(phone=phone)
+
         consultation = get_object_or_404(
-            ConsultationRequest,
-            id=pk,
-            customer_phone=phone
+            ConsultationRequest.objects.filter(q_filter),
+            id=pk
         )
 
         # 연결된 매칭이 있는지 확인
