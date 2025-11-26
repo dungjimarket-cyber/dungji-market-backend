@@ -265,17 +265,27 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """내 상담 요청 목록"""
+        import re
         user = request.user
         phone = user.phone_number
 
+        # 전화번호 정규화 (하이픈 제거)
+        normalized_phone = re.sub(r'[^0-9]', '', phone) if phone else None
+
         # user ID 또는 phone 둘 중 하나로 조회
         q_filter = Q(user=user)
-        if phone:
+        if normalized_phone:
+            # 정규화된 전화번호로 비교 (DB에 저장된 값도 정규화)
             q_filter |= Q(phone=phone)
+            q_filter |= Q(phone=normalized_phone)
+            # 하이픈 포함 형식도 체크
+            if len(normalized_phone) == 11:
+                formatted_phone = f"{normalized_phone[:3]}-{normalized_phone[3:7]}-{normalized_phone[7:]}"
+                q_filter |= Q(phone=formatted_phone)
 
         consultations = ConsultationRequest.objects.filter(
             q_filter
-        ).select_related('category').prefetch_related('matches__expert').distinct()
+        ).select_related('category').prefetch_related('matches__expert').distinct().order_by('-created_at')
 
         serializer = ConsultationRequestForCustomerSerializer(
             consultations, many=True, context={'request': request}
@@ -285,13 +295,19 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         """상담 요청 상세"""
+        import re
         user = request.user
         phone = user.phone_number
+        normalized_phone = re.sub(r'[^0-9]', '', phone) if phone else None
 
         # user ID 또는 phone 둘 중 하나로 조회
         q_filter = Q(user=user)
-        if phone:
+        if normalized_phone:
             q_filter |= Q(phone=phone)
+            q_filter |= Q(phone=normalized_phone)
+            if len(normalized_phone) == 11:
+                formatted_phone = f"{normalized_phone[:3]}-{normalized_phone[3:7]}-{normalized_phone[7:]}"
+                q_filter |= Q(phone=formatted_phone)
 
         consultation = get_object_or_404(
             ConsultationRequest.objects.filter(q_filter),
@@ -307,13 +323,19 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['get'], url_path='experts')
     def experts(self, request, pk=None):
         """답변한 전문가 목록"""
+        import re
         user = request.user
         phone = user.phone_number
+        normalized_phone = re.sub(r'[^0-9]', '', phone) if phone else None
 
         # user ID 또는 phone 둘 중 하나로 조회
         q_filter = Q(user=user)
-        if phone:
+        if normalized_phone:
             q_filter |= Q(phone=phone)
+            q_filter |= Q(phone=normalized_phone)
+            if len(normalized_phone) == 11:
+                formatted_phone = f"{normalized_phone[:3]}-{normalized_phone[3:7]}-{normalized_phone[7:]}"
+                q_filter |= Q(phone=formatted_phone)
 
         consultation = get_object_or_404(
             ConsultationRequest.objects.filter(q_filter),
@@ -331,13 +353,19 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'], url_path=r'experts/(?P<expert_id>\d+)/connect')
     def connect(self, request, pk=None, expert_id=None):
         """전문가와 연결하기"""
+        import re
         user = request.user
         phone = user.phone_number
+        normalized_phone = re.sub(r'[^0-9]', '', phone) if phone else None
 
         # user ID 또는 phone 둘 중 하나로 조회
         q_filter = Q(user=user)
-        if phone:
+        if normalized_phone:
             q_filter |= Q(phone=phone)
+            q_filter |= Q(phone=normalized_phone)
+            if len(normalized_phone) == 11:
+                formatted_phone = f"{normalized_phone[:3]}-{normalized_phone[3:7]}-{normalized_phone[7:]}"
+                q_filter |= Q(phone=formatted_phone)
 
         consultation = get_object_or_404(
             ConsultationRequest.objects.filter(q_filter),
@@ -379,13 +407,19 @@ class CustomerConsultationsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'], url_path='complete')
     def complete(self, request, pk=None):
         """상담 완료"""
+        import re
         user = request.user
         phone = user.phone_number
+        normalized_phone = re.sub(r'[^0-9]', '', phone) if phone else None
 
         # user ID 또는 phone 둘 중 하나로 조회
         q_filter = Q(user=user)
-        if phone:
+        if normalized_phone:
             q_filter |= Q(phone=phone)
+            q_filter |= Q(phone=normalized_phone)
+            if len(normalized_phone) == 11:
+                formatted_phone = f"{normalized_phone[:3]}-{normalized_phone[3:7]}-{normalized_phone[7:]}"
+                q_filter |= Q(phone=formatted_phone)
 
         consultation = get_object_or_404(
             ConsultationRequest.objects.filter(q_filter),
