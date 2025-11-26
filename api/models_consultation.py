@@ -66,6 +66,12 @@ class ConsultationRequest(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='requests',
+        verbose_name='상담 유형(레거시)'
+    )
+    consultation_type_text = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
         verbose_name='상담 유형'
     )
     region = models.CharField(max_length=50, verbose_name='희망 지역')
