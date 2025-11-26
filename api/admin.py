@@ -259,8 +259,9 @@ class PenaltyAdmin(admin.ModelAdmin):
 class ExpertProfileInline(admin.StackedInline):
     from .models_expert import ExpertProfile
     model = ExpertProfile
-    extra = 0
-    can_delete = False
+    extra = 1  # 전문가 프로필이 없는 사용자도 추가할 수 있도록 빈 폼 1개 표시
+    max_num = 1  # 최대 1개만 허용 (OneToOne 관계)
+    can_delete = True
     verbose_name = '전문가 프로필'
     verbose_name_plural = '전문가 프로필'
     fields = ['category', 'representative_name', 'status', 'is_receiving_requests', 'contact_phone', 'contact_email', 'tagline']
