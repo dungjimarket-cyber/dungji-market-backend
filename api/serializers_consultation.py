@@ -33,8 +33,18 @@ class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_category(self, value):
-        """카테고리 검증 - ID 또는 이름/google_place_type 지원"""
+        """카테고리 검증 - ID, 이름, 통합 카테고리 ID 지원"""
         from django.db.models import Q
+
+        # 통합 카테고리 매핑 (프론트엔드 가상 ID → 실제 DB 카테고리명)
+        MERGED_CATEGORY_MAP = {
+            'tax_accounting': '세무사',
+            'legal_service': '변호사',
+            'cleaning_moving': '청소 전문',
+            '세무·회계': '세무사',
+            '법률 서비스': '변호사',
+            '청소·이사': '청소 전문',
+        }
 
         # 숫자면 ID로 검색
         if str(value).isdigit():
@@ -42,6 +52,13 @@ class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
                 return LocalBusinessCategory.objects.get(id=int(value))
             except LocalBusinessCategory.DoesNotExist:
                 raise serializers.ValidationError('존재하지 않는 카테고리입니다.')
+
+        # 통합 카테고리 매핑 확인
+        if value in MERGED_CATEGORY_MAP:
+            real_category_name = MERGED_CATEGORY_MAP[value]
+            category = LocalBusinessCategory.objects.filter(name=real_category_name).first()
+            if category:
+                return category
 
         # 문자열이면 이름/google_place_type으로 검색
         category = LocalBusinessCategory.objects.filter(
