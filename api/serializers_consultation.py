@@ -88,19 +88,43 @@ class ConsultationRequestCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        import logging
+        logger = logging.getLogger(__name__)
+
         # consultation_type_name으로 ConsultationType 찾기
         consultation_type_name = validated_data.pop('consultation_type_name', None)
         if consultation_type_name and not validated_data.get('consultation_type'):
             category = validated_data.get('category')
             if category:
-                # 해당 카테고리에서 이름이 일치하는 상담 유형 찾기
+                logger.info(f"상담 유형 매칭 시도: 카테고리={category.name}, 유형명={consultation_type_name}")
+
+                # 1차: 정확히 일치하는 이름 찾기
                 consultation_type = ConsultationType.objects.filter(
                     category=category,
                     name__iexact=consultation_type_name,
                     is_active=True
                 ).first()
+
+                # 2차: 부분 매칭 (이름에 포함되어 있는지)
+                if not consultation_type:
+                    consultation_type = ConsultationType.objects.filter(
+                        category=category,
+                        name__icontains=consultation_type_name.replace(' ', ''),
+                        is_active=True
+                    ).first()
+
+                # 3차: 공백 제거 후 비교
+                if not consultation_type:
+                    for ct in ConsultationType.objects.filter(category=category, is_active=True):
+                        if ct.name.replace(' ', '') == consultation_type_name.replace(' ', ''):
+                            consultation_type = ct
+                            break
+
                 if consultation_type:
                     validated_data['consultation_type'] = consultation_type
+                    logger.info(f"상담 유형 매칭 성공: {consultation_type.name}")
+                else:
+                    logger.warning(f"상담 유형 매칭 실패: 카테고리={category.name}, 유형명={consultation_type_name}")
 
         # 로그인한 사용자가 있으면 연결
         request = self.context.get('request')
