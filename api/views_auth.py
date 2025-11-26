@@ -199,11 +199,15 @@ def register_user_v2(request):
             )
         
         # role 검증
-        if role not in ['buyer', 'seller']:
+        if role not in ['buyer', 'seller', 'expert']:
             return Response(
                 {'error': '올바르지 않은 회원 유형입니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # 전문가 전용 필드
+        expert_category_id = data.get('expert_category_id', '')
+        expert_is_business = data.get('expert_is_business', 'false').lower() == 'true'
         
         # 일반 회원가입인 경우 username 중복 확인
         if not social_provider and username_field:
@@ -254,7 +258,15 @@ def register_user_v2(request):
             #             {'error': '이미 등록된 사업자등록번호입니다. 동일한 사업자번호로는 하나의 계정만 생성할 수 있습니다.'},
             #             status=status.HTTP_400_BAD_REQUEST
             #         )
-        
+
+        # 전문가인 경우 추가 검증
+        if role == 'expert' and not social_provider:
+            if not expert_category_id:
+                return Response(
+                    {'error': '전문가는 전문 분야를 선택해야 합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         with transaction.atomic():
             # 사용자 생성
             # 이메일이 제공된 경우 실제 이메일 사용, 아니면 빈 문자열
@@ -427,7 +439,26 @@ def register_user_v2(request):
                     logger.error(f"프로필 이미지 업로드 실패: {str(e)}")
             
             user.save()
-            
+
+            # 전문가 회원 가입 시 전문가 프로필 생성
+            if role == 'expert' and expert_category_id:
+                try:
+                    from .models_expert import ExpertProfile
+                    from .models_local_business import LocalBusinessCategory
+
+                    category = LocalBusinessCategory.objects.get(id=expert_category_id)
+                    ExpertProfile.objects.create(
+                        user=user,
+                        category=category,
+                        is_business=expert_is_business,
+                        is_verified=False
+                    )
+                    logger.info(f"전문가 프로필 생성 완료: user={user.username}, category={category.name}")
+                except LocalBusinessCategory.DoesNotExist:
+                    logger.error(f"전문가 카테고리를 찾을 수 없음: {expert_category_id}")
+                except Exception as e:
+                    logger.error(f"전문가 프로필 생성 오류: {str(e)}")
+
             # 판매회원 가입시 입찰권 자동 추가
             if role == 'seller':
                 from .models import BidToken
