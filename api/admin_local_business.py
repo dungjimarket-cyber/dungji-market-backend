@@ -212,6 +212,7 @@ class LocalBusinessAdmin(admin.ModelAdmin):
         custom_urls = [
             path('collect-businesses/', self.admin_site.admin_view(self.collect_v2_view), name='collect_local_businesses'),
             path('validate-businesses/', self.admin_site.admin_view(self.validate_businesses_view), name='validate_local_businesses'),
+            path('retag-tax-law/', self.admin_site.admin_view(self.retag_tax_law_view), name='retag_tax_law'),
             path('<path:object_id>/refresh/', self.admin_site.admin_view(self.refresh_business_view), name='refresh_local_business'),
         ]
         return custom_urls + urls
@@ -350,6 +351,40 @@ class LocalBusinessAdmin(admin.ModelAdmin):
             'admin/local_business_collect_v2.html',
             context
         )
+
+    def retag_tax_law_view(self, request):
+        """ì—­ì œ ëª©ê·¸ì¤ ì´ë¦„ì— ë”°ëžŒ ìƒê·¼ì„ ì£¼ì— ë˜ëŠ” ë³´ë‚´ì„¸ìš”/변호사ë¡œ ìž¬ë¶„ë¥˜"""
+        from django.http import JsonResponse
+
+        if request.method != 'POST':
+            return JsonResponse({'error': 'POST only'}, status=405)
+
+        # í•„ìˆ˜ ì¹´í…Œê³ ë¦¬ ê°€ì ¸ì˜¤ê¸?
+        tax_category = LocalBusinessCategory.objects.filter(name='세무사').first()
+        lawyer_category = LocalBusinessCategory.objects.filter(name='변호사').first()
+
+        if not tax_category or not lawyer_category:
+            return JsonResponse({'error': '필수 카테고리(세무사/변호사)가 없습니다.'}, status=400)
+
+        # "세무"ê°€ í•´ë‹¹í•œ ì—­ì œëŠ” 세무사ë¡œ, ì´ì „ ê¸°ì¤‘ ë³´ì— êµ¬ë¶„ëœ ê²½ìš°ëŠ” íŒŒì‹œ
+        tax_qs = LocalBusiness.objects.filter(
+            category__name__in=['세무사', '회계사'],
+            name__icontains='세무'
+        )
+        tax_updated = tax_qs.update(category=tax_category)
+
+        # "변호"ê°€ í•´ë‹¹í•œ ì—­ì œëŠ” 변호사ë¡œ, 법무사 ê¸°ì¤‘ë³´ì— êµ¬ë¶„ëœ ê²½ìš°ëŠ” íŒŒì‹œ
+        lawyer_qs = LocalBusiness.objects.filter(
+            category__name__in=['법무사', '변호사'],
+            name__icontains='변호'
+        )
+        lawyer_updated = lawyer_qs.update(category=lawyer_category)
+
+        return JsonResponse({
+            'tax_updated': tax_updated,
+            'lawyer_updated': lawyer_updated,
+            'total_updated': tax_updated + lawyer_updated
+        })
 
     def refresh_business_view(self, request, object_id):
         """개별 업체 데이터 갱신"""

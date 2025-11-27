@@ -152,6 +152,10 @@ class Command(BaseCommand):
             categories = categories.filter(name=options['category'])
 
         # 지역 필터링 (하드코딩된 리스트 사용)
+        # 세무/변호 재분류용 대상 카테고리 캐싱
+        self.tax_category = LocalBusinessCategory.objects.filter(name='세무사').first()
+        self.lawyer_category = LocalBusinessCategory.objects.filter(name='변호사').first()
+
         regions = TARGET_REGIONS
         if options['region']:
             regions = [r for r in TARGET_REGIONS if options['region'] in r[0] or options['region'] in r[1]]
@@ -225,6 +229,12 @@ class Command(BaseCommand):
                         self.stdout.write(self.style.WARNING(f"    ⚠️  {business_name} - 창고/보관 업체 (이사 아님) 스킵"))
                         continue
 
+                target_category = category
+                if '세무' in business_name and getattr(self, 'tax_category', None):
+                    target_category = self.tax_category
+                if '변호' in business_name and getattr(self, 'lawyer_category', None):
+                    target_category = self.lawyer_category
+
                 with transaction.atomic():
                     # 기존 업체 확인
                     existing_business = LocalBusiness.objects.filter(
@@ -250,6 +260,7 @@ class Command(BaseCommand):
                         existing_business.website_url = place.get('websiteUri')
                         existing_business.business_status = place.get('businessStatus', 'OPERATIONAL')
                         existing_business.last_synced_at = timezone.now()
+                        existing_business.category = target_category
                         existing_business.save()
 
                         self.stdout.write(f"    ↻ {existing_business.name} (업데이트, 카테고리 유지: {existing_business.category.name})")
@@ -257,7 +268,7 @@ class Command(BaseCommand):
                         # 신규 업체는 모든 정보 포함하여 생성
                         business = LocalBusiness.objects.create(
                             google_place_id=place['placeId'],
-                            category=category,
+                            category=target_category,
                             region_name=region_full_name,
                             name=place['name'],
                             address=place['address'],

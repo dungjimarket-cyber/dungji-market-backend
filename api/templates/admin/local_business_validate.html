@@ -25,6 +25,24 @@
         </ul>
     </div>
 
+    <div style="background: #e8f5e9; border: 1px solid #4CAF50; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div>
+                <strong>세무/변호 업종 재분류</strong>
+                <div style="color: #2e7d32; margin-top: 6px; font-size: 13px;">
+                    업체명에 "세무"가 포함된 항목은 세무사, "변호"가 포함된 항목은 변호사로 즉시 업데이트합니다.
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" id="retagTaxLawBtn"
+                        style="padding: 8px 14px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    세무/변호 재분류 실행
+                </button>
+                <span id="retagStatus" style="color: #2e7d32; font-size: 13px;"></span>
+            </div>
+        </div>
+    </div>
+
     <form id="validateForm" style="margin-top: 20px;">
         {% csrf_token %}
 
@@ -156,6 +174,47 @@
     transform: scale(1.2);
 }
 </style>
+
+<script>
+// 세무/변호 자동 재분류 실행 (CSRF 토큰 직접 주입)
+const retagCsrfToken = '{{ csrf_token }}';
+const retagBtn = document.getElementById('retagTaxLawBtn');
+const retagStatus = document.getElementById('retagStatus');
+
+if (retagBtn) {
+    retagBtn.addEventListener('click', async () => {
+        retagBtn.disabled = true;
+        if (retagStatus) retagStatus.textContent = '재분류 실행 중...';
+
+        try {
+            const response = await fetch('/admin/api/localbusiness/retag-tax-law/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': retagCsrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || '재분류 실패');
+            }
+
+            if (retagStatus) {
+                retagStatus.textContent = `세무사 ${data.tax_updated}건, 변호사 ${data.lawyer_updated}건 업데이트`;
+                retagStatus.style.color = '#2e7d32';
+            }
+        } catch (err) {
+            if (retagStatus) {
+                retagStatus.textContent = err.message || '재분류 중 오류가 발생했습니다.';
+                retagStatus.style.color = '#d32f2f';
+            }
+        } finally {
+            retagBtn.disabled = false;
+        }
+    });
+}
+</script>
 
 <script>
 const csrfToken = '{{ csrf_token }}';
