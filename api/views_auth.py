@@ -10,6 +10,7 @@ from datetime import timedelta
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -20,6 +21,7 @@ from .models_nickname import NicknameChangeHistory
 from used_phones.models import UsedPhone
 from used_electronics.models import UsedElectronics
 from .utils.s3_utils import upload_file_to_s3
+from .utils.s3_upload import upload_to_s3
 from .utils.resend_sender import ResendSender
 from .serializers_jwt import CustomTokenObtainPairSerializer
 from django.conf import settings
@@ -1580,6 +1582,64 @@ def user_profile(request):
         return Response(
             {'error': '지원하지 않는 메서드입니다.'},
             status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+
+class UserProfileImageUploadView(APIView):
+    """
+    일반 회원 프로필 이미지 업로드
+    POST /api/profile/image/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if 'image' not in request.FILES:
+            return Response(
+                {'detail': '이미지 파일을 첨부해주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        image_file = request.FILES['image']
+
+        # 5MB 제한
+        if image_file.size > 5 * 1024 * 1024:
+            return Response(
+                {'detail': '이미지 크기는 5MB 이하로 올려주세요.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 허용 형식
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if image_file.content_type not in allowed_types:
+            return Response(
+                {'detail': 'JPG, PNG, GIF, WEBP 형식만 지원합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # S3 업로드 시도
+        image_url = upload_to_s3(image_file, 'profiles')
+
+        # 로컬 스토리지 폴백
+        if not image_url:
+            from django.core.files.storage import default_storage
+            from django.core.files.base import ContentFile
+            import uuid
+
+            image_file.seek(0)
+            ext = image_file.name.split('.')[-1]
+            filename = f'profiles/{uuid.uuid4().hex}.{ext}'
+            path = default_storage.save(filename, ContentFile(image_file.read()))
+            image_url = default_storage.url(path)
+
+        request.user.profile_image = image_url
+        request.user.save(update_fields=['profile_image'])
+
+        return Response(
+            {
+                'image_url': image_url,
+                'message': '프로필 이미지가 업로드되었습니다.'
+            },
+            status=status.HTTP_201_CREATED
         )
 
 

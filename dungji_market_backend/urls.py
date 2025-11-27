@@ -46,7 +46,7 @@ from api.views_consent import ParticipantConsentViewSet, start_consent_process
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
-from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, check_phone_duplicate, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status, verify_user_phone, reset_password_phone, find_id_by_phone
+from api.views_auth import CustomTokenObtainPairView, register_user_v2, check_username, check_nickname, check_email, check_phone_duplicate, find_username, reset_password, withdraw_user, get_user_profile, update_user_profile, user_profile, send_password_reset_email, verify_password_reset_email, reset_password_with_email, update_referral_code, check_referral_status, verify_user_phone, reset_password_phone, find_id_by_phone, UserProfileImageUploadView
 from api.views_nickname import nickname_change_status, nickname_change_history, nickname_change_test_status
 from api.views_auth_token import refresh_user_token, verify_token_role
 from api.views_link_preview import get_link_preview
@@ -342,6 +342,7 @@ urlpatterns = [
         'patch': 'toggle_receiving'
     }), name='expert_toggle_receiving'),
     path('api/expert/profile/image/', ExpertProfileImageUploadView.as_view(), name='expert_profile_image'),
+    path('api/profile/image/', UserProfileImageUploadView.as_view(), name='user_profile_image'),
     path('api/expert/requests/', ExpertRequestsViewSet.as_view({
         'get': 'list'
     }), name='expert_requests'),

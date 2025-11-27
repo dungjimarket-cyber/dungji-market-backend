@@ -72,7 +72,7 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
     phone_verified = models.BooleanField(default=False, verbose_name='휴대폰 인증 여부')
     phone_verified_at = models.DateTimeField(null=True, blank=True, verbose_name='휴대폰 인증 일시')
-    profile_image = models.URLField(blank=True)  # 외부 스토리지 사용 가정
+    profile_image = models.URLField(blank=True, verbose_name='프로필 이미지')
     business_reg_number = models.CharField(max_length=20, blank=True, null=True)
     is_business_verified = models.BooleanField(default=False)
     penalty_expiry = models.DateTimeField(null=True, blank=True)  # 새로 추가
