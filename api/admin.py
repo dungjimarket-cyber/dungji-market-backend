@@ -663,7 +663,7 @@ class UserAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {'fields': ('username', 'email', 'role', 'password')}),
         ('가입정보', {'fields': ('sns_type', 'sns_id')}),
-        ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+        ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region', 'profile_image')}),
         ('사업자정보', {'fields': ('seller_category', 'business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
         ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history')}),
         ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -691,7 +691,7 @@ class UserAdmin(admin.ModelAdmin):
             return (
                 (None, {'fields': ('username', 'email', 'role', 'password')}),
                 ('가입정보', {'fields': ('sns_type', 'sns_id')}),
-                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region', 'profile_image')}),
                 ('사업자정보', {'fields': ('seller_category', 'business_number', 'business_license_image', 'display_business_reg_file_preview', 'is_business_verified', 'is_remote_sales')}),
                 ('입찰권 관리', {'fields': ('get_bid_tokens_summary', 'get_quick_token_adjustment', 'get_adjustment_history')}),
                 ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -702,7 +702,7 @@ class UserAdmin(admin.ModelAdmin):
             return (
                 (None, {'fields': ('username', 'email', 'role', 'password')}),
                 ('가입정보', {'fields': ('sns_type', 'sns_id')}),
-                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region', 'profile_image')}),
                 ('전문가 정보', {
                     'fields': (),
                     'description': '⬇️ 아래 "전문가 프로필" 섹션에서 업종(카테고리)을 선택하세요.'

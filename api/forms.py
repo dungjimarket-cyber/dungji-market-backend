@@ -48,7 +48,8 @@ class UserChangeForm(forms.ModelForm):
 
   class Meta:
     model = User;
-    fields = ('username', 'email', 'role', 'password', 'is_active', 'is_staff');
+    # Admin fieldsets로 노출 제어, 기본은 전체 필드를 허용
+    fields = '__all__';
     labels = {
       'username': '아이디',  # 사용자 이름 → 아이디로 변경
     }
