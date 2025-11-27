@@ -303,7 +303,7 @@ class BidTokenAdjustmentLogInline(admin.TabularInline):
 class UserAdmin(admin.ModelAdmin):
     add_form = UserCreationForm
     form = UserChangeForm
-    list_display = ['get_user_id', 'nickname', 'email', 'role', 'seller_category', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'date_joined']
+    list_display = ['get_user_id', 'nickname', 'email', 'role', 'seller_category', 'get_expert_category', 'get_sns_type', 'is_business_verified', 'get_bid_tokens_count', 'get_subscription_status', 'date_joined']
     list_filter = ['role', 'seller_category', 'sns_type', 'is_active', 'is_staff', 'is_business_verified', 'date_joined']
     search_fields = ['username', 'email', 'business_number', 'nickname', 'phone_number', 'first_name', 'last_name', 'representative_name']
     ordering = ['-date_joined']  # 최신 가입자 순으로 정렬
@@ -374,7 +374,21 @@ class UserAdmin(admin.ModelAdmin):
         return obj.sns_type or '직접가입'
     get_sns_type.short_description = '가입유형'
     get_sns_type.admin_order_field = 'sns_type'
-    
+
+    def get_expert_category(self, obj):
+        """전문가 업종 표시"""
+        if obj.role != 'expert':
+            return '-'
+        try:
+            if hasattr(obj, 'expert_profile') and obj.expert_profile:
+                category = obj.expert_profile.category
+                if category:
+                    return mark_safe(f'<span style="color: #2196F3; background: #E3F2FD; padding: 2px 8px; border-radius: 4px;">{category.name}</span>')
+            return mark_safe('<span style="color: #FF9800; background: #FFF3E0; padding: 2px 8px; border-radius: 4px;">미설정</span>')
+        except:
+            return mark_safe('<span style="color: #FF9800; background: #FFF3E0; padding: 2px 8px; border-radius: 4px;">미설정</span>')
+    get_expert_category.short_description = '전문가 업종'
+
     def get_bid_tokens_count(self, obj):
         """활성 입찰권 수 표시"""
         if obj.role != 'seller':
@@ -683,6 +697,19 @@ class UserAdmin(admin.ModelAdmin):
                 ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
                 ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
             )
+        elif obj and obj.role == 'expert':
+            # 전문가용 fieldsets (전문가 프로필은 인라인으로 관리)
+            return (
+                (None, {'fields': ('username', 'email', 'role', 'password')}),
+                ('가입정보', {'fields': ('sns_type', 'sns_id')}),
+                ('개인정보', {'fields': ('nickname', 'phone_number', 'address_region')}),
+                ('전문가 정보', {
+                    'fields': (),
+                    'description': '⬇️ 아래 "전문가 프로필" 섹션에서 업종(카테고리)을 선택하세요.'
+                }),
+                ('권한', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+                ('중요 날짜', {'fields': ('last_login', 'date_joined')}),
+            )
         else:
             # 일반 사용자용 fieldsets (입찰권 관리 제외)
             return (
@@ -694,9 +721,13 @@ class UserAdmin(admin.ModelAdmin):
             )
     
     def get_inlines(self, request, obj):
-        """판매회원인 경우에만 BidToken 관련 인라인 표시"""
+        """역할에 따라 다른 인라인 표시"""
         if obj and obj.role == 'seller':
+            # 판매자: 모든 인라인 (전문가 프로필, 입찰권 등)
             return self.inlines
+        elif obj and obj.role == 'expert':
+            # 전문가: 전문가 프로필 인라인만
+            return [ExpertProfileInline]
         return []
     
     # 대량 액션들
