@@ -77,7 +77,9 @@ class ConsultationMatchAdmin(admin.ModelAdmin):
     )
 
     def get_consultation_info(self, obj):
-        return f"{obj.consultation.category.name} - {obj.consultation.customer_name}"
+        # ConsultationRequest에는 customer_name 필드가 없고 name/phone을 사용함
+        customer_name = getattr(obj.consultation, 'name', '') or ''
+        return f"{obj.consultation.category.name} - {customer_name}"
     get_consultation_info.short_description = '상담 요청'
 
     def get_expert_name(self, obj):
