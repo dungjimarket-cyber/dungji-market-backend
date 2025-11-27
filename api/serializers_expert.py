@@ -89,6 +89,7 @@ class ExpertProfilePublicSerializer(serializers.ModelSerializer):
     """
     category = LocalBusinessCategorySimpleSerializer(read_only=True)
     regions = RegionSimpleSerializer(many=True, read_only=True)
+    user_profile_image = serializers.CharField(source='user.profile_image', read_only=True)
 
     class Meta:
         model = ExpertProfile
@@ -98,7 +99,8 @@ class ExpertProfilePublicSerializer(serializers.ModelSerializer):
             'is_business', 'business_name',
             'category',
             'regions',
-            'profile_image', 'tagline', 'introduction',
+            'profile_image', 'user_profile_image',
+            'tagline', 'introduction',
         ]
 
 
@@ -160,6 +162,8 @@ class ConsultationRequestForExpertSerializer(serializers.ModelSerializer):
     answers = serializers.SerializerMethodField()
     customer_name = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
+    expert_message = serializers.SerializerMethodField()
+    available_time = serializers.SerializerMethodField()
 
     class Meta:
         model = ConsultationRequest
@@ -167,7 +171,7 @@ class ConsultationRequestForExpertSerializer(serializers.ModelSerializer):
             'id', 'category_name',
             'region', 'answers',
             'customer_name', 'customer_phone',
-            'match_status',
+            'match_status', 'expert_message', 'available_time',
             'created_at'
         ]
 
@@ -203,6 +207,24 @@ class ConsultationRequestForExpertSerializer(serializers.ModelSerializer):
             if match:
                 return obj.phone
         return None
+
+    def get_expert_message(self, obj):
+        """현재 전문가가 남긴 답변 내용"""
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'expert_profile'):
+            match = obj.matches.filter(expert=request.user.expert_profile).first()
+            if match:
+                return match.expert_message
+        return ''
+
+    def get_available_time(self, obj):
+        """현재 전문가가 남긴 상담 가능 일자"""
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'expert_profile'):
+            match = obj.matches.filter(expert=request.user.expert_profile).first()
+            if match:
+                return match.available_time
+        return ''
 
     def get_answers(self, obj):
         answers = {}
