@@ -197,30 +197,33 @@ class ExpertRequestsViewSet(viewsets.ViewSet):
             expert=expert_profile
         )
 
-        if match.status != 'pending':
-            return Response(
-                {'detail': '이미 답변한 요청입니다.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         serializer = ExpertReplySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        match.status = 'replied'
-        match.expert_message = serializer.validated_data.get('expert_message', '')
-        match.available_time = serializer.validated_data.get('available_time', '')
-        match.replied_at = timezone.now()
+        # 최초 답변 여부 판단
+        is_first_reply = (match.status == 'pending')
+
+        # 내용 업데이트 (필드가 없으면 기존 값 유지)
+        match.expert_message = serializer.validated_data.get('expert_message', match.expert_message or '')
+        match.available_time = serializer.validated_data.get('available_time', match.available_time or '')
+
+        # 최초 답변이면 상태/시간 갱신, 이후엔 상태 유지하고 내용만 갱신
+        if is_first_reply:
+            match.status = 'replied'
+            match.replied_at = timezone.now()
+
         match.save()
 
-        # 고객에게 알림 발송
-        try:
-            send_consultation_replied_notification(match)
-        except Exception as e:
-            # 알림 실패해도 답변은 성공으로 처리
-            pass
+        # 최초 답변일 때만 고객 알림 발송 (중복 발송 방지)
+        if is_first_reply:
+            try:
+                send_consultation_replied_notification(match)
+            except Exception:
+                # 알림 실패해도 답변은 성공으로 처리
+                pass
 
         return Response({
-            'detail': '답변이 완료되었습니다.',
+            'detail': '답변이 저장되었습니다.',
             'match': ConsultationMatchDetailSerializer(match).data
         })
 
