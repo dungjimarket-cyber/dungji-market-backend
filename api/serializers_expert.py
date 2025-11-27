@@ -157,6 +157,7 @@ class ConsultationRequestForExpertSerializer(serializers.ModelSerializer):
     """전문가에게 보여줄 상담 요청 시리얼라이저"""
     category_name = serializers.CharField(source='category.name', read_only=True)
     match_status = serializers.SerializerMethodField()
+    answers = serializers.SerializerMethodField()
     customer_name = serializers.SerializerMethodField()
     customer_phone = serializers.SerializerMethodField()
 
@@ -188,7 +189,7 @@ class ConsultationRequestForExpertSerializer(serializers.ModelSerializer):
                 status__in=['connected', 'completed']
             ).first()
             if match:
-                return obj.customer_name
+                return obj.name
         return None
 
     def get_customer_phone(self, obj):
@@ -200,8 +201,16 @@ class ConsultationRequestForExpertSerializer(serializers.ModelSerializer):
                 status__in=['connected', 'completed']
             ).first()
             if match:
-                return obj.customer_phone
+                return obj.phone
         return None
+
+    def get_answers(self, obj):
+        answers = {}
+        if obj.content:
+            answers['상담 내용'] = obj.content
+        if obj.consultation_type_text:
+            answers['상담 유형'] = obj.consultation_type_text
+        return answers
 
 
 # 고객용 상담 내역 시리얼라이저

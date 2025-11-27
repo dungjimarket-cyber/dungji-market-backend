@@ -129,11 +129,13 @@ def send_new_consultation_notifications(consultation, experts):
                 item_id=consultation.id
             )
 
-            # SMS 발송
-            sms_service.send_consultation_new_expert(
-                expert.contact_phone,
-                consultation.category.name
-            )
+            # SMS 발송 - User.phone_number 우선 사용, 없으면 contact_phone
+            phone_number = expert.user.phone_number or expert.contact_phone
+            if phone_number:
+                sms_service.send_consultation_new_expert(
+                    phone_number,
+                    consultation.category.name
+                )
 
             logger.debug(f"전문가 {expert.id}에게 상담 알림 발송")
 
