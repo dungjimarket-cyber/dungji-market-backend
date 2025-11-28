@@ -262,7 +262,7 @@ def create_sns_user(request):
         
         # 3차: 새 사용자인 경우 - 자동 생성하지 않고 회원가입 필요 플래그 반환
         # role이 명시적으로 전달된 경우에만 새 사용자 생성
-        if not role or role not in ['buyer', 'seller', 'partner']:
+        if not role or role not in ['buyer', 'seller', 'partner', 'expert']:
             # role이 없거나 유효하지 않은 경우 - 회원가입 페이지로 유도
             logger.info(f"새 사용자 감지 - 회원가입 필요: email={email}, sns_type={sns_type}, sns_id={sns_id}")
             return Response({
@@ -290,6 +290,8 @@ def create_sns_user(request):
                 # 역할에 따른 닉네임 프리픽스 설정
                 if role == 'seller':
                     nickname_prefix = '어미새'
+                elif role == 'expert':
+                    nickname_prefix = '전문가'
                 else:
                     nickname_prefix = '참새'
 
@@ -454,6 +456,15 @@ def create_sns_user(request):
             )
             
             logger.info(f"카카오 파트너 {user.username}의 파트너 프로필 생성 완료")
+
+        # 전문가인 경우 전문가 프로필 생성 (연락처/업종은 나중에 입력)
+        elif role == 'expert':
+            from .models_expert import ExpertProfile
+
+            # 전문가 프로필 생성 (필수 정보만, 업종/연락처는 나중에 입력)
+            # 업종과 연락처 없이 생성되므로 상담 매칭은 안됨
+            # → 프로필 완료 안내 모달에서 설정페이지로 유도
+            logger.info(f"카카오 전문가 {user.username}의 프로필 생성 대기 - 업종/연락처 입력 필요")
 
         # JWT 토큰 발급 - CustomTokenObtainPairSerializer 사용
         from api.serializers_jwt import CustomTokenObtainPairSerializer
