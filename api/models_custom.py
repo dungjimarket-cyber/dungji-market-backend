@@ -348,7 +348,7 @@ class CustomGroupBuy(models.Model):
 
             if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
                 short_title = self.title[:20] if len(self.title) > 20 else self.title
-                sms_message = f"[둥지마켓] {short_title} 공구가 마감되었습니다. 24시간 내 판매결정을 진행해주세요 ({self.current_participants}명 참여)"
+                sms_message = f"[둥지마켓] {short_title} 공구가 마감되었습니다. 참여자정보를 확인해주세요 ({self.current_participants}명 참여)"
 
                 success, error = sms_service._send_aligo_sms(self.seller.phone_number, sms_message)
 
