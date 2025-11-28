@@ -343,16 +343,34 @@ class CustomGroupBuy(models.Model):
 
         # 2단계: 판매자에게 SMS 발송
         try:
-            from api.utils.sms_service import SMSService
+            from api.utils.sms_service import SMSService, log_sms
             sms_service = SMSService()
 
             if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
                 short_title = self.title[:20] if len(self.title) > 20 else self.title
                 sms_message = f"[둥지마켓] {short_title} 공구가 마감되었습니다. 24시간 내 판매결정을 진행해주세요 ({self.current_participants}명 참여)"
-                sms_service._send_aligo_sms(self.seller.phone_number, sms_message)
-                logger.info(f"[COMPLETE] 판매자 SMS 발송 완료 - {self.seller.username}")
+
+                success, error = sms_service._send_aligo_sms(self.seller.phone_number, sms_message)
+
+                # SMS 로그 기록
+                log_sms(
+                    phone_number=self.seller.phone_number,
+                    message_type='groupbuy_completion_seller',
+                    message_content=sms_message,
+                    status='success' if success else 'failed',
+                    error_message=error,
+                    user=self.seller,
+                    custom_groupbuy=self
+                )
+
+                if success:
+                    logger.info(f"[COMPLETE] 판매자 SMS 발송 완료 - {self.seller.username}")
+                else:
+                    logger.error(f"[COMPLETE] 판매자 SMS 발송 실패 - {self.seller.username}, error: {error}")
+            else:
+                logger.warning(f"[COMPLETE] 판매자 전화번호 없음 - {self.seller.username}")
         except Exception as e:
-            logger.error(f"[COMPLETE] 판매자 SMS 발송 실패 - error:{str(e)}")
+            logger.error(f"[COMPLETE] 판매자 SMS 발송 예외 - error:{str(e)}")
 
         # 3단계: 완료 처리는 confirm_sale() API에서 수동으로 진행
         # 이 시점에서는 pending_seller로만 변경하고 종료
@@ -760,7 +778,7 @@ class CustomGroupBuy(models.Model):
                 self.seller_decision_deadline = timezone.now() + timedelta(hours=24)
                 self.save()
 
-                # 판매자에게 결정 요청 알림
+                # 판매자에게 결정 요청 알림 (Push)
                 if self.seller:
                     send_custom_groupbuy_notification(
                         user=self.seller,
@@ -769,6 +787,36 @@ class CustomGroupBuy(models.Model):
                         message=f'"{self.title}" 공구의 모집 기간이 종료되었습니다. 판매 진행 여부를 24시간 내에 결정해주세요. (현재 참여자 {self.current_participants}명)',
                         push_title='판매자 결정 필요'
                     )
+
+                    # 판매자에게 SMS 발송
+                    try:
+                        from api.utils.sms_service import SMSService, log_sms
+                        sms_service = SMSService()
+
+                        if hasattr(self.seller, 'phone_number') and self.seller.phone_number:
+                            short_title = self.title[:20] if len(self.title) > 20 else self.title
+                            sms_message = f"[둥지마켓] {short_title} 공구 모집기간이 종료되었습니다. 24시간 내 판매결정을 진행해주세요 ({self.current_participants}명 참여)"
+
+                            success, error = sms_service._send_aligo_sms(self.seller.phone_number, sms_message)
+
+                            log_sms(
+                                phone_number=self.seller.phone_number,
+                                message_type='groupbuy_completion_seller',
+                                message_content=sms_message,
+                                status='success' if success else 'failed',
+                                error_message=error,
+                                user=self.seller,
+                                custom_groupbuy=self
+                            )
+
+                            if success:
+                                logger.info(f"[EXPIRATION] 판매자 SMS 발송 완료 - {self.seller.username}")
+                            else:
+                                logger.error(f"[EXPIRATION] 판매자 SMS 발송 실패 - {self.seller.username}, error: {error}")
+                        else:
+                            logger.warning(f"[EXPIRATION] 판매자 전화번호 없음 - {self.seller.username}")
+                    except Exception as e:
+                        logger.error(f"[EXPIRATION] 판매자 SMS 발송 예외 - error:{str(e)}")
 
                 logger.info(f"판매자 결정 대기: {self.title} ({self.current_participants}명)")
                 return
