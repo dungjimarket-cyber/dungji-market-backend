@@ -36,7 +36,7 @@ class ExpertProfileSerializer(serializers.ModelSerializer):
     region_codes = serializers.ListField(
         child=serializers.CharField(),
         write_only=True,
-        required=True
+        required=False  # 수정 시에는 필수 아님
     )
     user_nickname = serializers.CharField(source='user.nickname', read_only=True)
 
