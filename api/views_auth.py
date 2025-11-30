@@ -452,8 +452,9 @@ def register_user_v2(request):
                     ExpertProfile.objects.create(
                         user=user,
                         category=category,
+                        representative_name=verified_name or nickname or user.username,
+                        contact_phone=phone_number or "",
                         is_business=expert_is_business,
-                        is_verified=False
                     )
                     logger.info(f"전문가 프로필 생성 완료: user={user.username}, category={category.name}")
                 except LocalBusinessCategory.DoesNotExist:
