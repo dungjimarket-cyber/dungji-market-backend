@@ -57,10 +57,13 @@ class ExpertProfileViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ExpertProfile.objects.filter(user=self.request.user)
+        return ExpertProfile.objects.filter(user=self.request.user).prefetch_related('regions')
 
     def get_object(self):
-        return get_object_or_404(ExpertProfile, user=self.request.user)
+        return get_object_or_404(
+            ExpertProfile.objects.prefetch_related('regions'),
+            user=self.request.user
+        )
 
     def list(self, request, *args, **kwargs):
         """내 전문가 프로필 조회"""
