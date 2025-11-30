@@ -1,6 +1,7 @@
 """
 전문가 프로필 및 상담 매칭 API 뷰
 """
+from datetime import timedelta
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -139,6 +140,9 @@ class ExpertRequestsViewSet(viewsets.ViewSet):
         # 상태별 필터링
         status_filter = request.query_params.get('status', None)
 
+        # 7일 전 기준 시간
+        seven_days_ago = timezone.now() - timedelta(days=7)
+
         matches = ConsultationMatch.objects.filter(
             expert=expert_profile
         ).select_related('consultation', 'consultation__category')
@@ -146,14 +150,20 @@ class ExpertRequestsViewSet(viewsets.ViewSet):
         if status_filter:
             matches = matches.filter(status=status_filter)
 
-        # 상태별 그룹핑
-        pending_matches = matches.filter(status='pending')
+        # 상태별 그룹핑 (pending은 7일 이내만 표시)
+        pending_matches = matches.filter(
+            status='pending',
+            created_at__gte=seven_days_ago
+        )
         replied_matches = matches.filter(status='replied')
         connected_matches = matches.filter(status='connected')
         completed_matches = matches.filter(status='completed')
 
-        # 상담 요청 ID 목록
-        consultation_ids = matches.values_list('consultation_id', flat=True)
+        # 7일 초과 pending 건 제외한 상담 요청 ID 목록
+        valid_matches = matches.exclude(
+            Q(status='pending') & Q(created_at__lt=seven_days_ago)
+        )
+        consultation_ids = valid_matches.values_list('consultation_id', flat=True)
         consultations = ConsultationRequest.objects.filter(id__in=consultation_ids)
 
         serializer = ConsultationRequestForExpertSerializer(
@@ -478,7 +488,15 @@ class ExpertRegisterView(APIView):
         with transaction.atomic():
             # 사용자 role을 expert로 변경
             request.user.role = 'expert'
-            request.user.save(update_fields=['role'])
+
+            # 전문가 등록 시 입력한 첫 번째 지역을 기본 프로필 지역으로 설정
+            region_codes = request.data.get('region_codes', [])
+            if region_codes and not request.user.address_region:
+                first_region = Region.objects.filter(code=region_codes[0]).first()
+                if first_region:
+                    request.user.address_region = first_region
+
+            request.user.save(update_fields=['role', 'address_region'])
 
             # 프로필 생성
             serializer.save(user=request.user)
