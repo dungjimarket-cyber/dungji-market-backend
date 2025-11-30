@@ -162,7 +162,7 @@ def send_consultation_replied_notification(match):
 
     try:
         # 고객 유저 찾기 (전화번호로)
-        customer = User.objects.filter(phone_number=consultation.customer_phone).first()
+        customer = User.objects.filter(phone_number=consultation.phone).first()
 
         if customer:
             message = f"{expert_name} 전문가가 상담에 답변했습니다."
@@ -179,7 +179,7 @@ def send_consultation_replied_notification(match):
 
         # SMS 발송 (회원/비회원 모두)
         sms_service.send_consultation_replied_customer(
-            consultation.customer_phone,
+            consultation.phone,
             expert_name
         )
 
@@ -201,7 +201,7 @@ def send_consultation_connected_notification(match):
 
     try:
         # 고객 이름 마스킹
-        customer_name = consultation.customer_name
+        customer_name = consultation.name
         if len(customer_name) > 1:
             masked_name = customer_name[0] + '*' * (len(customer_name) - 1)
         else:
