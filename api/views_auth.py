@@ -1517,45 +1517,36 @@ def user_profile(request):
             logger.info(f"[프로필수정] address_region_id in data: {'address_region_id' in data}")
             if 'address_region_id' in data:
                 logger.info(f"[프로필수정] address_region_id 블록 진입")
-                try:
-                    from datetime import timedelta
-                    REGION_CHANGE_LIMIT_DAYS = 90
+                from datetime import timedelta
+                REGION_CHANGE_LIMIT_DAYS = 90
 
-                    region_code = data['address_region_id']
-                    region_obj = None
-                    logger.info(f"[지역변경] 요청된 region_code: {region_code}")
-                    if region_code:
-                        region_obj = Region.objects.filter(code=region_code).first()
-                        logger.info(f"[지역변경] DB 조회 결과: region_obj={region_obj}, exists={region_obj is not None}")
-                        if not region_obj:
-                            # Region 테이블에 해당 코드가 없음 - 전체 Region 수 확인
-                            total_regions = Region.objects.count()
-                            logger.warning(f"[지역변경] Region code {region_code} not found in DB! Total regions: {total_regions}")
+                region_code = data['address_region_id']
+                region_obj = None
+                logger.info(f"[지역변경] 요청된 region_code: {region_code}")
+                if region_code:
+                    region_obj = Region.objects.filter(code=region_code).first()
+                    logger.info(f"[지역변경] DB 조회 결과: region_obj={region_obj}, exists={region_obj is not None}")
 
-                    # 90일 제한 체크 (변경 이력이 있는 경우)
-                    if user.region_last_changed_at:
-                        limit_date = user.region_last_changed_at + timedelta(days=REGION_CHANGE_LIMIT_DAYS)
-                        if timezone.now() < limit_date:
-                            days_remaining = (limit_date - timezone.now()).days + 1
-                            return Response(
-                                {'error': f'지역 변경은 {days_remaining}일 후에 가능합니다.'},
-                                status=status.HTTP_400_BAD_REQUEST
-                            )
+                # 90일 제한 체크 (변경 이력이 있는 경우)
+                if user.region_last_changed_at:
+                    limit_date = user.region_last_changed_at + timedelta(days=REGION_CHANGE_LIMIT_DAYS)
+                    if timezone.now() < limit_date:
+                        days_remaining = (limit_date - timezone.now()).days + 1
+                        return Response(
+                            {'error': f'지역 변경은 {days_remaining}일 후에 가능합니다.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
 
-                    # 지역 업데이트 및 변경 시간 기록
-                    # region_obj 존재 여부와 관계없이 지역 변경 시간 기록
-                    now_time = timezone.now()
-                    logger.info(f"[지역변경] 시간 설정 직전: now_time={now_time}")
-                    user.region_last_changed_at = now_time
-                    logger.info(f"[지역변경] 시간 설정 직후: user.region_last_changed_at={user.region_last_changed_at}")
-                    if region_obj:
-                        user.address_region = region_obj
-                        logger.info(f"지역 변경: user={user.id}, region={region_obj.code}, time={user.region_last_changed_at}")
-                    else:
-                        user.address_region = None
-                        logger.warning(f"지역 변경 (Region 객체 없음): user={user.id}, code={region_code}, time={user.region_last_changed_at}")
-                except Exception as e:
-                    logger.error(f"지역 업데이트 오류: {str(e)}")
+                # 지역 업데이트 및 변경 시간 기록
+                # region_obj 존재 여부와 관계없이 지역 변경 시간 기록
+                user.region_last_changed_at = timezone.now()
+                logger.info(f"[지역변경] 시간 설정: user.region_last_changed_at={user.region_last_changed_at}")
+                if region_obj:
+                    user.address_region = region_obj
+                    logger.info(f"지역 변경: user={user.id}, region={region_obj.code}")
+                else:
+                    user.address_region = None
+                    logger.info(f"지역 변경 (Region 없음): user={user.id}, code={region_code}")
             
             # 사업자 정보 업데이트
             if 'business_number' in data:
