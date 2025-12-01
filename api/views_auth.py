@@ -1518,8 +1518,13 @@ def user_profile(request):
                     from datetime import timedelta
                     REGION_CHANGE_LIMIT_DAYS = 90
 
-                    # 90일 제한 체크 (이미 지역이 설정되어 있고 변경 이력이 있는 경우)
-                    if user.address_region and user.region_last_changed_at:
+                    region_code = data['address_region_id']
+                    region_obj = None
+                    if region_code:
+                        region_obj = Region.objects.filter(code=region_code).first()
+
+                    # 90일 제한 체크 (변경 이력이 있는 경우)
+                    if user.region_last_changed_at:
                         limit_date = user.region_last_changed_at + timedelta(days=REGION_CHANGE_LIMIT_DAYS)
                         if timezone.now() < limit_date:
                             days_remaining = (limit_date - timezone.now()).days + 1
@@ -1528,14 +1533,11 @@ def user_profile(request):
                                 status=status.HTTP_400_BAD_REQUEST
                             )
 
-                    region_code = data['address_region_id']
-                    if region_code:
-                        region_obj = Region.objects.filter(code=region_code).first()
-                        if region_obj:
-                            # 지역이 변경된 경우에만 변경 시간 업데이트
-                            if user.address_region != region_obj:
-                                user.address_region = region_obj
-                                user.region_last_changed_at = timezone.now()
+                    # 지역 업데이트 및 변경 시간 기록
+                    if region_obj:
+                        user.address_region = region_obj
+                        user.region_last_changed_at = timezone.now()
+                        logger.info(f"지역 변경: user={user.id}, region={region_obj.code}, time={user.region_last_changed_at}")
                     else:
                         user.address_region = None
                 except Exception as e:
