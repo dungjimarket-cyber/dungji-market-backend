@@ -39,11 +39,20 @@ class LocalBusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
         return self.queryset.order_by('order_index', 'name')
 
     def list(self, request, *args, **kwargs):
-        """카테고리 목록 조회 - 세무사+회계사, 법무사+변호사 통합"""
+        """카테고리 목록 조회 - 세무사+회계사, 법무사+변호사 통합
+
+        쿼리 파라미터:
+        - raw=true: 통합 없이 원본 카테고리 10개 반환 (전문가 회원가입용)
+        """
         from django.db.models import Q
 
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
+
+        # raw=true인 경우 원본 카테고리 그대로 반환 (전문가 회원가입용)
+        raw_mode = request.query_params.get('raw', '').lower() == 'true'
+        if raw_mode:
+            return Response(serializer.data)
 
         # 통합할 카테고리 처리
         # 세무사+회계사 → 세무·회계, 법무사+변호사 → 법률 서비스, 청소+이사 → 청소·이사
