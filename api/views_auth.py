@@ -1370,7 +1370,6 @@ def user_profile(request):
             }
             
             # 활성 패널티 정보 추가
-            from django.utils import timezone
             from .models import Penalty
             active_penalty = Penalty.objects.filter(
                 user=user,
@@ -1517,7 +1516,6 @@ def user_profile(request):
             logger.info(f"[프로필수정] address_region_id in data: {'address_region_id' in data}")
             if 'address_region_id' in data:
                 logger.info(f"[프로필수정] address_region_id 블록 진입")
-                from datetime import timedelta
                 REGION_CHANGE_LIMIT_DAYS = 90
 
                 region_code = data['address_region_id']
