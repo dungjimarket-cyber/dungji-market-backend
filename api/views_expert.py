@@ -491,12 +491,15 @@ class ExpertRegisterView(APIView):
 
             # 전문가 등록 시 입력한 첫 번째 지역을 기본 프로필 지역으로 설정
             region_codes = request.data.get('region_codes', [])
+            update_fields = ['role']
             if region_codes and not request.user.address_region:
                 first_region = Region.objects.filter(code=region_codes[0]).first()
                 if first_region:
                     request.user.address_region = first_region
+                    request.user.region_last_changed_at = timezone.now()
+                    update_fields.extend(['address_region', 'region_last_changed_at'])
 
-            request.user.save(update_fields=['role', 'address_region'])
+            request.user.save(update_fields=update_fields)
 
             # 프로필 생성
             serializer.save(user=request.user)
