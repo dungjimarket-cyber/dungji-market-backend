@@ -1582,7 +1582,11 @@ def user_profile(request):
                         user.is_remote_sales_enabled = str(value).lower() == 'true'
             
             user.save()
-            
+
+            # 저장 후 값 재확인
+            user.refresh_from_db()
+            logger.info(f"프로필 저장 완료: user={user.id}, region_last_changed_at={user.region_last_changed_at}")
+
             return Response({
                 'message': '프로필이 업데이트되었습니다.',
                 'profile': {
@@ -1592,7 +1596,8 @@ def user_profile(request):
                     'phone_number': user.phone_number,
                     'first_name': user.first_name,
                     'profile_image': user.profile_image,
-                    'role': user.role
+                    'role': user.role,
+                    'region_last_changed_at': user.region_last_changed_at.isoformat() if user.region_last_changed_at else None
                 }
             })
         
