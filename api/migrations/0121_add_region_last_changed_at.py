@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0119_fix_tax_accounting_flows'),
+        ('api', '0120_fix_realtor_flows'),
     ]
 
     operations = [
