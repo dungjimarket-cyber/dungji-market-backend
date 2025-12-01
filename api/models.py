@@ -84,6 +84,7 @@ class User(AbstractUser):
     # 활동 지역 정보 (시/군/구 단위) - 구매자/판매자 공통
     address_region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True, related_name='users', verbose_name='활동 지역')
     address_detail = models.CharField(max_length=255, blank=True, null=True, verbose_name='상세 주소')
+    region_last_changed_at = models.DateTimeField(null=True, blank=True, verbose_name='지역 마지막 변경일')
     
     # 판매자 추가 정보
     business_number = models.CharField(max_length=20, blank=True, null=True, verbose_name='사업자등록번호')

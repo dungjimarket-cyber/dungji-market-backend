@@ -68,12 +68,29 @@ def mypage_update_profile(request):
         if field in data:
             setattr(user, field, data[field])
     
-    # 지역 정보 업데이트
+    # 지역 정보 업데이트 (90일 제한 체크)
     if 'address_region_id' in data:
         from api.models import Region
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # 90일 제한 체크 (이미 지역이 설정되어 있고 변경 이력이 있는 경우)
+        REGION_CHANGE_LIMIT_DAYS = 90
+        if user.address_region and user.region_last_changed_at:
+            limit_date = user.region_last_changed_at + timedelta(days=REGION_CHANGE_LIMIT_DAYS)
+            if timezone.now() < limit_date:
+                days_remaining = (limit_date - timezone.now()).days + 1
+                return Response(
+                    {'error': f'지역 변경은 {days_remaining}일 후에 가능합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         try:
             region = Region.objects.get(id=data['address_region_id'])
-            user.address_region = region
+            # 지역이 변경된 경우에만 변경 시간 업데이트
+            if user.address_region != region:
+                user.address_region = region
+                user.region_last_changed_at = timezone.now()
         except Region.DoesNotExist:
             return Response(
                 {'error': '유효하지 않은 지역입니다.'},

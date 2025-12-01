@@ -36,7 +36,7 @@ from api.views_inicis import (
     inicis_webhook, inicis_return, inicis_close, generate_mobile_hash,
     get_pending_payments
 )
-from api.views_region import RegionViewSet
+from api.views_region import RegionViewSet, region_change_status
 from api.views_notification import NotificationViewSet
 from api.admin_views import (
     AdminViewSet, adjust_user_bid_tokens, get_seller_detail, add_bid_permission_endpoint,
@@ -145,6 +145,7 @@ urlpatterns = [
         path('nickname-change-status/', nickname_change_status, name='nickname_change_status'),
         path('nickname-change-test/', nickname_change_test_status, name='nickname_change_test_status'),
         path('nickname-change-history/', nickname_change_history, name='nickname_change_history'),
+        path('region-change-status/', region_change_status, name='region_change_status'),
         path('check-email/', check_email, name='check_email'),
         path('check-phone/', check_phone_duplicate, name='check_phone_duplicate'),
         path('find-username/', find_username, name='find_username'),
