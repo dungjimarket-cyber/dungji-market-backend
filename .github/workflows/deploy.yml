@@ -214,9 +214,15 @@ jobs:
             exit 1
           fi
 
-          # 마이그레이션 실행
+          # 마이그레이션 상태 확인 및 실행
+          echo "🔄 Checking migration status..."
+          sudo docker exec dungji-backend-web python manage.py showmigrations api | tail -20
+
           echo "🔄 Running database migrations..."
           sudo docker exec dungji-backend-web python manage.py migrate --noinput
+
+          echo "🔄 Verifying migrations applied..."
+          sudo docker exec dungji-backend-web python manage.py showmigrations api | tail -10
 
           # 상담 플로우 데이터 초기화
           echo "💬 Initializing consultation flows..."
