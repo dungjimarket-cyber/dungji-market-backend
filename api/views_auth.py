@@ -1513,7 +1513,10 @@ def user_profile(request):
                 user.address_detail = data['address_detail']
             
             # 지역 업데이트 (90일 제한 체크)
+            logger.info(f"[프로필수정] 받은 data keys: {list(data.keys())}")
+            logger.info(f"[프로필수정] address_region_id in data: {'address_region_id' in data}")
             if 'address_region_id' in data:
+                logger.info(f"[프로필수정] address_region_id 블록 진입")
                 try:
                     from datetime import timedelta
                     REGION_CHANGE_LIMIT_DAYS = 90
@@ -1541,7 +1544,10 @@ def user_profile(request):
 
                     # 지역 업데이트 및 변경 시간 기록
                     # region_obj 존재 여부와 관계없이 지역 변경 시간 기록
-                    user.region_last_changed_at = timezone.now()
+                    now_time = timezone.now()
+                    logger.info(f"[지역변경] 시간 설정 직전: now_time={now_time}")
+                    user.region_last_changed_at = now_time
+                    logger.info(f"[지역변경] 시간 설정 직후: user.region_last_changed_at={user.region_last_changed_at}")
                     if region_obj:
                         user.address_region = region_obj
                         logger.info(f"지역 변경: user={user.id}, region={region_obj.code}, time={user.region_last_changed_at}")
