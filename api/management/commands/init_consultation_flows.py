@@ -361,97 +361,217 @@ CONSULTATION_FLOWS_DATA = {
 
     # ===== 공인중개사 =====
     '공인중개사': [
+        # Step 1: 목적 + 거래유형 통합
         {
             'step_number': 1,
             'question': '어떤 도움이 필요하세요?',
             'options': [
-                {'key': 'buy', 'label': '집 구하기 (매매/전월세)', 'icon': '🏠', 'description': '살 집을 찾고 있어요'},
-                {'key': 'sell', 'label': '집 내놓기 (매매)', 'icon': '💰', 'description': '팔 집이 있어요'},
-                {'key': 'lease_out', 'label': '세입자 구하기', 'icon': '🔑', 'description': '전세/월세 세입자 구해요'},
-                {'key': 'commercial', 'label': '상가/사무실', 'icon': '🏢'},
-                {'key': 'consulting', 'label': '부동산 상담만', 'icon': '💬', 'description': '시세, 투자 등'},
+                {'key': 'buy', 'label': '집 사기 (매매)', 'icon': '🏠', 'description': '내 집 마련'},
+                {'key': 'jeonse', 'label': '전세 구하기', 'icon': '📋', 'description': '전세로 들어갈 집'},
+                {'key': 'monthly', 'label': '월세 구하기', 'icon': '💵', 'description': '월세로 들어갈 집'},
+                {'key': 'sell', 'label': '집 팔기 (매매)', 'icon': '💰', 'description': '소유한 집 매도'},
+                {'key': 'lease_out', 'label': '세입자 구하기', 'icon': '🔑', 'description': '전세/월세 세입자 모집'},
+                {'key': 'commercial_find', 'label': '상가/사무실 구하기', 'icon': '🏢', 'description': '임대 또는 매매'},
+                {'key': 'commercial_list', 'label': '상가/사무실 내놓기', 'icon': '🏪', 'description': '임대 또는 매매'},
+                {'key': 'consulting', 'label': '부동산 상담만', 'icon': '💬', 'description': '시세, 투자, 세금 등'},
             ]
         },
-        # 집 구하기 선택 시
+        # Step 2: 매물 유형 - 주거용 구하기 (buy, jeonse, monthly)
         {
             'step_number': 2,
-            'question': '어떤 거래를 원하세요?',
+            'question': '어떤 매물을 찾으세요?',
             'depends_on_step': 1,
-            'depends_on_options': ['buy'],
+            'depends_on_options': ['buy', 'jeonse', 'monthly'],
             'options': [
-                {'key': 'buy_apt', 'label': '아파트 매매', 'icon': '🏢'},
-                {'key': 'buy_villa', 'label': '빌라/주택 매매', 'icon': '🏠'},
-                {'key': 'jeonse', 'label': '전세', 'icon': '📋'},
-                {'key': 'monthly', 'label': '월세', 'icon': '💵'},
+                {'key': 'apt', 'label': '아파트', 'icon': '🏢'},
                 {'key': 'officetel', 'label': '오피스텔', 'icon': '🏙️'},
-                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+                {'key': 'villa', 'label': '빌라/연립/다세대', 'icon': '🏠'},
+                {'key': 'house', 'label': '단독/다가구/전원주택', 'icon': '🏡'},
+                {'key': 'room', 'label': '원룸/투룸', 'icon': '🛏️'},
+                {'key': 'custom', 'label': '기타 (직접 입력)', 'icon': '📝', 'is_custom_input': True},
             ]
         },
-        # 집 내놓기 선택 시
+        # Step 2: 매물 유형 - 주거용 내놓기 (sell, lease_out)
         {
             'step_number': 2,
-            'question': '어떤 매물인가요?',
+            'question': '어떤 매물을 내놓으세요?',
             'depends_on_step': 1,
             'depends_on_options': ['sell', 'lease_out'],
             'options': [
                 {'key': 'apt', 'label': '아파트', 'icon': '🏢'},
-                {'key': 'villa', 'label': '빌라/다세대', 'icon': '🏠'},
-                {'key': 'house', 'label': '단독/다가구', 'icon': '🏡'},
                 {'key': 'officetel', 'label': '오피스텔', 'icon': '🏙️'},
-                {'key': 'land', 'label': '토지', 'icon': '🌳'},
-                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+                {'key': 'villa', 'label': '빌라/연립/다세대', 'icon': '🏠'},
+                {'key': 'house', 'label': '단독/다가구/전원주택', 'icon': '🏡'},
+                {'key': 'room', 'label': '원룸/투룸', 'icon': '🛏️'},
+                {'key': 'custom', 'label': '기타 (직접 입력)', 'icon': '📝', 'is_custom_input': True},
             ]
         },
-        # 상가 선택 시
+        # Step 2: 상업용 - 구하기 (commercial_find)
         {
             'step_number': 2,
-            'question': '어떤 상업용 부동산인가요?',
+            'question': '어떤 매물을 찾으세요?',
             'depends_on_step': 1,
-            'depends_on_options': ['commercial'],
+            'depends_on_options': ['commercial_find'],
             'options': [
                 {'key': 'store', 'label': '상가/점포', 'icon': '🏪'},
                 {'key': 'office', 'label': '사무실', 'icon': '💼'},
                 {'key': 'building', 'label': '건물 전체', 'icon': '🏢'},
                 {'key': 'factory', 'label': '공장/창고', 'icon': '🏭'},
-                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+                {'key': 'land', 'label': '토지', 'icon': '🌳'},
+                {'key': 'custom', 'label': '기타 (직접 입력)', 'icon': '📝', 'is_custom_input': True},
             ]
         },
-        # 상담만 선택 시
+        # Step 2: 상업용 - 내놓기 (commercial_list)
+        {
+            'step_number': 2,
+            'question': '어떤 매물을 내놓으세요?',
+            'depends_on_step': 1,
+            'depends_on_options': ['commercial_list'],
+            'options': [
+                {'key': 'store', 'label': '상가/점포', 'icon': '🏪'},
+                {'key': 'office', 'label': '사무실', 'icon': '💼'},
+                {'key': 'building', 'label': '건물 전체', 'icon': '🏢'},
+                {'key': 'factory', 'label': '공장/창고', 'icon': '🏭'},
+                {'key': 'land', 'label': '토지', 'icon': '🌳'},
+                {'key': 'custom', 'label': '기타 (직접 입력)', 'icon': '📝', 'is_custom_input': True},
+            ]
+        },
+        # Step 2: 상담 유형 (consulting)
         {
             'step_number': 2,
             'question': '어떤 상담이 필요하세요?',
             'depends_on_step': 1,
             'depends_on_options': ['consulting'],
             'options': [
-                {'key': 'price', 'label': '시세/가격 문의', 'icon': '💰'},
-                {'key': 'investment', 'label': '투자 상담', 'icon': '📈'},
-                {'key': 'tax', 'label': '세금 관련', 'icon': '🧾'},
-                {'key': 'legal', 'label': '계약/법률 관련', 'icon': '📋'},
-                {'key': 'custom', 'label': '직접 입력', 'icon': '📝', 'is_custom_input': True},
+                {'key': 'price', 'label': '시세/가격 문의', 'icon': '💰', 'description': '우리 집 얼마?'},
+                {'key': 'investment', 'label': '투자 상담', 'icon': '📈', 'description': '수익형/갭투자 등'},
+                {'key': 'tax', 'label': '세금 관련', 'icon': '🧾', 'description': '양도세, 취득세 등'},
+                {'key': 'legal', 'label': '계약/법률 관련', 'icon': '📋', 'description': '계약서, 등기 등'},
+                {'key': 'loan', 'label': '대출 상담', 'icon': '🏦', 'description': '주담대, 전세대출 등'},
+                {'key': 'custom', 'label': '기타 (직접 입력)', 'icon': '📝', 'is_custom_input': True},
             ]
         },
+        # Step 3: 예산 - 매매 구매 (buy)
         {
             'step_number': 3,
-            'question': '예산/희망 가격대는?',
+            'question': '구매 예산은?',
+            'depends_on_step': 1,
+            'depends_on_options': ['buy'],
             'options': [
-                {'key': 'under_200m', 'label': '2억 미만', 'icon': '💵'},
-                {'key': '200m_500m', 'label': '2억~5억', 'icon': '💰'},
-                {'key': '500m_1b', 'label': '5억~10억', 'icon': '💎'},
-                {'key': 'over_1b', 'label': '10억 이상', 'icon': '🏆'},
+                {'key': 'under_1', 'label': '1억 미만', 'icon': '💵'},
+                {'key': '1_3', 'label': '1억~3억', 'icon': '💰'},
+                {'key': '3_5', 'label': '3억~5억', 'icon': '💰'},
+                {'key': '5_10', 'label': '5억~10억', 'icon': '💎'},
+                {'key': 'over_10', 'label': '10억 이상', 'icon': '🏆'},
                 {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
             ]
         },
+        # Step 3: 예산 - 매매 판매 (sell)
+        {
+            'step_number': 3,
+            'question': '희망 매매가는?',
+            'depends_on_step': 1,
+            'depends_on_options': ['sell'],
+            'options': [
+                {'key': 'under_1', 'label': '1억 미만', 'icon': '💵'},
+                {'key': '1_3', 'label': '1억~3억', 'icon': '💰'},
+                {'key': '3_5', 'label': '3억~5억', 'icon': '💰'},
+                {'key': '5_10', 'label': '5억~10억', 'icon': '💎'},
+                {'key': 'over_10', 'label': '10억 이상', 'icon': '🏆'},
+                {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
+            ]
+        },
+        # Step 3: 예산 - 전세 구하기 (jeonse)
+        {
+            'step_number': 3,
+            'question': '전세금 예산은?',
+            'depends_on_step': 1,
+            'depends_on_options': ['jeonse'],
+            'options': [
+                {'key': 'under_1', 'label': '1억 미만', 'icon': '💵'},
+                {'key': '1_2', 'label': '1억~2억', 'icon': '💰'},
+                {'key': '2_3', 'label': '2억~3억', 'icon': '💰'},
+                {'key': '3_5', 'label': '3억~5억', 'icon': '💎'},
+                {'key': 'over_5', 'label': '5억 이상', 'icon': '🏆'},
+                {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
+            ]
+        },
+        # Step 3: 예산 - 세입자 구하기 (lease_out)
+        {
+            'step_number': 3,
+            'question': '희망 전세/보증금은?',
+            'depends_on_step': 1,
+            'depends_on_options': ['lease_out'],
+            'options': [
+                {'key': 'under_1', 'label': '1억 미만', 'icon': '💵'},
+                {'key': '1_2', 'label': '1억~2억', 'icon': '💰'},
+                {'key': '2_3', 'label': '2억~3억', 'icon': '💰'},
+                {'key': '3_5', 'label': '3억~5억', 'icon': '💎'},
+                {'key': 'over_5', 'label': '5억 이상', 'icon': '🏆'},
+                {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
+            ]
+        },
+        # Step 3: 예산 - 월세 구하기 (monthly)
+        {
+            'step_number': 3,
+            'question': '월세 예산은? (보증금 별도)',
+            'depends_on_step': 1,
+            'depends_on_options': ['monthly'],
+            'options': [
+                {'key': 'under_50', 'label': '50만원 미만', 'icon': '💵'},
+                {'key': '50_70', 'label': '50~70만원', 'icon': '💰'},
+                {'key': '70_100', 'label': '70~100만원', 'icon': '💰'},
+                {'key': '100_150', 'label': '100~150만원', 'icon': '💎'},
+                {'key': 'over_150', 'label': '150만원 이상', 'icon': '🏆'},
+                {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
+            ]
+        },
+        # Step 3: 예산 - 상가/사무실 구하기 (commercial_find)
+        {
+            'step_number': 3,
+            'question': '예산은?',
+            'depends_on_step': 1,
+            'depends_on_options': ['commercial_find'],
+            'options': [
+                {'key': 'under_1', 'label': '1억 미만', 'icon': '💵'},
+                {'key': '1_3', 'label': '1억~3억', 'icon': '💰'},
+                {'key': '3_5', 'label': '3억~5억', 'icon': '💰'},
+                {'key': '5_10', 'label': '5억~10억', 'icon': '💎'},
+                {'key': 'over_10', 'label': '10억 이상', 'icon': '🏆'},
+                {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
+            ]
+        },
+        # Step 3: 예산 - 상가/사무실 내놓기 (commercial_list)
+        {
+            'step_number': 3,
+            'question': '희망 금액은?',
+            'depends_on_step': 1,
+            'depends_on_options': ['commercial_list'],
+            'options': [
+                {'key': 'under_1', 'label': '1억 미만', 'icon': '💵'},
+                {'key': '1_3', 'label': '1억~3억', 'icon': '💰'},
+                {'key': '3_5', 'label': '3억~5억', 'icon': '💰'},
+                {'key': '5_10', 'label': '5억~10억', 'icon': '💎'},
+                {'key': 'over_10', 'label': '10억 이상', 'icon': '🏆'},
+                {'key': 'undecided', 'label': '미정/상담 후 결정', 'icon': '🤔'},
+            ]
+        },
+        # Step 4: 희망 시기 (consulting 제외 전체)
         {
             'step_number': 4,
-            'question': '거래 시기는?',
+            'question': '희망 시기는?',
+            'depends_on_step': 1,
+            'depends_on_options': ['buy', 'jeonse', 'monthly', 'sell', 'lease_out', 'commercial_find', 'commercial_list'],
             'options': [
-                {'key': 'urgent', 'label': '급함 (1개월 내)', 'icon': '🚨'},
-                {'key': 'soon', 'label': '3개월 내', 'icon': '📅'},
-                {'key': 'later', 'label': '6개월 내', 'icon': '🗓️'},
-                {'key': 'browsing', 'label': '둘러보는 중', 'icon': '👀'},
+                {'key': 'asap', 'label': '급함 (2주 내)', 'icon': '🚨'},
+                {'key': '1month', 'label': '1개월 내', 'icon': '📅'},
+                {'key': '3month', 'label': '3개월 내', 'icon': '🗓️'},
+                {'key': '6month', 'label': '6개월 내', 'icon': '📆'},
+                {'key': 'browsing', 'label': '천천히 알아보는 중', 'icon': '👀'},
             ]
         },
     ],
+
 
     # ===== 인테리어 =====
     '인테리어': [
