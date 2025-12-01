@@ -220,16 +220,8 @@ jobs:
 
           # region_last_changed_at 컬럼 존재 여부 확인 및 강제 마이그레이션
           echo "🔄 Checking region_last_changed_at column..."
-          COLUMN_CHECK=$(sudo docker exec dungji-backend-web python -c "
-from django.db import connection
-cursor = connection.cursor()
-cursor.execute(\"SELECT column_name FROM information_schema.columns WHERE table_name='api_user' AND column_name='region_last_changed_at'\")
-result = cursor.fetchone()
-print('EXISTS' if result else 'MISSING')
-" 2>/dev/null || echo "ERROR")
-
+          COLUMN_CHECK=$(sudo docker exec dungji-backend-web python -c "from django.db import connection; cursor = connection.cursor(); cursor.execute(\"SELECT column_name FROM information_schema.columns WHERE table_name='api_user' AND column_name='region_last_changed_at'\"); result = cursor.fetchone(); print('EXISTS' if result else 'MISSING')" 2>/dev/null || echo "ERROR")
           echo "Column check result: $COLUMN_CHECK"
-
           if [ "$COLUMN_CHECK" = "MISSING" ]; then
             echo "⚠️  region_last_changed_at 컬럼이 없습니다. 마이그레이션 재실행..."
             sudo docker exec dungji-backend-web python manage.py migrate api 0120 --fake
