@@ -1540,12 +1540,14 @@ def user_profile(request):
                             )
 
                     # 지역 업데이트 및 변경 시간 기록
+                    # region_obj 존재 여부와 관계없이 지역 변경 시간 기록
+                    user.region_last_changed_at = timezone.now()
                     if region_obj:
                         user.address_region = region_obj
-                        user.region_last_changed_at = timezone.now()
                         logger.info(f"지역 변경: user={user.id}, region={region_obj.code}, time={user.region_last_changed_at}")
                     else:
                         user.address_region = None
+                        logger.warning(f"지역 변경 (Region 객체 없음): user={user.id}, code={region_code}, time={user.region_last_changed_at}")
                 except Exception as e:
                     logger.error(f"지역 업데이트 오류: {str(e)}")
             
