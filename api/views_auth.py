@@ -449,13 +449,19 @@ def register_user_v2(request):
                     from .models_local_business import LocalBusinessCategory
 
                     category = LocalBusinessCategory.objects.get(id=expert_category_id)
-                    ExpertProfile.objects.create(
+                    expert_profile = ExpertProfile.objects.create(
                         user=user,
                         category=category,
                         representative_name=verified_name or nickname or user.username,
                         contact_phone=phone_number or "",
                         is_business=expert_is_business,
                     )
+
+                    # 전문가 프로필에 활동 지역 추가 (사용자의 address_region 사용)
+                    if user.address_region:
+                        expert_profile.regions.add(user.address_region)
+                        logger.info(f"전문가 활동 지역 설정: {user.address_region.full_name}")
+
                     logger.info(f"전문가 프로필 생성 완료: user={user.username}, category={category.name}")
                 except LocalBusinessCategory.DoesNotExist:
                     logger.error(f"전문가 카테고리를 찾을 수 없음: {expert_category_id}")
