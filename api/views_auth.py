@@ -1520,8 +1520,14 @@ def user_profile(request):
 
                     region_code = data['address_region_id']
                     region_obj = None
+                    logger.info(f"[지역변경] 요청된 region_code: {region_code}")
                     if region_code:
                         region_obj = Region.objects.filter(code=region_code).first()
+                        logger.info(f"[지역변경] DB 조회 결과: region_obj={region_obj}, exists={region_obj is not None}")
+                        if not region_obj:
+                            # Region 테이블에 해당 코드가 없음 - 전체 Region 수 확인
+                            total_regions = Region.objects.count()
+                            logger.warning(f"[지역변경] Region code {region_code} not found in DB! Total regions: {total_regions}")
 
                     # 90일 제한 체크 (변경 이력이 있는 경우)
                     if user.region_last_changed_at:
