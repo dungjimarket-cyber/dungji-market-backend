@@ -1607,9 +1607,11 @@ def user_profile(request):
             })
         
         except Exception as e:
-            logger.error(f"프로필 업데이트 오류: {str(e)}")
+            import traceback
+            error_detail = traceback.format_exc()
+            logger.error(f"프로필 업데이트 오류: {str(e)}\n{error_detail}")
             return Response(
-                {'error': '프로필 업데이트 중 오류가 발생했습니다.'},
+                {'error': f'프로필 업데이트 중 오류가 발생했습니다: {str(e)}', 'detail': error_detail},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
