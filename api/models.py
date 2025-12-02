@@ -93,6 +93,10 @@ class User(AbstractUser):
     seller_category = models.CharField(
         max_length=30,
         choices=[
+            # 신규 옵션 (2가지)
+            ('individual', '개인사업자'),
+            ('corporate', '법인사업자'),
+            # 레거시 옵션 (기존 사용자 호환용)
             ('general', '일반사업자(온·오프라인 도소매,요식업 등)'),
             ('telecom', '통신상품판매(휴대폰,인터넷,TV개통 등)'),
             ('rental', '렌탈서비스판매(정수기,비데,매트리스 등)'),
@@ -100,7 +104,7 @@ class User(AbstractUser):
         ],
         null=True,
         blank=True,
-        verbose_name='판매회원 구분'
+        verbose_name='사업자유형'
     )
     
     # 비대면 판매 관련 필드
