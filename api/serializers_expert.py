@@ -145,12 +145,13 @@ class ConsultationMatchSerializer(serializers.ModelSerializer):
 class ConsultationMatchDetailSerializer(ConsultationMatchSerializer):
     """
     상담 매칭 상세 시리얼라이저
-    - 연결된 경우 연락처 포함
+    - 답변한 전문가 연락처 포함
     """
     expert = serializers.SerializerMethodField()
 
     def get_expert(self, obj):
-        if obj.status in ['connected', 'completed']:
+        # 답변한 전문가는 연락처 공개
+        if obj.status in ['replied', 'connected', 'completed']:
             return ExpertProfileWithContactSerializer(obj.expert).data
         return ExpertProfilePublicSerializer(obj.expert).data
 
