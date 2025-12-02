@@ -108,11 +108,18 @@ class ExpertProfileWithContactSerializer(ExpertProfilePublicSerializer):
     """
     전문가 프로필 + 연락처 시리얼라이저
     - 연결된 후 연락처 공개
+    - contact_phone이 없으면 user.phone_number 사용
     """
+    contact_phone = serializers.SerializerMethodField()
+
     class Meta(ExpertProfilePublicSerializer.Meta):
         fields = ExpertProfilePublicSerializer.Meta.fields + [
             'contact_phone', 'contact_email'
         ]
+
+    def get_contact_phone(self, obj):
+        # contact_phone이 있으면 사용, 없으면 user.phone_number fallback
+        return obj.contact_phone or (obj.user.phone_number if obj.user else None)
 
 
 class ConsultationMatchSerializer(serializers.ModelSerializer):
