@@ -13,10 +13,10 @@ PHONE_SHOP_FLOWS = [
         'depends_on_step': None,
         'depends_on_options': [],
         'options': [
+            {'key': 'phone', 'label': '휴대폰', 'icon': '📱', 'description': '휴대폰만 개통/변경'},
             {'key': 'internet', 'label': '인터넷', 'icon': '🌐', 'description': '인터넷만 가입/변경'},
             {'key': 'internet_tv', 'label': '인터넷 + TV', 'icon': '📺', 'description': '인터넷, TV 결합'},
             {'key': 'triple', 'label': '휴대폰 + 인터넷 + TV', 'icon': '🏠', 'description': '트리플 결합 할인'},
-            {'key': 'phone', 'label': '휴대폰', 'icon': '📱', 'description': '휴대폰만 개통/변경'},
         ]
     },
     # ===== 인터넷 선택 시 =====
