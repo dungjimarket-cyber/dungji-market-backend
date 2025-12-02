@@ -119,9 +119,9 @@ PHONE_SHOP_FLOWS = [
         'depends_on_step': 1,
         'depends_on_options': ['internet', 'internet_tv', 'triple'],
         'options': [
-            {'key': 'skt', 'label': 'SK브로드밴드', 'icon': '🔴'},
-            {'key': 'kt', 'label': 'KT', 'icon': '⚪'},
-            {'key': 'lgu', 'label': 'LG U+', 'icon': '🟣'},
+            {'key': 'skt', 'label': 'SK브로드밴드', 'logo': '/logos/skt.png'},
+            {'key': 'kt', 'label': 'KT', 'logo': '/logos/kt.png'},
+            {'key': 'lgu', 'label': 'LG U+', 'logo': '/logos/lgu.png'},
             {'key': 'compare', 'label': '비교 후 결정', 'icon': '⚖️'},
         ]
     },
@@ -132,9 +132,9 @@ PHONE_SHOP_FLOWS = [
         'depends_on_step': 2,
         'depends_on_options': ['new', 'mnp', 'upgrade', 'plan_only'],
         'options': [
-            {'key': 'skt', 'label': 'SKT', 'icon': '🔴'},
-            {'key': 'kt', 'label': 'KT', 'icon': '⚪'},
-            {'key': 'lgu', 'label': 'LG U+', 'icon': '🟣'},
+            {'key': 'skt', 'label': 'SKT', 'logo': '/logos/skt.png'},
+            {'key': 'kt', 'label': 'KT', 'logo': '/logos/kt.png'},
+            {'key': 'lgu', 'label': 'LG U+', 'logo': '/logos/lgu.png'},
             {'key': 'compare', 'label': '비교 후 결정', 'icon': '⚖️'},
         ]
     },
