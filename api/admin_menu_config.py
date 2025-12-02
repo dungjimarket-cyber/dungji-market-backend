@@ -2,7 +2,7 @@
 Django Admin 메뉴 카테고리 설정
 
 메뉴를 3개 영역으로 분류:
-1. 공구견적 (Group Purchase)
+1. 전문가 상담 (Expert Consultation)
 2. 커스텀공구 (Custom Deal)
 3. 중고거래 (Used Market)
 """
@@ -23,7 +23,7 @@ class CategoryAdminSite(admin.AdminSite):
 
         # 카테고리별로 모델 분류
         categories = {
-            '1. 공구견적': [],
+            '1. 전문가 상담': [],
             '2. 커스텀공구': [],
             '3. 중고거래': [],
             '4. 시스템 관리': [],
@@ -47,7 +47,7 @@ class CategoryAdminSite(admin.AdminSite):
                 elif any(keyword in model_name_lower or keyword in url_name for keyword in used_keywords):
                     categories['3. 중고거래'].append(model)
                 elif any(keyword in model_name_lower or keyword in url_name for keyword in groupbuy_keywords):
-                    categories['1. 공구견적'].append(model)
+                    categories['1. 전문가 상담'].append(model)
                 else:
                     categories['4. 시스템 관리'].append(model)
 
