@@ -19,7 +19,8 @@ from django.utils.decorators import method_decorator
 from .models_crawler import CrawlSession, CrawlResult, EmailCampaign
 from .services.crawler_service import (
     run_crawler, run_all_crawlers, export_to_excel,
-    get_emails_from_data, CRAWLER_MAP
+    get_emails_from_data, CRAWLER_MAP,
+    crawl_local_business_emails, get_local_business_categories, get_local_business_regions
 )
 
 import json
@@ -165,6 +166,75 @@ def run_crawler_view(request):
         regions = request.POST.getlist('regions')
         max_pages = int(request.POST.get('max_pages', 5))
 
+        # LocalBusiness 크롤러인 경우
+        if crawler_type == 'local_business':
+            category_id = request.POST.get('lb_category_id')
+            region_name = request.POST.get('lb_region_name', '').strip()
+            limit = int(request.POST.get('lb_limit', 100))
+
+            # 세션 생성
+            session = CrawlSession.objects.create(
+                crawler_type='local_business',
+                regions=[region_name] if region_name else [],
+                max_pages=limit,
+                status='running',
+                created_by=request.user
+            )
+
+            try:
+                # LocalBusiness 크롤링 실행
+                result = crawl_local_business_emails(
+                    category_id=int(category_id) if category_id else None,
+                    region_name=region_name if region_name else None,
+                    limit=limit
+                )
+
+                all_data = result['data']
+                session.total_count = result.get('businesses_crawled', 0)
+                session.email_count = result['email_count']
+
+                # 결과 저장
+                for item in all_data:
+                    CrawlResult.objects.create(
+                        session=session,
+                        category='local_business',
+                        name=item.get('업체명', ''),
+                        office_name=item.get('업체명', ''),
+                        affiliation='',
+                        address=item.get('주소', ''),
+                        region=item.get('지역', ''),
+                        phone=item.get('전화번호', ''),
+                        email=item.get('이메일', ''),
+                        specialty=item.get('웹사이트', ''),
+                    )
+
+                # 엑셀 파일 생성 및 저장
+                excel_file = export_to_excel(all_data)
+                if excel_file:
+                    filename = f"crawl_local_business_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                    session.result_file.save(filename, ContentFile(excel_file.read()))
+
+                session.status = 'completed'
+                session.completed_at = timezone.now()
+                session.save()
+
+                messages.success(
+                    request,
+                    f"크롤링 완료! {result.get('businesses_crawled', 0)}개 웹사이트에서 {session.email_count}개 이메일 수집"
+                )
+
+            except Exception as e:
+                logger.error(f"LocalBusiness 크롤링 오류: {e}")
+                import traceback
+                traceback.print_exc()
+                session.status = 'failed'
+                session.error_message = str(e)
+                session.save()
+                messages.error(request, f"크롤링 실패: {e}")
+
+            return redirect('admin_crawler_dashboard')
+
+        # 기존 협회 크롤러
         if not regions:
             regions = ['서울', '경기', '부산', '대구', '인천']
 
@@ -236,11 +306,17 @@ def run_crawler_view(request):
         return redirect('admin_crawler_dashboard')
 
     # GET 요청
+    # LocalBusiness 카테고리 및 지역 목록 가져오기
+    lb_categories = get_local_business_categories()
+    lb_regions = get_local_business_regions()
+
     context = {
         'title': '크롤러 실행',
-        'crawler_types': [('all', '전체')] + [(k, v[0]) for k, v in CRAWLER_MAP.items()],
+        'crawler_types': [('all', '전체 (협회)')] + [(k, v[0]) for k, v in CRAWLER_MAP.items()] + [('local_business', '📍 DB 업체 웹사이트')],
         'regions': ['서울', '경기', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
                     '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'],
+        'lb_categories': lb_categories,
+        'lb_regions': lb_regions,
     }
     return render(request, 'admin/crawler/run_crawler.html', context)
 

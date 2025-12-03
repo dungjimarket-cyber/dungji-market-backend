@@ -24,6 +24,7 @@ class CrawlSession(models.Model):
         ('tax_accountant', '세무사'),
         ('accountant', '공인회계사'),
         ('realtor', '공인중개사'),
+        ('local_business', 'DB 업체 웹사이트'),
     ]
 
     crawler_type = models.CharField(
@@ -88,6 +89,7 @@ class CrawlResult(models.Model):
         ('tax_accountant', '세무사'),
         ('accountant', '공인회계사'),
         ('realtor', '공인중개사'),
+        ('local_business', 'DB 업체'),
     ]
 
     session = models.ForeignKey(

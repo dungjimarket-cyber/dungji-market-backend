@@ -539,3 +539,230 @@ def get_emails_from_data(data):
                 'region': item.get('지역', ''),
             })
     return emails
+
+
+# ============== LocalBusiness 웹사이트 이메일 크롤러 ==============
+
+def crawl_website_for_emails(url, driver=None, timeout=10):
+    """
+    단일 웹사이트에서 이메일 추출
+
+    Args:
+        url: 크롤링할 웹사이트 URL
+        driver: 기존 드라이버 (없으면 새로 생성)
+        timeout: 페이지 로딩 타임아웃
+
+    Returns:
+        list: 찾은 이메일 목록
+    """
+    close_driver = False
+    if driver is None:
+        driver = setup_driver(headless=True)
+        close_driver = True
+
+    found_emails = set()
+
+    try:
+        # URL 정규화
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
+        driver.set_page_load_timeout(timeout)
+        driver.get(url)
+        time.sleep(2)
+
+        # 페이지 소스에서 이메일 추출
+        page_source = driver.page_source
+        emails = extract_emails(page_source)
+        found_emails.update(emails)
+
+        # 페이지 텍스트에서도 추출
+        try:
+            body_text = driver.find_element(By.TAG_NAME, "body").text
+            emails = extract_emails(body_text)
+            found_emails.update(emails)
+        except:
+            pass
+
+        # mailto 링크에서 추출
+        try:
+            mailto_links = driver.find_elements(By.CSS_SELECTOR, "a[href^='mailto:']")
+            for link in mailto_links:
+                href = link.get_attribute('href')
+                if href:
+                    email = href.replace('mailto:', '').split('?')[0].strip()
+                    if '@' in email:
+                        found_emails.add(email)
+        except:
+            pass
+
+        # 연락처/Contact 페이지 탐색 (메인에서 이메일 못찾으면)
+        if not found_emails:
+            contact_keywords = ['contact', 'about', '연락', '문의', '회사소개', 'company']
+            try:
+                links = driver.find_elements(By.TAG_NAME, "a")
+                contact_links = []
+
+                for link in links[:50]:  # 처음 50개 링크만 확인
+                    try:
+                        href = link.get_attribute('href') or ''
+                        text = link.text.lower()
+
+                        for keyword in contact_keywords:
+                            if keyword in href.lower() or keyword in text:
+                                if href and href.startswith('http'):
+                                    contact_links.append(href)
+                                    break
+                    except:
+                        continue
+
+                # 연락처 페이지 방문
+                for contact_url in contact_links[:2]:  # 최대 2개 페이지만
+                    try:
+                        driver.get(contact_url)
+                        time.sleep(1.5)
+
+                        page_text = driver.page_source
+                        emails = extract_emails(page_text)
+                        found_emails.update(emails)
+
+                        if found_emails:
+                            break
+                    except:
+                        continue
+
+            except:
+                pass
+
+    except Exception as e:
+        logger.debug(f"웹사이트 크롤링 오류 ({url}): {e}")
+    finally:
+        if close_driver:
+            driver.quit()
+
+    # 일반적인 이메일이 아닌 것 필터링 (이미지, 스크립트 관련)
+    filtered_emails = [
+        e for e in found_emails
+        if not e.endswith(('.png', '.jpg', '.gif', '.js', '.css'))
+        and not e.startswith('data:')
+        and len(e) < 100
+    ]
+
+    return filtered_emails
+
+
+def crawl_local_business_emails(category_id=None, region_name=None, limit=100, progress_callback=None):
+    """
+    LocalBusiness 테이블의 웹사이트에서 이메일 크롤링
+
+    Args:
+        category_id: 특정 카테고리만 크롤링 (None이면 전체)
+        region_name: 특정 지역만 크롤링 (None이면 전체)
+        limit: 최대 크롤링 수
+        progress_callback: 진행 상황 콜백
+
+    Returns:
+        dict: 크롤링 결과
+    """
+    # Django ORM 임포트 (함수 내에서 임포트하여 Django 미설정 환경에서도 모듈 로드 가능)
+    try:
+        from api.models_local_business import LocalBusiness, LocalBusinessCategory
+    except:
+        logger.error("Django 모델을 임포트할 수 없습니다.")
+        return {'success': False, 'error': 'Django 모델 임포트 실패', 'data': [], 'count': 0, 'email_count': 0}
+
+    logger.info("[LocalBusiness] 웹사이트 이메일 크롤링 시작...")
+
+    # 쿼리 생성
+    queryset = LocalBusiness.objects.filter(
+        website_url__isnull=False
+    ).exclude(
+        website_url=''
+    ).select_related('category')
+
+    if category_id:
+        queryset = queryset.filter(category_id=category_id)
+
+    if region_name:
+        queryset = queryset.filter(region_name__icontains=region_name)
+
+    businesses = queryset[:limit]
+    total = len(businesses)
+
+    if total == 0:
+        logger.info("[LocalBusiness] 크롤링할 웹사이트가 없습니다.")
+        return {'success': True, 'data': [], 'count': 0, 'email_count': 0}
+
+    logger.info(f"[LocalBusiness] 총 {total}개 웹사이트 크롤링 예정")
+
+    all_data = []
+    driver = setup_driver(headless=True)
+
+    try:
+        for idx, business in enumerate(businesses, 1):
+            if progress_callback:
+                progress_callback(f"[{idx}/{total}] {business.name} 크롤링 중...")
+
+            logger.info(f"[{idx}/{total}] {business.name} - {business.website_url}")
+
+            try:
+                emails = crawl_website_for_emails(business.website_url, driver=driver)
+
+                if emails:
+                    for email in emails:
+                        all_data.append({
+                            '업종': business.category.name if business.category else '',
+                            '업체명': business.name,
+                            '주소': business.address,
+                            '지역': business.region_name,
+                            '전화번호': business.phone_number or '',
+                            '웹사이트': business.website_url,
+                            '이메일': email,
+                            'business_id': business.id,
+                        })
+                    logger.info(f"  -> 이메일 {len(emails)}개 발견: {emails}")
+                else:
+                    logger.info(f"  -> 이메일 없음")
+
+            except Exception as e:
+                logger.warning(f"  -> 오류: {e}")
+
+            # 서버 부하 방지
+            time.sleep(1)
+
+    except Exception as e:
+        logger.error(f"[LocalBusiness] 크롤링 오류: {e}")
+    finally:
+        driver.quit()
+
+    email_count = len(all_data)
+    unique_businesses = len(set(d['business_id'] for d in all_data))
+
+    logger.info(f"[LocalBusiness] 완료: {unique_businesses}개 업체에서 {email_count}개 이메일 수집")
+
+    return {
+        'success': True,
+        'data': all_data,
+        'count': len(all_data),
+        'email_count': email_count,
+        'businesses_crawled': total,
+        'businesses_with_email': unique_businesses,
+    }
+
+
+def get_local_business_categories():
+    """LocalBusiness 카테고리 목록 반환"""
+    try:
+        from api.models_local_business import LocalBusinessCategory
+        return list(LocalBusinessCategory.objects.filter(is_active=True).values('id', 'name'))
+    except:
+        return []
+
+
+def get_local_business_regions():
+    """LocalBusiness 지역 목록 반환"""
+    try:
+        from api.models_local_business import LocalBusiness
+        return list(LocalBusiness.objects.values_list('region_name', flat=True).distinct())
+    except:
+        return []
