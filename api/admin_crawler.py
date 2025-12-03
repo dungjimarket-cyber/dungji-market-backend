@@ -233,7 +233,7 @@ def run_crawler_view(request):
             session.save()
             messages.error(request, f"크롤링 실패: {e}")
 
-        return redirect('admin:crawler_dashboard')
+        return redirect('admin_crawler_dashboard')
 
     # GET 요청
     context = {
@@ -285,11 +285,11 @@ def download_session_excel(request, session_id):
             return response
 
         messages.warning(request, "다운로드할 데이터가 없습니다.")
-        return redirect('admin:crawler_dashboard')
+        return redirect('admin_crawler_dashboard')
 
     except CrawlSession.DoesNotExist:
         messages.error(request, "세션을 찾을 수 없습니다.")
-        return redirect('admin:crawler_dashboard')
+        return redirect('admin_crawler_dashboard')
 
 
 @staff_member_required
