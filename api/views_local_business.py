@@ -721,3 +721,84 @@ def google_search_proxy_standalone(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+# 크롤러용 URL 목록 API
+@csrf_exempt
+@api_view(['GET'])
+@perm_decorator([AllowAny])
+def crawler_url_list(request):
+    """크롤러용 웹사이트 URL 목록 반환
+
+    Query Params:
+        - category: 카테고리 ID (선택)
+        - region: 지역명 (선택)
+        - limit: 최대 개수 (기본: 100)
+        - format: 응답 형식 (json/text, 기본: json)
+
+    사용법: GET /api/local-businesses/crawler-urls/?limit=50&region=강남구
+    """
+    category_id = request.query_params.get('category')
+    region_name = request.query_params.get('region', '').strip()
+    limit = int(request.query_params.get('limit', 100))
+    response_format = request.query_params.get('format', 'json')
+
+    # 웹사이트 URL이 있는 업체만 조회
+    queryset = LocalBusiness.objects.filter(
+        website_url__isnull=False
+    ).exclude(
+        website_url=''
+    ).select_related('category')
+
+    if category_id:
+        queryset = queryset.filter(category_id=category_id)
+
+    if region_name:
+        queryset = queryset.filter(region_name__icontains=region_name)
+
+    businesses = queryset[:limit]
+
+    # 텍스트 형식 (URL만)
+    if response_format == 'text':
+        urls = [b.website_url for b in businesses]
+        return HttpResponse('\n'.join(urls), content_type='text/plain; charset=utf-8')
+
+    # JSON 형식 (상세 정보 포함)
+    data = []
+    for b in businesses:
+        data.append({
+            'id': b.id,
+            'name': b.name,
+            'category': b.category.name if b.category else '',
+            'region': b.region_name,
+            'address': b.address,
+            'phone': b.phone_number or '',
+            'website_url': b.website_url,
+        })
+
+    return Response({
+        'count': len(data),
+        'businesses': data
+    })
+
+
+@csrf_exempt
+@api_view(['GET'])
+@perm_decorator([AllowAny])
+def crawler_categories(request):
+    """크롤러용 카테고리 목록"""
+    categories = LocalBusinessCategory.objects.filter(is_active=True).values('id', 'name')
+    return Response(list(categories))
+
+
+@csrf_exempt
+@api_view(['GET'])
+@perm_decorator([AllowAny])
+def crawler_regions(request):
+    """크롤러용 지역 목록"""
+    regions = LocalBusiness.objects.filter(
+        website_url__isnull=False
+    ).exclude(
+        website_url=''
+    ).values_list('region_name', flat=True).distinct()
+    return Response(list(regions))
+
