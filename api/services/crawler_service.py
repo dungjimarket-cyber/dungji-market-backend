@@ -39,7 +39,13 @@ def setup_driver(headless=True):
     options.add_argument('--window-size=1920,1080')
     options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
 
-    service = Service(ChromeDriverManager().install())
+    # Docker 환경에서는 설치된 ChromeDriver 사용, 로컬에서는 webdriver_manager 사용
+    chromedriver_path = '/usr/local/bin/chromedriver'
+    if os.path.exists(chromedriver_path):
+        service = Service(chromedriver_path)
+    else:
+        service = Service(ChromeDriverManager().install())
+
     driver = webdriver.Chrome(service=service, options=options)
     return driver
 
