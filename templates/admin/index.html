@@ -89,6 +89,21 @@
         </a>
     </div>
 
+    <!-- 크롤러 관리 카드 -->
+    <div class="sms-test-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+        <h2>🕷️ 크롤러 관리</h2>
+        <p>전문가 협회 사이트에서 데이터를 수집하고, 이메일 캠페인을 관리합니다.</p>
+        <a href="{% url 'admin_crawler_dashboard' %}" class="sms-test-btn" style="color: #11998e;">
+            📊 대시보드
+        </a>
+        <a href="{% url 'admin_crawler_run' %}" class="sms-test-btn" style="margin-left: 10px; color: #11998e;">
+            🚀 크롤링 실행
+        </a>
+        <a href="{% url 'admin_crawler_email_create' %}" class="sms-test-btn" style="margin-left: 10px; color: #11998e;">
+            ✉️ 이메일 캠페인
+        </a>
+    </div>
+
     {% if app_list %}
         <!-- 1. 전문가 상담 -->
         <div class="category-section category-groupbuy">

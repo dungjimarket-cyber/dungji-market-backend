@@ -96,6 +96,7 @@ from api.views_mypage import (
 from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
 from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 from api.admin_sms_test import sms_test_view
+from api.admin_crawler import get_crawler_urls
 from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet, google_search_proxy_standalone
 from api.views_consultation import ConsultationTypeViewSet, ConsultationRequestViewSet, ConsultationFlowViewSet, ConsultationFlowAdminViewSet, ConsultationFlowOptionAdminViewSet
 from api.views_expert import ExpertProfileViewSet, ExpertRequestsViewSet, CustomerConsultationsViewSet, ExpertRegisterView, ExpertProfileImageUploadView
@@ -134,6 +135,7 @@ router.register(r'admin/consultation-flow-options', ConsultationFlowOptionAdminV
 
 urlpatterns = [
     path('admin/sms-test/', sms_test_view, name='admin_sms_test'),
+] + get_crawler_urls() + [
     path('admin/', admin.site.urls),
     path('api/auth/', include([
         path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),

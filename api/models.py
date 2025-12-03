@@ -29,6 +29,8 @@ from .models_local_business import (
 from .models_consultation import ConsultationType, ConsultationRequest
 # 상담 질문 플로우 모델 import
 from .models_consultation_flow import ConsultationFlow, ConsultationFlowOption
+# 크롤러 모델 import
+from .models_crawler import CrawlSession, CrawlResult, EmailCampaign
 
 logger = logging.getLogger(__name__)
 

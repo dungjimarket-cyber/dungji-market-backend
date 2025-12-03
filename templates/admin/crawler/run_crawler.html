@@ -1,0 +1,146 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}크롤러 실행{% endblock %}
+
+{% block content %}
+<style>
+    .crawler-form {
+        max-width: 800px;
+        padding: 20px;
+    }
+    .form-section {
+        background: white;
+        border-radius: 8px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .form-section h3 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    .form-group select, .form-group input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .checkbox-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .checkbox-item input {
+        width: auto;
+    }
+    .submit-btn {
+        background: #417690;
+        color: white;
+        padding: 12px 30px;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    .submit-btn:hover {
+        background: #205067;
+    }
+    .back-link {
+        display: inline-block;
+        margin-left: 15px;
+        color: #417690;
+    }
+    .warning-box {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .warning-box h4 {
+        margin: 0 0 10px 0;
+        color: #856404;
+    }
+    .warning-box ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #856404;
+    }
+</style>
+
+<div class="crawler-form">
+    <h1>크롤러 실행</h1>
+
+    <div class="warning-box">
+        <h4>주의사항</h4>
+        <ul>
+            <li>크롤링은 시간이 오래 걸릴 수 있습니다 (업종당 5~10분)</li>
+            <li>실행 중 페이지를 닫아도 백그라운드에서 계속 진행됩니다</li>
+            <li>완료 후 대시보드에서 결과를 확인할 수 있습니다</li>
+        </ul>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-section">
+            <h3>크롤러 유형</h3>
+            <div class="form-group">
+                <label for="crawler_type">수집할 업종 선택</label>
+                <select name="crawler_type" id="crawler_type">
+                    {% for value, name in crawler_types %}
+                    <option value="{{ value }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>검색 지역</h3>
+            <div class="form-group">
+                <label>수집할 지역 선택 (선택 안하면 기본 5개 지역)</label>
+                <div class="checkbox-grid">
+                    {% for region in regions %}
+                    <label class="checkbox-item">
+                        <input type="checkbox" name="regions" value="{{ region }}"
+                            {% if region in '서울,경기,부산,대구,인천' %}checked{% endif %}>
+                        {{ region }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>수집 설정</h3>
+            <div class="form-group">
+                <label for="max_pages">최대 페이지 수</label>
+                <input type="number" name="max_pages" id="max_pages" value="5" min="1" max="50">
+            </div>
+        </div>
+
+        <div>
+            <button type="submit" class="submit-btn">크롤링 시작</button>
+            <a href="{% url 'admin_crawler_dashboard' %}" class="back-link">취소</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
