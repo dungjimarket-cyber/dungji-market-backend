@@ -1,0 +1,215 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}크롤링 진행 상태{% endblock %}
+
+{% block content %}
+<style>
+    .progress-container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+    .progress-card {
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .progress-title {
+        font-size: 24px;
+        margin-bottom: 30px;
+        color: #333;
+    }
+    .spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #417690;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 30px;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .progress-message {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 20px;
+        min-height: 30px;
+    }
+    .progress-stats {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin: 30px 0;
+    }
+    .stat-item {
+        text-align: center;
+    }
+    .stat-value {
+        font-size: 32px;
+        font-weight: bold;
+        color: #417690;
+    }
+    .stat-label {
+        font-size: 14px;
+        color: #888;
+        margin-top: 5px;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 20px;
+    }
+    .status-running {
+        background: #fff3cd;
+        color: #856404;
+    }
+    .status-completed {
+        background: #d4edda;
+        color: #155724;
+    }
+    .status-failed {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    .action-buttons {
+        margin-top: 30px;
+    }
+    .btn {
+        display: inline-block;
+        padding: 12px 30px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        margin: 0 10px;
+        cursor: pointer;
+        border: none;
+    }
+    .btn-primary {
+        background: #417690;
+        color: white;
+    }
+    .btn-primary:hover {
+        background: #205067;
+    }
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    .btn-secondary:hover {
+        background: #545b62;
+    }
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    .btn-success:hover {
+        background: #218838;
+    }
+    .hidden {
+        display: none;
+    }
+    .session-info {
+        font-size: 14px;
+        color: #888;
+        margin-top: 20px;
+    }
+</style>
+
+<div class="progress-container">
+    <div class="progress-card">
+        <h1 class="progress-title">크롤링 진행 상태</h1>
+
+        <div id="spinner" class="spinner"></div>
+
+        <div id="status-badge" class="status-badge status-running">실행 중</div>
+
+        <div id="progress-message" class="progress-message">크롤링 준비 중...</div>
+
+        <div class="progress-stats">
+            <div class="stat-item">
+                <div id="total-count" class="stat-value">0</div>
+                <div class="stat-label">수집 건수</div>
+            </div>
+            <div class="stat-item">
+                <div id="email-count" class="stat-value">0</div>
+                <div class="stat-label">이메일 수</div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <a href="{% url 'admin_crawler_dashboard' %}" class="btn btn-secondary">대시보드로 이동</a>
+            <a id="download-btn" href="{% url 'admin_crawler_download' session.id %}" class="btn btn-success hidden">엑셀 다운로드</a>
+        </div>
+
+        <div class="session-info">
+            세션 ID: {{ session.id }} |
+            유형: {{ session.get_crawler_type_display }} |
+            시작: {{ session.created_at|date:"Y-m-d H:i" }}
+        </div>
+    </div>
+</div>
+
+<script>
+const sessionId = {{ session.id }};
+let pollInterval = null;
+
+function updateProgress() {
+    fetch(`/admin/crawler/status/${sessionId}/`)
+        .then(response => response.json())
+        .then(data => {
+            // 메시지 업데이트
+            document.getElementById('progress-message').textContent = data.message || '진행 중...';
+
+            // 통계 업데이트
+            document.getElementById('total-count').textContent = data.total_count || 0;
+            document.getElementById('email-count').textContent = data.email_count || 0;
+
+            // 상태 뱃지 업데이트
+            const badge = document.getElementById('status-badge');
+            badge.className = 'status-badge';
+
+            if (data.status === 'completed') {
+                badge.classList.add('status-completed');
+                badge.textContent = '완료';
+                document.getElementById('spinner').classList.add('hidden');
+                document.getElementById('download-btn').classList.remove('hidden');
+                clearInterval(pollInterval);
+            } else if (data.status === 'failed') {
+                badge.classList.add('status-failed');
+                badge.textContent = '실패';
+                document.getElementById('spinner').classList.add('hidden');
+                clearInterval(pollInterval);
+            } else {
+                badge.classList.add('status-running');
+                badge.textContent = '실행 중';
+            }
+        })
+        .catch(error => {
+            console.error('상태 조회 오류:', error);
+        });
+}
+
+// 초기 상태 확인
+updateProgress();
+
+// 2초마다 상태 확인
+pollInterval = setInterval(updateProgress, 2000);
+
+// 페이지 떠날 때 정리
+window.addEventListener('beforeunload', () => {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+    }
+});
+</script>
+{% endblock %}
