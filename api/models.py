@@ -404,7 +404,7 @@ class GroupBuy(models.Model):
     description = models.TextField(blank=True, verbose_name='공구 설명')
     product = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, verbose_name='상품')  # Temporarily allow null
     product_name = models.CharField(max_length=255, blank=True, verbose_name='상품명 백업')  # 상품 이름 백업
-    creator = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='created_groupbuys', verbose_name='생성자')  # Temporarily allow null
+    creator = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_groupbuys', verbose_name='생성자')  # 탈퇴 시 NULL 처리
     creator_nickname = models.CharField(max_length=150, blank=True, null=True, verbose_name='생성자 닉네임')  # 생성자 닉네임 저장
     participants = models.ManyToManyField(User, through='Participation', related_name='joined_groupbuys', verbose_name='참여자')
     min_participants = models.PositiveSmallIntegerField(default=1, verbose_name='최소 참여자 수')
