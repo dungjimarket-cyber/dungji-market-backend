@@ -9,7 +9,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0124_add_crawler_models'),
+        ('api', '0123_fix_phone_shop_flows_v2'),
     ]
 
     operations = [

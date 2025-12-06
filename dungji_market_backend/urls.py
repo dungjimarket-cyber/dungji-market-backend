@@ -96,8 +96,7 @@ from api.views_mypage import (
 from api.custom.custom_groupbuy import CustomGroupBuyViewSet, CustomParticipantViewSet, CustomFavoriteViewSet, get_custom_categories
 from api.custom.custom_image import CustomImageUploadView, CustomImageDeleteView
 from api.admin_sms_test import sms_test_view
-from api.admin_crawler import get_crawler_urls
-from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet, google_search_proxy_standalone, crawler_url_list, crawler_categories, crawler_regions
+from api.views_local_business import LocalBusinessCategoryViewSet, LocalBusinessViewSet, google_search_proxy_standalone
 from api.views_consultation import ConsultationTypeViewSet, ConsultationRequestViewSet, ConsultationFlowViewSet, ConsultationFlowAdminViewSet, ConsultationFlowOptionAdminViewSet
 from api.views_expert import ExpertProfileViewSet, ExpertRequestsViewSet, CustomerConsultationsViewSet, ExpertRegisterView, ExpertProfileImageUploadView
 
@@ -135,7 +134,6 @@ router.register(r'admin/consultation-flow-options', ConsultationFlowOptionAdminV
 
 urlpatterns = [
     path('admin/sms-test/', sms_test_view, name='admin_sms_test'),
-] + get_crawler_urls() + [
     path('admin/', admin.site.urls),
     path('api/auth/', include([
         path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -186,11 +184,6 @@ urlpatterns = [
 
     # Google Places API 프록시 (router보다 먼저 등록해야 함!)
     path('api/local-businesses/google-search-proxy/', google_search_proxy_standalone, name='google_search_proxy'),
-
-    # 크롤러용 API (URL 목록 조회)
-    path('api/local-businesses/crawler-urls/', crawler_url_list, name='crawler_url_list'),
-    path('api/local-businesses/crawler-categories/', crawler_categories, name='crawler_categories'),
-    path('api/local-businesses/crawler-regions/', crawler_regions, name='crawler_regions'),
 
     path('api/', include(router.urls)),
     path('api/categories/<int:category_id>/fields/', get_category_fields, name='category_fields'),

@@ -62,11 +62,6 @@ try:
 except ImportError:
     pass
 
-# 크롤러 Admin 등록
-try:
-    from . import admin_crawler
-except ImportError:
-    pass
 
 logger = logging.getLogger(__name__)
 
