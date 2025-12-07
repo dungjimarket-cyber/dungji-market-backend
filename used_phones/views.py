@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, F, Avg, Count
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from datetime import timedelta
 from django_filters.rest_framework import DjangoFilterBackend
 import logging
 from .models import (
@@ -77,8 +78,36 @@ class UsedPhoneViewSet(viewsets.ModelViewSet):
         context['request'] = self.request
         return context
 
+    def _auto_complete_expired_trades(self):
+        """거래중 상태에서 14일 경과한 거래를 자동으로 완료 처리"""
+        expiry_date = timezone.now() - timedelta(days=14)
+
+        # 14일 경과한 거래중 상태의 Transaction 조회
+        expired_transactions = UsedPhoneTransaction.objects.filter(
+            status='trading',
+            created_at__lt=expiry_date
+        ).select_related('phone')
+
+        if expired_transactions.exists():
+            # 관련 UsedPhone 상태도 함께 업데이트
+            phone_ids = list(expired_transactions.values_list('phone_id', flat=True))
+
+            # Transaction 상태 업데이트
+            updated_count = expired_transactions.update(
+                status='completed',
+                completed_at=timezone.now()
+            )
+
+            # UsedPhone 상태 업데이트
+            UsedPhone.objects.filter(id__in=phone_ids).update(status='sold')
+
+            logger.info(f"[자동 거래완료] {updated_count}건의 거래가 14일 경과로 자동 완료 처리됨")
+
     def get_queryset(self):
         """지역 필터링 추가"""
+        # 거래중 14일 경과 시 자동 완료 처리
+        self._auto_complete_expired_trades()
+
         # list, retrieve, 조회 관련 액션은 sold 포함 (조회는 가능)
         if self.action in ['list', 'retrieve', 'my_offer', 'active_offers_count', 'offer_count', 'offers']:
             # 디버깅 로그 추가
